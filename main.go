@@ -1,12 +1,13 @@
 package main
 
 import (
-	"buildkite/test_splitter/api"
-	"buildkite/test_splitter/runner"
-	"buildkite/test_splitter/util"
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"github.com/buildkite/test-splitter/internal/api"
+	"github.com/buildkite/test-splitter/internal/runner"
+	"github.com/buildkite/test-splitter/internal/util"
 )
 
 // other attributes are omitted for simplicity

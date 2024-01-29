@@ -1,8 +1,6 @@
 package runner
 
 import (
-	"buildkite/test_splitter/api"
-	"buildkite/test_splitter/util"
 	"fmt"
 	"log"
 	"math"
@@ -11,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/buildkite/test-splitter/internal/api"
+	"github.com/buildkite/test-splitter/internal/util"
 )
 
 type Rspec struct {

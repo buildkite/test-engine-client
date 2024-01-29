@@ -1,12 +1,13 @@
 package api
 
 import (
-	"buildkite/test_splitter/util"
 	"bytes"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
+
+	"github.com/buildkite/test-splitter/internal/util"
 )
 
 type TestCase struct {
