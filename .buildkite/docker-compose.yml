@@ -1,0 +1,19 @@
+version: '3.5'
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile-compile
+    volumes:
+      - ../:/work:cached
+      - ~/gocache:/gocache
+      - ~/gomodcache:/gomodcache
+    working_dir: /work
+    environment:
+      - BUILDKITE_BUILD_NUMBER
+      - BUILDKITE_JOB_ID
+      - "BUILDKITE_AGENT_TAGS=queue=default"
+      - "BUILDKITE_BUILD_PATH=/buildkite"
+      - GOCACHE=/gocache
+      - GOMODCACHE=/gomodcache
