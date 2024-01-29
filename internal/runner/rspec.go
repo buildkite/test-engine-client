@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
-	"github.com/buildkite/test-splitter/internal/util"
 )
 
 type Rspec struct {
@@ -82,7 +81,7 @@ func (r Rspec) Report(testCases []api.TestCase) {
 	for _, reportFile := range reportFiles {
 		var report RspecReport
 
-		err := util.ReadJsonFile(reportFile, &report)
+		err := readJsonFile(reportFile, &report)
 		if err != nil {
 			fmt.Println("Error when reading report file: ", err)
 		}

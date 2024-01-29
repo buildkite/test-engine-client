@@ -6,15 +6,15 @@ import (
 	"io"
 	"log"
 	"net/http"
-
-	"github.com/buildkite/test-splitter/internal/util"
 )
 
+// TestCase represents a single test case.
 type TestCase struct {
 	Path              string `json:"path"`
 	EstimatedDuration *int   `json:"estimated_duration"`
 }
 
+// Tests represents a set of tests.
 type Tests struct {
 	Cases  []TestCase `json:"cases"`
 	Format string     `json:"format"`
@@ -37,7 +37,7 @@ type TestPlanParams struct {
 	Tests       Tests  `json:"tests"`
 }
 
-func GetTestPlan(params TestPlanParams) TestPlan {
+func GetTestPlan(splitterPath string, params TestPlanParams) TestPlan {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
@@ -45,7 +45,6 @@ func GetTestPlan(params TestPlanParams) TestPlan {
 	}
 
 	// create request
-	splitterPath := util.FetchEnv("BUILDKITE_SPLITTER_PATH", "https://buildkite.com")
 	postUrl := splitterPath + "/test-splitting/plan"
 	r, err := http.NewRequest("POST", postUrl, bytes.NewBuffer(requestBody))
 	if err != nil {

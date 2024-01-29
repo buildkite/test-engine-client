@@ -9,7 +9,6 @@ import (
 
 	"github.com/buildkite/test-splitter/internal/api"
 	"github.com/buildkite/test-splitter/internal/runner"
-	"github.com/buildkite/test-splitter/internal/util"
 )
 
 // other attributes are omitted for simplicity
@@ -32,10 +31,11 @@ func main() {
 	fmt.Printf("Found %d files\n", len(files))
 
 	// fetch env vars
-	suiteToken := util.FetchEnv("BUILDKITE_SPLITTER_RSPEC_TOKEN", "xx-local-analytics-key")
-	identifier := util.FetchEnv("BUILDKITE_BUILD_ID", "local")
-	mode := util.FetchEnv("BUILDKITE_SPLITTER_MODE", "static")
-	parralelism := util.FetchIntEnv("BUILDKITE_PARALLEL_JOB_COUNT", 1)
+	suiteToken := FetchEnv("BUILDKITE_SPLITTER_RSPEC_TOKEN", "xx-local-analytics-key")
+	identifier := FetchEnv("BUILDKITE_BUILD_ID", "local")
+	mode := FetchEnv("BUILDKITE_SPLITTER_MODE", "static")
+	parralelism := FetchIntEnv("BUILDKITE_PARALLEL_JOB_COUNT", 1)
+	splitterPath := FetchEnv("BUILDKITE_SPLITTER_PATH", "https://buildkite.com")
 
 	// get plan
 	fmt.Println("--- :test-analytics: Getting Test Plan 🎣")
@@ -51,7 +51,7 @@ func main() {
 		})
 	}
 
-	plan := api.GetTestPlan(api.TestPlanParams{
+	plan := api.GetTestPlan(splitterPath, api.TestPlanParams{
 		SuiteToken:  suiteToken,
 		Mode:        mode,
 		Identifier:  identifier,
@@ -63,7 +63,7 @@ func main() {
 	})
 
 	// get plan for this node
-	nodeIdx := util.FetchEnv("BUILDKITE_PARALLEL_JOB", "0")
+	nodeIdx := FetchEnv("BUILDKITE_PARALLEL_JOB", "0")
 	thisNodePlan := plan.Tasks[nodeIdx]
 
 	prettifiedPlan, _ := json.MarshalIndent(thisNodePlan, "", "  ")
