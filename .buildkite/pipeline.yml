@@ -1,0 +1,24 @@
+steps:
+  - name: ":go::robot_face: Check Code Committed"
+    key: check-code-committed
+    command: .buildkite/steps/check-code-committed.sh
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: build
+
+  - name: ":go: Tests with race detector"
+    key: test-linux-amd64
+    command: ".buildkite/steps/tests.sh -race"
+    artifact_paths: cover.{html,out}
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: build
+      # Uncomment when a TA token is set up
+      # (don't paste it directly into this file or elsewhere in the repo)
+      # - test-collector#v1.2.0:
+      #     files: "junit-*.xml"
+      #     format: "junit"
