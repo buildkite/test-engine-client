@@ -6,7 +6,7 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
-          run: agent
+          run: build
 
   - name: ":go: Tests with race detector"
     key: test-linux-amd64
@@ -16,7 +16,9 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
-          run: agent
-      - test-collector#v1.2.0:
-          files: "junit-*.xml"
-          format: "junit"
+          run: build
+      # Uncomment when a TA token is set up
+      # (don't paste it directly into this file or elsewhere in the repo)
+      # - test-collector#v1.2.0:
+      #     files: "junit-*.xml"
+      #     format: "junit"

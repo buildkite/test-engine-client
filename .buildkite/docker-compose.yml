@@ -1,7 +1,7 @@
 version: '3.5'
 
 services:
-  agent:
+  build:
     build:
       context: .
       dockerfile: Dockerfile-compile
