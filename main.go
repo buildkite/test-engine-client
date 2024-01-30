@@ -34,7 +34,10 @@ func main() {
 	suiteToken := FetchEnv("BUILDKITE_SPLITTER_RSPEC_TOKEN", "xx-local-analytics-key")
 	identifier := FetchEnv("BUILDKITE_BUILD_ID", "local")
 	mode := FetchEnv("BUILDKITE_SPLITTER_MODE", "static")
-	parralelism := FetchIntEnv("BUILDKITE_PARALLEL_JOB_COUNT", 1)
+	parralelism, err := FetchIntEnv("BUILDKITE_PARALLEL_JOB_COUNT", 1)
+	if err != nil {
+		log.Fatalf("Misconfigured parallel job count: %v", err)
+	}
 	splitterPath := FetchEnv("BUILDKITE_SPLITTER_PATH", "https://buildkite.com")
 
 	// get plan
@@ -75,7 +78,7 @@ func main() {
 	for _, testCase := range thisNodePlan.Tests.Cases {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
-	err := testRunner.Run(runnableTests)
+	err = testRunner.Run(runnableTests)
 
 	if err != nil {
 		// TODO: bubble up rspec error to main process
