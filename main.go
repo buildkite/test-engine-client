@@ -54,7 +54,7 @@ func main() {
 		})
 	}
 
-	plan := api.GetTestPlan(splitterPath, api.TestPlanParams{
+	plan := api.FetchTestPlan(splitterPath, api.TestPlanParams{
 		SuiteToken:  suiteToken,
 		Mode:        mode,
 		Identifier:  identifier,

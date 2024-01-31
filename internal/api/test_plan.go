@@ -37,7 +37,8 @@ type TestPlanParams struct {
 	Tests       Tests  `json:"tests"`
 }
 
-func GetTestPlan(splitterPath string, params TestPlanParams) TestPlan {
+// FetchTestPlan fetches a test plan from the service.
+func FetchTestPlan(splitterPath string, params TestPlanParams) TestPlan {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
@@ -59,6 +60,8 @@ func GetTestPlan(splitterPath string, params TestPlanParams) TestPlan {
 		log.Fatal("Error when sending request: ", err)
 	}
 	defer resp.Body.Close()
+
+	// TODO: check the response status code
 
 	// read response
 	responseBody, err := io.ReadAll(resp.Body)
