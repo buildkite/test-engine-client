@@ -32,7 +32,11 @@ func TestFetchTestPlan(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	got := FetchTestPlan(svr.URL, TestPlanParams{})
+	params := TestPlanParams{}
+	got, err := FetchTestPlan(svr.URL, params)
+	if err != nil {
+		t.Errorf("FetchTestPlan(%q, %v) error = %v", svr.URL, params, err)
+	}
 	want := TestPlan{
 		Tasks: map[string]Task{
 			"task_1": {
@@ -40,7 +44,7 @@ func TestFetchTestPlan(t *testing.T) {
 				Tests: Tests{
 					Cases: []TestCase{{
 						Path:              "dummy.spec",
-						EstimatedDuration: ptr(1000000),
+						EstimatedDuration: ptr(1_000_000),
 					}},
 					Format: "junit",
 				},
@@ -49,6 +53,6 @@ func TestFetchTestPlan(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("FetchTestPlan diff (-got +want):\n%s", diff)
+		t.Errorf("FetchTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
 	}
 }

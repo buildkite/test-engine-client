@@ -3,8 +3,8 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -38,18 +38,18 @@ type TestPlanParams struct {
 }
 
 // FetchTestPlan fetches a test plan from the service.
-func FetchTestPlan(splitterPath string, params TestPlanParams) TestPlan {
+func FetchTestPlan(splitterPath string, params TestPlanParams) (TestPlan, error) {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
-		log.Fatal("Error when converting params to json string: ", err)
+		return TestPlan{}, fmt.Errorf("converting params to JSON: %w", err)
 	}
 
 	// create request
 	postUrl := splitterPath + "/test-splitting/plan"
 	r, err := http.NewRequest("POST", postUrl, bytes.NewBuffer(requestBody))
 	if err != nil {
-		log.Fatal("Error when creating request: ", err)
+		return TestPlan{}, fmt.Errorf("creating request: %w", err)
 	}
 	r.Header.Add("Content-Type", "application/json")
 
@@ -57,7 +57,7 @@ func FetchTestPlan(splitterPath string, params TestPlanParams) TestPlan {
 	client := &http.Client{}
 	resp, err := client.Do(r)
 	if err != nil {
-		log.Fatal("Error when sending request: ", err)
+		return TestPlan{}, fmt.Errorf("sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -66,15 +66,15 @@ func FetchTestPlan(splitterPath string, params TestPlanParams) TestPlan {
 	// read response
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal("Error when reading response body: ", err)
+		return TestPlan{}, fmt.Errorf("reading response body: %w", err)
 	}
 
 	// parse response
 	var testPlan TestPlan
 	err = json.Unmarshal(responseBody, &testPlan)
 	if err != nil {
-		log.Fatal("Error when parsing response: ", err)
+		return TestPlan{}, fmt.Errorf("parsing response: %w", err)
 	}
 
-	return testPlan
+	return testPlan, nil
 }
