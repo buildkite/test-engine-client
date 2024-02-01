@@ -49,6 +49,7 @@ func (r Rspec) Run(testCases []string) error {
 	fmt.Println("bin/rspec", strings.Join(args, " "))
 
 	cmd := exec.Command("bin/rspec", args...)
+	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	return cmd.Run()
 }
