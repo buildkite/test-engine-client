@@ -3,8 +3,7 @@ steps:
     command: ".buildkite/steps/github-release.sh"
     plugins:
       - aws-assume-role-with-web-identity:
-          # TODO: replace with correct arn role
-          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-buildkite
+          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-splitter-client-release
       - aws-ssm#v1.0.0:
           parameters:
             GH_TOKEN: /pipelines/buildkite/test-splitter-client-release/GH_TOKEN
