@@ -8,3 +8,4 @@ steps:
           run: release
           mount-checkout: true
           mount-ssh-agent: true
+          mount-buildkite-agent: true
