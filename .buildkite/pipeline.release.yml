@@ -7,3 +7,4 @@ steps:
           cli-version: 2
           run: release
           mount-checkout: true
+          mount-ssh-agent: true
