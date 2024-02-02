@@ -2,6 +2,12 @@ steps:
   - name: ":octocat: :rocket: Create Github Release"
     command: ".buildkite/steps/github-release.sh"
     plugins:
+      - aws-assume-role-with-web-identity:
+          # TODO: replace with correct arn role
+          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-buildkite
+      - aws-ssm#v1.0.0:
+          parameters:
+            GH_TOKEN: /pipelines/buildkite/test-splitter-client-release/GH_TOKEN
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
@@ -9,3 +15,6 @@ steps:
           mount-checkout: true
           mount-ssh-agent: true
           mount-buildkite-agent: true
+          env:
+            - ARTIFACTS_BUILD_ID
+            - GH_TOKEN
