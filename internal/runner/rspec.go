@@ -149,12 +149,12 @@ func (r Rspec) Report(w io.Writer, testCases []api.TestCase) error {
 
 	// print each row
 	for _, testCase := range testCases {
-		estimatedDuration := 0
-		if testCase.EstimatedDuration != nil {
-			// Estimated duration from API is an integer in microsecond
-			estimatedDuration = *testCase.EstimatedDuration * int(time.Microsecond)
-		}
 
+		var estimatedDuration time.Duration
+
+		if testCase.EstimatedDuration != nil {
+			estimatedDuration = time.Duration(*testCase.EstimatedDuration) * time.Microsecond
+		}
 		// Actual duration from rspec report is in second
 		actualDuration := executionByFile[testCase.Path] * float64(time.Second)
 
@@ -163,7 +163,7 @@ func (r Rspec) Report(w io.Writer, testCases []api.TestCase) error {
 		fmt.Fprintf(w,
 			"%-*s | %*s | %*s | %*s |\n",
 			fileNameWidth, testCase.Path,
-			estimatedDurationWidth, time.Duration(estimatedDuration).Truncate(time.Millisecond).String(),
+			estimatedDurationWidth, estimatedDuration.Truncate(time.Millisecond).String(),
 			actualDurationWidth, time.Duration(actualDuration).Truncate(time.Millisecond).String(),
 			predictionErrorWidth, fmt.Sprintf("%.2f%%", predictionError),
 		)
