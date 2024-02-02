@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -83,23 +85,32 @@ type RspecReport struct {
 //
 // This is helpful for us in development, not sure if we will
 // continue to maintain this functionality.
-func (Rspec) Report(testCases []api.TestCase) {
+func (r Rspec) Report(w io.Writer, testCases []api.TestCase) error {
 	// get all rspec json files
 	reportFiles, err := filepath.Glob("tmp/rspec-*.json")
 	if err != nil {
-		fmt.Println("Error when getting report files: ", err)
+		return fmt.Errorf("globbing for report files: %v", err)
+	}
+
+	// early return if no report files
+	if len(reportFiles) == 0 {
+		fmt.Fprintf(w, "No report files found")
+		return nil
 	}
 
 	// read and parse all rspec json files
 	var reports []RspecReport
+	var errs []error
 	for _, reportFile := range reportFiles {
 		var report RspecReport
-
-		err := readJsonFile(reportFile, &report)
-		if err != nil {
-			fmt.Println("Error when reading report file: ", err)
+		if err := readJsonFile(reportFile, &report); err != nil {
+			errs = append(errs, err)
+			continue
 		}
 		reports = append(reports, report)
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("reading report files: %v", errors.Join(errs...))
 	}
 
 	// aggregate execution time by file
@@ -125,16 +136,16 @@ func (Rspec) Report(testCases []api.TestCase) {
 	predictionErrorWidth := len("Error %")
 
 	// print header
-	lines := strings.Repeat("-", fileNameWidth+estimatedDurationWidth+actualDurationWidth+predictionErrorWidth+11)
-	fmt.Println(lines)
-	fmt.Printf(
+	dashedLine := strings.Repeat("-", fileNameWidth+estimatedDurationWidth+actualDurationWidth+predictionErrorWidth+11) + "\n"
+	fmt.Fprintf(w, dashedLine)
+	fmt.Fprintf(w,
 		"%-*s | %-*s | %-*s | %-*s |\n",
 		fileNameWidth, "File Name",
 		estimatedDurationWidth, "Estimated",
 		actualDurationWidth, "Actual",
 		predictionErrorWidth, "Error %",
 	)
-	fmt.Println(lines)
+	fmt.Fprintf(w, dashedLine)
 
 	// print each row
 	for _, testCase := range testCases {
@@ -149,7 +160,7 @@ func (Rspec) Report(testCases []api.TestCase) {
 
 		predictionError := math.Abs((actualDuration - float64(estimatedDuration)) / actualDuration * 100)
 
-		fmt.Printf(
+		fmt.Fprintf(w,
 			"%-*s | %*s | %*s | %*s |\n",
 			fileNameWidth, testCase.Path,
 			estimatedDurationWidth, time.Duration(estimatedDuration).Truncate(time.Millisecond).String(),
@@ -157,5 +168,7 @@ func (Rspec) Report(testCases []api.TestCase) {
 			predictionErrorWidth, fmt.Sprintf("%.2f%%", predictionError),
 		)
 	}
-	fmt.Println(lines)
+	fmt.Fprintf(w, dashedLine)
+
+	return nil
 }
