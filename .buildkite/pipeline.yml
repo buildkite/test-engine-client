@@ -9,7 +9,7 @@ steps:
           run: build
 
   - name: ":go: Tests with race detector"
-    key: test-linux-amd64
+    key: tests
     command: ".buildkite/steps/tests.sh -race"
     artifact_paths: cover.{html,out}
     plugins:
@@ -17,11 +17,9 @@ steps:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           run: build
-      # Uncomment when a TA token is set up
-      # (don't paste it directly into this file or elsewhere in the repo)
-      # - test-collector#v1.2.0:
-      #     files: "junit-*.xml"
-      #     format: "junit"
+      - test-collector#v1.2.0:
+          files: "junit-*.xml"
+          format: "junit"
 
   - wait
 

@@ -54,7 +54,7 @@ func main() {
 		})
 	}
 
-	plan := api.GetTestPlan(splitterPath, api.TestPlanParams{
+	plan, err := api.FetchTestPlan(splitterPath, api.TestPlanParams{
 		SuiteToken:  suiteToken,
 		Mode:        mode,
 		Identifier:  identifier,
@@ -64,6 +64,9 @@ func main() {
 			Format: "files",
 		},
 	})
+	if err != nil {
+		log.Fatalf("Couldn't fetch test plan: %v", err)
+	}
 
 	// get plan for this node
 	nodeIdx := FetchEnv("BUILDKITE_PARALLEL_JOB", "0")

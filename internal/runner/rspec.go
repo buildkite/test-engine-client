@@ -16,7 +16,7 @@ import (
 type Rspec struct {
 }
 
-func (r Rspec) GetFiles() []string {
+func (Rspec) GetFiles() []string {
 	var files []string
 
 	// Use filepath.Walk to traverse the directory recursively
@@ -40,7 +40,7 @@ func (r Rspec) GetFiles() []string {
 	return files
 }
 
-func (r Rspec) Run(testCases []string) error {
+func (Rspec) Run(testCases []string) error {
 	args := []string{"--options", ".rspec.ci"}
 
 	args = append(args, testCases...)
@@ -70,7 +70,7 @@ type RspecReport struct {
 	Examples []RspecExample `json:"examples"`
 }
 
-func (r Rspec) Report(testCases []api.TestCase) {
+func (Rspec) Report(testCases []api.TestCase) {
 	// get all rspec json files
 	reportFiles, err := filepath.Glob("tmp/rspec-*.json")
 	if err != nil {
@@ -125,12 +125,10 @@ func (r Rspec) Report(testCases []api.TestCase) {
 
 	// print each row
 	for _, testCase := range testCases {
-		estimatedDuration := *testCase.EstimatedDuration
-		if err != nil {
-			estimatedDuration = 0
-		} else {
+		estimatedDuration := 0
+		if testCase.EstimatedDuration != nil {
 			// Estimated duration from API is an integer in microsecond
-			estimatedDuration *= int(time.Microsecond)
+			estimatedDuration = *testCase.EstimatedDuration * int(time.Microsecond)
 		}
 
 		// Actual duration from rspec report is in second
