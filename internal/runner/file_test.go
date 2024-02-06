@@ -9,8 +9,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+type Report struct {
+	Result string `json:"result"`
+}
+
 func TestReadJsonFile(t *testing.T) {
-	var report struct{ result string }
+	var report Report
 
 	testCases := []struct {
 		fileName   string
@@ -23,7 +27,7 @@ func TestReadJsonFile(t *testing.T) {
 			wantError:  errors.New("open file_not_exist: no such file or directory")},
 		{
 			fileName:   filepath.Join("../../test", "fixtures", "report.json"),
-			wantResult: "pass1",
+			wantResult: "pass",
 			wantError:  nil},
 		// unhappy path -> able to read file but unable to unmarshall
 	}
@@ -41,8 +45,8 @@ func TestReadJsonFile(t *testing.T) {
 			}
 		} else {
 			// happy path test
-			if cmp.Equal(report.result, tc.wantResult) {
-				t.Errorf("readJsonFile(%s) got: %s; want %s", tc.fileName, report.result, tc.wantResult)
+			if diff := cmp.Diff(report.Result, tc.wantResult); diff != "" {
+				t.Errorf("readJsonFile(%s) got: %s; want %s", tc.fileName, report.Result, tc.wantResult)
 			}
 		}
 	}
