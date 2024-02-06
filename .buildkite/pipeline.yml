@@ -48,4 +48,4 @@ steps:
   - name: ":pipeline: Upload Release Pipeline"
     command: ".buildkite/steps/upload-release-step.sh"
     depends_on: build-binary
-    branches: "main"
+    # branches: "main"
