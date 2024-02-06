@@ -1,25 +1,30 @@
 package runner
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )
 
 func TestReadJsonFile(t *testing.T) {
-	var report RspecReport
+	var report struct{ result string }
 
 	testCases := []struct {
 		fileName   string
-		wantResult any
-		wantError  string
+		wantResult string
+		wantError  error
 	}{
 		{
 			fileName:   "file_not_exist",
-			wantResult: nil,
-			wantError:  "open file_not_exist: no such file or directory"},
-		// happy path -> able to read file and produce json result
+			wantResult: "",
+			wantError:  errors.New("open file_not_exist: no such file or directory")},
+		{
+			fileName:   filepath.Join("../../test", "fixtures", "report.json"),
+			wantResult: "pass1",
+			wantError:  nil},
 		// unhappy path -> able to read file but unable to unmarshall
 	}
 
@@ -27,10 +32,17 @@ func TestReadJsonFile(t *testing.T) {
 		gotError := readJsonFile(tc.fileName, &report)
 
 		if gotError != nil {
-			msg := fmt.Errorf("%w", gotError)
 
-			if cmp.Equal(msg, tc.wantError) {
+			msg := fmt.Errorf("%w", gotError)
+			fmt.Println(msg)
+			if diff := cmp.Diff(msg, tc.wantError); diff != "" {
+				fmt.Println("diff: ", diff)
 				t.Errorf("readJsonFile(%s) error: %s; want %s", tc.fileName, msg, tc.wantError)
+			}
+		} else {
+			// happy path test
+			if cmp.Equal(report.result, tc.wantResult) {
+				t.Errorf("readJsonFile(%s) got: %s; want %s", tc.fileName, report.result, tc.wantResult)
 			}
 		}
 	}
