@@ -2,6 +2,7 @@
 version=$(cat version/VERSION)
 
 cat <<YAML | buildkite-agent pipeline upload
+steps:
   - name: ":rocket: Release"
     trigger: "test-splitter-client-release"
     build:
