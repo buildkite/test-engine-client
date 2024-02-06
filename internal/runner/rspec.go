@@ -1,22 +1,22 @@
 package runner
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
 )
 
-type Rspec struct {
-}
+type Rspec struct{}
 
-func (Rspec) GetFiles() []string {
+func (Rspec) FindFiles() ([]string, error) {
 	var files []string
 
 	// Use filepath.Walk to traverse the directory recursively
@@ -34,16 +34,19 @@ func (Rspec) GetFiles() []string {
 
 	// Handle potential error from filepath.Walk
 	if err != nil {
-		log.Fatal("Error when getting files: ", err)
+		return nil, fmt.Errorf("walking to find files: %w", err)
 	}
 
-	return files
+	return files, nil
 }
 
-func (Rspec) Run(testCases []string) error {
+func (r Rspec) Run(testCases []string) error {
 	args := []string{"--options", ".rspec.ci"}
 
 	args = append(args, testCases...)
+
+	// TODO: Figure out in advance whether we'll hit ARG_MAX and make args
+	// an appropriate size
 
 	fmt.Println("+++ :test-analytics: Executing tests 🏃")
 	fmt.Println("bin/rspec", strings.Join(args, " "))
@@ -51,7 +54,19 @@ func (Rspec) Run(testCases []string) error {
 	cmd := exec.Command("bin/rspec", args...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	return cmd.Run()
+
+	err := cmd.Run()
+	if errors.Is(err, syscall.E2BIG) { // Will this work on e.g. Windows?
+		n := len(testCases) / 2
+		if err := r.Run(testCases[:n]); err != nil {
+			return err
+		}
+		if err := r.Run(testCases[n:]); err != nil {
+			return err
+		}
+		return nil
+	}
+	return err
 }
 
 type RspecExample struct {
