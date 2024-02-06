@@ -13,5 +13,5 @@ fi
 echo "--- :package: Downloading built binaries from build ${ARTIFACTS_BUILD_ID}"
 buildkite-agent artifact download --build "${ARTIFACTS_BUILD_ID}" "pkg/test-splitter-*" .
 
-echo "--- :octocat: :rocket: Creating GitHub release for v$version"
+echo "--- :octocat: :rocket: Creating GitHub release for v${splitter_version}"
 gh release create "v${splitter_version}" ./pkg/* --generate-notes --draft
