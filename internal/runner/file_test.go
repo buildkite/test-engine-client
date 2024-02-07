@@ -17,9 +17,7 @@ type Report struct {
 func TestReadJsonFile_Errors(t *testing.T) {
 	var got Report
 
-	want := Report{
-		Result: "",
-	}
+	want := Report{}
 
 	testCases := []struct {
 		fileName    string
