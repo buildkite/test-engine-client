@@ -17,6 +17,10 @@ type Report struct {
 func TestReadJsonFile_Errors(t *testing.T) {
 	var got Report
 
+	want := Report{
+		Result: "",
+	}
+
 	testCases := []struct {
 		fileName    string
 		wantErrorAs any
@@ -34,8 +38,8 @@ func TestReadJsonFile_Errors(t *testing.T) {
 	for _, tc := range testCases {
 		err := readJsonFile(tc.fileName, &got)
 
-		if got.Result != "" {
-			t.Errorf("readJsonFile(%q, &got) = %s", tc.fileName, got)
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Errorf("readJsonFile(%s) diff (-got +want):\n%s", tc.fileName, diff)
 		}
 
 		if err != nil {
