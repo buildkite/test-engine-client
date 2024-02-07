@@ -1,8 +1,9 @@
 package runner
 
 import (
+	"encoding/json"
 	"errors"
-	"fmt"
+	"io/fs"
 	"path/filepath"
 	"testing"
 
@@ -14,23 +15,33 @@ type Report struct {
 }
 
 func TestReadJsonFile_Errors(t *testing.T) {
-	var report Report
+	var got Report
 
 	testCases := []struct {
-		fileName  string
-		wantError error
+		fileName    string
+		wantErrorAs any
 	}{
 		{
-			fileName:  "file_not_exist",
-			wantError: errors.New("open file_not_exist: no such file or directory")},
+			fileName:    "file_not_exist",
+			wantErrorAs: new(*fs.PathError),
+		},
+		{
+			fileName:    filepath.Join("..", "..", "test", "fixtures", "invalid_report.txt"),
+			wantErrorAs: new(*json.SyntaxError),
+		},
 	}
 
 	for _, tc := range testCases {
-		gotError := readJsonFile(tc.fileName, &report)
-		if gotError != nil {
+		err := readJsonFile(tc.fileName, &got)
 
-			msg := fmt.Errorf("%w", gotError)
-			fmt.Println(msg)
+		if got.Result != "" {
+			t.Errorf("readJsonFile(%q, &got) = %s", tc.fileName, got)
+		}
+
+		if err != nil {
+			if !errors.As(err, tc.wantErrorAs) {
+				t.Errorf("readJsonFile(%q, &got) = %v, want %T", tc.fileName, err, tc.wantErrorAs)
+			}
 		}
 	}
 }
