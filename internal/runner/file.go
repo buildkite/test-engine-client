@@ -2,6 +2,7 @@ package runner
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 )
 
@@ -12,7 +13,8 @@ import (
 func readJsonFile(filename string, v any) error {
 	content, err := os.ReadFile(filename)
 	if err != nil {
-		return err
+		//return err
+		return fmt.Errorf("reading file: %w", err)
 	}
 
 	return json.Unmarshal(content, v)
