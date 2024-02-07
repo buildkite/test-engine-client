@@ -49,14 +49,16 @@ func TestReadJsonFile_Errors(t *testing.T) {
 func TestReadJsonFile(t *testing.T) {
 	var got Report
 	fileName := filepath.Join("..", "..", "test", "fixtures", "report.json")
-	want := "pass"
+	want := Report{
+		Result: "pass",
+	}
 
 	err := readJsonFile(fileName, &got)
 	if err != nil {
 		t.Errorf("readJsonFile(%q, &got) = %v", fileName, err)
 	}
 
-	if diff := cmp.Diff(got.Result, want); diff != "" {
-		t.Errorf("readJsonFile(%s) got: %s; want %s", fileName, got.Result, want)
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("readJsonFile(%s) diff (-got +want):\n%s", fileName, diff)
 	}
 }
