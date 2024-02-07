@@ -47,4 +47,3 @@ steps:
     command: ".buildkite/steps/upload-release-step.sh"
     depends_on: build-binary
     branches: "main"
-    
