@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 
@@ -22,12 +23,32 @@ type RspecData struct {
 }
 
 func main() {
-	// TODO: detect test runner and use appropriate runner
-	testRunner := runner.Rspec{}
+	testType := flag.String("type", "rspec", "Test `framework` to be run [rspec, go]")
+	flag.Parse()
+
+	var testRunner interface {
+		FindFiles() ([]string, error)
+		Run([]string) error
+		Report([]api.TestCase)
+	}
+
+	switch *testType {
+	case "rspec":
+		testRunner = runner.Rspec{}
+
+	case "go":
+		testRunner = runner.GoTests{}
+
+	default:
+		log.Fatalf("Unsupported test type %q", *testType)
+	}
 
 	// get files
 	fmt.Println("--- :test-analytics: Gathering test plan context and creating test plan request 🐿️")
-	files := testRunner.GetFiles()
+	files, err := testRunner.FindFiles()
+	if err != nil {
+		log.Fatalf("Couldn't find test files: %v", err)
+	}
 	fmt.Printf("Found %d files\n", len(files))
 
 	// fetch env vars
