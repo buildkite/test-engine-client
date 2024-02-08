@@ -53,8 +53,7 @@ func TestReadJsonFile(t *testing.T) {
 		Result: "pass",
 	}
 
-	err := readJsonFile(fileName, &got)
-	if err != nil {
+	if err := readJsonFile(fileName, &got); err != nil {
 		t.Errorf("readJsonFile(%q, &got) = %v", fileName, err)
 	}
 
