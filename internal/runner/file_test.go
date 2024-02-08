@@ -40,10 +40,8 @@ func TestReadJsonFile_Errors(t *testing.T) {
 			t.Errorf("readJsonFile(%s) diff (-got +want):\n%s", tc.fileName, diff)
 		}
 
-		if err != nil {
-			if !errors.As(err, tc.wantErrorAs) {
-				t.Errorf("readJsonFile(%q, &got) = %v, want %T", tc.fileName, err, tc.wantErrorAs)
-			}
+		if !errors.As(err, tc.wantErrorAs) {
+			t.Errorf("readJsonFile(%q, &got) = %v, want %T", tc.fileName, err, tc.wantErrorAs)
 		}
 	}
 }
