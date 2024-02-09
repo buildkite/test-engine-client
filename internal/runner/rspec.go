@@ -13,9 +13,15 @@ import (
 	"github.com/buildkite/test-splitter/internal/api"
 )
 
+// In future, Rspec will implement an interface that defines
+// behaviour common to all test runners.
+// For now, Rspec provides rspec specific behaviour to execute
+// and report on tests in the Rspec framework.
 type Rspec struct {
 }
 
+// GetFiles returns an array of file names, for files in
+// the "spec" directory that end in "spec.rb".
 func (Rspec) GetFiles() []string {
 	var files []string
 
@@ -40,6 +46,7 @@ func (Rspec) GetFiles() []string {
 	return files
 }
 
+// Run executes the given testCases via bin/rspec.
 func (Rspec) Run(testCases []string) error {
 	args := []string{"--options", ".rspec.ci"}
 
@@ -54,6 +61,7 @@ func (Rspec) Run(testCases []string) error {
 	return cmd.Run()
 }
 
+// RspecExample defines metadata for an rspec example (test).
 type RspecExample struct {
 	Id              string  `json:"id"`
 	Description     string  `json:"description"`
@@ -64,12 +72,18 @@ type RspecExample struct {
 	RunTime         float64 `json:"run_time"`
 }
 
+// RspecReport defines metadata for an rspec generated test report.
 type RspecReport struct {
 	Version  string         `json:"version"`
 	Seed     int            `json:"seed"`
 	Examples []RspecExample `json:"examples"`
 }
 
+// Report produces a report that surfaces estimated and actual
+// performance data for Rspec tests files.
+//
+// This is helpful for us in development, not sure if we will
+// continue to maintain this functionality.
 func (Rspec) Report(testCases []api.TestCase) {
 	// get all rspec json files
 	reportFiles, err := filepath.Glob("tmp/rspec-*.json")
