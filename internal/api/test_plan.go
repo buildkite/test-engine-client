@@ -20,15 +20,18 @@ type Tests struct {
 	Format string     `json:"format"`
 }
 
+// Task represents the task for the given node.
 type Task struct {
 	NodeNumber int   `json:"node_number"`
 	Tests      Tests `json:"tests"`
 }
 
+// TestPlan represents the entire test plan.
 type TestPlan struct {
 	Tasks map[string]Task `json:"tasks"`
 }
 
+// TestPlanParams represents the config params sent when fetching a test plan.
 type TestPlanParams struct {
 	SuiteToken  string `json:"suite_token"`
 	Mode        string `json:"mode"`

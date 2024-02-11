@@ -6,7 +6,7 @@ import (
 )
 
 // readJsonFile reads a json file and unmarshals it into v.
-// v must be a pointer to a struct
+// v must be a pointer to a struct.
 //
 // https://golang.org/pkg/encoding/json/#Unmarshal
 func readJsonFile(filename string, v any) error {
