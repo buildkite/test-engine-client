@@ -2,7 +2,6 @@ package runner
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -22,7 +21,7 @@ type Rspec struct {
 
 // GetFiles returns an array of file names, for files in
 // the "spec" directory that end in "spec.rb".
-func (Rspec) GetFiles() []string {
+func (Rspec) GetFiles() ([]string, error) {
 	var files []string
 
 	// Use filepath.Walk to traverse the directory recursively
@@ -40,10 +39,10 @@ func (Rspec) GetFiles() []string {
 
 	// Handle potential error from filepath.Walk
 	if err != nil {
-		log.Fatal("Error when getting files: ", err)
+		return nil, err
 	}
 
-	return files
+	return files, nil
 }
 
 // Run executes the given testCases via bin/rspec.
