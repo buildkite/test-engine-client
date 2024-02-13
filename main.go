@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/buildkite/test-splitter/internal/api"
 	"github.com/buildkite/test-splitter/internal/runner"
@@ -73,15 +74,15 @@ func main() {
 
 	// get plan for this node
 	nodeIdx := FetchEnv("BUILDKITE_PARALLEL_JOB", "0")
-	thisNodePlan := plan.Tasks[nodeIdx]
+	thisNodeTask := plan.Tasks[nodeIdx]
 
-	prettifiedPlan, _ := json.MarshalIndent(thisNodePlan, "", "  ")
+	prettifiedPlan, _ := json.MarshalIndent(thisNodeTask, "", "  ")
 	fmt.Println("--- :test-analytics: Plan for this node 🎊")
 	fmt.Println(string(prettifiedPlan))
 
 	// execute tests
 	runnableTests := []string{}
-	for _, testCase := range thisNodePlan.Tests.Cases {
+	for _, testCase := range thisNodeTask.Tests.Cases {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
 	err = testRunner.Run(runnableTests)
@@ -92,5 +93,8 @@ func main() {
 	}
 
 	fmt.Println("--- :test-analytics: Test execution results 📊")
-	testRunner.Report(thisNodePlan.Tests.Cases)
+	err = testRunner.Report(os.Stdout, thisNodeTask.Tests.Cases)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
