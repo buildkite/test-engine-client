@@ -27,7 +27,10 @@ func main() {
 
 	// get files
 	fmt.Println("--- :test-analytics: Gathering test plan context and creating test plan request 🐿️")
-	files := testRunner.GetFiles()
+	files, err := testRunner.GetFiles()
+	if err != nil {
+		log.Fatalf("Couldn't get files: %v", err)
+	}
 	fmt.Printf("Found %d files\n", len(files))
 
 	// fetch env vars
