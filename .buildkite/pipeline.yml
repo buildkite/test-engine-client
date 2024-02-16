@@ -46,12 +46,11 @@ steps:
   - trigger: buildkite-splitter
     key: e2e-tests
     label: ":bonezone: End-to-end Tests"
-    # branches: "main"
+    branches: "main"
     depends_on: 
       - build-binary
     build:
       message: "End-to-end test for Test Splitter Client - Build #${BUILDKITE_BUILD_NUMBER}"
-      branch: "${BUILDKITE_BRANCH}"
 
   - name: ":pipeline: Upload Release Pipeline"
     command: ".buildkite/steps/upload-release-step.sh"
