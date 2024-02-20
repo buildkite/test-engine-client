@@ -42,8 +42,19 @@ steps:
           arch:
             - amd64
             - arm64
+  
+  - trigger: buildkite-splitter
+    key: e2e-tests
+    label: ":bonezone: End-to-end Tests"
+    branches: "main"
+    depends_on: 
+      - build-binary
+    build:
+      message: "End-to-end test for Test Splitter Client - Build #${BUILDKITE_BUILD_NUMBER}"
 
   - name: ":pipeline: Upload Release Pipeline"
     command: ".buildkite/steps/upload-release-step.sh"
-    depends_on: build-binary
+    depends_on: 
+      - build-binary
+      - e2e-tests
     branches: "main"
