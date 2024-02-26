@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -65,6 +66,16 @@ func FetchTestPlan(splitterPath string, params TestPlanParams) (TestPlan, error)
 	defer resp.Body.Close()
 
 	// TODO: check the response status code
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println("Non-OK HTTP status:", resp.StatusCode)
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			// terminate program
+			log.Fatalf("Cannot process the request")
+		} else {
+			// fallback to naive split
+			fmt.Printf("5xx error")
+		}
+	}
 
 	// read response
 	responseBody, err := io.ReadAll(resp.Body)
