@@ -42,6 +42,16 @@ type TestPlanParams struct {
 	Tests       Tests  `json:"tests"`
 }
 
+func MakeAPICall(r *http.Request, client *http.Client) (*http.Response, error) {
+	resp, err := client.Do(r)
+	if err != nil {
+		return resp, fmt.Errorf("sending request: %w", err)
+	}
+
+	defer resp.Body.Close()
+	return resp, nil
+}
+
 // FetchTestPlan fetches a test plan from the service.
 func FetchTestPlan(splitterPath string, params TestPlanParams) (TestPlan, error) {
 	// convert params to json string
@@ -64,12 +74,16 @@ func FetchTestPlan(splitterPath string, params TestPlanParams) (TestPlan, error)
 	i := 0
 retryLoop:
 	for i < retryLimit {
-		resp, err := client.Do(r)
+		// resp, err := client.Do(r)
+		// if err != nil {
+		// 	return TestPlan{}, fmt.Errorf("sending request: %w", err)
+		// }
+		// defer resp.Body.Close()
+
+		resp, err := MakeAPICall(r, client)
 		if err != nil {
 			return TestPlan{}, fmt.Errorf("sending request: %w", err)
 		}
-		defer resp.Body.Close()
-
 		// TODO: check the response status code
 		switch {
 		case resp.StatusCode == http.StatusOK:
@@ -79,7 +93,7 @@ retryLoop:
 			return TestPlan{}, fmt.Errorf("server response: %d", resp.StatusCode)
 		case resp.StatusCode >= 500 && resp.StatusCode < 600:
 			// retr
-			// time.Sleep
+			// time.Sleep // consider fuzzed exponential backoff
 		}
 	}
 
