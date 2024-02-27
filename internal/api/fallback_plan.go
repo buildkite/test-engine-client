@@ -20,7 +20,7 @@ func CreateFallbackPlan(tests Tests, parallelism int) TestPlan {
 		tasks[strconv.Itoa(i)] = Task{
 			NodeNumber: i,
 			Tests: Tests{
-				Format: "files",
+				Format: tests.Format,
 				Cases:  []TestCase{},
 			},
 		}
@@ -34,9 +34,7 @@ func CreateFallbackPlan(tests Tests, parallelism int) TestPlan {
 		tasks[strconv.Itoa(nodeNumber)] = task
 	}
 
-	plan := TestPlan{
+	return TestPlan{
 		Tasks: tasks,
 	}
-
-	return plan
 }
