@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 )
+
+const retryLimit = 5
 
 // TestCase represents a single test case.
 type TestCase struct {
@@ -58,22 +59,27 @@ func FetchTestPlan(splitterPath string, params TestPlanParams) (TestPlan, error)
 	r.Header.Add("Content-Type", "application/json")
 
 	// send request
-	client := &http.Client{}
-	resp, err := client.Do(r)
-	if err != nil {
-		return TestPlan{}, fmt.Errorf("sending request: %w", err)
-	}
-	defer resp.Body.Close()
 
-	// TODO: check the response status code
-	if resp.StatusCode != http.StatusOK {
-		fmt.Println("Non-OK HTTP status:", resp.StatusCode)
-		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			// terminate program
-			log.Fatalf("Cannot process the request")
-		} else {
-			// fallback to naive split
-			fmt.Printf("5xx error")
+	client := &http.Client{}
+	i := 0
+retryLoop:
+	for i < retryLimit {
+		resp, err := client.Do(r)
+		if err != nil {
+			return TestPlan{}, fmt.Errorf("sending request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// TODO: check the response status code
+		switch {
+		case resp.StatusCode == http.StatusOK:
+			// This is our happy path
+			break retryLoop
+		case resp.StatusCode >= 400 && resp.StatusCode < 500:
+			return TestPlan{}, fmt.Errorf("server response: %d", resp.StatusCode)
+		case resp.StatusCode >= 500 && resp.StatusCode < 600:
+			// retr
+			// time.Sleep
 		}
 	}
 
