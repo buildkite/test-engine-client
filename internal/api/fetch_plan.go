@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,16 +30,16 @@ type TestPlanParams struct {
 }
 
 // FetchTestPlan fetches a test plan from the service, including retries.
-func FetchTestPlan(splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
+func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
 	var testPlan plan.TestPlan
 
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(5),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	)
-	err := r.Do(func(r *roko.Retrier) error {
+	err := r.DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
-		testPlan, err = tryFetchTestPlan(splitterPath, params)
+		testPlan, err = tryFetchTestPlan(ctx, splitterPath, params)
 		// Don't retry if the request was invalid
 		if errors.Is(err, errInvalidRequest) {
 			r.Break()
@@ -53,16 +54,19 @@ func FetchTestPlan(splitterPath string, params TestPlanParams) (plan.TestPlan, e
 }
 
 // tryFetchTestPlan fetches a test plan from the service.
-func tryFetchTestPlan(splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
+func tryFetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("converting params to JSON: %w", err)
 	}
 
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	// create request
 	postUrl := splitterPath + "/test-splitting/plan"
-	r, err := http.NewRequest("POST", postUrl, bytes.NewBuffer(requestBody))
+	r, err := http.NewRequestWithContext(reqCtx, "POST", postUrl, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("creating request: %w", err)
 	}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -33,8 +34,10 @@ func TestFetchTestPlan(t *testing.T) {
 	}))
 	defer svr.Close()
 
+	ctx := context.Background()
+
 	params := TestPlanParams{}
-	got, err := FetchTestPlan(svr.URL, params)
+	got, err := FetchTestPlan(ctx, svr.URL, params)
 	if err != nil {
 		t.Errorf("FetchTestPlan(%q, %v) error = %v", svr.URL, params, err)
 	}
