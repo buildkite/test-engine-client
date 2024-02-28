@@ -1,7 +1,8 @@
 package api
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strconv"
 )
 
@@ -10,8 +11,8 @@ import (
 func CreateFallbackPlan(tests Tests, parallelism int) TestPlan {
 	// sort all test cases
 	testCases := tests.Cases
-	sort.Slice(testCases, func(i, j int) bool {
-		return testCases[i].Path < testCases[j].Path
+	slices.SortFunc(testCases, func(a, b TestCase) int {
+		return cmp.Compare(a.Path, b.Path)
 	})
 
 	// create tasks
