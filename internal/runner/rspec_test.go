@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/test-splitter/internal/api"
+	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
 )
 
 func TestReport(t *testing.T) {
 	testRunner := Rspec{}
-	task := api.Task{}
+	task := plan.Task{}
 	var buf strings.Builder
 
 	// Test that the report writer works when there are no report files
