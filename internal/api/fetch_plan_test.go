@@ -95,7 +95,9 @@ func TestFetchTestPlan_Error5xx(t *testing.T) {
 		w.WriteHeader(500)
 	}))
 	defer svr.Close()
-
+	originalRetryDelay := retryDelay
+	retryDelay = 0
+	t.Cleanup(func() { retryDelay = originalRetryDelay })
 	ctx := context.Background()
 	params := TestPlanParams{}
 	got, err := FetchTestPlan(ctx, svr.URL, params)
