@@ -85,7 +85,16 @@ func tryFetchTestPlan(ctx context.Context, splitterPath string, params TestPlanP
 	}
 	defer resp.Body.Close()
 
-	// TODO: check the response status code
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		// This is our happy path
+
+	case resp.StatusCode >= 400 && resp.StatusCode < 500:
+		return plan.TestPlan{}, fmt.Errorf("%w: server response: %d", errInvalidRequest, resp.StatusCode)
+
+	case resp.StatusCode >= 500 && resp.StatusCode < 600:
+		return plan.TestPlan{}, fmt.Errorf("server response: %d", resp.StatusCode)
+	}
 
 	// read response
 	responseBody, err := io.ReadAll(resp.Body)
