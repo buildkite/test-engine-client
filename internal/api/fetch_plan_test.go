@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
@@ -84,5 +85,32 @@ func TestFetchTestPlan_Error4xx(t *testing.T) {
 
 	if !errors.Is(err, errInvalidRequest) {
 		t.Errorf("FetchTestPlan(%q, %v) want %v", svr.URL, params, errInvalidRequest)
+	}
+}
+
+// Test the client keeps getting 5xx error until retry limit exceeded
+func TestFetchTestPlan_Error5xx(t *testing.T) {
+	retryDelay = 0 * time.Second
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+	}))
+	defer svr.Close()
+
+	ctx := context.Background()
+	params := TestPlanParams{}
+	got, err := FetchTestPlan(ctx, svr.URL, params)
+
+	wantTestPlan := plan.TestPlan{}
+
+	if err == nil {
+		t.Errorf("FetchTestPlan(%q, %v) should return an error", svr.URL, params)
+	}
+
+	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
+		t.Errorf("FetchTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
+	}
+
+	if !errors.Is(err, ErrRetryLimitExceeded) {
+		t.Errorf("FetchTestPlan(%q, %v) want %v", svr.URL, params, ErrRetryLimitExceeded)
 	}
 }
