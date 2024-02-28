@@ -20,6 +20,10 @@ var (
 	errInvalidRequest = errors.New("request was invalid")
 )
 
+var (
+	retryDelay = 5 * time.Second
+)
+
 // TestPlanParams represents the config params sent when fetching a test plan.
 type TestPlanParams struct {
 	SuiteToken  string     `json:"suite_token"`
@@ -31,11 +35,12 @@ type TestPlanParams struct {
 
 // FetchTestPlan fetches a test plan from the service, including retries.
 func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
+	const retryMaxAttempts = 5
 	var testPlan plan.TestPlan
 
 	r := roko.NewRetrier(
-		roko.WithMaxAttempts(5),
-		roko.WithStrategy(roko.Constant(5*time.Second)),
+		roko.WithMaxAttempts(retryMaxAttempts),
+		roko.WithStrategy(roko.Constant(retryDelay)),
 	)
 	err := r.DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
@@ -47,7 +52,7 @@ func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanPara
 		return err
 	})
 
-	if err != nil && r.AttemptCount() == 5 {
+	if err != nil && r.AttemptCount() == retryMaxAttempts {
 		return testPlan, fmt.Errorf("%w: %w", ErrRetryLimitExceeded, err)
 	}
 	return testPlan, err
