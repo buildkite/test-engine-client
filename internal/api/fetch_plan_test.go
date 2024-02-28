@@ -39,7 +39,7 @@ func TestFetchTestPlan(t *testing.T) {
 		t.Errorf("FetchTestPlan(%q, %v) error = %v", svr.URL, params, err)
 	}
 	want := plan.TestPlan{
-		Tasks: map[string]plan.Task{
+		Tasks: map[string]*plan.Task{
 			"task_1": {
 				NodeNumber: 1,
 				Tests: plan.Tests{

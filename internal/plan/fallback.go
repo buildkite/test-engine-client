@@ -15,9 +15,9 @@ func CreateFallbackPlan(tests Tests, parallelism int) TestPlan {
 		return cmp.Compare(a.Path, b.Path)
 	})
 
-	tasks := make(map[string]Task)
+	tasks := make(map[string]*Task)
 	for i := 0; i < parallelism; i++ {
-		tasks[strconv.Itoa(i)] = Task{
+		tasks[strconv.Itoa(i)] = &Task{
 			NodeNumber: i,
 			Tests: Tests{
 				Format: tests.Format,
@@ -31,7 +31,6 @@ func CreateFallbackPlan(tests Tests, parallelism int) TestPlan {
 		nodeNumber := i % parallelism
 		task := tasks[strconv.Itoa(nodeNumber)]
 		task.Tests.Cases = append(task.Tests.Cases, testCase)
-		tasks[strconv.Itoa(nodeNumber)] = task
 	}
 
 	return TestPlan{
