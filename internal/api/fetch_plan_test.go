@@ -33,7 +33,7 @@ func TestFetchTestPlan(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	params := plan.TestPlanParams{}
+	params := TestPlanParams{}
 	got, err := FetchTestPlan(svr.URL, params)
 	if err != nil {
 		t.Errorf("FetchTestPlan(%q, %v) error = %v", svr.URL, params, err)
