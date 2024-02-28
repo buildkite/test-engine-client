@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/test-splitter/internal/api"
+	"github.com/buildkite/test-splitter/internal/plan"
 )
 
 // In future, Rspec will implement an interface that defines
@@ -85,7 +85,7 @@ type RspecReport struct {
 //
 // This is helpful for us in development, not sure if we will
 // continue to maintain this functionality.
-func (r Rspec) Report(w io.Writer, testCases []api.TestCase) error {
+func (r Rspec) Report(w io.Writer, testCases []plan.TestCase) error {
 	// get all rspec json files
 	reportFiles, err := filepath.Glob("tmp/rspec-*.json")
 	if err != nil {

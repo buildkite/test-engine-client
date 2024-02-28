@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/buildkite/test-splitter/internal/api"
+	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/buildkite/test-splitter/internal/runner"
 )
 
@@ -51,9 +52,9 @@ func main() {
 	fmt.Println("Identifier: ", identifier)
 	fmt.Println("Parallelism: ", parralelism)
 
-	testCases := []api.TestCase{}
+	testCases := []plan.TestCase{}
 	for _, file := range files {
-		testCases = append(testCases, api.TestCase{
+		testCases = append(testCases, plan.TestCase{
 			Path: file,
 		})
 	}
@@ -63,7 +64,7 @@ func main() {
 		Mode:        mode,
 		Identifier:  identifier,
 		Parallelism: parralelism,
-		Tests: api.Tests{
+		Tests: plan.Tests{
 			Cases:  testCases,
 			Format: "files",
 		},

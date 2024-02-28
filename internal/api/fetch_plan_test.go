@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -37,12 +38,12 @@ func TestFetchTestPlan(t *testing.T) {
 	if err != nil {
 		t.Errorf("FetchTestPlan(%q, %v) error = %v", svr.URL, params, err)
 	}
-	want := TestPlan{
-		Tasks: map[string]Task{
+	want := plan.TestPlan{
+		Tasks: map[string]plan.Task{
 			"task_1": {
 				NodeNumber: 1,
-				Tests: Tests{
-					Cases: []TestCase{{
+				Tests: plan.Tests{
+					Cases: []plan.TestCase{{
 						Path:              "dummy.spec",
 						EstimatedDuration: ptr(1_000_000),
 					}},
