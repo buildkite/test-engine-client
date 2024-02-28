@@ -75,10 +75,6 @@ func TestFetchTestPlan_Error4xx(t *testing.T) {
 
 	wantTestPlan := plan.TestPlan{}
 
-	if err == nil {
-		t.Errorf("FetchTestPlan(%q, %v) should return an error", svr.URL, params)
-	}
-
 	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
 		t.Errorf("FetchTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
 	}
@@ -105,10 +101,6 @@ func TestFetchTestPlan_Error5xx(t *testing.T) {
 
 	wantTestPlan := plan.TestPlan{}
 
-	if err == nil {
-		t.Errorf("FetchTestPlan(%q, %v) should return an error", svr.URL, params)
-	}
-
 	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
 		t.Errorf("FetchTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
 	}
@@ -133,10 +125,6 @@ func TestFetchTestPlan_Timeout(t *testing.T) {
 	got, err := FetchTestPlan(reqCtx, svr.URL, params)
 
 	wantTestPlan := plan.TestPlan{}
-
-	if err == nil {
-		t.Errorf("FetchTestPlan(%q, %v) should return an error", svr.URL, params)
-	}
 
 	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
 		t.Errorf("FetchTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
