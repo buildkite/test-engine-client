@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -58,5 +59,30 @@ func TestFetchTestPlan(t *testing.T) {
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("FetchTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
+	}
+}
+
+func TestFetchTestPlan_Error4xx(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+	}))
+	defer svr.Close()
+
+	ctx := context.Background()
+	params := TestPlanParams{}
+	got, err := FetchTestPlan(ctx, svr.URL, params)
+
+	wantTestPlan := plan.TestPlan{}
+
+	if err == nil {
+		t.Errorf("FetchTestPlan(%q, %v) should return an error", svr.URL, params)
+	}
+
+	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
+		t.Errorf("FetchTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
+	}
+
+	if !errors.Is(err, errInvalidRequest) {
+		t.Errorf("FetchTestPlan(%q, %v) want %v", svr.URL, params, errInvalidRequest)
 	}
 }
