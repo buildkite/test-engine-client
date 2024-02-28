@@ -22,12 +22,3 @@ type Task struct {
 type TestPlan struct {
 	Tasks map[string]Task `json:"tasks"`
 }
-
-// TestPlanParams represents the config params sent when fetching a test plan.
-type TestPlanParams struct {
-	SuiteToken  string `json:"suite_token"`
-	Mode        string `json:"mode"`
-	Identifier  string `json:"identifier"`
-	Parallelism int    `json:"parallelism"`
-	Tests       Tests  `json:"tests"`
-}

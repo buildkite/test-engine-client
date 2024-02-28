@@ -10,8 +10,17 @@ import (
 	"github.com/buildkite/test-splitter/internal/plan"
 )
 
+// TestPlanParams represents the config params sent when fetching a test plan.
+type TestPlanParams struct {
+	SuiteToken  string     `json:"suite_token"`
+	Mode        string     `json:"mode"`
+	Identifier  string     `json:"identifier"`
+	Parallelism int        `json:"parallelism"`
+	Tests       plan.Tests `json:"tests"`
+}
+
 // FetchTestPlan fetches a test plan from the service.
-func FetchTestPlan(splitterPath string, params plan.TestPlanParams) (plan.TestPlan, error) {
+func FetchTestPlan(splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
