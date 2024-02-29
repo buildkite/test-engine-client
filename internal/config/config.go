@@ -1,9 +1,5 @@
 package config
 
-import (
-	"errors"
-)
-
 type Config struct {
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `validate:"required,gt=0,lte=500"`
@@ -20,18 +16,22 @@ type Config struct {
 }
 
 func New() (Config, error) {
-	var errs []error
+	var errs InvalidConfigError
 
 	c := &Config{}
 
-	// Fetch from environment variables
 	err := c.fetchFromEnv()
 	if err != nil {
-		errs = append(errs, err)
+		errs = append(errs, err.(InvalidConfigError)...)
+	}
+
+	err = c.validate()
+	if err != nil {
+		errs = append(errs, err.(InvalidConfigError)...)
 	}
 
 	if len(errs) > 0 {
-		return Config{}, errors.Join(errs...)
+		return Config{}, errs
 	}
 
 	return *c, nil
