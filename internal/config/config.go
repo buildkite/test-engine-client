@@ -6,7 +6,7 @@ import (
 
 type Config struct {
 	// Parallelism is the number of parallel tasks to run.
-	Parallelism int `validate:"required,gt=0,lte=100"`
+	Parallelism int `validate:"required,gt=0,lte=500"`
 	// ServerBaseUrl is the base URL of the test splitter server.
 	ServerBaseUrl string `validate:"required,url"`
 	// SuiteToken is the token of the test suite.
@@ -16,7 +16,7 @@ type Config struct {
 	// Identifier is the identifier of the build.
 	Identifier string `validate:"required,max=1024"`
 	// Node index is index of the current node.
-	NodeIndex int `validate:"required,gte=0,ltfield=Parallelism"`
+	NodeIndex int `validate:"gte=0,ltfield=Parallelism"`
 }
 
 func New() (Config, error) {
