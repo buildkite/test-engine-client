@@ -20,5 +20,5 @@ type Task struct {
 
 // TestPlan represents the entire test plan.
 type TestPlan struct {
-	Tasks map[string]Task `json:"tasks"`
+	Tasks map[string]*Task `json:"tasks"`
 }
