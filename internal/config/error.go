@@ -15,7 +15,7 @@ func (i InvalidConfigError) Error() string {
 		errs = append(errs, err.Error())
 	}
 	sort.Strings(errs)
-	return fmt.Sprintf("invalid config: %s", strings.Join(errs, ",\n"))
+	return strings.Join(errs, ",\n")
 }
 
 // InvalidFieldError is the detailed error of an invalid rule for a field in the config.
