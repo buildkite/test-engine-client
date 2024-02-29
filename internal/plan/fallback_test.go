@@ -41,6 +41,11 @@ func TestCreateFallbackPlan(t *testing.T) {
 				{{Path: "c"}},
 			},
 		},
+		// The function should allow for duplicate test cases in the input
+		// and distribute them evenly across the nodes.
+		// This can be useful when the same test case needs to be run multiple times
+		// to ensure it's not flaky.
+		// Preventing duplicate test cases will be the responsibility of the caller.
 		{
 			testCases: []TestCase{
 				{Path: "a"},
