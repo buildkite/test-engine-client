@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
+	"github.com/buildkite/test-splitter/internal/config"
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/buildkite/test-splitter/internal/runner"
 )
@@ -38,22 +40,18 @@ func main() {
 	}
 	fmt.Printf("Found %d files\n", len(files))
 
-	// fetch env vars
-	suiteToken := FetchEnv("BUILDKITE_SPLITTER_RSPEC_TOKEN", "xx-local-analytics-key")
-	identifier := FetchEnv("BUILDKITE_BUILD_ID", "local")
-	mode := FetchEnv("BUILDKITE_SPLITTER_MODE", "static")
-	parralelism, err := FetchIntEnv("BUILDKITE_PARALLEL_JOB_COUNT", 1)
+	// get config
+	config, err := config.New()
 	if err != nil {
-		log.Fatalf("Misconfigured parallel job count: %v", err)
+		log.Fatal("Invalid configuration: ", err)
 	}
-	splitterPath := FetchEnv("BUILDKITE_SPLITTER_PATH", "https://buildkite.com")
 
 	// get plan
 	fmt.Println("--- :test-analytics: Getting Test Plan 🎣")
-	fmt.Println("SuiteToken: ", suiteToken)
-	fmt.Println("Mode: ", mode)
-	fmt.Println("Identifier: ", identifier)
-	fmt.Println("Parallelism: ", parralelism)
+	fmt.Println("SuiteToken: ", config.SuiteToken)
+	fmt.Println("Mode: ", config.Mode)
+	fmt.Println("Identifier: ", config.Identifier)
+	fmt.Println("Parallelism: ", config.Parallelism)
 
 	testCases := []plan.TestCase{}
 	for _, file := range files {
@@ -71,12 +69,11 @@ func main() {
 		Cases:  testCases,
 		Format: "files",
 	}
-
-	testPlan, err := api.FetchTestPlan(fetchCtx, splitterPath, api.TestPlanParams{
-		SuiteToken:  suiteToken,
-		Mode:        mode,
-		Identifier:  identifier,
-		Parallelism: parralelism,
+	testPlan, err := api.FetchTestPlan(fetchCtx, config.ServerBaseUrl, api.TestPlanParams{
+		SuiteToken:  config.SuiteToken,
+		Mode:        config.Mode,
+		Identifier:  config.Identifier,
+		Parallelism: config.Parallelism,
 		Tests:       tests,
 	})
 	if err != nil {
@@ -86,12 +83,11 @@ func main() {
 			log.Fatalf("Couldn't fetch test plan: %v", err)
 		}
 		// Create the fallback plan
-		testPlan = plan.CreateFallbackPlan(tests, parralelism)
+		testPlan = plan.CreateFallbackPlan(tests, config.Parallelism)
 	}
 
 	// get plan for this node
-	nodeIdx := FetchEnv("BUILDKITE_PARALLEL_JOB", "0")
-	thisNodeTask := testPlan.Tasks[nodeIdx]
+	thisNodeTask := testPlan.Tasks[strconv.Itoa(config.NodeIndex)]
 
 	prettifiedPlan, _ := json.MarshalIndent(thisNodeTask, "", "  ")
 	fmt.Println("--- :test-analytics: Plan for this node 🎊")
