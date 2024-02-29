@@ -19,8 +19,6 @@ type Config struct {
 	NodeIndex int `validate:"required,gte=0,ltfield=Parallelism"`
 }
 
-var ErrInvalidConfig = errors.New("invalid config")
-
 func New() (Config, error) {
 	var errs []error
 
