@@ -58,6 +58,18 @@ func TestCreateFallbackPlan(t *testing.T) {
 				{{Path: "c"}},
 			},
 		},
+		{
+			testCases: []TestCase{
+				{Path: "a"},
+				{Path: "b"},
+			},
+			parallelism: 3,
+			want: [][]TestCase{
+				{{Path: "a"}},
+				{{Path: "b"}},
+				{},
+			},
+		},
 	}
 
 	for _, s := range scenarios {
