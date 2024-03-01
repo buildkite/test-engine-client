@@ -33,7 +33,7 @@ func TestConfigValidate(t *testing.T) {
 		}
 
 		if !errors.As(err, new(InvalidConfigError)) {
-			t.Errorf("config.fetchFromEnv() expected ValidationError, got %v", err)
+			t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
 		}
 	})
 
@@ -113,16 +113,16 @@ func TestConfigValidate(t *testing.T) {
 			}
 
 			if !errors.As(err, new(InvalidConfigError)) {
-				t.Errorf("config.fetchFromEnv() expected InvalidConfigError, got %v", err)
+				t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
 			}
 
 			validationErrors := err.(InvalidConfigError)
 			if len(validationErrors) != 1 {
-				t.Errorf("config.fetchFromEnv() expected 1 validation error, got %d", len(validationErrors))
+				t.Errorf("config.Validate() expected 1 validation error, got %d", len(validationErrors))
 			}
 
 			if validationErrors[0].name != s.field {
-				t.Errorf("config.fetchFromEnv() expected error name %v, got %v", s.field, validationErrors[0].name)
+				t.Errorf("config.Validate() expected error name %v, got %v", s.field, validationErrors[0].name)
 			}
 		})
 	}
@@ -136,7 +136,7 @@ func TestConfigValidate(t *testing.T) {
 		}
 
 		if !errors.As(err, new(InvalidConfigError)) {
-			t.Errorf("config.fetchFromEnv() expected ValidationError, got %v", err)
+			t.Errorf("config.Validate() expected ValidationError, got %v", err)
 		}
 
 		validationErrors := err.(InvalidConfigError)
