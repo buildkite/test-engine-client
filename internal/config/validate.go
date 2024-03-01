@@ -1,14 +1,14 @@
 package config
 
 import (
-	"github.com/go-playground/validator"
+	"github.com/go-playground/validator/v10"
 )
 
 // validate checks if the Config struct is valid using the "github.com/go-playground/validator" package to validate the struct.
 // The validation rules are defined in the struct tags.
 // It returns an InvalidConfigError if the struct is invalid.
 func (c *Config) validate() error {
-	validate := validator.New()
+	validate := validator.New(validator.WithRequiredStructEnabled())
 	validationErrors := validate.Struct(c)
 
 	if validationErrors != nil {
