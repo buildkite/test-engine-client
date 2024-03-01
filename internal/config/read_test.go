@@ -11,7 +11,7 @@ import (
 func TestConfigreadFromEnv(t *testing.T) {
 	t.Run("all environment variables are present", func(t *testing.T) {
 		os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
-		os.Setenv("BUILDKITE_PARALLEL_JOB", "5")
+		os.Setenv("BUILDKITE_PARALLEL_JOB", "0")
 		os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.localhost")
 		os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 		os.Setenv("BUILDKITE_BUILD_ID", "123")
@@ -23,7 +23,7 @@ func TestConfigreadFromEnv(t *testing.T) {
 
 		want := Config{
 			Parallelism:   10,
-			NodeIndex:     5,
+			NodeIndex:     0,
 			ServerBaseUrl: "https://buildkite.localhost",
 			Mode:          "static",
 			Identifier:    "123",
