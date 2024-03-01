@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestConfigFetchFromEnv(t *testing.T) {
+func TestConfigreadFromEnv(t *testing.T) {
 	t.Run("all environment variables are present", func(t *testing.T) {
 		os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
 		os.Setenv("BUILDKITE_PARALLEL_JOB", "5")
@@ -19,7 +19,7 @@ func TestConfigFetchFromEnv(t *testing.T) {
 		defer os.Clearenv()
 
 		c := Config{}
-		err := c.fetchFromEnv()
+		err := c.readFromEnv()
 
 		want := Config{
 			Parallelism:   10,
@@ -31,11 +31,11 @@ func TestConfigFetchFromEnv(t *testing.T) {
 		}
 
 		if err != nil {
-			t.Errorf("config.fetchFromEnv() expected no error, got error %v", err)
+			t.Errorf("config.readFromEnv() expected no error, got error %v", err)
 		}
 
 		if diff := cmp.Diff(c, want); diff != "" {
-			t.Errorf("config.fetchFromEnv() diff (-got +want):\n%s", diff)
+			t.Errorf("config.readFromEnv() diff (-got +want):\n%s", diff)
 		}
 	})
 
@@ -44,7 +44,7 @@ func TestConfigFetchFromEnv(t *testing.T) {
 		defer os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
 
 		c := Config{}
-		c.fetchFromEnv()
+		c.readFromEnv()
 		if c.ServerBaseUrl != "https://buildkite.com" {
 			t.Errorf("ServerBaseUrl = %v, want %v", c.ServerBaseUrl, "https://buildkite.com")
 		}
@@ -55,7 +55,7 @@ func TestConfigFetchFromEnv(t *testing.T) {
 		defer os.Unsetenv("BUILDKITE_SPLITTER_MODE")
 
 		c := Config{}
-		c.fetchFromEnv()
+		c.readFromEnv()
 		if c.Mode != "static" {
 			t.Errorf("Mode = %v, want %v", c.Mode, "static")
 		}
@@ -69,22 +69,22 @@ func TestConfigFetchFromEnv(t *testing.T) {
 		defer os.Unsetenv("BUILDKITE_PARALLEL_JOB")
 
 		c := Config{}
-		err := c.fetchFromEnv()
+		err := c.readFromEnv()
 		if err == nil {
-			t.Errorf("config.fetchFromEnv() expected error, got nil")
+			t.Errorf("config.readFromEnv() expected error, got nil")
 		}
 
 		if !errors.As(err, new(InvalidConfigError)) {
-			t.Errorf("config.fetchFromEnv() expected ValidationError, got %v", err)
+			t.Errorf("config.readFromEnv() expected ValidationError, got %v", err)
 		}
 
 		validationErrors := err.(InvalidConfigError)
 		if len(validationErrors) != 1 {
-			t.Errorf("config.fetchFromEnv() expected 1 error, got %v", len(validationErrors))
+			t.Errorf("config.readFromEnv() expected 1 error, got %v", len(validationErrors))
 		}
 
 		if validationErrors[0].name != "Parallelism" {
-			t.Errorf("config.fetchFromEnv() expected error name %v, got %v", "Parallelism", validationErrors[0].name)
+			t.Errorf("config.readFromEnv() expected error name %v, got %v", "Parallelism", validationErrors[0].name)
 		}
 	})
 
@@ -96,22 +96,22 @@ func TestConfigFetchFromEnv(t *testing.T) {
 		defer os.Unsetenv("BUILDKITE_PARALLEL_JOB")
 
 		c := Config{}
-		err := c.fetchFromEnv()
+		err := c.readFromEnv()
 		if err == nil {
-			t.Errorf("config.fetchFromEnv() expected error, got nil")
+			t.Errorf("config.readFromEnv() expected error, got nil")
 		}
 
 		if !errors.As(err, new(InvalidConfigError)) {
-			t.Errorf("config.fetchFromEnv() expected ValidationError, got %v", err)
+			t.Errorf("config.readFromEnv() expected ValidationError, got %v", err)
 		}
 
 		validationErrors := err.(InvalidConfigError)
 		if len(validationErrors) != 1 {
-			t.Errorf("config.fetchFromEnv() expected 1 error, got %v", len(validationErrors))
+			t.Errorf("config.readFromEnv() expected 1 error, got %v", len(validationErrors))
 		}
 
 		if validationErrors[0].name != "NodeIndex" {
-			t.Errorf("config.fetchFromEnv() expected error name %v, got %v", "NodeIndex", validationErrors[0].name)
+			t.Errorf("config.readFromEnv() expected error name %v, got %v", "NodeIndex", validationErrors[0].name)
 		}
 	})
 }

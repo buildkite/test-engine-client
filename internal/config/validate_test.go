@@ -144,7 +144,7 @@ func TestConfigValidate(t *testing.T) {
 		// When parallelism less than 1, node index will always be invalid because it cannot be greater than parallelism and less than 0.
 		// So, we expect 2 validation errors.
 		if len(validationErrors) != 2 {
-			t.Errorf("config.fetchFromEnv() expected 2 validation error, got %d", len(validationErrors))
+			t.Errorf("config.readFromEnv() expected 2 validation error, got %d", len(validationErrors))
 		}
 	})
 }
