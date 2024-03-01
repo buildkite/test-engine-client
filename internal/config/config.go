@@ -15,12 +15,14 @@ type Config struct {
 	NodeIndex int `validate:"gte=0,ltfield=Parallelism"`
 }
 
+// New wraps the readFromEnv and validate functions to create a new Config struct.
+// It returns Config struct and an InvalidConfigError if there is an invalid configuration.
 func New() (Config, error) {
 	var errs InvalidConfigError
 
 	c := &Config{}
 
-	err := c.fetchFromEnv()
+	err := c.readFromEnv()
 	if err != nil {
 		errs = append(errs, err.(InvalidConfigError)...)
 	}

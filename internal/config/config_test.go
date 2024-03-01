@@ -72,7 +72,7 @@ func TestNewConfig(t *testing.T) {
 
 		validationErrors := err.(InvalidConfigError)
 		if len(validationErrors) != 2 {
-			t.Errorf("config.fetchFromEnv() expected 1 error, got %v", len(validationErrors))
+			t.Errorf("config.readFromEnv() expected 1 error, got %v", len(validationErrors))
 		}
 	})
 
