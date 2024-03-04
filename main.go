@@ -48,10 +48,7 @@ func main() {
 
 	// get plan
 	fmt.Println("--- :test-analytics: Getting Test Plan 🎣")
-	fmt.Println("SuiteToken: ", config.SuiteToken)
-	fmt.Println("Mode: ", config.Mode)
-	fmt.Println("Identifier: ", config.Identifier)
-	fmt.Println("Parallelism: ", config.Parallelism)
+	fmt.Printf("config: %+v", config)
 
 	testCases := []plan.TestCase{}
 	for _, file := range files {
