@@ -18,8 +18,8 @@ import (
 // - BUILDKITE_SPLITTER_MODE (Mode)
 // - BUILDKITE_SUITE_TOKEN (SuiteToken)
 //
-// In the future, it will need to read from different environment variables
-// based on the CI environment (e.g. GitHub Actions, CircleCI, etc).
+// If we are going to support other CI environment in the future,
+// we will need to change where we read the configuration from.
 func (c *Config) readFromEnv() error {
 	var errs InvalidConfigError
 
