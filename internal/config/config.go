@@ -2,7 +2,7 @@ package config
 
 type Config struct {
 	// Parallelism is the number of parallel tasks to run.
-	Parallelism int `validate:"required,gt=0,lte=500"`
+	Parallelism int `validate:"required,gt=0,lte=1000"`
 	// ServerBaseUrl is the base URL of the test splitter server.
 	ServerBaseUrl string `validate:"required,url"`
 	// SuiteToken is the token of the test suite.

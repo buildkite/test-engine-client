@@ -83,9 +83,9 @@ func TestConfigValidate(t *testing.T) {
 			value: 15,
 		},
 		{
-			name:  "Parallelism is greater than 500",
+			name:  "Parallelism is greater than 1000",
 			field: "Parallelism",
-			value: 501,
+			value: 1341,
 		},
 	}
 
