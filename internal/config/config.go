@@ -2,17 +2,17 @@ package config
 
 type Config struct {
 	// Parallelism is the number of parallel tasks to run.
-	Parallelism int `validate:"required,gt=0,lte=1000"`
+	Parallelism int
 	// ServerBaseUrl is the base URL of the test splitter server.
-	ServerBaseUrl string `validate:"required,url"`
+	ServerBaseUrl string
 	// SuiteToken is the token of the test suite.
-	SuiteToken string `validate:"required,max=1024"`
+	SuiteToken string
 	// Mode is the mode of the test splitter.
-	Mode string `validate:"required,oneof=static"`
+	Mode string
 	// Identifier is the identifier of the build.
-	Identifier string `validate:"required,max=1024"`
+	Identifier string
 	// Node index is index of the current node.
-	NodeIndex int `validate:"gte=0,ltfield=Parallelism"`
+	NodeIndex int
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.

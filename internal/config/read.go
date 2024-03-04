@@ -2,7 +2,6 @@ package config
 
 import (
 	"os"
-	"strconv"
 )
 
 // readFromEnv reads the configuration from environment variables and sets it to the Config struct.
@@ -21,7 +20,9 @@ import (
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
 func (c *Config) readFromEnv() error {
-	var errs InvalidConfigError
+	validator := validator{
+		errs: &InvalidConfigError{},
+	}
 
 	c.SuiteToken = os.Getenv("BUILDKITE_SUITE_TOKEN")
 	c.Identifier = os.Getenv("BUILDKITE_BUILD_ID")
@@ -29,31 +30,20 @@ func (c *Config) readFromEnv() error {
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 
-	// get parallelism and node index
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
-	parallelismInt, err := strconv.Atoi(parallelism)
-	if err != nil {
-		errs = append(errs, InvalidFieldError{
-			name: "Parallelism",
-			rule: "number",
-		})
-	} else {
-		c.Parallelism = parallelismInt
+	parellismInt, err := validator.validateStringNumeric("Parallelism", parallelism)
+	if err == nil {
+		c.Parallelism = parellismInt
 	}
 
 	nodeIndex := os.Getenv("BUILDKITE_PARALLEL_JOB")
-	nodeIndexInt, err := strconv.Atoi(nodeIndex)
-	if err != nil {
-		errs = append(errs, InvalidFieldError{
-			name: "NodeIndex",
-			rule: "number",
-		})
-	} else {
+	nodeIndexInt, err := validator.validateStringNumeric("NodeIndex", nodeIndex)
+	if err == nil {
 		c.NodeIndex = nodeIndexInt
 	}
 
-	if len(errs) > 0 {
-		return errs
+	if len(*validator.errs) > 0 {
+		return *validator.errs
 	}
 	return nil
 }

@@ -1,26 +1,30 @@
 package config
 
-import (
-	"github.com/go-playground/validator/v10"
-)
-
-// validate checks if the Config struct is valid using the "github.com/go-playground/validator" package to validate the struct.
-// The validation rules are defined in the struct tags.
-// It returns an InvalidConfigError if the struct is invalid.
+// validate checks if the Config struct is valid and returns InvalidConfigError if it's invalid.
 func (c *Config) validate() error {
-	validate := validator.New(validator.WithRequiredStructEnabled())
-	validationErrors := validate.Struct(c)
-
-	if validationErrors != nil {
-		var errs InvalidConfigError
-		for _, err := range validationErrors.(validator.ValidationErrors) {
-			errs = append(errs, InvalidFieldError{
-				name:  err.Field(),
-				rule:  err.Tag(),
-				param: err.Param(),
-			})
-		}
-		return errs
+	validator := validator{
+		errs: &InvalidConfigError{},
 	}
+
+	validator.validateStringRequired("SuiteToken", c.SuiteToken)
+	validator.validateStringMaxLen("SuiteToken", c.SuiteToken, 1024)
+
+	validator.validateStringRequired("Identifier", c.Identifier)
+	validator.validateStringMaxLen("Identifier", c.Identifier, 1024)
+
+	validator.validateMin("Parallelism", c.Parallelism, 1)
+	validator.validateMax("Parallelism", c.Parallelism, 1000)
+
+	validator.validateMin("NodeIndex", c.NodeIndex, 0)
+	validator.validateMax("NodeIndex", c.NodeIndex, c.Parallelism-1)
+
+	validator.validateStringIn("Mode", c.Mode, []string{"static"})
+
+	validator.validateStringUrl("ServerBaseUrl", c.ServerBaseUrl)
+
+	if len(*validator.errs) > 0 {
+		return *validator.errs
+	}
+
 	return nil
 }
