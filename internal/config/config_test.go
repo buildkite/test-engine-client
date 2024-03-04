@@ -19,85 +19,78 @@ func setEnv(t *testing.T) {
 }
 
 func TestNewConfig(t *testing.T) {
-	t.Run("all configurations are present and valid", func(t *testing.T) {
-		setEnv(t)
-		defer os.Clearenv()
+	setEnv(t)
+	defer os.Clearenv()
 
-		c, err := New()
-		if err != nil {
-			t.Errorf("config.New() expected no error, got error %v", err)
-		}
+	c, err := New()
+	if err != nil {
+		t.Errorf("config.New() expected no error, got error %v", err)
+	}
 
-		want := Config{
-			Parallelism:   60,
-			NodeIndex:     7,
-			ServerBaseUrl: "https://build.kite",
-			Mode:          "static",
-			Identifier:    "xyz",
-			SuiteToken:    "my_token",
-		}
+	want := Config{
+		Parallelism:   60,
+		NodeIndex:     7,
+		ServerBaseUrl: "https://build.kite",
+		Mode:          "static",
+		Identifier:    "xyz",
+		SuiteToken:    "my_token",
+	}
 
-		if diff := cmp.Diff(c, want); diff != "" {
-			t.Errorf("config.New() diff (-got +want):\n%s", diff)
-		}
-	})
+	if diff := cmp.Diff(c, want); diff != "" {
+		t.Errorf("config.New() diff (-got +want):\n%s", diff)
+	}
+}
 
-	t.Run("all configurations are missing", func(t *testing.T) {
-		os.Clearenv()
+func TestNewConfig_EmptyConfig(t *testing.T) {
+	os.Clearenv()
 
-		_, err := New()
-		if err == nil {
-			t.Errorf("config.New() expected error, got nil")
-		}
+	_, err := New()
 
-		if !errors.As(err, new(InvalidConfigError)) {
-			t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
-		}
-	})
+	if !errors.As(err, new(InvalidConfigError)) {
+		t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
+	}
+}
 
-	t.Run("some configurations are invalid", func(t *testing.T) {
-		setEnv(t)
-		os.Setenv("BUILDKITE_SPLITTER_MODE", "dynamic")
-		os.Unsetenv("BUILDKITE_SUITE_TOKEN")
-		defer os.Clearenv()
+func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
+	setEnv(t)
+	os.Unsetenv("BUILDKITE_SPLITTER_MODE")
+	os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
+	defer os.Clearenv()
 
-		_, err := New()
-		if err == nil {
-			t.Errorf("config.New() expected error, got nil")
-		}
+	c, err := New()
+	if err != nil {
+		t.Errorf("config.New() expected no error, got error %v", err)
+	}
 
-		if !errors.As(err, new(InvalidConfigError)) {
-			t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
-		}
+	want := Config{
+		Parallelism:   60,
+		NodeIndex:     7,
+		ServerBaseUrl: "https://buildkite.com",
+		Mode:          "static",
+		Identifier:    "xyz",
+		SuiteToken:    "my_token",
+	}
 
-		validationErrors := err.(InvalidConfigError)
-		if len(validationErrors) != 2 {
-			t.Errorf("config.readFromEnv() expected 1 error, got %v", len(validationErrors))
-		}
-	})
+	if diff := cmp.Diff(c, want); diff != "" {
+		t.Errorf("config.New() diff (-got +want):\n%s", diff)
+	}
+}
 
-	t.Run("configurations with default values are missing", func(t *testing.T) {
-		setEnv(t)
-		os.Unsetenv("BUILDKITE_SPLITTER_MODE")
-		os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
-		defer os.Clearenv()
+func TestNewConfig_InvalidConfig(t *testing.T) {
+	setEnv(t)
+	os.Setenv("BUILDKITE_SPLITTER_MODE", "dynamic")
+	os.Unsetenv("BUILDKITE_SUITE_TOKEN")
+	defer os.Clearenv()
 
-		c, err := New()
-		if err != nil {
-			t.Errorf("config.New() expected no error, got error %v", err)
-		}
+	_, err := New()
 
-		want := Config{
-			Parallelism:   60,
-			NodeIndex:     7,
-			ServerBaseUrl: "https://buildkite.com",
-			Mode:          "static",
-			Identifier:    "xyz",
-			SuiteToken:    "my_token",
-		}
+	if !errors.As(err, new(InvalidConfigError)) {
+		t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
+		return
+	}
 
-		if diff := cmp.Diff(c, want); diff != "" {
-			t.Errorf("config.New() diff (-got +want):\n%s", diff)
-		}
-	})
+	validationErrors := err.(InvalidConfigError)
+	if len(validationErrors) != 2 {
+		t.Errorf("config.readFromEnv() expected 2 error, got %v", len(validationErrors))
+	}
 }
