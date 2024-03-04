@@ -18,25 +18,22 @@ func createConfig() Config {
 }
 
 func TestConfigValidate(t *testing.T) {
-	t.Run("config is valid", func(t *testing.T) {
-		c := createConfig()
-		if err := c.validate(); err != nil {
-			t.Errorf("config.Validate() expected no error, got error %v", err)
-		}
-	})
+	c := createConfig()
+	if err := c.validate(); err != nil {
+		t.Errorf("config.Validate() expected no error, got error %v", err)
+	}
+}
 
-	t.Run("config is empty", func(t *testing.T) {
-		c := Config{}
-		err := c.validate()
-		if err == nil {
-			t.Errorf("config.Validate() expected error, got nil")
-		}
+func TestConfigValidate_Empty(t *testing.T) {
+	c := Config{}
+	err := c.validate()
 
-		if !errors.As(err, new(InvalidConfigError)) {
-			t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
-		}
-	})
+	if !errors.As(err, new(InvalidConfigError)) {
+		t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
+	}
+}
 
+func TestConfigValidate_Invalid(t *testing.T) {
 	scenario := []struct {
 		name  string
 		field string
@@ -108,12 +105,9 @@ func TestConfigValidate(t *testing.T) {
 			}
 
 			err := c.validate()
-			if err == nil {
-				t.Errorf("config.Validate() expected error, got nil")
-			}
-
 			if !errors.As(err, new(InvalidConfigError)) {
 				t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
+				return
 			}
 
 			validationErrors := err.(InvalidConfigError)
@@ -131,12 +125,10 @@ func TestConfigValidate(t *testing.T) {
 		c := createConfig()
 		c.Parallelism = 0
 		err := c.validate()
-		if err == nil {
-			t.Errorf("config.Validate() expected error, got nil")
-		}
 
 		if !errors.As(err, new(InvalidConfigError)) {
 			t.Errorf("config.Validate() expected ValidationError, got %v", err)
+			return
 		}
 
 		validationErrors := err.(InvalidConfigError)
