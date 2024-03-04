@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestConfigreadFromEnv(t *testing.T) {
+func TestConfigReadFromEnv(t *testing.T) {
 	t.Run("all environment variables are present", func(t *testing.T) {
 		os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
 		os.Setenv("BUILDKITE_PARALLEL_JOB", "0")

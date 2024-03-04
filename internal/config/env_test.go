@@ -6,11 +6,11 @@ import (
 )
 
 func TestGetEnvWithDefault(t *testing.T) {
-	os.Setenv("EXISTENT_KEY", "my_value")
-	defer os.Unsetenv("EXISTENT_KEY")
+	os.Setenv("MY_KEY", "my_value")
+	defer os.Unsetenv("MY_KEY")
 
-	os.Setenv("EMPTY_VALUE", "")
-	defer os.Unsetenv("EMPTY_VALUE")
+	os.Setenv("EMPTY_KEY", "")
+	defer os.Unsetenv("EMPTY_KEY")
 
 	tests := []struct {
 		key          string
@@ -18,7 +18,7 @@ func TestGetEnvWithDefault(t *testing.T) {
 		want         string
 	}{
 		{
-			key:          "EXISTENT_KEY",
+			key:          "MY_KEY",
 			defaultValue: "default_value",
 			want:         "my_value",
 		},
@@ -28,7 +28,7 @@ func TestGetEnvWithDefault(t *testing.T) {
 			want:         "non_existent_default_value",
 		},
 		{
-			key:          "EMPTY_VALUE",
+			key:          "EMPTY_KEY",
 			defaultValue: "empty_default_value",
 			want:         "empty_default_value",
 		},
