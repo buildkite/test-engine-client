@@ -3,10 +3,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
 	"github.com/buildkite/test-splitter/internal/plan"
@@ -59,7 +62,12 @@ func main() {
 		})
 	}
 
-	plan, err := api.FetchTestPlan(splitterPath, api.TestPlanParams{
+	ctx := context.Background()
+
+	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+
+	plan, err := api.FetchTestPlan(fetchCtx, splitterPath, api.TestPlanParams{
 		SuiteToken:  suiteToken,
 		Mode:        mode,
 		Identifier:  identifier,
@@ -70,7 +78,13 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatalf("Couldn't fetch test plan: %v", err)
+		// Didn't run out of retries? Must have been some kind of error that
+		// means we should abort.
+		if !errors.Is(err, api.ErrRetryLimitExceeded) {
+			log.Fatalf("Couldn't fetch test plan: %v", err)
+		}
+
+		// TODO: create the fallback plan
 	}
 
 	// get plan for this node

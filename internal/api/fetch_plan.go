@@ -2,12 +2,26 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
+	"github.com/buildkite/roko"
 	"github.com/buildkite/test-splitter/internal/plan"
+)
+
+var (
+	ErrRetryLimitExceeded = errors.New("retry limit exceeded")
+
+	errInvalidRequest = errors.New("request was invalid")
+)
+
+var (
+	retryDelay = 5 * time.Second
 )
 
 // TestPlanParams represents the config params sent when fetching a test plan.
@@ -19,17 +33,45 @@ type TestPlanParams struct {
 	Tests       plan.Tests `json:"tests"`
 }
 
-// FetchTestPlan fetches a test plan from the service.
-func FetchTestPlan(splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
+// FetchTestPlan fetches a test plan from the service, including retries.
+func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
+	const retryMaxAttempts = 5
+	var testPlan plan.TestPlan
+
+	r := roko.NewRetrier(
+		roko.WithMaxAttempts(retryMaxAttempts),
+		roko.WithStrategy(roko.Constant(retryDelay)),
+	)
+	err := r.DoWithContext(ctx, func(r *roko.Retrier) error {
+		var err error
+		testPlan, err = tryFetchTestPlan(ctx, splitterPath, params)
+		// Don't retry if the request was invalid
+		if errors.Is(err, errInvalidRequest) {
+			r.Break()
+		}
+		return err
+	})
+
+	if err != nil && r.AttemptCount() == retryMaxAttempts {
+		return testPlan, fmt.Errorf("%w: %w", ErrRetryLimitExceeded, err)
+	}
+	return testPlan, err
+}
+
+// tryFetchTestPlan fetches a test plan from the service.
+func tryFetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("converting params to JSON: %w", err)
 	}
 
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	// create request
 	postUrl := splitterPath + "/test-splitting/plan"
-	r, err := http.NewRequest("POST", postUrl, bytes.NewBuffer(requestBody))
+	r, err := http.NewRequestWithContext(reqCtx, "POST", postUrl, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("creating request: %w", err)
 	}
@@ -43,7 +85,16 @@ func FetchTestPlan(splitterPath string, params TestPlanParams) (plan.TestPlan, e
 	}
 	defer resp.Body.Close()
 
-	// TODO: check the response status code
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		// This is our happy path
+
+	case resp.StatusCode >= 400 && resp.StatusCode < 500:
+		return plan.TestPlan{}, fmt.Errorf("%w: server response: %d", errInvalidRequest, resp.StatusCode)
+
+	case resp.StatusCode >= 500 && resp.StatusCode < 600:
+		return plan.TestPlan{}, fmt.Errorf("server response: %d", resp.StatusCode)
+	}
 
 	// read response
 	responseBody, err := io.ReadAll(resp.Body)
