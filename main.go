@@ -72,9 +72,7 @@ func main() {
 		Format: "files",
 	}
 
-	var testPlan plan.TestPlan
-
-	testPlan, err = api.FetchTestPlan(fetchCtx, splitterPath, api.TestPlanParams{
+	testPlan, err := api.FetchTestPlan(fetchCtx, splitterPath, api.TestPlanParams{
 		SuiteToken:  suiteToken,
 		Mode:        mode,
 		Identifier:  identifier,
