@@ -67,15 +67,19 @@ func main() {
 	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 
-	plan, err := api.FetchTestPlan(fetchCtx, splitterPath, api.TestPlanParams{
+	tests := plan.Tests{
+		Cases:  testCases,
+		Format: "files",
+	}
+
+	var testPlan plan.TestPlan
+
+	testPlan, err = api.FetchTestPlan(fetchCtx, splitterPath, api.TestPlanParams{
 		SuiteToken:  suiteToken,
 		Mode:        mode,
 		Identifier:  identifier,
 		Parallelism: parralelism,
-		Tests: plan.Tests{
-			Cases:  testCases,
-			Format: "files",
-		},
+		Tests:       tests,
 	})
 	if err != nil {
 		// Didn't run out of retries? Must have been some kind of error that
@@ -83,13 +87,13 @@ func main() {
 		if !errors.Is(err, api.ErrRetryLimitExceeded) {
 			log.Fatalf("Couldn't fetch test plan: %v", err)
 		}
-
-		// TODO: create the fallback plan
+		// Create the fallback plan
+		testPlan = plan.CreateFallbackPlan(tests, parralelism)
 	}
 
 	// get plan for this node
 	nodeIdx := FetchEnv("BUILDKITE_PARALLEL_JOB", "0")
-	thisNodeTask := plan.Tasks[nodeIdx]
+	thisNodeTask := testPlan.Tasks[nodeIdx]
 
 	prettifiedPlan, _ := json.MarshalIndent(thisNodeTask, "", "  ")
 	fmt.Println("--- :test-analytics: Plan for this node 🎊")
