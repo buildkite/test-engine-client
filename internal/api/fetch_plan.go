@@ -39,7 +39,7 @@ func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanPara
 
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(retryMaxAttempts),
-		roko.WithStrategy(roko.Constant(retryDelay)),
+		roko.WithStrategy(roko.Exponential(2, 0)), // Using exponential backoff, the calculation is (2s ** attempts) + 0s
 	)
 	testPlan, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (plan.TestPlan, error) {
 		tp, err := tryFetchTestPlan(ctx, splitterPath, params)
