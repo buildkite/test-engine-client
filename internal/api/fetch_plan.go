@@ -21,7 +21,7 @@ var (
 )
 
 var (
-	retryDelay = 5 * time.Second
+	baseDelay = 2000 * time.Millisecond
 )
 
 // TestPlanParams represents the config params sent when fetching a test plan.
@@ -36,12 +36,10 @@ type TestPlanParams struct {
 // FetchTestPlan fetches a test plan from the service, including retries.
 func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
 	const retryMaxAttempts = 5
-	const baseDelay = 2
-	const delayAdjustment = 0
 
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(retryMaxAttempts),
-		roko.WithStrategy(roko.Exponential(baseDelay, delayAdjustment)), // Using exponential backoff, the calculation is (2s ** attempts) + 0s
+		roko.WithStrategy(roko.ExponentialSubsecond(baseDelay)), // Using exponential backoff, the calculation is baseDelay ^ attempts
 	)
 	testPlan, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (plan.TestPlan, error) {
 		tp, err := tryFetchTestPlan(ctx, splitterPath, params)
