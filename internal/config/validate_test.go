@@ -20,7 +20,7 @@ func createConfig() Config {
 func TestConfigValidate(t *testing.T) {
 	c := createConfig()
 	if err := c.validate(); err != nil {
-		t.Errorf("config.Validate() expected no error, got error %v", err)
+		t.Errorf("config.validate() error = %v", err)
 	}
 }
 
@@ -29,7 +29,7 @@ func TestConfigValidate_Empty(t *testing.T) {
 	err := c.validate()
 
 	if !errors.As(err, new(InvalidConfigError)) {
-		t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
 	}
 }
 
@@ -106,17 +106,17 @@ func TestConfigValidate_Invalid(t *testing.T) {
 
 			err := c.validate()
 			if !errors.As(err, new(InvalidConfigError)) {
-				t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
+				t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
 				return
 			}
 
 			validationErrors := err.(InvalidConfigError)
 			if len(validationErrors) != 1 {
-				t.Errorf("config.Validate() expected 1 validation error, got %d", len(validationErrors))
+				t.Errorf("config.validate() error length = %d, want 1", len(validationErrors))
 			}
 
 			if validationErrors[0].name != s.field {
-				t.Errorf("config.Validate() expected error name %v, got %v", s.field, validationErrors[0].name)
+				t.Errorf("config.validate() error name = %s, want %s", validationErrors[0].name, s.field)
 			}
 		})
 	}
@@ -127,7 +127,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		err := c.validate()
 
 		if !errors.As(err, new(InvalidConfigError)) {
-			t.Errorf("config.Validate() expected ValidationError, got %v", err)
+			t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
 			return
 		}
 
@@ -136,7 +136,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		// When parallelism less than 1, node index will always be invalid because it cannot be greater than parallelism and less than 0.
 		// So, we expect 2 validation errors.
 		if len(validationErrors) != 2 {
-			t.Errorf("config.readFromEnv() expected 2 validation error, got %d", len(validationErrors))
+			t.Errorf("config.validate() error length = %d, want 2", len(validationErrors))
 		}
 	})
 }

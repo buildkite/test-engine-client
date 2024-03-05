@@ -30,7 +30,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 	}
 
 	if err != nil {
-		t.Errorf("config.readFromEnv() expected no error, got error %v", err)
+		t.Errorf("config.readFromEnv() error = %v", err)
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {
@@ -65,12 +65,12 @@ func TestConfigReadFromEnv_NotInteger(t *testing.T) {
 	err := c.readFromEnv()
 
 	if !errors.As(err, new(InvalidConfigError)) {
-		t.Errorf("config.readFromEnv() expected ValidationError, got %v", err)
+		t.Errorf("config.readFromEnv() error = %v, want InvalidConfigError", err)
 		return
 	}
 
 	validationErrors := err.(InvalidConfigError)
 	if len(validationErrors) != 2 {
-		t.Errorf("config.readFromEnv() expected 2 error, got %v", len(validationErrors))
+		t.Errorf("config.readFromEnv() error length = %d, want 2", len(validationErrors))
 	}
 }

@@ -1,5 +1,6 @@
 package config
 
+// Config is the internal representation of the complete test splitter client configuration.
 type Config struct {
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int

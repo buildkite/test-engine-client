@@ -24,7 +24,7 @@ func TestNewConfig(t *testing.T) {
 
 	c, err := New()
 	if err != nil {
-		t.Errorf("config.New() expected no error, got error %v", err)
+		t.Errorf("config.New() error = %v", err)
 	}
 
 	want := Config{
@@ -47,7 +47,7 @@ func TestNewConfig_EmptyConfig(t *testing.T) {
 	_, err := New()
 
 	if !errors.As(err, new(InvalidConfigError)) {
-		t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
+		t.Errorf("config.Validate() error = %v, want InvalidConfigError", err)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 
 	c, err := New()
 	if err != nil {
-		t.Errorf("config.New() expected no error, got error %v", err)
+		t.Errorf("config.New() error = %v", err)
 	}
 
 	want := Config{
@@ -85,12 +85,12 @@ func TestNewConfig_InvalidConfig(t *testing.T) {
 	_, err := New()
 
 	if !errors.As(err, new(InvalidConfigError)) {
-		t.Errorf("config.Validate() expected InvalidConfigError, got %v", err)
+		t.Errorf("config.Validate() error = %v, want InvalidConfigError", err)
 		return
 	}
 
 	validationErrors := err.(InvalidConfigError)
 	if len(validationErrors) != 2 {
-		t.Errorf("config.readFromEnv() expected 2 error, got %v", len(validationErrors))
+		t.Errorf("config.readFromEnv() error length = %d, want 2", len(validationErrors))
 	}
 }
