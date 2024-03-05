@@ -18,6 +18,13 @@ func (i InvalidConfigError) Error() string {
 	return strings.Join(errs, ",\n")
 }
 
+func (e *InvalidConfigError) appendFieldError(field, format string, v ...any) {
+	*e = append(*e, invalidFieldError{
+		name: field,
+		err:  fmt.Sprintf(format, v...),
+	})
+}
+
 // invalidFieldError is the detailed error of an invalid rule for a field in the config.
 type invalidFieldError struct {
 	// name is the name of the field.

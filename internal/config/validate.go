@@ -1,29 +1,58 @@
 package config
 
+import (
+	"net/url"
+)
+
 // validate checks if the Config struct is valid and returns InvalidConfigError if it's invalid.
 func (c *Config) validate() error {
-	validator := validator{
-		errs: &InvalidConfigError{},
+	var errs InvalidConfigError
+
+	if c.SuiteToken == "" {
+		errs.appendFieldError("SuiteToken", "can not be blank")
 	}
 
-	validator.validateStringRequired("SuiteToken", c.SuiteToken)
-	validator.validateStringMaxLen("SuiteToken", c.SuiteToken, 1024)
+	if len(c.SuiteToken) > 1024 {
+		errs.appendFieldError("SuiteToken", "can not be longer than %d characters", 1024)
+	}
 
-	validator.validateStringRequired("Identifier", c.Identifier)
-	validator.validateStringMaxLen("Identifier", c.Identifier, 1024)
+	if c.Identifier == "" {
+		errs.appendFieldError("Identifier", "can not be blank")
+	}
 
-	validator.validateMin("Parallelism", c.Parallelism, 1)
-	validator.validateMax("Parallelism", c.Parallelism, 1000)
+	if len(c.Identifier) > 1024 {
+		errs.appendFieldError("Identifier", "can not be longer than %d characters", 1024)
+	}
 
-	validator.validateMin("NodeIndex", c.NodeIndex, 0)
-	validator.validateMax("NodeIndex", c.NodeIndex, c.Parallelism-1)
+	if c.Parallelism < 1 {
+		errs.appendFieldError("Parallelism", "must be greater than or equal to %d", 1)
+	}
 
-	validator.validateStringIn("Mode", c.Mode, []string{"static"})
+	if c.Parallelism > 1000 {
+		errs.appendFieldError("Parallelism", "can not be greater than %d", 1000)
+	}
 
-	validator.validateStringUrl("ServerBaseUrl", c.ServerBaseUrl)
+	if c.NodeIndex < 0 {
+		errs.appendFieldError("NodeIndex", "must be greater than or equal to %d", 0)
+	}
 
-	if len(*validator.errs) > 0 {
-		return *validator.errs
+	if c.NodeIndex > c.Parallelism-1 {
+		errs.appendFieldError("NodeIndex", "can not be greater than %d", c.Parallelism-1)
+	}
+
+	if c.Mode != "static" {
+		errs.appendFieldError("Mode", "%s is not a valid %s. Valid values are %v", c.Mode, "Mode", []string{"static"})
+	}
+
+	if c.ServerBaseUrl != "" {
+		_, err := url.ParseRequestURI(c.ServerBaseUrl)
+		if err != nil {
+			errs.appendFieldError("ServerBaseUrl", "must be a valid URL")
+		}
+	}
+
+	if len(errs) > 0 {
+		return errs
 	}
 
 	return nil

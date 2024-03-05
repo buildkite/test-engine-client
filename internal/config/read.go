@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 )
 
 // readFromEnv reads the configuration from environment variables and sets it to the Config struct.
@@ -20,9 +21,7 @@ import (
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
 func (c *Config) readFromEnv() error {
-	validator := validator{
-		errs: &InvalidConfigError{},
-	}
+	var errs InvalidConfigError
 
 	c.SuiteToken = os.Getenv("BUILDKITE_SUITE_TOKEN")
 	c.Identifier = os.Getenv("BUILDKITE_BUILD_ID")
@@ -31,19 +30,23 @@ func (c *Config) readFromEnv() error {
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
-	parellismInt, err := validator.validateStringNumeric("Parallelism", parallelism)
-	if err == nil {
-		c.Parallelism = parellismInt
+	parallelismInt, err := strconv.Atoi(parallelism)
+	if err != nil {
+		errs.appendFieldError("Parallelism", "must be a number")
+	} else {
+		c.Parallelism = parallelismInt
 	}
 
 	nodeIndex := os.Getenv("BUILDKITE_PARALLEL_JOB")
-	nodeIndexInt, err := validator.validateStringNumeric("NodeIndex", nodeIndex)
-	if err == nil {
+	nodeIndexInt, err := strconv.Atoi(nodeIndex)
+	if err != nil {
+		errs.appendFieldError("NodeIndex", "must be a number")
+	} else {
 		c.NodeIndex = nodeIndexInt
 	}
 
-	if len(*validator.errs) > 0 {
-		return *validator.errs
+	if len(errs) > 0 {
+		return errs
 	}
 	return nil
 }
