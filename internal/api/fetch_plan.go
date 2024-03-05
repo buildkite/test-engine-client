@@ -36,10 +36,12 @@ type TestPlanParams struct {
 // FetchTestPlan fetches a test plan from the service, including retries.
 func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
 	const retryMaxAttempts = 5
+	const baseDelay = 2
+	const delayAdjustment = 0
 
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(retryMaxAttempts),
-		roko.WithStrategy(roko.Exponential(2, 0)), // Using exponential backoff, the calculation is (2s ** attempts) + 0s
+		roko.WithStrategy(roko.Exponential(baseDelay, delayAdjustment)), // Using exponential backoff, the calculation is (2s ** attempts) + 0s
 	)
 	testPlan, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (plan.TestPlan, error) {
 		tp, err := tryFetchTestPlan(ctx, splitterPath, params)
@@ -64,7 +66,7 @@ func tryFetchTestPlan(ctx context.Context, splitterPath string, params TestPlanP
 		return plan.TestPlan{}, fmt.Errorf("converting params to JSON: %w", err)
 	}
 
-	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	reqCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	// create request

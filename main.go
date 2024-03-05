@@ -60,7 +60,7 @@ func main() {
 
 	ctx := context.Background()
 
-	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	fetchCtx, cancel := context.WithTimeout(ctx, 70*time.Second)
 	defer cancel()
 
 	tests := plan.Tests{
