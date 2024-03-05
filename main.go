@@ -41,14 +41,14 @@ func main() {
 	fmt.Printf("Found %d files\n", len(files))
 
 	// get config
-	config, err := config.New()
+	cfg, err := config.New()
 	if err != nil {
 		log.Fatal("Invalid configuration: ", err)
 	}
 
 	// get plan
 	fmt.Println("--- :test-analytics: Getting Test Plan 🎣")
-	fmt.Printf("config: %+v", config)
+	fmt.Printf("config: %+v", cfg)
 
 	testCases := []plan.TestCase{}
 	for _, file := range files {
@@ -66,11 +66,11 @@ func main() {
 		Cases:  testCases,
 		Format: "files",
 	}
-	testPlan, err := api.FetchTestPlan(fetchCtx, config.ServerBaseUrl, api.TestPlanParams{
-		SuiteToken:  config.SuiteToken,
-		Mode:        config.Mode,
-		Identifier:  config.Identifier,
-		Parallelism: config.Parallelism,
+	testPlan, err := api.FetchTestPlan(fetchCtx, cfg.ServerBaseUrl, api.TestPlanParams{
+		SuiteToken:  cfg.SuiteToken,
+		Mode:        cfg.Mode,
+		Identifier:  cfg.Identifier,
+		Parallelism: cfg.Parallelism,
 		Tests:       tests,
 	})
 	if err != nil {
@@ -80,11 +80,11 @@ func main() {
 			log.Fatalf("Couldn't fetch test plan: %v", err)
 		}
 		// Create the fallback plan
-		testPlan = plan.CreateFallbackPlan(tests, config.Parallelism)
+		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
 	}
 
 	// get plan for this node
-	thisNodeTask := testPlan.Tasks[strconv.Itoa(config.NodeIndex)]
+	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
 
 	prettifiedPlan, _ := json.MarshalIndent(thisNodeTask, "", "  ")
 	fmt.Println("--- :test-analytics: Plan for this node 🎊")

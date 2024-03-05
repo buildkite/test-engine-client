@@ -7,14 +7,14 @@ import (
 )
 
 // validator is a helper struct to validate the Config struct.
-// It contains errs which is a list of InvalidFieldError and various validation functions.
+// It contains errs which is a list of invalidFieldError and various validation functions.
 type validator struct {
 	errs *InvalidConfigError
 }
 
 func (v *validator) validateStringRequired(field string, value string) {
 	if value == "" {
-		*v.errs = append(*v.errs, InvalidFieldError{
+		*v.errs = append(*v.errs, invalidFieldError{
 			name: field,
 			err:  "can not be blank",
 		})
@@ -23,7 +23,7 @@ func (v *validator) validateStringRequired(field string, value string) {
 
 func (v *validator) validateStringMaxLen(field string, value string, max int) {
 	if len(value) > max {
-		*v.errs = append(*v.errs, InvalidFieldError{
+		*v.errs = append(*v.errs, invalidFieldError{
 			name: field,
 			err:  fmt.Sprintf("can not be longer than %d characters", max),
 		})
@@ -32,7 +32,7 @@ func (v *validator) validateStringMaxLen(field string, value string, max int) {
 
 func (v *validator) validateMin(field string, value int, min int) {
 	if value < min {
-		*v.errs = append(*v.errs, InvalidFieldError{
+		*v.errs = append(*v.errs, invalidFieldError{
 			name: field,
 			err:  fmt.Sprintf("must be greater than or equal to %d", min),
 		})
@@ -41,7 +41,7 @@ func (v *validator) validateMin(field string, value int, min int) {
 
 func (v *validator) validateMax(field string, value int, max int) {
 	if value > max {
-		*v.errs = append(*v.errs, InvalidFieldError{
+		*v.errs = append(*v.errs, invalidFieldError{
 			name: field,
 			err:  fmt.Sprintf("can not be greater than %d", max),
 		})
@@ -54,7 +54,7 @@ func (v *validator) validateStringIn(field string, value string, validValues []s
 			return
 		}
 	}
-	*v.errs = append(*v.errs, InvalidFieldError{
+	*v.errs = append(*v.errs, invalidFieldError{
 		name: field,
 		err:  fmt.Sprintf("%s is not a valid %s. Valid values are %v", value, field, validValues),
 	})
@@ -62,17 +62,17 @@ func (v *validator) validateStringIn(field string, value string, validValues []s
 
 func (v *validator) validateStringUrl(field string, value string) {
 	if _, err := url.ParseRequestURI(value); err != nil {
-		*v.errs = append(*v.errs, InvalidFieldError{
+		*v.errs = append(*v.errs, invalidFieldError{
 			name: field,
 			err:  "must be a valid URL",
 		})
 	}
 }
 
-func (v *validator) validateStringNumeric(field string, value string) (int, *InvalidFieldError) {
+func (v *validator) validateStringNumeric(field string, value string) (int, *invalidFieldError) {
 	int, err := strconv.Atoi(value)
 	if err != nil {
-		fieldError := InvalidFieldError{
+		fieldError := invalidFieldError{
 			name: field,
 			err:  "must be a number",
 		}
