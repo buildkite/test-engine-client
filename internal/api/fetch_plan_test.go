@@ -91,9 +91,10 @@ func TestFetchTestPlan_Error5xx(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	originalRetryDelay := retryDelay
-	retryDelay = 0 * time.Second
-	t.Cleanup(func() { retryDelay = originalRetryDelay })
+	originalBaseDelay := baseDelay
+	baseDelay = 1 * time.Millisecond
+
+	t.Cleanup(func() { baseDelay = originalBaseDelay })
 
 	ctx := context.Background()
 	params := TestPlanParams{}
