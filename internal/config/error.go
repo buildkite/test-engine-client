@@ -7,7 +7,7 @@ import (
 )
 
 // InvalidConfigError is an error that contains a list of all invalid fields in the config.
-type InvalidConfigError []InvalidFieldError
+type InvalidConfigError []invalidFieldError
 
 func (i InvalidConfigError) Error() string {
 	var errs []string
@@ -18,14 +18,14 @@ func (i InvalidConfigError) Error() string {
 	return strings.Join(errs, ",\n")
 }
 
-// InvalidFieldError is the detailed error of an invalid rule for a field in the config.
-type InvalidFieldError struct {
+// invalidFieldError is the detailed error of an invalid rule for a field in the config.
+type invalidFieldError struct {
 	// name is the name of the field.
 	name string
 	// err is the error message.
 	err string
 }
 
-func (f InvalidFieldError) Error() string {
+func (f invalidFieldError) Error() string {
 	return fmt.Sprintf("%s %s", f.name, f.err)
 }
