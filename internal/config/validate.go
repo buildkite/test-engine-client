@@ -45,8 +45,7 @@ func (c *Config) validate() error {
 	}
 
 	if c.ServerBaseUrl != "" {
-		_, err := url.ParseRequestURI(c.ServerBaseUrl)
-		if err != nil {
+		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
 			errs.appendFieldError("ServerBaseUrl", "must be a valid URL")
 		}
 	}
