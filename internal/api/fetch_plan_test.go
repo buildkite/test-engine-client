@@ -84,33 +84,7 @@ func TestFetchTestPlan_Error4xx(t *testing.T) {
 	}
 }
 
-// Test the client keeps getting 5xx error until retry limit exceeded
-func TestFetchTestPlan_Error5xx(t *testing.T) {
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(500)
-	}))
-	defer svr.Close()
-
-	originalInitialDelay := initialDelay
-	initialDelay = 1 * time.Millisecond
-
-	t.Cleanup(func() { initialDelay = originalInitialDelay })
-
-	ctx := context.Background()
-	params := TestPlanParams{}
-	got, err := FetchTestPlan(ctx, svr.URL, params)
-
-	wantTestPlan := plan.TestPlan{}
-
-	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
-		t.Errorf("FetchTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
-	}
-
-	if !errors.Is(err, ErrRetryLimitExceeded) {
-		t.Errorf("FetchTestPlan(%q, %v) want %v got %v", svr.URL, params, ErrRetryLimitExceeded, err)
-	}
-}
-
+// Test the client keeps getting 5xx error until reached context deadline
 func TestFetchTestPlan_Timeout(t *testing.T) {
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,11 +93,11 @@ func TestFetchTestPlan_Timeout(t *testing.T) {
 	defer svr.Close()
 
 	ctx := context.Background()
-	reqCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	params := TestPlanParams{}
-	got, err := FetchTestPlan(reqCtx, svr.URL, params)
+	got, err := FetchTestPlan(fetchCtx, svr.URL, params)
 
 	wantTestPlan := plan.TestPlan{}
 
