@@ -48,6 +48,7 @@ func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanPara
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(retryMaxAttempts),
 		roko.WithStrategy(roko.ExponentialSubsecond(initialDelay)),
+		roko.WithJitter(),
 	)
 	testPlan, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (plan.TestPlan, error) {
 		tp, err := tryFetchTestPlan(ctx, splitterPath, params)
