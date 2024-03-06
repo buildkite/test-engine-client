@@ -21,15 +21,13 @@ type Config struct {
 func New() (Config, error) {
 	var errs InvalidConfigError
 
-	c := &Config{}
+	c := Config{}
 
-	err := c.readFromEnv()
-	if err != nil {
+	if err := c.readFromEnv(); err != nil {
 		errs = append(errs, err.(InvalidConfigError)...)
 	}
 
-	err = c.validate()
-	if err != nil {
+	if err := c.validate(); err != nil {
 		errs = append(errs, err.(InvalidConfigError)...)
 	}
 
@@ -37,5 +35,5 @@ func New() (Config, error) {
 		return Config{}, errs
 	}
 
-	return *c, nil
+	return c, nil
 }
