@@ -15,15 +15,10 @@ import (
 )
 
 var (
-	ErrRetryLimitExceeded = errors.New("retry limit exceeded")
-
 	errInvalidRequest = errors.New("request was invalid")
 )
 
 var (
-	// Initial retry delay for fetching test plans.
-	// This is a variable so it can be overridden in tests.
-	// See comment in FetchTestPlan.
 	initialDelay = 3000 * time.Millisecond
 )
 
@@ -38,21 +33,13 @@ type TestPlanParams struct {
 
 // FetchTestPlan fetches a test plan from the service, including retries.
 func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
-	const retryMaxAttempts = 5
-
 	// Retry using exponential backoff
 	// The formula is: delay = initialDelay ** (retries/16 + 1)
-	// Example of 3s initial delay growing over 10 attempts:
+	// Example of 3s initial delay growing over 6 attempts:
 	//  3s    → 5s    → 8s   → 13s   → 22s
-	// for a total retry delay of 51 seconds between attempts.
-	// Each request times out after 15 seconds, chosen to provide some
-	// headroom on top of the goal p99 time to fetch of 10s.
-	// So in the worst case only 3 full attempts and 1 partial attempt
-	// may be made to fetch a test plan before the overall 70 second
-	// timeout.
 
 	r := roko.NewRetrier(
-		roko.WithMaxAttempts(retryMaxAttempts),
+		roko.TryForever(),
 		roko.WithStrategy(roko.ExponentialSubsecond(initialDelay)),
 		roko.WithJitter(),
 	)
@@ -65,9 +52,6 @@ func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanPara
 		return tp, err
 	})
 
-	if err != nil && r.AttemptCount() == retryMaxAttempts {
-		return testPlan, fmt.Errorf("%w: %w", ErrRetryLimitExceeded, err)
-	}
 	return testPlan, err
 }
 
