@@ -31,18 +31,16 @@ func (c *Config) readFromEnv() error {
 
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	parallelismInt, err := strconv.Atoi(parallelism)
+	c.Parallelism = parallelismInt
 	if err != nil {
 		errs.appendFieldError("Parallelism", "must be a number")
-	} else {
-		c.Parallelism = parallelismInt
 	}
 
 	nodeIndex := os.Getenv("BUILDKITE_PARALLEL_JOB")
 	nodeIndexInt, err := strconv.Atoi(nodeIndex)
+	c.NodeIndex = nodeIndexInt
 	if err != nil {
 		errs.appendFieldError("NodeIndex", "must be a number")
-	} else {
-		c.NodeIndex = nodeIndexInt
 	}
 
 	if len(errs) > 0 {
