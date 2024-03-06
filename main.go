@@ -59,7 +59,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-
+	// We expect the whole test plan fetching process takes no more than 70 seconds
 	fetchCtx, cancel := context.WithTimeout(ctx, 70*time.Second)
 	defer cancel()
 
