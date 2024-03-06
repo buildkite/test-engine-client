@@ -19,6 +19,9 @@ var (
 )
 
 var (
+	// Initial retry delay for fetching test plans.
+	// This is a variable so it can be overridden in tests.
+	// See comment in FetchTestPlan.
 	initialDelay = 3000 * time.Millisecond
 )
 
@@ -37,6 +40,12 @@ func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanPara
 	// The formula is: delay = initialDelay ** (retries/16 + 1)
 	// Example of 3s initial delay growing over 6 attempts:
 	//  3s    → 5s    → 8s   → 13s   → 22s
+	// for a total retry delay of 51 seconds between attempts.
+	// Each request times out after 15 seconds, chosen to provide some
+	// headroom on top of the goal p99 time to fetch of 10s.
+	// So in the worst case only 3 full attempts and 1 partial attempt
+	// may be made to fetch a test plan before the overall 70 second
+	// timeout.
 
 	r := roko.NewRetrier(
 		roko.TryForever(),
