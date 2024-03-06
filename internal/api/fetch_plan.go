@@ -21,7 +21,7 @@ var (
 )
 
 var (
-	initialDelay = 5000 * time.Millisecond
+	initialDelay = 3000 * time.Millisecond
 )
 
 // TestPlanParams represents the config params sent when fetching a test plan.
@@ -39,8 +39,8 @@ func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanPara
 
 	// Retry using exponential backoff
 	// The formula is: delay = initialDelay ** (retries/16 + 1)
-	// Example of 5s initial delay growing over 10 attempts:
-	//  5s    → 9s    → 14s   → 25s
+	// Example of 3s initial delay growing over 10 attempts:
+	//  3s    → 5s    → 8s   → 13s   → 22s
 
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(retryMaxAttempts),
