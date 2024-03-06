@@ -44,6 +44,12 @@ func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanPara
 	// The formula is: delay = initialDelay ** (retries/16 + 1)
 	// Example of 3s initial delay growing over 10 attempts:
 	//  3s    → 5s    → 8s   → 13s   → 22s
+	// for a total retry delay of 51 seconds between attempts.
+	// Each request times out after 15 seconds, chosen to provide some
+	// headroom on top of the goal p99 time to fetch of 10s.
+	// So in the worst case only 3 full attempts and 1 partial attempt
+	// may be made to fetch a test plan before the overall 70 second
+	// timeout.
 
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(retryMaxAttempts),
@@ -73,6 +79,7 @@ func tryFetchTestPlan(ctx context.Context, splitterPath string, params TestPlanP
 		return plan.TestPlan{}, fmt.Errorf("converting params to JSON: %w", err)
 	}
 
+	// See above for explanation of 15 seconds.
 	reqCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
