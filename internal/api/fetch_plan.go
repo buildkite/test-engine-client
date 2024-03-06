@@ -21,6 +21,9 @@ var (
 )
 
 var (
+	// Initial retry delay for fetching test plans.
+	// This is a variable so it can be overridden in tests.
+	// See comment in FetchTestPlan.
 	initialDelay = 3000 * time.Millisecond
 )
 
