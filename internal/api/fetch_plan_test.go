@@ -91,10 +91,10 @@ func TestFetchTestPlan_Error5xx(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	originalBaseDelay := baseDelay
-	baseDelay = 1 * time.Millisecond
+	originalInitialDelay := initialDelay
+	initialDelay = 1 * time.Millisecond
 
-	t.Cleanup(func() { baseDelay = originalBaseDelay })
+	t.Cleanup(func() { initialDelay = originalInitialDelay })
 
 	ctx := context.Background()
 	params := TestPlanParams{}
