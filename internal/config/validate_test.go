@@ -105,18 +105,18 @@ func TestConfigValidate_Invalid(t *testing.T) {
 			}
 
 			err := c.validate()
-			if !errors.As(err, new(InvalidConfigError)) {
+
+			var invConfigError InvalidConfigError
+			if !errors.As(err, &invConfigError) {
 				t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
-				return
 			}
 
-			validationErrors := err.(InvalidConfigError)
-			if len(validationErrors) != 1 {
-				t.Errorf("config.validate() error length = %d, want 1", len(validationErrors))
+			if len(invConfigError) != 1 {
+				t.Errorf("config.validate() error length = %d, want 1", len(invConfigError))
 			}
 
-			if validationErrors[0].name != s.field {
-				t.Errorf("config.validate() error name = %s, want %s", validationErrors[0].name, s.field)
+			if invConfigError[0].name != s.field {
+				t.Errorf("config.validate() error name = %s, want %s", invConfigError[0].name, s.field)
 			}
 		})
 	}
@@ -126,17 +126,16 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		c.Parallelism = 0
 		err := c.validate()
 
-		if !errors.As(err, new(InvalidConfigError)) {
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
 			t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
 			return
 		}
 
-		validationErrors := err.(InvalidConfigError)
-
 		// When parallelism less than 1, node index will always be invalid because it cannot be greater than parallelism and less than 0.
 		// So, we expect 2 validation errors.
-		if len(validationErrors) != 2 {
-			t.Errorf("config.validate() error length = %d, want 2", len(validationErrors))
+		if len(invConfigError) != 2 {
+			t.Errorf("config.validate() error length = %d, want 2", len(invConfigError))
 		}
 	})
 }

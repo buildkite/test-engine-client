@@ -84,13 +84,12 @@ func TestNewConfig_InvalidConfig(t *testing.T) {
 
 	_, err := New()
 
-	if !errors.As(err, new(InvalidConfigError)) {
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
 		t.Errorf("config.Validate() error = %v, want InvalidConfigError", err)
-		return
 	}
 
-	validationErrors := err.(InvalidConfigError)
-	if len(validationErrors) != 2 {
-		t.Errorf("config.readFromEnv() error length = %d, want 2", len(validationErrors))
+	if len(invConfigError) != 2 {
+		t.Errorf("config.readFromEnv() error length = %d, want 2", len(invConfigError))
 	}
 }
