@@ -104,7 +104,7 @@ func main() {
 			log.Printf("Rspec exits with error %d", errorCode)
 			os.Exit(errorCode)
 		}
-		log.Fatalf("error running command: %v", err)
+		log.Fatalf("Couldn't run tests: %v", err)
 	}
 
 	fmt.Println("--- :test-analytics: Test execution results 📊")
