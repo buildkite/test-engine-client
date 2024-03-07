@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"time"
 
@@ -98,8 +99,12 @@ func main() {
 	err = testRunner.Run(runnableTests)
 
 	if err != nil {
-		// TODO: bubble up rspec error to main process
-		log.Fatal("Error when executing tests: ", err)
+		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
+			errorCode := exitError.ExitCode()
+			log.Printf("Rspec exits with error %d", errorCode)
+			os.Exit(errorCode)
+		}
+		log.Fatalf("error running command: %v", err)
 	}
 
 	fmt.Println("--- :test-analytics: Test execution results 📊")
