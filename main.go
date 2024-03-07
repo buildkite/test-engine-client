@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"time"
 
@@ -96,7 +97,30 @@ func main() {
 	for _, testCase := range thisNodeTask.Tests.Cases {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
-	if err := testRunner.Run(runnableTests); err != nil {
+	cmd := testRunner.Command(runnableTests)
+
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Couldn't start tests: %v", err)
+	}
+
+	waitCh := make(chan struct{})
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh)
+
+		for {
+			select {
+			case sig := <-sigCh:
+				cmd.Process.Signal(sig)
+			case <-waitCh:
+				signal.Stop(sigCh)
+				return
+			}
+		}
+	}()
+
+	if err := cmd.Wait(); err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
 			log.Printf("Rspec exited with error %d", exitCode)
@@ -104,6 +128,8 @@ func main() {
 		}
 		log.Fatalf("Couldn't run tests: %v", err)
 	}
+
+	close(waitCh)
 
 	fmt.Println("--- :test-analytics: Test execution results 📊")
 	err = testRunner.Report(os.Stdout, thisNodeTask.Tests.Cases)

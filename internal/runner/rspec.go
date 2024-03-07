@@ -47,8 +47,8 @@ func (Rspec) GetFiles() ([]string, error) {
 	return files, nil
 }
 
-// Run executes the given testCases via bin/rspec.
-func (Rspec) Run(testCases []string) error {
+// Command returns an exec.Cmd that will run the rspec command
+func (Rspec) Command(testCases []string) *exec.Cmd {
 	args := []string{"--options", ".rspec.ci"}
 
 	args = append(args, testCases...)
@@ -59,7 +59,7 @@ func (Rspec) Run(testCases []string) error {
 	cmd := exec.Command("bin/rspec", args...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	return cmd.Run()
+	return cmd
 }
 
 // RspecExample defines metadata for an rspec example (test).
