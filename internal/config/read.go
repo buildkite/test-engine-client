@@ -33,14 +33,14 @@ func (c *Config) readFromEnv() error {
 	parallelismInt, err := strconv.Atoi(parallelism)
 	c.Parallelism = parallelismInt
 	if err != nil {
-		errs.appendFieldError("Parallelism", "must be a number")
+		errs.appendFieldError("Parallelism", "was %q, must be a number", parallelism)
 	}
 
 	nodeIndex := os.Getenv("BUILDKITE_PARALLEL_JOB")
 	nodeIndexInt, err := strconv.Atoi(nodeIndex)
 	c.NodeIndex = nodeIndexInt
 	if err != nil {
-		errs.appendFieldError("NodeIndex", "must be a number")
+		errs.appendFieldError("NodeIndex", "was %q, must be a number", nodeIndex)
 	}
 
 	if len(errs) > 0 {

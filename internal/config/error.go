@@ -15,13 +15,21 @@ func (i InvalidConfigError) Error() string {
 		errs = append(errs, err.Error())
 	}
 	sort.Strings(errs)
-	return strings.Join(errs, ",\n")
+	return strings.Join(errs, ";\n")
+}
+
+func (i InvalidConfigError) Unwrap() []error {
+	errs := make([]error, 0, len(i))
+	for _, e := range i {
+		errs = append(errs, e)
+	}
+	return errs
 }
 
 func (e *InvalidConfigError) appendFieldError(field, format string, v ...any) {
 	*e = append(*e, invalidFieldError{
 		name: field,
-		err:  fmt.Sprintf(format, v...),
+		err:  fmt.Errorf(format, v...),
 	})
 }
 
@@ -29,10 +37,14 @@ func (e *InvalidConfigError) appendFieldError(field, format string, v ...any) {
 type invalidFieldError struct {
 	// name is the name of the field.
 	name string
-	// err is the error message.
-	err string
+	// err is the error.
+	err error
 }
 
 func (f invalidFieldError) Error() string {
 	return fmt.Sprintf("%s %s", f.name, f.err)
+}
+
+func (f invalidFieldError) Unwrap() error {
+	return f.err
 }
