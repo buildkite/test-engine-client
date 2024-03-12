@@ -85,6 +85,12 @@ func main() {
 		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
 	}
 
+	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
+	// In this case, we should create a fallback plan.
+	if len(testPlan.Tasks) == 0 {
+		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	}
+
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
 
