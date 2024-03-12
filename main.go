@@ -19,16 +19,6 @@ import (
 	"github.com/buildkite/test-splitter/internal/runner"
 )
 
-// other attributes are omitted for simplicity
-type Example struct {
-	FilePath string `json:"file_path"`
-}
-
-// other attributes are omitted for simplicity
-type RspecData struct {
-	Examples []Example `json:"examples"`
-}
-
 func main() {
 	// TODO: detect test runner and use appropriate runner
 	testRunner := runner.Rspec{}
