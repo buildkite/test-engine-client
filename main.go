@@ -58,27 +58,10 @@ func main() {
 		Cases:  testCases,
 		Format: "files",
 	}
-	testPlan, err := api.FetchTestPlan(fetchCtx, cfg.ServerBaseUrl, api.TestPlanParams{
-		SuiteToken:  cfg.SuiteToken,
-		Mode:        cfg.Mode,
-		Identifier:  cfg.Identifier,
-		Parallelism: cfg.Parallelism,
-		Tests:       tests,
-	})
-	if err != nil {
-		// Didn't exceed context deadline? Must have been some kind of error that
-		// means we should abort.
-		if !errors.Is(err, context.DeadlineExceeded) {
-			log.Fatalf("Couldn't fetch test plan: %v", err)
-		}
-		// Create the fallback plan
-		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
-	}
 
-	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
-	// In this case, we should create a fallback plan.
-	if len(testPlan.Tasks) == 0 {
-		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	testPlan, err := createTestPlan(fetchCtx, cfg, tests)
+	if err != nil {
+		log.Fatalf("Couldn't create test plan: %v", err)
 	}
 
 	// get plan for this node
@@ -107,4 +90,31 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+func createTestPlan(fetchCtx context.Context, cfg config.Config, tests plan.Tests) (plan.TestPlan, error) {
+	testPlan, err := api.FetchTestPlan(fetchCtx, cfg.ServerBaseUrl, api.TestPlanParams{
+		SuiteToken:  cfg.SuiteToken,
+		Mode:        cfg.Mode,
+		Identifier:  cfg.Identifier,
+		Parallelism: cfg.Parallelism,
+		Tests:       tests,
+	})
+	if err != nil {
+		// Didn't exceed context deadline? Must have been some kind of error that
+		// means we should abort.
+		if !errors.Is(err, context.DeadlineExceeded) {
+			log.Fatalf("Couldn't fetch test plan: %v", err)
+		}
+		// Create the fallback plan
+		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	}
+
+	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
+	// In this case, we should create a fallback plan.
+	if len(testPlan.Tasks) == 0 {
+		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	}
+
+	return testPlan, nil
 }
