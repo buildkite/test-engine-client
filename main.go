@@ -41,25 +41,13 @@ func main() {
 	fmt.Println("--- :test-analytics: Getting Test Plan 🎣")
 	fmt.Printf("config: %+v", cfg)
 
-	testCases := []plan.TestCase{}
-	for _, file := range files {
-		testCases = append(testCases, plan.TestCase{
-			Path: file,
-		})
-	}
-
 	ctx := context.Background()
 	// We expect the whole test plan fetching process takes no more than 60 seconds.
 	// Configure the timeout as 70s to give it a bit more buffer.
 	fetchCtx, cancel := context.WithTimeout(ctx, 70*time.Second)
 	defer cancel()
 
-	tests := plan.Tests{
-		Cases:  testCases,
-		Format: "files",
-	}
-
-	testPlan, err := createTestPlan(fetchCtx, cfg, tests)
+	testPlan, err := fetchOrCreateTestPlan(fetchCtx, cfg, files)
 	if err != nil {
 		log.Fatalf("Couldn't create test plan: %v", err)
 	}
@@ -92,14 +80,29 @@ func main() {
 	}
 }
 
-func createTestPlan(fetchCtx context.Context, cfg config.Config, tests plan.Tests) (plan.TestPlan, error) {
-	testPlan, err := api.FetchTestPlan(fetchCtx, cfg.ServerBaseUrl, api.TestPlanParams{
+// fetchOrCreateTestPlan fetches a test plan from the server, or creates a
+// fallback plan if the server is unavailable or returns an error plan.
+func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []string) (plan.TestPlan, error) {
+	testCases := []plan.TestCase{}
+	for _, file := range files {
+		testCases = append(testCases, plan.TestCase{
+			Path: file,
+		})
+	}
+
+	tests := plan.Tests{
+		Cases:  testCases,
+		Format: "files",
+	}
+
+	testPlan, err := api.FetchTestPlan(ctx, cfg.ServerBaseUrl, api.TestPlanParams{
 		SuiteToken:  cfg.SuiteToken,
 		Mode:        cfg.Mode,
 		Identifier:  cfg.Identifier,
 		Parallelism: cfg.Parallelism,
 		Tests:       tests,
 	})
+
 	if err != nil {
 		// Didn't exceed context deadline? Must have been some kind of error that
 		// means we should abort.
