@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"time"
 
@@ -95,11 +96,13 @@ func main() {
 	for _, testCase := range thisNodeTask.Tests.Cases {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
-	err = testRunner.Run(runnableTests)
-
-	if err != nil {
-		// TODO: bubble up rspec error to main process
-		log.Fatal("Error when executing tests: ", err)
+	if err := testRunner.Run(runnableTests); err != nil {
+		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
+			exitCode := exitError.ExitCode()
+			log.Printf("Rspec exited with error %d", exitCode)
+			os.Exit(exitCode)
+		}
+		log.Fatalf("Couldn't run tests: %v", err)
 	}
 
 	fmt.Println("--- :test-analytics: Test execution results 📊")
