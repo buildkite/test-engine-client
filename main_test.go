@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/buildkite/test-splitter/internal/config"
 	"github.com/buildkite/test-splitter/internal/plan"
@@ -117,7 +118,11 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	}))
 	defer svr.Close()
 
+	// set the fetch timeout to 1 second so we don't wait too long
 	ctx := context.Background()
+	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+	defer cancel()
+
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   3,
@@ -129,7 +134,7 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(tests, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files)
+	got, err := fetchOrCreateTestPlan(fetchCtx, cfg, files)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
 	}
