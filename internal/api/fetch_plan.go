@@ -36,8 +36,10 @@ type TestPlanParams struct {
 
 // FetchTestPlan fetches a test plan from the service, including retries.
 func FetchTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
-	// Retry using exponential backoff
-	// The formula is: delay = initialDelay ** (retries/16 + 1)
+	// Retry using exponential backoff offerred by roko
+	// https://pkg.go.dev/github.com/buildkite/roko#ExponentialSubsecond
+	//
+	// The formula defined by roko is: delay = initialDelay ** (retries/16 + 1)
 	// Example of 3s initial delay growing over 6 attempts:
 	//  3s    → 5s    → 8s   → 13s   → 22s
 	// for a total retry delay of 51 seconds between attempts.
