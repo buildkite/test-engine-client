@@ -71,17 +71,27 @@ func main() {
 		log.Fatalf("Couldn't start tests: %v", err)
 	}
 
-	waitCh := make(chan struct{})
+	// Create a channel that will be closed when the command finishes.
+	finishCh := make(chan struct{})
 
+	// Start a goroutine to that waits for a signal or the command to finish.
 	go func() {
+		// Create another channel to receive the signals.
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh)
 
+		// Wait for the a signal to be received or the command to finish.
+		// Because a message can come through both channels asynchronously,
+		// we use for loop to listen to both channels and select the one that has a message.
+		// Without for loop, only one case would be selected and the other would be ignored.
+		// If the signal is received first, the finishCh will never get processed and the goroutine will run forever.
 		for {
 			select {
 			case sig := <-sigCh:
+				// When a signal is received, forward it to the command.
 				cmd.Process.Signal(sig)
-			case <-waitCh:
+			case <-finishCh:
+				// When the the command finishes, we stop listening for signals and return.
 				signal.Stop(sigCh)
 				return
 			}
@@ -97,7 +107,8 @@ func main() {
 		log.Fatalf("Couldn't run tests: %v", err)
 	}
 
-	close(waitCh)
+	// Close the channel that will stop the goroutine.
+	close(finishCh)
 
 	fmt.Println("--- :test-analytics: Test execution results 📊")
 	err = testRunner.Report(os.Stdout, thisNodeTask.Tests.Cases)
