@@ -59,8 +59,9 @@ func main() {
 	}
 
 	ctx := context.Background()
-
-	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	// We expect the whole test plan fetching process takes no more than 60 seconds.
+	// Configure the timeout as 70s to give it a bit more buffer.
+	fetchCtx, cancel := context.WithTimeout(ctx, 70*time.Second)
 	defer cancel()
 
 	tests := plan.Tests{
@@ -75,9 +76,9 @@ func main() {
 		Tests:       tests,
 	})
 	if err != nil {
-		// Didn't run out of retries? Must have been some kind of error that
+		// Didn't exceed context deadline? Must have been some kind of error that
 		// means we should abort.
-		if !errors.Is(err, api.ErrRetryLimitExceeded) {
+		if !errors.Is(err, context.DeadlineExceeded) {
 			log.Fatalf("Couldn't fetch test plan: %v", err)
 		}
 		// Create the fallback plan
