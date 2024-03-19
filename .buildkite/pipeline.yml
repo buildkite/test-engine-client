@@ -46,7 +46,6 @@ steps:
   - trigger: buildkite-splitter
     key: e2e-tests
     label: ":bonezone: End-to-end Tests"
-    if: build.message =~ /\[e2e\]/i || build.branch == "main"
     depends_on: 
       - build-binary
     build:
