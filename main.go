@@ -105,9 +105,9 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 
 	if err != nil {
 		// Didn't exceed context deadline? Must have been some kind of error that
-		// means we should abort.
+		// means we should return error to main function and abort.
 		if !errors.Is(err, context.DeadlineExceeded) {
-			log.Fatalf("Couldn't fetch test plan: %v", err)
+			return plan.TestPlan{}, err
 		}
 		// Create the fallback plan
 		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
