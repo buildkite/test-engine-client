@@ -39,7 +39,7 @@ func main() {
 
 	// get plan
 	fmt.Println("--- :test-analytics: Getting Test Plan 🎣")
-	fmt.Printf("config: %+v", cfg)
+	fmt.Printf("config: %+v\n", cfg)
 
 	ctx := context.Background()
 	// We expect the whole test plan fetching process takes no more than 60 seconds.
@@ -110,12 +110,14 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 			return plan.TestPlan{}, err
 		}
 		// Create the fallback plan
+		fmt.Println("⚠️ Test splitter client could not connect to server, using fallback plan")
 		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
+		fmt.Println("⚠️ Test splitter server returned an error plan, using fallback plan")
 		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
 	}
 
