@@ -110,14 +110,14 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 			return plan.TestPlan{}, err
 		}
 		// Create the fallback plan
-		fmt.Println("⚠️ Test splitter client could not connect to server, using fallback plan")
+		fmt.Println("Could not fetch plan from server, using fallback mode. Your build may take longer than usual.")
 		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
-		fmt.Println("⚠️ Test splitter server returned an error plan, using fallback plan")
+		fmt.Println("Test splitter server returned an error, using fallback mode. Your build may take longer than usual.")
 		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
 	}
 
