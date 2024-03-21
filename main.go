@@ -19,16 +19,6 @@ import (
 	"github.com/buildkite/test-splitter/internal/runner"
 )
 
-// other attributes are omitted for simplicity
-type Example struct {
-	FilePath string `json:"file_path"`
-}
-
-// other attributes are omitted for simplicity
-type RspecData struct {
-	Examples []Example `json:"examples"`
-}
-
 func main() {
 	// TODO: detect test runner and use appropriate runner
 	testRunner := runner.Rspec{}
@@ -49,14 +39,7 @@ func main() {
 
 	// get plan
 	fmt.Println("--- :test-analytics: Getting Test Plan 🎣")
-	fmt.Printf("config: %+v", cfg)
-
-	testCases := []plan.TestCase{}
-	for _, file := range files {
-		testCases = append(testCases, plan.TestCase{
-			Path: file,
-		})
-	}
+	fmt.Printf("config: %+v\n", cfg)
 
 	ctx := context.Background()
 	// We expect the whole test plan fetching process takes no more than 60 seconds.
@@ -64,25 +47,9 @@ func main() {
 	fetchCtx, cancel := context.WithTimeout(ctx, 70*time.Second)
 	defer cancel()
 
-	tests := plan.Tests{
-		Cases:  testCases,
-		Format: "files",
-	}
-	testPlan, err := api.FetchTestPlan(fetchCtx, cfg.ServerBaseUrl, api.TestPlanParams{
-		SuiteToken:  cfg.SuiteToken,
-		Mode:        cfg.Mode,
-		Identifier:  cfg.Identifier,
-		Parallelism: cfg.Parallelism,
-		Tests:       tests,
-	})
+	testPlan, err := fetchOrCreateTestPlan(fetchCtx, cfg, files)
 	if err != nil {
-		// Didn't exceed context deadline? Must have been some kind of error that
-		// means we should abort.
-		if !errors.Is(err, context.DeadlineExceeded) {
-			log.Fatalf("Couldn't fetch test plan: %v", err)
-		}
-		// Create the fallback plan
-		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+		log.Fatalf("Couldn't create test plan: %v", err)
 	}
 
 	// get plan for this node
@@ -111,4 +78,48 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+// fetchOrCreateTestPlan fetches a test plan from the server, or creates a
+// fallback plan if the server is unavailable or returns an error plan.
+func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []string) (plan.TestPlan, error) {
+	testCases := []plan.TestCase{}
+	for _, file := range files {
+		testCases = append(testCases, plan.TestCase{
+			Path: file,
+		})
+	}
+
+	tests := plan.Tests{
+		Cases:  testCases,
+		Format: "files",
+	}
+
+	testPlan, err := api.FetchTestPlan(ctx, cfg.ServerBaseUrl, api.TestPlanParams{
+		SuiteToken:  cfg.SuiteToken,
+		Mode:        cfg.Mode,
+		Identifier:  cfg.Identifier,
+		Parallelism: cfg.Parallelism,
+		Tests:       tests,
+	})
+
+	if err != nil {
+		// Didn't exceed context deadline? Must have been some kind of error that
+		// means we should return error to main function and abort.
+		if !errors.Is(err, context.DeadlineExceeded) {
+			return plan.TestPlan{}, err
+		}
+		// Create the fallback plan
+		fmt.Println("Could not fetch plan from server, using fallback mode. Your build may take longer than usual.")
+		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	}
+
+	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
+	// In this case, we should create a fallback plan.
+	if len(testPlan.Tasks) == 0 {
+		fmt.Println("Test splitter server returned an error, using fallback mode. Your build may take longer than usual.")
+		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	}
+
+	return testPlan, nil
 }
