@@ -53,7 +53,6 @@ func (Rspec) Command(testCases []string) *exec.Cmd {
 
 	args = append(args, testCases...)
 
-	fmt.Println("+++ :test-analytics: Executing tests 🏃")
 	fmt.Println("bin/rspec", strings.Join(args, " "))
 
 	cmd := exec.Command("bin/rspec", args...)
