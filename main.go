@@ -99,12 +99,6 @@ func main() {
 
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
-
-	fmt.Println("--- :test-analytics: Test execution results 📊")
-	err = testRunner.Report(os.Stdout, thisNodeTask.Tests.Cases)
-	if err != nil {
-		fmt.Println(err)
-	}
 }
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
