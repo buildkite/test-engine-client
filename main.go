@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -25,12 +24,10 @@ func main() {
 	testRunner := runner.Rspec{}
 
 	// get files
-	fmt.Println("--- :test-analytics: Gathering test plan context and creating test plan request 🐿️")
 	files, err := testRunner.GetFiles()
 	if err != nil {
 		log.Fatalf("Couldn't get files: %v", err)
 	}
-	fmt.Printf("Found %d files\n", len(files))
 
 	// get config
 	cfg, err := config.New()
@@ -39,9 +36,6 @@ func main() {
 	}
 
 	// get plan
-	fmt.Println("--- :test-analytics: Getting Test Plan 🎣")
-	fmt.Printf("config: %+v\n", cfg)
-
 	ctx := context.Background()
 	// We expect the whole test plan fetching process takes no more than 60 seconds.
 	// Configure the timeout as 70s to give it a bit more buffer.
@@ -55,10 +49,6 @@ func main() {
 
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
-
-	prettifiedPlan, _ := json.MarshalIndent(thisNodeTask, "", "  ")
-	fmt.Println("--- :test-analytics: Plan for this node 🎊")
-	fmt.Println(string(prettifiedPlan))
 
 	// execute tests
 	runnableTests := []string{}
@@ -109,12 +99,6 @@ func main() {
 
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
-
-	fmt.Println("--- :test-analytics: Test execution results 📊")
-	err = testRunner.Report(os.Stdout, thisNodeTask.Tests.Cases)
-	if err != nil {
-		fmt.Println(err)
-	}
 }
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
