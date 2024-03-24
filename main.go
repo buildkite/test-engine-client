@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"time"
 
@@ -64,7 +65,40 @@ func main() {
 	for _, testCase := range thisNodeTask.Tests.Cases {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
-	if err := testRunner.Run(runnableTests); err != nil {
+	cmd := testRunner.Command(runnableTests)
+
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Couldn't start tests: %v", err)
+	}
+
+	// Create a channel that will be closed when the command finishes.
+	finishCh := make(chan struct{})
+
+	// Start a goroutine to that waits for a signal or the command to finish.
+	go func() {
+		// Create another channel to receive the signals.
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh)
+
+		// Wait for a signal to be received or the command to finish.
+		// Because a message can come through both channels asynchronously,
+		// we use for loop to listen to both channels and select the one that has a message.
+		// Without for loop, only one case would be selected and the other would be ignored.
+		// If the signal is received first, the finishCh will never get processed and the goroutine will run forever.
+		for {
+			select {
+			case sig := <-sigCh:
+				// When a signal is received, forward it to the command.
+				cmd.Process.Signal(sig)
+			case <-finishCh:
+				// When the the command finishes, we stop listening for signals and return.
+				signal.Stop(sigCh)
+				return
+			}
+		}
+	}()
+
+	if err := cmd.Wait(); err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
 			log.Printf("Rspec exited with error %d", exitCode)
@@ -72,6 +106,9 @@ func main() {
 		}
 		log.Fatalf("Couldn't run tests: %v", err)
 	}
+
+	// Close the channel that will stop the goroutine.
+	close(finishCh)
 
 	fmt.Println("--- :test-analytics: Test execution results 📊")
 	err = testRunner.Report(os.Stdout, thisNodeTask.Tests.Cases)
