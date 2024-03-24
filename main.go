@@ -80,7 +80,7 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh)
 
-		// Wait for the a signal to be received or the command to finish.
+		// Wait for a signal to be received or the command to finish.
 		// Because a message can come through both channels asynchronously,
 		// we use for loop to listen to both channels and select the one that has a message.
 		// Without for loop, only one case would be selected and the other would be ignored.
