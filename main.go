@@ -5,12 +5,14 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
@@ -23,10 +25,20 @@ func main() {
 	// TODO: detect test runner and use appropriate runner
 	testRunner := runner.Rspec{}
 
-	// get files
-	files, err := testRunner.GetFiles()
-	if err != nil {
-		log.Fatalf("Couldn't get files: %v", err)
+	// Gathering files
+	filesFlag := flag.String("files", "", "string of file names for splitting")
+	flag.Parse()
+
+	// see if cmd line files string had any files
+	files := strings.Split(*filesFlag, ",")
+
+	// if not get files from directory
+	if len(files) == 0 {
+		fs, err := testRunner.GetFiles()
+		if err != nil {
+			log.Fatalf("Couldn't get files: %v", err)
+		}
+		files = fs
 	}
 
 	// get config
