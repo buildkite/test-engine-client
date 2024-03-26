@@ -29,11 +29,11 @@ func main() {
 	filesFlag := flag.String("files", "", "string of file names for splitting")
 	flag.Parse()
 
-	// see if cmd line files string had any files
-	files := strings.Split(*filesFlag, ",")
+	var files []string
 
-	// if not get files from directory
-	if len(files) == 0 {
+	if *filesFlag != "" {
+		files = strings.Split(*filesFlag, ",")
+	} else {
 		fs, err := testRunner.GetFiles()
 		if err != nil {
 			log.Fatalf("Couldn't get files: %v", err)
