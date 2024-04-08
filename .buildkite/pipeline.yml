@@ -42,6 +42,29 @@ steps:
           arch:
             - amd64
             - arm64
+    
+  - group: "rspec"
+    key: rspec
+    depends_on: 
+      - build-binary
+    steps: 
+    - name: "Run rspec"
+      command: .buildkite/steps/install-binary.sh
+      plugins:
+        docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: build
+          pull-retries: 2
+          mount-buildkite-agent: true
+          env:
+            - BUILDKITE_SUITE_TOKEN
+            - BUILDKITE_SPLITTER_BASE_URL
+      env:
+        BUILDKITE_SPLITTER_MODE: static
+        BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
+        BUILDKITE_SUITE_TOKEN: 8ZsZrRPio52VUKe7W3Ud7q6m
+      parallelism: 3
   
   - trigger: buildkite-splitter
     key: e2e-tests
