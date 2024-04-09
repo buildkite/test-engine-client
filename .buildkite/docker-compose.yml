@@ -1,6 +1,19 @@
 version: '3.5'
 
 services:
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile-e2e
+      environment:
+        - BUILDKITE_BUILD_NUMBER
+        - BUILDKITE_JOB_ID
+        - BUILDKITE_PARALLEL_JOB
+        - BUILDKITE_PARALLEL_JOB_COUNT
+        - BUILDKITE_BUILD_ID
+        - BUILDKITE_SPLITTER_MODE            # splitting mode
+        - BUILDKITE_SPLITTER_BASE_URL        # url for fetching test plan
+        - BUILDKITE_SUITE_TOKEN
   build:
     build:
       context: .
@@ -17,13 +30,6 @@ services:
       - "BUILDKITE_BUILD_PATH=/buildkite"
       - GOCACHE=/gocache
       - GOMODCACHE=/gomodcache
-      - BUILDKITE_PARALLEL_JOB
-      - BUILDKITE_PARALLEL_JOB_COUNT
-      - BUILDKITE_BUILD_ID
-      - BUILDKITE_SPLITTER_RSPEC_TOKEN     # token for the splitter suite
-      - BUILDKITE_SPLITTER_MODE            # splitting mode
-      - BUILDKITE_SPLITTER_BASE_URL        # url for fetching test plan
-      - BUILDKITE_SUITE_TOKEN
   release:
     build:
       context: .
