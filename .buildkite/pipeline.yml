@@ -57,13 +57,9 @@ steps:
           run: build
           pull-retries: 2
           mount-buildkite-agent: true
-          env:
-            - BUILDKITE_SUITE_TOKEN
-            - BUILDKITE_SPLITTER_BASE_URL
       env:
-        BUILDKITE_SPLITTER_MODE: static
         BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
-        BUILDKITE_SUITE_TOKEN: 8ZsZrRPio52VUKe7W3Ud7q6m
+        BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
       parallelism: 3
   
   - trigger: buildkite-splitter

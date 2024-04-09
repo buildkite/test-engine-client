@@ -23,6 +23,7 @@ services:
       - BUILDKITE_SPLITTER_RSPEC_TOKEN     # token for the splitter suite
       - BUILDKITE_SPLITTER_MODE            # splitting mode
       - BUILDKITE_SPLITTER_BASE_URL        # url for fetching test plan
+      - BUILDKITE_SUITE_TOKEN
   release:
     build:
       context: .
