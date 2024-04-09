@@ -56,6 +56,7 @@ steps:
           cli-version: 2
           run: e2e
           pull-retries: 2
+          mount-checkout: true
           mount-buildkite-agent: true
       env:
         BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
