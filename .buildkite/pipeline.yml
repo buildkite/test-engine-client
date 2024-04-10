@@ -74,7 +74,7 @@ steps:
           mount-checkout: true
           mount-buildkite-agent: true
           env:
-            BUILDKITE_BUILD_ID: sdsdffffffff
+            - BUILDKITE_BUILD_ID=sdsdffffffff
       env:
         BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
         BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
