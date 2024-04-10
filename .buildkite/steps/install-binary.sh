@@ -22,8 +22,11 @@ set +e
 
 echo -e "+++ :rspec: Running specs"
 
-BUILDKITE_BUILD_ID=12456465564656
-cat "${BUILDKITE_BUILD_ID}"
+cat "${ERROR_PLAN:-}"
+if [[ "${ERROR_PLAN:-}" == "true" ]] ; then
+  BUILDKITE_BUILD_ID=error_plan_build_id
+  cat "${BUILDKITE_BUILD_ID}"
+fi
 
 ./test-splitter
 
