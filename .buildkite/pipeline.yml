@@ -59,21 +59,22 @@ steps:
           mount-checkout: true
           mount-buildkite-agent: true
       env:
+        BUILDKITE_SPLITTER_BASE_URL: https://buildkite.com
+        BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
+      parallelism: 3
+    
+    - name: "Run rspec (fallback mode due to 500)"
+      command: .buildkite/steps/install-binary.sh
+      plugins:
+        docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: e2e
+          pull-retries: 2
+          mount-checkout: true
+          mount-buildkite-agent: true
+      env:
         BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
         BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
       parallelism: 3
-  
-  - trigger: buildkite-splitter
-    key: e2e-tests
-    label: ":bonezone: End-to-end Tests"
-    depends_on: 
-      - build-binary
-    build:
-      message: "End-to-end test for Test Splitter Client - Build #${BUILDKITE_BUILD_NUMBER}"
 
-  - name: ":pipeline: Upload Release Pipeline"
-    command: ".buildkite/steps/upload-release-step.sh"
-    depends_on: 
-      - build-binary
-      - e2e-tests
-    branches: "main"

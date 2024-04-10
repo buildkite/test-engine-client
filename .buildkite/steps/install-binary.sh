@@ -27,10 +27,3 @@ echo -e "+++ :rspec: Running specs"
 exit_code=$?
 echo -e "--- :bangbang: RSpec exit code: $exit_code"
 set -e
-
-# Move the jsons file to a splitter directory so it doesn't conflicts with the jsons from the main rspec step (Knapsack).
-#
-# We are hardcoding the rspec command and options in the test splitter client, so we can't control where to store the output files,
-# unless we change the test splitter.
-mkdir -p tmp/splitter
-mv tmp/rspec-*.json tmp/splitter/
