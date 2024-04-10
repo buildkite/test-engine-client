@@ -22,6 +22,7 @@ set +e
 
 echo -e "+++ :rspec: Running specs"
 
+BUILDKITE_BUILD_ID=12456465564656
 cat "${BUILDKITE_BUILD_ID}"
 
 ./test-splitter
