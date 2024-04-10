@@ -9,7 +9,7 @@ echo -e "--- :wrench: Install Test Splitter"
 # otherwise install the test-splitter from the GitHub.
 
 echo -e "Downloading test-splitter from the test-splitter-client build artifact"
-buildkite-agent artifact download --build "${BUILDKITE_BUILD_ID}" pkg/test-splitter-linux-amd64 .
+buildkite-agent artifact download pkg/test-splitter-linux-amd64 .
 mv pkg/test-splitter-linux-amd64 test-splitter
 
 chmod +x test-splitter
@@ -21,6 +21,8 @@ chmod +x test-splitter
 set +e
 
 echo -e "+++ :rspec: Running specs"
+
+cat "${BUILDKITE_BUILD_ID}"
 
 ./test-splitter
 
