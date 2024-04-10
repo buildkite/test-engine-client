@@ -76,5 +76,6 @@ steps:
       env:
         BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
         BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
+        BUILDKITE_BUILD_ID: sdsdffffffff
       parallelism: 3
 
