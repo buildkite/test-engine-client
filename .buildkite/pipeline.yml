@@ -64,7 +64,7 @@ steps:
       parallelism: 3
     
     - name: "Run rspec (fallback mode due to 500)"
-      command: .buildkite/steps/install-binary.sh
+      command: BUILDKITE_BUILD_ID=15646546456646 .buildkite/steps/install-binary.sh
       plugins:
         docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
