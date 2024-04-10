@@ -73,10 +73,23 @@ steps:
           pull-retries: 2
           mount-checkout: true
           mount-buildkite-agent: true
-          env:
-            - BUILDKITE_BUILD_ID=sdsdffffffff
       env:
         BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
         BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
       parallelism: 3
 
+    - name: "Run rspec (fallback mode due to error plan)"
+      command: .buildkite/steps/install-binary.sh
+      plugins:
+        docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: e2e
+          pull-retries: 2
+          mount-checkout: true
+          mount-buildkite-agent: true
+      env:
+        BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
+        BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
+        ERROR_PLAN: true
+      parallelism: 3

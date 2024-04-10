@@ -14,6 +14,7 @@ services:
       - BUILDKITE_SPLITTER_MODE            # splitting mode
       - BUILDKITE_SPLITTER_BASE_URL        # url for fetching test plan
       - BUILDKITE_SUITE_TOKEN
+      - ERROR_PLAN
   build:
     build:
       context: .
