@@ -89,7 +89,7 @@ steps:
           mount-checkout: true
           mount-buildkite-agent: true
       env:
-        BUILDKITE_SPLITTER_BASE_URL: https://build.kite.com
+        BUILDKITE_SPLITTER_BASE_URL: https://buildkite.com
         BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
         ERROR_PLAN: true
       parallelism: 3
