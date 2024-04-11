@@ -63,7 +63,7 @@ steps:
         BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
       parallelism: 3
     
-    - name: "Run rspec (fallback mode due to 500)"
+    - name: "Run rspec (fallback mode - 500 error)"
       command: .buildkite/steps/install-binary.sh
       plugins:
         docker-compose#v4.14.0:
@@ -78,7 +78,7 @@ steps:
         BUILDKITE_SUITE_TOKEN: ${BUILDKITE_ANALYTICS_TOKEN}
       parallelism: 3
 
-    - name: "Run rspec (fallback mode due to error plan)"
+    - name: "Run rspec (fallback mode - error plan)"
       command: .buildkite/steps/install-binary.sh
       plugins:
         docker-compose#v4.14.0:
