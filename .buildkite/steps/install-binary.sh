@@ -8,7 +8,10 @@ echo -e "--- :wrench: Install Test Splitter"
 
 echo -e "Downloading test-splitter from the test-splitter-client build artifact"
 buildkite-agent artifact download pkg/test-splitter-linux-amd64 .
-mv pkg/test-splitter-linux-amd64 test-splitter
+mkdir -p e2e
+mv pkg/test-splitter-linux-amd64 e2e/test-splitter
+
+cd e2e
 
 chmod +x test-splitter
 
