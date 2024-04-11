@@ -86,11 +86,16 @@ func tryFetchTestPlan(ctx context.Context, splitterPath string, params TestPlanP
 
 	// send request
 	client := &http.Client{}
+
+	start := time.Now()
 	resp, err := client.Do(r)
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("sending request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	elapsed := time.Since(start)
+	fmt.Println("⏲️ Request took", elapsed)
 
 	switch {
 	case resp.StatusCode == http.StatusOK:
