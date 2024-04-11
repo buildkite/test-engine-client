@@ -43,8 +43,8 @@ steps:
             - amd64
             - arm64
     
-  - group: "rspec"
-    key: rspec
+  - group: ":bonezone: End-to-end Tests"
+    key: e2e-tests
     depends_on: 
       - build-binary
     steps: 
