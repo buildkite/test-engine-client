@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -27,12 +28,26 @@ func main() {
 
 	// Gathering files
 	filesFlag := flag.String("files", "", "string of file names for splitting")
+	testListFlag := flag.String("test-list", "", "path to a file containing a list of test files")
 	flag.Parse()
 
 	var files []string
 
 	if *filesFlag != "" {
 		files = strings.Split(*filesFlag, ",")
+	} else if *testListFlag != "" {
+		file, err := os.Open(*testListFlag)
+		if err != nil {
+			log.Fatalf("Couldn't open test list file: %v", err)
+		}
+		defer file.Close()
+
+		// Read the file line by line
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			files = append(files, scanner.Text())
+		}
+
 	} else {
 		fs, err := testRunner.GetFiles()
 		if err != nil {

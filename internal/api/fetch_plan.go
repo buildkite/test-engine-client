@@ -95,7 +95,7 @@ func tryFetchTestPlan(ctx context.Context, splitterPath string, params TestPlanP
 	defer resp.Body.Close()
 
 	elapsed := time.Since(start)
-	fmt.Println("⏲️ Request took", elapsed)
+	fmt.Println("⏱️ Request took", elapsed)
 
 	switch {
 	case resp.StatusCode == http.StatusOK:
