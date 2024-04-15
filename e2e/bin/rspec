@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# The go client runs `bin/rspec --options .rspec.ci filenames`
+# This is a workaround to run the rspec command without installing Bundler
+# Run rspec command with arguments provided
+
+rspec $@
