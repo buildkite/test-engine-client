@@ -13,26 +13,23 @@ The available Go binaries
 
 ## Using the Test Splitter
 
-### Required ENV variables
+### ENV variables
+Please ensure that these default Buildkite ENV variables are available in the environment you are running your tests in. We will detect these env vars automatically, and use them to orchestrate the test splitting
 - BUILDKITE_BUILD_ID
-- BUILDKITE_SUITE_TOKEN
-
-`BUILDKITE_SUITE_TOKEN` can be found in the Test Analytics suite setting page under API token section https://buildkite.com/organizations/buildkite/analytics/suites/{#SUITE_SLUG}/edit
-
 - BUILDKITE_PARALLEL_JOB_COUNT
 - BUILDKITE_PARALLEL_JOB
 
-`BUILDKITE_PARALLEL_JOB_COUNT` and `BUILDKITE_PARALLEL_JOB` will be accessable when build step is configured with `parallelism`.
+Additionally, we need the API token for the Test Suite that has the test data for the build. This will be available in the settings page for the Test Suite. We are expecting this key to be available as BUILDKITE_SUITE_TOKEN.
 ### Run the Test Splitter
-Assuming the Go binary is downloaded and renamed to `test-splitter`
+Please download the executable and make it available in your testing environment. 
 
-We need to make it executable 
+Once that's available, you'll need to modify permissions to make the binary executable, and then execute it. The test splitter will run the rspec specs for you, so you'll run the test splitter in lieu of the relevant rspec command. Under the hood, the test splitter will execute `bin/rspec YOUR_TEST_PLAN` so if your rspec installation is different or if you are using any custom flags, this may not work for your test set up. Please get in touch with one of the Test Splitting team and we'll see what we can do! 
 
-`chmod +x test-splitter`
-
-Run the test splitter
-
-`./test-splitter`
+Otherwise, your script for executing specs may look something like:
+```  
+chmod +x test-splitter
+./test-splitter # fetches the test plan for this node, and then executes the rspec tests
+```
 
 ## Release
 To release a new version, open a PR and update the version number in `version/VERSION`. 
