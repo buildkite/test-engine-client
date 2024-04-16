@@ -17,9 +17,6 @@ steps:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           run: build
-      - test-collector#v1.2.0:
-          files: "junit-*.xml"
-          format: "junit"
 
   - wait
 
