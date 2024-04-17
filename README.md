@@ -1,6 +1,6 @@
 # Buildkite Test Splitter
 ## Installation
-The latest version of Buildkite Test Splitter can be downloaded from https://api.github.com/repos/buildkite/test-splitter/releases/latest
+The latest version of Buildkite Test Splitter can be downloaded from https://github.com/buildkite/test-splitter/releases
 
 ### Supported OS/Architecture
 ARM and AMD architecture for linux and darwin 
