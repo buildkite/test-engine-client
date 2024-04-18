@@ -15,12 +15,12 @@ type DiscoveryPattern struct {
 func discoverTestFiles(pattern DiscoveryPattern) ([]string, error) {
 	parsedPattern, err := zzglob.Parse(pattern.IncludePattern)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing pattern %q", pattern)
+		return nil, fmt.Errorf("error parsing test file pattern %q", pattern)
 	}
 
 	parsedExcludePattern, err := zzglob.Parse(pattern.ExcludePattern)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing exclude pattern %q", pattern.ExcludePattern)
+		return nil, fmt.Errorf("error parsing test file exclude pattern %q", pattern.ExcludePattern)
 	}
 
 	discoveredFiles := []string{}

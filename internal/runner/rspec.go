@@ -47,16 +47,16 @@ func (Rspec) Command(testCases []string) *exec.Cmd {
 }
 
 // discoveryPattern returns the pattern to use for discovering test files.
-// It uses the BUILDKITE_SPLITTER_PATTERN and BUILDKITE_SPLITTER_EXCLUDE_PATTERN.
-// If BUILDKITE_SPLITTER_PATTERN is not set, it defaults to "spec/**/*_spec.rb"
+// It uses the BUILDKITE_SPLITTER_TEST_FILE_PATTERN and BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN.
+// If BUILDKITE_SPLITTER_TEST_FILE_PATTERN is not set, it defaults to "spec/**/*_spec.rb"
 func (Rspec) discoveryPattern() DiscoveryPattern {
-	includePattern := os.Getenv("BUILDKITE_SPLITTER_PATTERN")
+	includePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
 
 	if includePattern == "" {
 		includePattern = "spec/**/*_spec.rb"
 	}
 
-	excludePattern := os.Getenv("BUILDKITE_SPLITTER_EXCLUDE_PATTERN")
+	excludePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
 
 	return DiscoveryPattern{
 		IncludePattern: includePattern,

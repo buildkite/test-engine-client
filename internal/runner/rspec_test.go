@@ -22,8 +22,8 @@ func TestRspecDiscoveryPattern_Default(t *testing.T) {
 }
 
 func TestRspecDiscoveryPattern_IncludePattern(t *testing.T) {
-	os.Setenv("BUILDKITE_SPLITTER_PATTERN", "spec/models/**/*_spec.rb")
-	defer os.Unsetenv("BUILDKITE_SPLITTER_PATTERN")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN", "spec/models/**/*_spec.rb")
+	defer os.Unsetenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
 
 	rspec := Rspec{}
 	got := rspec.discoveryPattern()
@@ -39,8 +39,8 @@ func TestRspecDiscoveryPattern_IncludePattern(t *testing.T) {
 }
 
 func TestRspecDiscoveryPattern_ExcludePattern(t *testing.T) {
-	os.Setenv("BUILDKITE_SPLITTER_EXCLUDE_PATTERN", "spec/features/**")
-	defer os.Unsetenv("BUILDKITE_SPLITTER_EXCLUDE_PATTERN")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN", "spec/features/**")
+	defer os.Unsetenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
 
 	rspec := Rspec{}
 	got := rspec.discoveryPattern()
