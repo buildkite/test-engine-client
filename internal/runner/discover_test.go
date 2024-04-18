@@ -8,7 +8,12 @@ import (
 
 func TestDiscoverTestFiles(t *testing.T) {
 	pattern := "test/**/*_test"
-	got := discoverTestFiles(pattern, "")
+	got, err := discoverTestFiles(pattern, "")
+
+	if err != nil {
+		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, "", err)
+	}
+
 	want := []string{
 		"test/animals/ant_test",
 		"test/animals/bee_test",
@@ -18,14 +23,19 @@ func TestDiscoverTestFiles(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("discoverTestFiles(%q) diff (-got +want):\n%s", pattern, diff)
+		t.Errorf("discoverTestFiles(%q, %q) diff (-got +want):\n%s", pattern, "", diff)
 	}
 }
 
 func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
 	pattern := "test/**/*_test"
 	excludePattern := "test/animals/*"
-	got := discoverTestFiles(pattern, excludePattern)
+	got, err := discoverTestFiles(pattern, excludePattern)
+
+	if err != nil {
+		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, excludePattern, err)
+	}
+
 	want := []string{
 		"test/fruits/apple_test",
 		"test/fruits/banana_test",
@@ -33,6 +43,6 @@ func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("discoverTestFiles(%q) diff (-got +want):\n%s", pattern, diff)
+		t.Errorf("discoverTestFiles(%q, %q) diff (-got +want):\n%s", pattern, excludePattern, diff)
 	}
 }
