@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -18,24 +17,23 @@ type Rspec struct {
 // GetFiles returns an array of file names, for files in
 // the "spec" directory that end in "spec.rb".
 func (Rspec) GetFiles() ([]string, error) {
-	var files []string
+	pattern := os.Getenv("BUILDKITE_SPLITTER_PATTERN")
 
-	// Use filepath.Walk to traverse the directory recursively
-	err := filepath.Walk("spec", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+	// set default Rspec pattern if not provided
+	if pattern == "" {
+		pattern = "spec/**/*_spec.rb"
+	}
 
-		if strings.HasSuffix(info.Name(), "_spec.rb") {
-			files = append(files, path)
-		}
+	excludePattern := os.Getenv("BUILDKITE_SPLITTER_EXCLUDE_PATTERN")
 
-		return nil
-	})
+	files, err := discoverTestFiles(pattern, excludePattern)
 
-	// Handle potential error from filepath.Walk
 	if err != nil {
 		return nil, err
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no files found with pattern %q", pattern)
 	}
 
 	return files, nil
