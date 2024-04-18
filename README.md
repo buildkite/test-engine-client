@@ -15,11 +15,19 @@ The available Go binaries
 
 ### ENV variables
 Please ensure that these default Buildkite ENV variables are available in the environment you are running your tests in. We will detect these env vars automatically, and use them to orchestrate the test splitting
-- BUILDKITE_BUILD_ID
-- BUILDKITE_PARALLEL_JOB_COUNT
-- BUILDKITE_PARALLEL_JOB
+- `BUILDKITE_BUILD_ID`
+- `BUILDKITE_PARALLEL_JOB_COUNT`
+- `BUILDKITE_PARALLEL_JOB`
 
-Additionally, we need the API token for the Test Suite that has the test data for the build. This will be available in the settings page for the Test Suite. We are expecting this key to be available as BUILDKITE_SUITE_TOKEN.
+We also need the API token for the Test Suite that has the test data for the build. This will be available in the settings page for the Test Suite. We are expecting this key to be available as `BUILDKITE_SUITE_TOKEN`.
+
+Additionally, you can configure the Test Splitter using the following optional environment variables:
+| Environment Variable | Description |
+| ---- | ----------- |
+| `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | Glob pattern for discovering test files that need to be executed. The default value for Rspec is `spec/**/*_spec.rb`. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library*. |
+| `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | Glob pattern to use for excluding test files or directory. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
+
+
 ### Run the Test Splitter
 Please download the executable and make it available in your testing environment. 
 
