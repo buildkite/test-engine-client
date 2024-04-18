@@ -16,24 +16,17 @@ type Rspec struct {
 
 // GetFiles returns an array of file names, for files in
 // the "spec" directory that end in "spec.rb".
-func (Rspec) GetFiles() ([]string, error) {
-	pattern := os.Getenv("BUILDKITE_SPLITTER_PATTERN")
+func (r Rspec) GetFiles() ([]string, error) {
+	pattern := r.discoveryPattern()
 
-	// set default Rspec pattern if not provided
-	if pattern == "" {
-		pattern = "spec/**/*_spec.rb"
-	}
-
-	excludePattern := os.Getenv("BUILDKITE_SPLITTER_EXCLUDE_PATTERN")
-
-	files, err := discoverTestFiles(pattern, excludePattern)
+	files, err := discoverTestFiles(pattern)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no files found with pattern %q", pattern)
+		return nil, fmt.Errorf("no files found with pattern %q and exclude pattern %q", pattern.IncludePattern, pattern.ExcludePattern)
 	}
 
 	return files, nil
@@ -51,4 +44,22 @@ func (Rspec) Command(testCases []string) *exec.Cmd {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	return cmd
+}
+
+// discoveryPattern returns the pattern to use for discovering test files.
+// It uses the BUILDKITE_SPLITTER_PATTERN and BUILDKITE_SPLITTER_EXCLUDE_PATTERN.
+// If BUILDKITE_SPLITTER_PATTERN is not set, it defaults to "spec/**/*_spec.rb"
+func (Rspec) discoveryPattern() DiscoveryPattern {
+	includePattern := os.Getenv("BUILDKITE_SPLITTER_PATTERN")
+
+	if includePattern == "" {
+		includePattern = "spec/**/*_spec.rb"
+	}
+
+	excludePattern := os.Getenv("BUILDKITE_SPLITTER_EXCLUDE_PATTERN")
+
+	return DiscoveryPattern{
+		IncludePattern: includePattern,
+		ExcludePattern: excludePattern,
+	}
 }

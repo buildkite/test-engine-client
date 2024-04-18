@@ -8,7 +8,10 @@ import (
 
 func TestDiscoverTestFiles(t *testing.T) {
 	pattern := "fixtures/**/*_test"
-	got, err := discoverTestFiles(pattern, "")
+	got, err := discoverTestFiles(DiscoveryPattern{
+		IncludePattern: pattern,
+		ExcludePattern: "",
+	})
 
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, "", err)
@@ -30,7 +33,10 @@ func TestDiscoverTestFiles(t *testing.T) {
 func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
 	pattern := "fixtures/**/*_test"
 	excludePattern := "fixtures/animals/*"
-	got, err := discoverTestFiles(pattern, excludePattern)
+	got, err := discoverTestFiles(DiscoveryPattern{
+		IncludePattern: pattern,
+		ExcludePattern: excludePattern,
+	})
 
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, excludePattern, err)

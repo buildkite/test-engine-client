@@ -7,15 +7,20 @@ import (
 	"github.com/DrJosh9000/zzglob"
 )
 
-func discoverTestFiles(pattern string, excludePattern string) ([]string, error) {
-	parsedPattern, err := zzglob.Parse(pattern)
+type DiscoveryPattern struct {
+	IncludePattern string
+	ExcludePattern string
+}
+
+func discoverTestFiles(pattern DiscoveryPattern) ([]string, error) {
+	parsedPattern, err := zzglob.Parse(pattern.IncludePattern)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing pattern %q", pattern)
 	}
 
-	parsedExcludePattern, err := zzglob.Parse(excludePattern)
+	parsedExcludePattern, err := zzglob.Parse(pattern.ExcludePattern)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing exclude pattern %q", excludePattern)
+		return nil, fmt.Errorf("error parsing exclude pattern %q", pattern.ExcludePattern)
 	}
 
 	discoveredFiles := []string{}
