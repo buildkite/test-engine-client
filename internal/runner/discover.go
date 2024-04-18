@@ -7,10 +7,15 @@ import (
 	"github.com/DrJosh9000/zzglob"
 )
 
-func discoverTestFiles(pattern string) []string {
+func discoverTestFiles(pattern string, excludePattern string) []string {
 	parsedPattern, err := zzglob.Parse(pattern)
 	if err != nil {
 		fmt.Printf("Error parsing pattern: %v\n", err)
+	}
+
+	parsedExcludePattern, err := zzglob.Parse(excludePattern)
+	if err != nil {
+		fmt.Printf("Error parsing exclude pattern: %v\n", err)
 	}
 
 	discoveredFiles := []string{}
@@ -24,6 +29,12 @@ func discoverTestFiles(pattern string) []string {
 		if d.IsDir() {
 			return nil
 		}
+
+		// Check if the path matches the exclude pattern and skip it
+		if parsedExcludePattern.Match(path) {
+			return nil
+		}
+
 		discoveredFiles = append(discoveredFiles, path)
 		return nil
 	}, nil)
