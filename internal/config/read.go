@@ -11,21 +11,20 @@ import (
 // set default values for ServerBaseUrl and Mode if they are not set.
 //
 // Currently, it reads the following environment variables:
-// - BUILDKITE_BUILD_ID (Identifier)
+// - BUILDKITE_SPLITTER_IDENTIFIER (Identifier)
 // - BUILDKITE_PARALLEL_JOB_COUNT (Parallelism)
 // - BUILDKITE_PARALLEL_JOB (NodeIndex)
 // - BUILDKITE_SPLITTER_BASE_URL (ServerBaseUrl)
 // - BUILDKITE_SPLITTER_MODE (Mode)
-// - BUILDKITE_SUITE_TOKEN (SuiteToken)
+// - BUILDKITE_SPLITTER_SUITE_TOKEN (SuiteToken)
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
 func (c *Config) readFromEnv() error {
 	var errs InvalidConfigError
 
-	c.SuiteToken = os.Getenv("BUILDKITE_SUITE_TOKEN")
-	c.Identifier = os.Getenv("BUILDKITE_BUILD_ID")
-
+	c.SuiteToken = getEnvWithDefault("BUILDKITE_SPLITTER_SUITE_TOKEN", os.Getenv("BUILDKITE_ANALYTICS_TOKEN"))
+	c.Identifier = getEnvWithDefault("BUILDKITE_SPLITTER_IDENTIFIER", os.Getenv("BUILDKITE_BUILD_ID"))
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 

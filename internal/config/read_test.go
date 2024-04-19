@@ -14,7 +14,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.localhost")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
-	os.Setenv("BUILDKITE_SUITE_TOKEN", "my_token")
+	os.Setenv("BUILDKITE_SPLITTER_SUITE_TOKEN", "my_token")
 	defer os.Clearenv()
 
 	c := Config{}

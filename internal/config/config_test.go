@@ -15,7 +15,7 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://build.kite")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 	os.Setenv("BUILDKITE_BUILD_ID", "xyz")
-	os.Setenv("BUILDKITE_SUITE_TOKEN", "my_token")
+	os.Setenv("BUILDKITE_SPLITTER_SUITE_TOKEN", "my_token")
 }
 
 func TestNewConfig(t *testing.T) {
@@ -79,7 +79,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 func TestNewConfig_InvalidConfig(t *testing.T) {
 	setEnv(t)
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "dynamic")
-	os.Unsetenv("BUILDKITE_SUITE_TOKEN")
+	os.Unsetenv("BUILDKITE_SPLITTER_SUITE_TOKEN")
 	defer os.Clearenv()
 
 	_, err := New()
