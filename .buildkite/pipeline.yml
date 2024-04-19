@@ -39,3 +39,9 @@ steps:
           arch:
             - amd64
             - arm64
+
+  - name: ":pipeline: Upload Release Pipeline"
+    command: ".buildkite/steps/upload-release-step.sh"
+    depends_on:
+      - build-binary
+    branches: "main"
