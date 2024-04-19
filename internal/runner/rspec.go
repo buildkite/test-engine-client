@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -17,25 +16,17 @@ type Rspec struct {
 
 // GetFiles returns an array of file names, for files in
 // the "spec" directory that end in "spec.rb".
-func (Rspec) GetFiles() ([]string, error) {
-	var files []string
+func (r Rspec) GetFiles() ([]string, error) {
+	pattern := r.discoveryPattern()
 
-	// Use filepath.Walk to traverse the directory recursively
-	err := filepath.Walk("spec", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+	files, err := discoverTestFiles(pattern)
 
-		if strings.HasSuffix(info.Name(), "_spec.rb") {
-			files = append(files, path)
-		}
-
-		return nil
-	})
-
-	// Handle potential error from filepath.Walk
 	if err != nil {
 		return nil, err
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no files found with pattern %q and exclude pattern %q", pattern.IncludePattern, pattern.ExcludePattern)
 	}
 
 	return files, nil
@@ -53,4 +44,22 @@ func (Rspec) Command(testCases []string) *exec.Cmd {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	return cmd
+}
+
+// discoveryPattern returns the pattern to use for discovering test files.
+// It uses the BUILDKITE_SPLITTER_TEST_FILE_PATTERN and BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN.
+// If BUILDKITE_SPLITTER_TEST_FILE_PATTERN is not set, it defaults to "spec/**/*_spec.rb"
+func (Rspec) discoveryPattern() DiscoveryPattern {
+	includePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
+
+	if includePattern == "" {
+		includePattern = "spec/**/*_spec.rb"
+	}
+
+	excludePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
+
+	return DiscoveryPattern{
+		IncludePattern: includePattern,
+		ExcludePattern: excludePattern,
+	}
 }
