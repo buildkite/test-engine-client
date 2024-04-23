@@ -25,6 +25,8 @@ func main() {
 	// TODO: detect test runner and use appropriate runner
 	testRunner := runner.Rspec{}
 
+	argsWithoutProg := os.Args[1:]
+	fmt.Println(argsWithoutProg)
 	// Gathering files
 	filesFlag := flag.String("files", "", "string of file names for splitting")
 	flag.Parse()
@@ -67,7 +69,7 @@ func main() {
 	for _, testCase := range thisNodeTask.Tests.Cases {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
-	cmd := testRunner.Command(runnableTests)
+	cmd := testRunner.Command(runnableTests, argsWithoutProg)
 
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Couldn't start tests: %v", err)
