@@ -33,25 +33,12 @@ func (r Rspec) GetFiles() ([]string, error) {
 }
 
 // Command returns an exec.Cmd that will run the rspec command
-func (Rspec) Command(testCases []string, testCommandArgs []string) *exec.Cmd {
-	testCommand := "bundle exec rspec"
-	testArgs := testCases
+func (r Rspec) Command(testCases []string, commandLineArgs []string) *exec.Cmd {
+	commandName, commandArgs := r.commandNameAndArgs(testCases, commandLineArgs)
 
-	if len(testCommandArgs) > 0 {
-		index := -1
-		for i, item := range testCommandArgs {
-			if item == "{{testExample}}" {
-				index = i
-				break
-			}
-		}
-		testCommand = strings.Join(testCommandArgs[:index], " ")
-		testArgs = append(testArgs, testCommandArgs[index+1:]...)
-	}
+	fmt.Println(commandName, strings.Join(commandArgs, " "))
 
-	fmt.Println(testCommand, strings.Join(testArgs, " "))
-
-	cmd := exec.Command(testCommand, testArgs...)
+	cmd := exec.Command(commandName, commandArgs...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	return cmd
@@ -73,4 +60,40 @@ func (Rspec) discoveryPattern() DiscoveryPattern {
 		IncludePattern: includePattern,
 		ExcludePattern: excludePattern,
 	}
+}
+
+// commandNameAndArgs returns the command name and arguments to run the Rspec tests
+func (Rspec) commandNameAndArgs(testCases []string, commandLineArgs []string) (string, []string) {
+	commandName := ""
+	commandArgs := []string{}
+	// if commandLineArgs is not empty, using customized test command
+	if len(commandLineArgs) > 0 {
+		index := -1
+		for i, item := range commandLineArgs {
+			if strings.Compare(item, "{{testExamples}}") == 0 {
+				index = i
+				break
+			}
+		}
+		// Command name is the first element of the command line args
+		commandName = commandLineArgs[0]
+		// The rest of the command line args are the arguments of the test command
+		// if {{testExamples}} is found, replace it with testCases
+		// otherwise, append testCases to the end of the command args
+		if index != -1 {
+			commandArgs = append(commandArgs, commandLineArgs[1:index]...)
+			commandArgs = append(commandArgs, testCases...)
+			commandArgs = append(commandArgs, commandLineArgs[index+1:]...)
+		} else {
+			commandArgs = append(commandArgs, commandLineArgs[1:]...)
+			commandArgs = append(commandArgs, testCases...)
+		}
+	} else {
+		// The default Rspec command `bundle exec rspec ${testCases}`
+		commandName = "bundle"
+		commandArgs = append(commandArgs, "exec", "rspec")
+		commandArgs = append(commandArgs, testCases...)
+	}
+
+	return commandName, commandArgs
 }
