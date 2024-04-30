@@ -24,9 +24,8 @@ import (
 func main() {
 	// TODO: detect test runner and use appropriate runner
 	testRunner := runner.Rspec{}
-
+	// Get the arguments without the program name
 	argsWithoutProg := os.Args[1:]
-	fmt.Println(argsWithoutProg)
 	// Gathering files
 	filesFlag := flag.String("files", "", "string of file names for splitting")
 	flag.Parse()

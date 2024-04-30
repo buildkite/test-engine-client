@@ -33,14 +33,25 @@ func (r Rspec) GetFiles() ([]string, error) {
 }
 
 // Command returns an exec.Cmd that will run the rspec command
-func (Rspec) Command(testCases []string) *exec.Cmd {
-	args := []string{"--options", ".rspec.ci"}
+func (Rspec) Command(testCases []string, testCommandArgs []string) *exec.Cmd {
+	testCommand := "bundle exec rspec"
+	testArgs := testCases
 
-	args = append(args, testCases...)
+	if len(testCommandArgs) > 0 {
+		index := -1
+		for i, item := range testCommandArgs {
+			if item == "{{testExample}}" {
+				index = i
+				break
+			}
+		}
+		testCommand = strings.Join(testCommandArgs[:index], " ")
+		testArgs = append(testArgs, testCommandArgs[index+1:]...)
+	}
 
-	fmt.Println("bin/rspec", strings.Join(args, " "))
+	fmt.Println(testCommand, strings.Join(testArgs, " "))
 
-	cmd := exec.Command("bin/rspec", args...)
+	cmd := exec.Command(testCommand, testArgs...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	return cmd
