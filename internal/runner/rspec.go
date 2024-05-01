@@ -34,8 +34,8 @@ func (r Rspec) GetFiles() ([]string, error) {
 }
 
 // Command returns an exec.Cmd that will run the rspec command
-func (r Rspec) Command(testCases []string, commandLineArgs []string) *exec.Cmd {
-	commandName, commandArgs := r.commandNameAndArgs(testCases, commandLineArgs)
+func (r Rspec) Command(testCases []string) *exec.Cmd {
+	commandName, commandArgs := r.commandNameAndArgs(testCases)
 
 	fmt.Println(commandName, strings.Join(commandArgs, " "))
 
@@ -64,23 +64,26 @@ func (Rspec) discoveryPattern() DiscoveryPattern {
 }
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests
-func (Rspec) commandNameAndArgs(testCases []string, commandLineArgs []string) (string, []string) {
+func (Rspec) commandNameAndArgs(testCases []string) (string, []string) {
+	testCommand := os.Getenv("BUILDKITE_TEST_SPLITTER_CMD")
+	testCommandFields := strings.Fields(testCommand)
+
 	commandName := ""
 	commandArgs := []string{}
 	// if commandLineArgs is not empty, using customized test command
-	if len(commandLineArgs) > 0 {
-		index := slices.Index(commandLineArgs, "{{testExamples}}")
+	if len(testCommandFields) > 0 {
+		index := slices.Index(testCommandFields, "{{testExamples}}")
 		// Command name is the first element of the command line args
-		commandName = commandLineArgs[0]
+		commandName = testCommandFields[0]
 		// The rest of the command line args are the arguments of the test command
 		// if {{testExamples}} is found, replace it with testCases
 		// otherwise, append testCases to the end of the command args
 		if index != -1 {
-			commandArgs = append(commandArgs, commandLineArgs[1:index]...)
+			commandArgs = append(commandArgs, testCommandFields[1:index]...)
 			commandArgs = append(commandArgs, testCases...)
-			commandArgs = append(commandArgs, commandLineArgs[index+1:]...)
+			commandArgs = append(commandArgs, testCommandFields[index+1:]...)
 		} else {
-			commandArgs = append(commandArgs, commandLineArgs[1:]...)
+			commandArgs = append(commandArgs, testCommandFields[1:]...)
 			commandArgs = append(commandArgs, testCases...)
 		}
 	} else {

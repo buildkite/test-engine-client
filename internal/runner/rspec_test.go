@@ -10,9 +10,10 @@ import (
 func TestCommandNameAndArgs_WithCommandArgs(t *testing.T) {
 	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testArgs := []string{"bin/rspec", "--options", "{{testExamples}}", "--format"}
+	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "bin/rspec --options {{testExamples}} --format")
+	defer os.Unsetenv("BUILDKITE_TEST_SPLITTER_CMD")
 
-	gotName, gotArgs := rspec.commandNameAndArgs(testCases, testArgs)
+	gotName, gotArgs := rspec.commandNameAndArgs(testCases)
 
 	wantName := "bin/rspec"
 	wantArgs := []string{"--options", "spec/models/user_spec.rb", "spec/models/billing_spec.rb", "--format"}
@@ -28,9 +29,10 @@ func TestCommandNameAndArgs_WithCommandArgs(t *testing.T) {
 func TestCommandNameAndArgs_WithoutTestPlaceholder(t *testing.T) {
 	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testArgs := []string{"bin/rspec", "--options", "--format"}
+	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "bin/rspec --options --format")
+	defer os.Unsetenv("BUILDKITE_TEST_SPLITTER_CMD")
 
-	gotName, gotArgs := rspec.commandNameAndArgs(testCases, testArgs)
+	gotName, gotArgs := rspec.commandNameAndArgs(testCases)
 
 	wantName := "bin/rspec"
 	wantArgs := []string{"--options", "--format", "spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
@@ -46,9 +48,8 @@ func TestCommandNameAndArgs_WithoutTestPlaceholder(t *testing.T) {
 func TestCommandNameAndArgs_DefaultCommand(t *testing.T) {
 	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testArgs := []string{}
 
-	gotName, gotArgs := rspec.commandNameAndArgs(testCases, testArgs)
+	gotName, gotArgs := rspec.commandNameAndArgs(testCases)
 
 	wantName := "bundle"
 	wantArgs := []string{"exec", "rspec", "spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
