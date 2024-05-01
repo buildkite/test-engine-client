@@ -68,13 +68,7 @@ func (Rspec) commandNameAndArgs(testCases []string, commandLineArgs []string) (s
 	commandArgs := []string{}
 	// if commandLineArgs is not empty, using customized test command
 	if len(commandLineArgs) > 0 {
-		index := -1
-		for i, item := range commandLineArgs {
-			if strings.Compare(item, "{{testExamples}}") == 0 {
-				index = i
-				break
-			}
-		}
+		index := slices.Index(commandLineArgs, "{{testExamples}}")
 		// Command name is the first element of the command line args
 		commandName = commandLineArgs[0]
 		// The rest of the command line args are the arguments of the test command
