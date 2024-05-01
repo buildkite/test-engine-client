@@ -36,8 +36,7 @@ func (r Rspec) GetFiles() ([]string, error) {
 // Command returns an exec.Cmd that will run the rspec command
 func (r Rspec) Command(testCases []string) *exec.Cmd {
 	commandName, commandArgs := r.commandNameAndArgs(testCases)
-
-	fmt.Println(commandName, strings.Join(commandArgs, " "))
+	fmt.Printf("%q\n", commandName+" "+strings.Join(commandArgs, " "))
 
 	cmd := exec.Command(commandName, commandArgs...)
 	cmd.Stderr = os.Stderr
