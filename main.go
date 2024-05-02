@@ -66,7 +66,7 @@ func main() {
 	for _, testCase := range thisNodeTask.Tests.Cases {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
-	cmd := testRunner.Command(runnableTests)
+	cmd := testRunner.Command(runnableTests, cfg.TestCommand)
 
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Couldn't start tests: %v", err)

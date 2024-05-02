@@ -7,13 +7,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestCommandNameAndArgs_WithCommandArgs(t *testing.T) {
+func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "bin/rspec --options {{testExamples}} --format")
-	defer os.Unsetenv("BUILDKITE_TEST_SPLITTER_CMD")
+	testCommand := "bin/rspec --options {{testExamples}} --format"
 
-	gotName, gotArgs := rspec.commandNameAndArgs(testCases)
+	gotName, gotArgs := rspec.commandNameAndArgs(testCases, testCommand)
 
 	wantName := "bin/rspec"
 	wantArgs := []string{"--options", "spec/models/user_spec.rb", "spec/models/billing_spec.rb", "--format"}
@@ -26,33 +25,15 @@ func TestCommandNameAndArgs_WithCommandArgs(t *testing.T) {
 	}
 }
 
-func TestCommandNameAndArgs_WithoutTestPlaceholder(t *testing.T) {
+func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "bin/rspec --options --format")
-	defer os.Unsetenv("BUILDKITE_TEST_SPLITTER_CMD")
+	testCommand := "bin/rspec --options --format"
 
-	gotName, gotArgs := rspec.commandNameAndArgs(testCases)
+	gotName, gotArgs := rspec.commandNameAndArgs(testCases, testCommand)
 
 	wantName := "bin/rspec"
 	wantArgs := []string{"--options", "--format", "spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("Rspec.commandNameAndArgs() diff (-got +want):\n%s", diff)
-	}
-	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("Rspec.commandNameAndArgs() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCommandNameAndArgs_DefaultCommand(t *testing.T) {
-	rspec := Rspec{}
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-
-	gotName, gotArgs := rspec.commandNameAndArgs(testCases)
-
-	wantName := "bundle"
-	wantArgs := []string{"exec", "rspec", "spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("Rspec.commandNameAndArgs() diff (-got +want):\n%s", diff)
