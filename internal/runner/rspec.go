@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/kballard/go-shellquote"
 )
 
 // In future, Rspec will implement an interface that defines
@@ -63,13 +65,19 @@ func (Rspec) discoveryPattern() DiscoveryPattern {
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests
 func (Rspec) commandNameAndArgs(testCases []string, testCommand string) (string, []string) {
+	completedTestCommand := ""
 	if strings.Contains(testCommand, "{{testExamples}}") {
-		testCommand = strings.ReplaceAll(testCommand, "{{testExamples}}", strings.Join(testCases, " "))
+		completedTestCommand = strings.ReplaceAll(testCommand, "{{testExamples}}", shellquote.Join(testCases...))
 	} else {
-		testCommand = testCommand + " " + strings.Join(testCases, " ")
+		completedTestCommand = testCommand + " " + shellquote.Join(testCases...)
 	}
 
-	testCommandFields := strings.Fields(testCommand)
+	testCommandFields, err := shellquote.Split(completedTestCommand)
+
+	if err != nil {
+		fmt.Printf("Couldn't process test command %q: %v", testCommand, err)
+		os.Exit(3)
+	}
 
 	return testCommandFields[0], testCommandFields[1:]
 }
