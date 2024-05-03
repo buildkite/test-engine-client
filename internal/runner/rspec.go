@@ -35,14 +35,17 @@ func (r Rspec) GetFiles() ([]string, error) {
 }
 
 // Command returns an exec.Cmd that will run the rspec command
-func (r Rspec) Command(testCases []string, testCommand string) *exec.Cmd {
-	commandName, commandArgs := r.commandNameAndArgs(testCases, testCommand)
+func (r Rspec) Command(testCases []string, testCommand string) (*exec.Cmd, error) {
+	commandName, commandArgs, err := r.commandNameAndArgs(testCases, testCommand)
+	if err != nil {
+		return nil, err
+	}
 	fmt.Printf("%q\n", commandName+" "+strings.Join(commandArgs, " "))
 
 	cmd := exec.Command(commandName, commandArgs...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	return cmd
+	return cmd, nil
 }
 
 // discoveryPattern returns the pattern to use for discovering test files.
@@ -64,7 +67,7 @@ func (Rspec) discoveryPattern() DiscoveryPattern {
 }
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests
-func (Rspec) commandNameAndArgs(testCases []string, testCommand string) (string, []string) {
+func (Rspec) commandNameAndArgs(testCases []string, testCommand string) (string, []string, error) {
 	completedTestCommand := ""
 	if strings.Contains(testCommand, "{{testExamples}}") {
 		completedTestCommand = strings.ReplaceAll(testCommand, "{{testExamples}}", shellquote.Join(testCases...))
@@ -75,9 +78,8 @@ func (Rspec) commandNameAndArgs(testCases []string, testCommand string) (string,
 	testCommandFields, err := shellquote.Split(completedTestCommand)
 
 	if err != nil {
-		fmt.Printf("Couldn't process test command %q: %v", testCommand, err)
-		os.Exit(3)
+		return "", []string{}, err
 	}
 
-	return testCommandFields[0], testCommandFields[1:]
+	return testCommandFields[0], testCommandFields[1:], nil
 }
