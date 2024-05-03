@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -35,7 +34,7 @@ func main() {
 	} else {
 		fs, err := testRunner.GetFiles()
 		if err != nil {
-			log.Fatalf("Couldn't get files: %v", err)
+			logErrorAndExit(3, "Couldn't get files: %v", err)
 		}
 		files = fs
 	}
@@ -43,7 +42,7 @@ func main() {
 	// get config
 	cfg, err := config.New()
 	if err != nil {
-		log.Fatal("Invalid configuration: ", err)
+		logErrorAndExit(3, "Invalid configuration: %v", err)
 	}
 
 	// get plan
@@ -55,7 +54,7 @@ func main() {
 
 	testPlan, err := fetchOrCreateTestPlan(fetchCtx, cfg, files)
 	if err != nil {
-		log.Fatalf("Couldn't create test plan: %v", err)
+		logErrorAndExit(3, "Couldn't create test plan: %v", err)
 	}
 
 	// get plan for this node
@@ -69,11 +68,11 @@ func main() {
 
 	cmd, err := testRunner.Command(runnableTests, cfg.TestCommand)
 	if err != nil {
-		log.Fatalf("Couldn't process test command: %q, %v", cfg.TestCommand, err)
+		logErrorAndExit(3, "Couldn't process test command: %q, %v", cfg.TestCommand, err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		log.Fatalf("Couldn't start tests: %v", err)
+		logErrorAndExit(3, "Couldn't start tests: %v", err)
 	}
 
 	// Create a channel that will be closed when the command finishes.
@@ -106,14 +105,19 @@ func main() {
 	if err := cmd.Wait(); err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
-			log.Printf("Rspec exited with error %d", exitCode)
-			os.Exit(exitCode)
+			logErrorAndExit(exitCode, "Rspec exited with error %d", err)
 		}
-		log.Fatalf("Couldn't run tests: %v", err)
+		logErrorAndExit(3, "Couldn't run tests: %v", err)
 	}
 
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
+}
+
+// logErrorAndExit logs an error message and exits with the given exit code.
+func logErrorAndExit(exitCode int, format string, v ...any) {
+	fmt.Printf(format, v...)
+	os.Exit(exitCode)
 }
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
