@@ -14,6 +14,8 @@ type Config struct {
 	Identifier string
 	// Node index is index of the current node.
 	NodeIndex int
+	// TestCommand is the command to run the tests.
+	TestCommand string
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.

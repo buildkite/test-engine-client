@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
+	"slices"
+
+	"github.com/kballard/go-shellquote"
 )
 
 // In future, Rspec will implement an interface that defines
@@ -33,17 +35,17 @@ func (r Rspec) GetFiles() ([]string, error) {
 }
 
 // Command returns an exec.Cmd that will run the rspec command
-func (Rspec) Command(testCases []string) *exec.Cmd {
-	args := []string{"--options", ".rspec.ci"}
+func (r Rspec) Command(testCases []string, testCommand string) (*exec.Cmd, error) {
+	commandName, commandArgs, err := r.commandNameAndArgs(testCases, testCommand)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(shellquote.Join(append([]string{commandName}, commandArgs...)...))
 
-	args = append(args, testCases...)
-
-	fmt.Println("bin/rspec", strings.Join(args, " "))
-
-	cmd := exec.Command("bin/rspec", args...)
+	cmd := exec.Command(commandName, commandArgs...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	return cmd
+	return cmd, nil
 }
 
 // discoveryPattern returns the pattern to use for discovering test files.
@@ -62,4 +64,19 @@ func (Rspec) discoveryPattern() DiscoveryPattern {
 		IncludePattern: includePattern,
 		ExcludePattern: excludePattern,
 	}
+}
+
+// commandNameAndArgs returns the command name and arguments to run the Rspec tests
+func (Rspec) commandNameAndArgs(testCases []string, testCommand string) (string, []string, error) {
+	words, err := shellquote.Split(testCommand)
+	if err != nil {
+		return "", []string{}, err
+	}
+	idx := slices.Index(words, "{{testExamples}}")
+	if idx < 0 {
+		words = append(words, testCases...)
+		return words[0], words[1:], nil
+	}
+	words = slices.Replace(words, idx, idx+1, testCases...)
+	return words[0], words[1:], nil
 }
