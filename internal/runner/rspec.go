@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"slices"
-	"strings"
 
 	"github.com/kballard/go-shellquote"
 )
@@ -41,7 +40,7 @@ func (r Rspec) Command(testCases []string, testCommand string) (*exec.Cmd, error
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("%q\n", commandName+" "+strings.Join(commandArgs, " "))
+	fmt.Println(shellquote.Join(append([]string{commandName}, commandArgs...)...))
 
 	cmd := exec.Command(commandName, commandArgs...)
 	cmd.Stderr = os.Stderr
