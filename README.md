@@ -21,8 +21,8 @@ The available Go binaries
 |  `BUILDKITE_PARALLEL_JOB` | - | Required, test plan for specific node |
 | `BUILDKITE_SPLITTER_SUITE_TOKEN` | `BUILDKITE_ANALYTICS_TOKEN` | Required, unique token for Test Suite that is being parallelised |
 |  `BUILDKITE_SPLITTER_IDENTIFIER` | `BUILDKITE_BUILD_ID` | Required, use default unless you have a specific use case |
-| `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `spec/**/*_spec.rb` | Optional, glob pattern for discovering test files that need to be executed. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library*. |
-| `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | - | Optional, glob pattern to use for excluding test files or directory. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
+| `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `spec/**/*_spec.rb` | Optional, file glob pattern for discovering test files that need to be executed. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library*. |
+| `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | - | Optional, file glob pattern to use for excluding test files or directory. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
 
 For most use cases, Test Splitter should work out of the box due to the default values available from your Buildkite environment.
 
