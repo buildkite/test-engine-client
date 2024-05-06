@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/kballard/go-shellquote"
@@ -68,18 +69,15 @@ func (Rspec) discoveryPattern() DiscoveryPattern {
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests
 func (Rspec) commandNameAndArgs(testCases []string, testCommand string) (string, []string, error) {
-	completedTestCommand := ""
-	if strings.Contains(testCommand, "{{testExamples}}") {
-		completedTestCommand = strings.ReplaceAll(testCommand, "{{testExamples}}", shellquote.Join(testCases...))
-	} else {
-		completedTestCommand = testCommand + " " + shellquote.Join(testCases...)
-	}
-
-	testCommandFields, err := shellquote.Split(completedTestCommand)
-
+	words, err := shellquote.Split(testCommand)
 	if err != nil {
 		return "", []string{}, err
 	}
-
-	return testCommandFields[0], testCommandFields[1:], nil
+	idx := slices.Index(words, "{{testExamples}}")
+	if idx < 0 {
+		words = append(words, testCases...)
+		return words[0], words[1:], nil
+	}
+	words = slices.Replace(words, idx, idx+1, testCases...)
+	return words[0], words[1:], nil
 }
