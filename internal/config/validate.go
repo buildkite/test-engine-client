@@ -50,6 +50,18 @@ func (c *Config) validate() error {
 		}
 	}
 
+	if c.AccessToken == "" {
+		errs.appendFieldError("AccessToken", "must not be blank")
+	}
+
+	if c.OrganizationSlug == "" {
+		errs.appendFieldError("Organization", "must not be blank")
+	}
+
+	if c.SuiteSlug == "" {
+		errs.appendFieldError("Suite", "must not be blank")
+	}
+
 	if len(errs) > 0 {
 		return errs
 	}
