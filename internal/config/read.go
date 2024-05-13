@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -25,7 +26,7 @@ func (c *Config) readFromEnv() error {
 	var errs InvalidConfigError
 
 	c.SuiteToken = getEnvWithDefault("BUILDKITE_SPLITTER_SUITE_TOKEN", os.Getenv("BUILDKITE_ANALYTICS_TOKEN"))
-	c.Identifier = getEnvWithDefault("BUILDKITE_SPLITTER_IDENTIFIER", os.Getenv("BUILDKITE_BUILD_ID"))
+	c.Identifier = getEnvWithDefault("BUILDKITE_SPLITTER_IDENTIFIER", fmt.Sprintf("%s/%s", os.Getenv("BUILDKITE_BUILD_ID"), os.Getenv("BUILDKITE_STEP_ID")))
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 	c.TestCommand = getEnvWithDefault("BUILDKITE_TEST_SPLITTER_CMD", "bundle exec rspec {{testExamples}}")
