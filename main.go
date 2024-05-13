@@ -135,7 +135,7 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		Format: "files",
 	}
 
-	testPlan, err := api.FetchTestPlan(ctx, cfg.ServerBaseUrl, api.TestPlanParams{
+	testPlan, err := api.CreateTestPlan(ctx, cfg.ServerBaseUrl, api.TestPlanParams{
 		SuiteToken:  cfg.SuiteToken,
 		Mode:        cfg.Mode,
 		Identifier:  cfg.Identifier,
