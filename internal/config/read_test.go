@@ -13,7 +13,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "0")
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.localhost")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
-	os.Setenv("BUILDKITE_BUILD_ID", "123")
+	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "123")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "bin/rspec {{testExamples}}")
 	defer os.Clearenv()
@@ -44,9 +44,10 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
 	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "")
-	defer os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
-	defer os.Unsetenv("BUILDKITE_SPLITTER_MODE")
-	defer os.Unsetenv("BUILDKITE_TEST_SPLITTER_CMD")
+	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "")
+	os.Setenv("BUILDKITE_BUILD_ID", "123")
+	os.Setenv("BUILDKITE_STEP_ID", "456")
+	defer os.Clearenv()
 
 	c := Config{}
 	c.readFromEnv()
@@ -60,6 +61,10 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 
 	if c.TestCommand != "bundle exec rspec {{testExamples}}" {
 		t.Errorf("TestCommand = %v, want %v", c.TestCommand, "bundle exec rspec {{testExamples}}")
+	}
+
+	if c.Identifier != "123/456" {
+		t.Errorf("Identifier = %v, want %v", c.Identifier, "123/456")
 	}
 }
 
