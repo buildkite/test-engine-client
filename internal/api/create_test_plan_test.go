@@ -39,9 +39,12 @@ func TestCreateTestPlan(t *testing.T) {
 	ctx := context.Background()
 
 	params := TestPlanParams{}
-	got, err := CreateTestPlan(ctx, svr.URL, params)
+	apiClient := client{
+		ServerBaseUrl: svr.URL,
+	}
+	got, err := apiClient.CreateTestPlan(ctx, params)
 	if err != nil {
-		t.Errorf("CreateTestPlan(%q, %v) error = %v", svr.URL, params, err)
+		t.Errorf("CreateTestPlan(ctx, %v) error = %v", params, err)
 	}
 	want := plan.TestPlan{
 		Tasks: map[string]*plan.Task{
@@ -59,7 +62,7 @@ func TestCreateTestPlan(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("CreateTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
+		t.Errorf("CreateTestPlan(ctx, %v) diff (-got +want):\n%s", params, diff)
 	}
 }
 
@@ -71,16 +74,20 @@ func TestCreateTestPlan_Error4xx(t *testing.T) {
 
 	ctx := context.Background()
 	params := TestPlanParams{}
-	got, err := CreateTestPlan(ctx, svr.URL, params)
+	apiClient := client{
+		ServerBaseUrl: svr.URL,
+	}
+
+	got, err := apiClient.CreateTestPlan(ctx, params)
 
 	wantTestPlan := plan.TestPlan{}
 
 	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
-		t.Errorf("CreateTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
+		t.Errorf("CreateTestPlan(ctx, %v) diff (-got +want):\n%s", params, diff)
 	}
 
 	if !errors.Is(err, errInvalidRequest) {
-		t.Errorf("CreateTestPlan(%q, %v) want %v got %v", svr.URL, params, errInvalidRequest, err)
+		t.Errorf("CreateTestPlan(ctx, %v) want %v got %v", params, errInvalidRequest, err)
 	}
 }
 
@@ -97,15 +104,19 @@ func TestCreateTestPlan_Timeout(t *testing.T) {
 	defer cancel()
 
 	params := TestPlanParams{}
-	got, err := CreateTestPlan(fetchCtx, svr.URL, params)
+	apiClient := client{
+		ServerBaseUrl: svr.URL,
+	}
+
+	got, err := apiClient.CreateTestPlan(fetchCtx, params)
 
 	wantTestPlan := plan.TestPlan{}
 
 	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
-		t.Errorf("CreateTestPlan(%q, %v) diff (-got +want):\n%s", svr.URL, params, diff)
+		t.Errorf("CreateTestPlan(ctx, %v) diff (-got +want):\n%s", params, diff)
 	}
 
 	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("FetchTestPlan(%q, %v) want %v, got %v", svr.URL, params, context.DeadlineExceeded, err)
+		t.Errorf("FetchTestPlan(ctx, %v) want %v, got %v", params, context.DeadlineExceeded, err)
 	}
 }

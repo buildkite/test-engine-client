@@ -28,7 +28,7 @@ type TestPlanParams struct {
 }
 
 // CreateTestPlan creates a test plan from the service, including retries.
-func CreateTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
+func (c client) CreateTestPlan(ctx context.Context, params TestPlanParams) (plan.TestPlan, error) {
 	// Retry using exponential backoff offerred by roko
 	// https://pkg.go.dev/github.com/buildkite/roko#ExponentialSubsecond
 	//
@@ -53,7 +53,7 @@ func CreateTestPlan(ctx context.Context, splitterPath string, params TestPlanPar
 		roko.WithJitter(),
 	)
 	testPlan, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (plan.TestPlan, error) {
-		tp, err := tryCreateTestPlan(ctx, splitterPath, params)
+		tp, err := c.tryCreateTestPlan(ctx, params)
 		// Don't retry if the request was invalid
 		if errors.Is(err, errInvalidRequest) {
 			r.Break()
@@ -65,7 +65,7 @@ func CreateTestPlan(ctx context.Context, splitterPath string, params TestPlanPar
 }
 
 // tryCreateTestPlan creates a test plan from the service.
-func tryCreateTestPlan(ctx context.Context, splitterPath string, params TestPlanParams) (plan.TestPlan, error) {
+func (c client) tryCreateTestPlan(ctx context.Context, params TestPlanParams) (plan.TestPlan, error) {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
@@ -77,7 +77,7 @@ func tryCreateTestPlan(ctx context.Context, splitterPath string, params TestPlan
 	defer cancel()
 
 	// create request
-	postUrl := splitterPath + "/test-splitting/plan"
+	postUrl := c.ServerBaseUrl + "/test-splitting/plan"
 	r, err := http.NewRequestWithContext(reqCtx, "POST", postUrl, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("creating request: %w", err)
