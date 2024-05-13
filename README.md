@@ -41,5 +41,9 @@ Otherwise, your script for executing specs may look something like:
 chmod +x test-splitter
 ./test-splitter # fetches the test plan for this node, and then executes the rspec tests
 ```
-
-
+### Exit code
+| Exit code | Description |
+| ---- | ---- |
+| 0 | All tests pass |
+| 1 | At least one test fails |
+| 3 | Test Splitter failure (eg. config error) |
