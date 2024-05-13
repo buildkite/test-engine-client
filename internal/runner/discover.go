@@ -31,18 +31,24 @@ func discoverTestFiles(pattern DiscoveryPattern) ([]string, error) {
 		if err != nil {
 			fmt.Printf("Error walking: %v\n", err)
 		}
-		if d.IsDir() {
+
+		// Check if the path matches the exclude pattern. If so, skip it.
+		// If it matches a directory, then skip that directory.
+		if parsedExcludePattern.Match(path) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
 			return nil
 		}
-
-		// Check if the path matches the exclude pattern and skip it
-		if parsedExcludePattern.Match(path) {
+		// Skip directories that happen to match the include pattern - we're
+		// only interested in files.
+		if d.IsDir() {
 			return nil
 		}
 
 		discoveredFiles = append(discoveredFiles, path)
 		return nil
-	}, nil)
+	}, zzglob.WalkIntermediateDirs(true))
 
 	return discoveredFiles, nil
 }
