@@ -139,14 +139,15 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
-	// Fetch the plan from the server's cache first.
+	// Fetch the plan from the server's cache.
 	cachedPlan, err := apiClient.FetchTestPlan(cfg.SuiteSlug, cfg.Identifier)
-	if cachedPlan != nil {
-		return *cachedPlan, nil
-	}
 
 	if err != nil {
 		return plan.TestPlan{}, err
+	}
+
+	if cachedPlan != nil {
+		return *cachedPlan, nil
 	}
 
 	// If the cache is empty, create a new plan.
