@@ -44,6 +44,7 @@ chmod +x test-splitter
 ### Exit code
 | Exit code | Description |
 | ---- | ---- |
-| 0 | All tests pass |
-| 1 | At least one test fails |
-| 3 | Test Splitter failure (eg. config error) |
+| 0 | Success (passed through from test runner) |
+| 1 | Failure (passed through from test runner) |
+| 16 | Test Splitter failure (eg. config error) |
+| * | Other errors (passed through from the test runner) |

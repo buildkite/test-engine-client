@@ -34,7 +34,7 @@ func main() {
 	} else {
 		fs, err := testRunner.GetFiles()
 		if err != nil {
-			logErrorAndExit(3, "Couldn't get files: %v", err)
+			logErrorAndExit(16, "Couldn't get files: %v", err)
 		}
 		files = fs
 	}
@@ -42,7 +42,7 @@ func main() {
 	// get config
 	cfg, err := config.New()
 	if err != nil {
-		logErrorAndExit(3, "Invalid configuration: %v", err)
+		logErrorAndExit(16, "Invalid configuration: %v", err)
 	}
 
 	// get plan
@@ -54,7 +54,7 @@ func main() {
 
 	testPlan, err := fetchOrCreateTestPlan(fetchCtx, cfg, files)
 	if err != nil {
-		logErrorAndExit(3, "Couldn't create test plan: %v", err)
+		logErrorAndExit(16, "Couldn't create test plan: %v", err)
 	}
 
 	// get plan for this node
@@ -68,11 +68,11 @@ func main() {
 
 	cmd, err := testRunner.Command(runnableTests, cfg.TestCommand)
 	if err != nil {
-		logErrorAndExit(3, "Couldn't process test command: %q, %v", cfg.TestCommand, err)
+		logErrorAndExit(16, "Couldn't process test command: %q, %v", cfg.TestCommand, err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		logErrorAndExit(3, "Couldn't start tests: %v", err)
+		logErrorAndExit(16, "Couldn't start tests: %v", err)
 	}
 
 	// Create a channel that will be closed when the command finishes.
@@ -107,7 +107,7 @@ func main() {
 			exitCode := exitError.ExitCode()
 			logErrorAndExit(exitCode, "Rspec exited with error %d", err)
 		}
-		logErrorAndExit(3, "Couldn't run tests: %v", err)
+		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
 	// Close the channel that will stop the goroutine.
