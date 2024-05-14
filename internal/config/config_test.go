@@ -14,7 +14,7 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "7")
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://build.kite")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
-	os.Setenv("BUILDKITE_BUILD_ID", "xyz")
+	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "xyz")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "bin/rspec {{testExamples}}")
 }
