@@ -46,4 +46,5 @@ chmod +x test-splitter
 | ---- | ---- |
 | 0 | All tests pass |
 | 1 | At least one test fails |
-| 3 | Test Splitter failure (eg. config error) |
+| 16 | Test Splitter failure (eg. config error) |
+| * | Test Splitter failure (eg. config error) |
