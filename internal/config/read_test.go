@@ -14,21 +14,25 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.localhost")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "123")
-	os.Setenv("BUILDKITE_SPLITTER_SUITE_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
+	os.Setenv("BUILDKITE_API_ACCESS_TOKEN", "my_token")
+	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
+	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
 	defer os.Clearenv()
 
 	c := Config{}
 	err := c.readFromEnv()
 
 	want := Config{
-		Parallelism:   10,
-		NodeIndex:     0,
-		ServerBaseUrl: "https://buildkite.localhost",
-		Mode:          "static",
-		Identifier:    "123",
-		SuiteToken:    "my_token",
-		TestCommand:   "bin/rspec {{testExamples}}",
+		Parallelism:      10,
+		NodeIndex:        0,
+		ServerBaseUrl:    "https://buildkite.localhost",
+		Mode:             "static",
+		Identifier:       "123",
+		TestCommand:      "bin/rspec {{testExamples}}",
+		AccessToken:      "my_token",
+		OrganizationSlug: "my_org",
+		SuiteSlug:        "my_suite",
 	}
 
 	if err != nil {
@@ -51,8 +55,8 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 
 	c := Config{}
 	c.readFromEnv()
-	if c.ServerBaseUrl != "https://buildkite.com" {
-		t.Errorf("ServerBaseUrl = %v, want %v", c.ServerBaseUrl, "https://buildkite.com")
+	if c.ServerBaseUrl != "https://api.buildkite.com" {
+		t.Errorf("ServerBaseUrl = %v, want %v", c.ServerBaseUrl, "https://api.buildkite.com")
 	}
 
 	if c.Mode != "static" {

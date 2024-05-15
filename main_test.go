@@ -41,7 +41,6 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   10,
-		SuiteToken:    "suite_token",
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
@@ -80,6 +79,10 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	"tasks": {}
 }`
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// simulate cache miss for GET test_plan so it will trigger the test plan creation
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+		}
 		fmt.Fprint(w, response)
 	}))
 	defer svr.Close()
@@ -88,7 +91,6 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   2,
-		SuiteToken:    "suite_token",
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
@@ -126,7 +128,6 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   3,
-		SuiteToken:    "suite_token",
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
@@ -161,7 +162,6 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   2,
-		SuiteToken:    "suite_token",
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
