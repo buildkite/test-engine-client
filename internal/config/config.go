@@ -18,8 +18,6 @@ type Config struct {
 	ServerBaseUrl string
 	// SuiteSlug is the slug of the suite.
 	SuiteSlug string
-	// SuiteToken is the token of the test suite.
-	SuiteToken string
 	// TestCommand is the command to run the tests.
 	TestCommand string
 }

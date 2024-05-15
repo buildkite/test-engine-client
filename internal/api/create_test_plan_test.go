@@ -39,10 +39,10 @@ func TestCreateTestPlan(t *testing.T) {
 	ctx := context.Background()
 
 	params := TestPlanParams{}
-	apiClient := client{
+	apiClient := NewClient(ClientConfig{
 		ServerBaseUrl: svr.URL,
-	}
-	got, err := apiClient.CreateTestPlan(ctx, params)
+	})
+	got, err := apiClient.CreateTestPlan(ctx, "my-suite", params)
 	if err != nil {
 		t.Errorf("CreateTestPlan(ctx, %v) error = %v", params, err)
 	}
@@ -74,11 +74,11 @@ func TestCreateTestPlan_Error4xx(t *testing.T) {
 
 	ctx := context.Background()
 	params := TestPlanParams{}
-	apiClient := client{
+	apiClient := NewClient(ClientConfig{
 		ServerBaseUrl: svr.URL,
-	}
+	})
 
-	got, err := apiClient.CreateTestPlan(ctx, params)
+	got, err := apiClient.CreateTestPlan(ctx, "my-suite", params)
 
 	wantTestPlan := plan.TestPlan{}
 
@@ -104,11 +104,11 @@ func TestCreateTestPlan_Timeout(t *testing.T) {
 	defer cancel()
 
 	params := TestPlanParams{}
-	apiClient := client{
+	apiClient := NewClient(ClientConfig{
 		ServerBaseUrl: svr.URL,
-	}
+	})
 
-	got, err := apiClient.CreateTestPlan(fetchCtx, params)
+	got, err := apiClient.CreateTestPlan(fetchCtx, "my-suite", params)
 
 	wantTestPlan := plan.TestPlan{}
 

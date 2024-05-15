@@ -15,8 +15,10 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://build.kite")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "xyz")
-	os.Setenv("BUILDKITE_SPLITTER_SUITE_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "bin/rspec {{testExamples}}")
+	os.Setenv("BUILDKITE_API_ACCESS_TOKEN", "my_token")
+	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
+	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
 }
 
 func TestNewConfig(t *testing.T) {
@@ -29,13 +31,15 @@ func TestNewConfig(t *testing.T) {
 	}
 
 	want := Config{
-		Parallelism:   60,
-		NodeIndex:     7,
-		ServerBaseUrl: "https://build.kite",
-		Mode:          "static",
-		Identifier:    "xyz",
-		SuiteToken:    "my_token",
-		TestCommand:   "bin/rspec {{testExamples}}",
+		Parallelism:      60,
+		NodeIndex:        7,
+		ServerBaseUrl:    "https://build.kite",
+		Mode:             "static",
+		Identifier:       "xyz",
+		TestCommand:      "bin/rspec {{testExamples}}",
+		AccessToken:      "my_token",
+		OrganizationSlug: "my_org",
+		SuiteSlug:        "my_suite",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {
@@ -66,13 +70,15 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	}
 
 	want := Config{
-		Parallelism:   60,
-		NodeIndex:     7,
-		ServerBaseUrl: "https://buildkite.com",
-		Mode:          "static",
-		Identifier:    "xyz",
-		SuiteToken:    "my_token",
-		TestCommand:   "bundle exec rspec {{testExamples}}",
+		Parallelism:      60,
+		NodeIndex:        7,
+		ServerBaseUrl:    "https://api.buildkite.com",
+		Mode:             "static",
+		Identifier:       "xyz",
+		TestCommand:      "bundle exec rspec {{testExamples}}",
+		AccessToken:      "my_token",
+		OrganizationSlug: "my_org",
+		SuiteSlug:        "my_suite",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {
@@ -83,7 +89,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 func TestNewConfig_InvalidConfig(t *testing.T) {
 	setEnv(t)
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "dynamic")
-	os.Unsetenv("BUILDKITE_SPLITTER_SUITE_TOKEN")
+	os.Unsetenv("BUILDKITE_API_ACCESS_TOKEN")
 	defer os.Clearenv()
 
 	_, err := New()
