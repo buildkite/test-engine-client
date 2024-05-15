@@ -67,6 +67,80 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	}
 }
 
+func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
+	cachedPlan := `{
+	"tasks": {
+		"0": {
+			"node_number": 0,
+			"tests": {
+				"cases": [
+					{
+						"path": "apple"
+					}
+				],
+				"format": "files"
+			}
+		}
+	}
+}`
+
+	newPlan := `{
+	"tasks": {
+		"0": {
+			"node_number": 0,
+			"tests": {
+				"cases": [
+					{
+						"path": "banana"
+					}
+				],
+				"format": "files"
+			}
+		}
+	}
+}`
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			fmt.Fprint(w, cachedPlan)
+		} else {
+			fmt.Fprint(w, newPlan)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		NodeIndex:        0,
+		Parallelism:      10,
+		Identifier:       "identifier",
+		ServerBaseUrl:    svr.URL,
+		OrganizationSlug: "org",
+		SuiteSlug:        "suite",
+	}
+
+	tests := []string{"banana"}
+
+	want := plan.TestPlan{
+		Tasks: map[string]*plan.Task{
+			"0": {
+				NodeNumber: 0,
+				Tests: plan.Tests{
+					Cases:  []plan.TestCase{{Path: "apple"}},
+					Format: "files",
+				},
+			},
+		},
+	}
+
+	got, err := fetchOrCreateTestPlan(context.Background(), cfg, tests)
+	if err != nil {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
+	}
+}
+
 func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	files := []string{"apple", "banana", "cherry", "mango"}
 	tests := plan.Tests{
