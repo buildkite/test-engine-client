@@ -17,8 +17,8 @@ The available Go binaries
 
 | Environment Variable | Default Value | Description |
 | ---- | ---- | ----------- |
-| `BUILDKITE_API_ACCESS_TOKEN ` | - | Required, Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. |
-| `BUILDKITE_ORGANIZATION_SLUG` | - | Required, the slug of your Buildkite organization. |
+| `BUILDKITE_API_ACCESS_TOKEN ` | - | Required, Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can create access token from [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite |
+| `BUILDKITE_ORGANIZATION_SLUG` | - | Required, the slug of your Buildkite organization. This is available in your pipeline environment, so you don't need to set it manually |
 | `BUILDKITE_PARALLEL_JOB_COUNT` | - | Required, total number of parallelism. |
 | `BUILDKITE_PARALLEL_JOB` | - | Required, test plan for specific node |
 | `BUILDKITE_SPLITTER_IDENTIFIER` | `BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID` | Optional. Test Splitter uses the identifier to store and fetch the test plan and must be unique for each build and steps group. By default it will use a composite of `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID`, but it can be overridden by specifying the `BUILDKITE_SPLITTER_IDENTIFIER`. `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID` must be accessible by the client when using the default. |
