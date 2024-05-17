@@ -163,8 +163,7 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		Format: "files",
 	}
 
-	testPlan, err := apiClient.CreateTestPlan(ctx, api.TestPlanParams{
-		SuiteToken:  cfg.SuiteToken,
+	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, api.TestPlanParams{
 		Mode:        cfg.Mode,
 		Identifier:  cfg.Identifier,
 		Parallelism: cfg.Parallelism,
