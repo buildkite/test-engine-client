@@ -28,7 +28,7 @@ type TestPlanParams struct {
 }
 
 // CreateTestPlan creates a test plan from the service, including retries.
-func (c client) CreateTestPlan(ctx context.Context, params TestPlanParams) (plan.TestPlan, error) {
+func (c client) CreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
 	// Retry using exponential backoff offerred by roko
 	// https://pkg.go.dev/github.com/buildkite/roko#ExponentialSubsecond
 	//
@@ -53,7 +53,7 @@ func (c client) CreateTestPlan(ctx context.Context, params TestPlanParams) (plan
 		roko.WithJitter(),
 	)
 	testPlan, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (plan.TestPlan, error) {
-		tp, err := c.tryCreateTestPlan(ctx, params)
+		tp, err := c.tryCreateTestPlan(ctx, suiteSlug, params)
 		// Don't retry if the request was invalid
 		if errors.Is(err, errInvalidRequest) {
 			r.Break()
@@ -65,7 +65,7 @@ func (c client) CreateTestPlan(ctx context.Context, params TestPlanParams) (plan
 }
 
 // tryCreateTestPlan creates a test plan from the service.
-func (c client) tryCreateTestPlan(ctx context.Context, params TestPlanParams) (plan.TestPlan, error) {
+func (c client) tryCreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
@@ -77,7 +77,7 @@ func (c client) tryCreateTestPlan(ctx context.Context, params TestPlanParams) (p
 	defer cancel()
 
 	// create request
-	postUrl := c.ServerBaseUrl + "/test-splitting/plan"
+	postUrl := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan", c.ServerBaseUrl, c.OrganizationSlug, suiteSlug)
 	r, err := http.NewRequestWithContext(reqCtx, "POST", postUrl, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("creating request: %w", err)
@@ -85,8 +85,7 @@ func (c client) tryCreateTestPlan(ctx context.Context, params TestPlanParams) (p
 	r.Header.Add("Content-Type", "application/json")
 
 	// send request
-	client := &http.Client{}
-	resp, err := client.Do(r)
+	resp, err := c.httpClient.Do(r)
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("sending request: %w", err)
 	}
