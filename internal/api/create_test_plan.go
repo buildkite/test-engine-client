@@ -90,21 +90,24 @@ func (c client) tryCreateTestPlan(ctx context.Context, suiteSlug string, params 
 	}
 	defer resp.Body.Close()
 
+	// read response
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return plan.TestPlan{}, fmt.Errorf("reading response body: %w", err)
+	}
+
 	switch {
 	case resp.StatusCode == http.StatusOK:
 		// This is our happy path
 
 	case resp.StatusCode >= 400 && resp.StatusCode < 500:
-		return plan.TestPlan{}, fmt.Errorf("%w: server response: %d", errInvalidRequest, resp.StatusCode)
-
+		var errorResp errorResponse
+		json.Unmarshal(responseBody, &errorResp)
+		return plan.TestPlan{}, fmt.Errorf("%w: server response: %d %s", errInvalidRequest, resp.StatusCode, errorResp.Message)
 	case resp.StatusCode >= 500 && resp.StatusCode < 600:
-		return plan.TestPlan{}, fmt.Errorf("server response: %d", resp.StatusCode)
-	}
-
-	// read response
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return plan.TestPlan{}, fmt.Errorf("reading response body: %w", err)
+		var errorResp errorResponse
+		json.Unmarshal(responseBody, &errorResp)
+		return plan.TestPlan{}, fmt.Errorf("server response: %d %s", resp.StatusCode, errorResp.Message)
 	}
 
 	// parse response
