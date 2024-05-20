@@ -29,7 +29,7 @@ The available Go binaries
 
 For most use cases, Test Splitter should work out of the box due to the default values available from your Buildkite environment.
 
-However, you'll need to set `BUILDKITE_SPLITTER_SUITE_TOKEN` if your test collector doesn't use the `BUILDKITE_ANALYTICS_TOKEN` value, or your pipeline has multiple suites.
+However, you'll have to set `BUILDKITE_API_ACCESS_TOKEN` and `BUILDKITE_SPLITTER_SUITE_SLUG`.
 
 You can also set the `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` or `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` if you need to filter the tests selected for execution.
 
