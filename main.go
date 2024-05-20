@@ -115,13 +115,45 @@ func main() {
 	if err := cmd.Wait(); err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
-			logErrorAndExit(exitCode, "Rspec exited with error %d", err)
+			if cfg.MaxRetries == 0 {
+				logErrorAndExit(exitCode, "Rspec exited with error %d", err)
+			} else {
+				retryFailedTests(testRunner, cfg)
+			}
 		}
 		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
+}
+
+func retryFailedTests(testRunner runner.Rspec, cfg config.Config) {
+	// Retry failed tests
+	retries := 0
+	for retries < cfg.MaxRetries {
+		retries++
+		cmd, err := testRunner.RetryCommand(cfg.TestCommand)
+		if err != nil {
+			logErrorAndExit(16, "Couldn't process retry command: %v", err)
+		}
+
+		if err := cmd.Start(); err != nil {
+			logErrorAndExit(16, "Couldn't start tests: %v", err)
+		}
+
+		err = cmd.Wait()
+		if err != nil {
+			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
+				exitCode := exitError.ExitCode()
+				if retries >= cfg.MaxRetries {
+					logErrorAndExit(exitCode, "Rspec exited with error %d", err)
+				}
+			}
+		} else {
+			break
+		}
+	}
 }
 
 // logErrorAndExit logs an error message and exits with the given exit code.
