@@ -4,8 +4,12 @@ updates:
     directory: /.buildkite
     schedule:
       interval: weekly
+    reviewers:
+      - "buildkite/test-splitting"
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 2
+    reviewers:
+      - "buildkite/test-splitting"
