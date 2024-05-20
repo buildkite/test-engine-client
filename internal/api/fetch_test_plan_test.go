@@ -86,27 +86,33 @@ func TestFetchTestPlan_NotFound(t *testing.T) {
 	}
 }
 
-func TestFetchTestPlan_Unauthorized(t *testing.T) {
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-	}))
-	defer svr.Close()
+func TestFetchTestPlan_InvalidRequest(t *testing.T) {
+	statusCodes := []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden}
 
-	cfg := ClientConfig{
-		AccessToken:      "asdf1234",
-		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
-	}
+	for _, code := range statusCodes {
+		t.Run(fmt.Sprintf("status code %d", code), func(t *testing.T) {
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(code)
+			}))
+			defer svr.Close()
 
-	c := NewClient(cfg)
-	got, err := c.FetchTestPlan("my-suite", "xyz")
+			cfg := ClientConfig{
+				AccessToken:      "asdf1234",
+				OrganizationSlug: "my-org",
+				ServerBaseUrl:    svr.URL,
+			}
 
-	if err == nil {
-		t.Errorf("FetchTestPlan() want error, got nil")
-	}
+			c := NewClient(cfg)
+			got, err := c.FetchTestPlan("my-suite", "xyz")
 
-	if got != nil {
-		t.Errorf("FetchTestPlan() = %v, want nil", got)
+			if err == nil {
+				t.Errorf("FetchTestPlan() want error, got nil")
+			}
+
+			if got != nil {
+				t.Errorf("FetchTestPlan() = %v, want nil", got)
+			}
+		})
 	}
 }
 
