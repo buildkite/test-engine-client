@@ -20,6 +20,8 @@ type Config struct {
 	SuiteSlug string
 	// TestCommand is the command to run the tests.
 	TestCommand string
+	// MaxRetries is the maximum number of retries for a failed test.
+	MaxRetries int
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.
