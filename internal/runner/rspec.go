@@ -58,6 +58,7 @@ func (r Rspec) RetryCommand(defaultTestCommand string) (*exec.Cmd, error) {
 		return n == "{{testExamples}}"
 	})
 	words = slices.Insert(words, len(words), "--only-failures")
+	fmt.Println(shellquote.Join(words...))
 
 	cmd := exec.Command(words[0], words[1:]...)
 	cmd.Stderr = os.Stderr
