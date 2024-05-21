@@ -155,8 +155,8 @@ func retryFailedTests(testRunner runner.Rspec, maxRetries int) {
 				}
 			}
 		} else {
-			// If the command exits successfully, we break the loop.
-			break
+			// If the failing tests pass after retry (test command exits without error), we exit with code 0.
+			os.Exit(0)
 		}
 	}
 }
