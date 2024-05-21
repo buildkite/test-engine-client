@@ -72,7 +72,6 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		Mode:          "static",
 		Identifier:    "xyz",
 		SuiteToken:    "my_token",
-		TestCommand:   "bundle exec rspec {{testExamples}}",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {

@@ -59,10 +59,6 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 		t.Errorf("Mode = %v, want %v", c.Mode, "static")
 	}
 
-	if c.TestCommand != "bundle exec rspec {{testExamples}}" {
-		t.Errorf("TestCommand = %v, want %v", c.TestCommand, "bundle exec rspec {{testExamples}}")
-	}
-
 	if c.Identifier != "123/456" {
 		t.Errorf("Identifier = %v, want %v", c.Identifier, "123/456")
 	}

@@ -9,6 +9,24 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
+func TestNewRspec_DefaultCommand(t *testing.T) {
+	defaultCommand := "bundle exec rspec {{testExamples}}"
+	rspec := NewRspec("")
+
+	if rspec.TestCommand != defaultCommand {
+		t.Errorf("rspec.TestCommand = %q, want %q", rspec.TestCommand, defaultCommand)
+	}
+}
+
+func TestNewRspec_CustomCommand(t *testing.T) {
+	customCommand := "bin/rspec --options {{testExamples}} --format"
+	rspec := NewRspec(customCommand)
+
+	if rspec.TestCommand != customCommand {
+		t.Errorf("rspec.TestCommand = %q, want %q", rspec.TestCommand, customCommand)
+	}
+}
+
 func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options {{testExamples}} --format"
