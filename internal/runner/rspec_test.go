@@ -90,6 +90,21 @@ func TestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	}
 }
 
+func TestRetryCommand_DefaultRetryCommand(t *testing.T) {
+	testCommand := "bin/rspec --options {{testExamples}}"
+	rspec := NewRspec(testCommand)
+
+	got, err := rspec.RetryCommand()
+	if err != nil {
+		t.Errorf("Rspec.RetryCommand() error = %v", err)
+	}
+
+	want := "bin/rspec --options --only-failures"
+	if diff := cmp.Diff(got.String(), want); diff != "" {
+		t.Errorf("Rspec.RetryCommand() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestRspecDiscoveryPattern_Default(t *testing.T) {
 	rspec := Rspec{}
 	got := rspec.discoveryPattern()
