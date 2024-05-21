@@ -20,14 +20,24 @@ import (
 	"github.com/buildkite/test-splitter/internal/runner"
 )
 
+var Version = ""
+
 func main() {
 	// TODO: detect test runner and use appropriate runner
 	testRunner := runner.Rspec{}
+
+	versionFlag := flag.Bool("version", false, "print version information")
+
 	// Gathering files
 	filesFlag := flag.String("files", "", "string of file names for splitting")
 	flag.Parse()
 
 	var files []string
+
+	if *versionFlag {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
 
 	if *filesFlag != "" {
 		files = strings.Split(*filesFlag, ",")
