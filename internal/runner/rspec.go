@@ -45,12 +45,12 @@ func (r Rspec) GetFiles() ([]string, error) {
 	return files, nil
 }
 
-func (r Rspec) RetryCommand(defaultTestCommand string) (*exec.Cmd, error) {
+func (r Rspec) RetryCommand() (*exec.Cmd, error) {
 	// use default test command to build retry command
 	// remove all occurrences of "{{testExamples}}" and append "--only-failures"
 
 	// TODO: support custom retry command in the future
-	words, err := shellquote.Split(defaultTestCommand)
+	words, err := shellquote.Split(r.TestCommand)
 	if err != nil {
 		return nil, err
 	}

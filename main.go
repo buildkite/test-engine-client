@@ -118,7 +118,7 @@ func main() {
 			if cfg.MaxRetries == 0 {
 				logErrorAndExit(exitCode, "Rspec exited with error %d", err)
 			} else {
-				retryFailedTests(testRunner, cfg)
+				retryFailedTests(testRunner, cfg.MaxRetries)
 			}
 		}
 		logErrorAndExit(16, "Couldn't run tests: %v", err)
@@ -128,12 +128,12 @@ func main() {
 	close(finishCh)
 }
 
-func retryFailedTests(testRunner runner.Rspec, cfg config.Config) {
+func retryFailedTests(testRunner runner.Rspec, maxRetries int) {
 	// Retry failed tests
 	retries := 0
-	for retries < cfg.MaxRetries {
+	for retries < maxRetries {
 		retries++
-		cmd, err := testRunner.RetryCommand(cfg.TestCommand)
+		cmd, err := testRunner.RetryCommand()
 		if err != nil {
 			logErrorAndExit(16, "Couldn't process retry command: %v", err)
 		}
@@ -146,7 +146,7 @@ func retryFailedTests(testRunner runner.Rspec, cfg config.Config) {
 		if err != nil {
 			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 				exitCode := exitError.ExitCode()
-				if retries >= cfg.MaxRetries {
+				if retries >= maxRetries {
 					logErrorAndExit(exitCode, "Rspec exited with error %d", err)
 				}
 			}
