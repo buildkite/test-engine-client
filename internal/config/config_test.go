@@ -16,7 +16,7 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "xyz")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_TOKEN", "my_token")
-	os.Setenv("BUILDKITE_TEST_SPLITTER_CMD", "bin/rspec {{testExamples}}")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
 }
 
 func TestNewConfig(t *testing.T) {
@@ -57,7 +57,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	setEnv(t)
 	os.Unsetenv("BUILDKITE_SPLITTER_MODE")
 	os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
-	os.Unsetenv("BUILDKITE_TEST_SPLITTER_CMD")
+	os.Unsetenv("BUILDKITE_SPLITTER_TEST_CMD")
 	defer os.Clearenv()
 
 	c, err := New()
@@ -72,7 +72,6 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		Mode:          "static",
 		Identifier:    "xyz",
 		SuiteToken:    "my_token",
-		TestCommand:   "bundle exec rspec {{testExamples}}",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {

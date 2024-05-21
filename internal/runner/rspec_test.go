@@ -9,12 +9,30 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
+func TestNewRspec_DefaultCommand(t *testing.T) {
+	defaultCommand := "bundle exec rspec {{testExamples}}"
+	rspec := NewRspec("")
+
+	if rspec.TestCommand != defaultCommand {
+		t.Errorf("rspec.TestCommand = %q, want %q", rspec.TestCommand, defaultCommand)
+	}
+}
+
+func TestNewRspec_CustomCommand(t *testing.T) {
+	customCommand := "bin/rspec --options {{testExamples}} --format"
+	rspec := NewRspec(customCommand)
+
+	if rspec.TestCommand != customCommand {
+		t.Errorf("rspec.TestCommand = %q, want %q", rspec.TestCommand, customCommand)
+	}
+}
+
 func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
-	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options {{testExamples}} --format"
+	rspec := NewRspec(testCommand)
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases, testCommand)
+	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 	if err != nil {
 		t.Errorf("Rspec.commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -31,11 +49,11 @@ func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
-	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options --format"
+	rspec := NewRspec(testCommand)
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases, testCommand)
+	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 	if err != nil {
 		t.Errorf("Rspec.commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -52,11 +70,11 @@ func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options ' {{testExamples}}"
+	rspec := NewRspec(testCommand)
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases, testCommand)
+	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 
 	wantName := ""
 	wantArgs := []string{}
