@@ -23,8 +23,14 @@ import (
 var Version = ""
 
 func main() {
+	// get config
+	cfg, err := config.New()
+	if err != nil {
+		logErrorAndExit(16, "Invalid configuration: %v", err)
+	}
+
 	// TODO: detect test runner and use appropriate runner
-	testRunner := runner.Rspec{}
+	testRunner := runner.NewRspec(cfg.TestCommand)
 
 	versionFlag := flag.Bool("version", false, "print version information")
 
@@ -49,12 +55,6 @@ func main() {
 		files = fs
 	}
 
-	// get config
-	cfg, err := config.New()
-	if err != nil {
-		logErrorAndExit(16, "Invalid configuration: %v", err)
-	}
-
 	// get plan
 	ctx := context.Background()
 	// We expect the whole test plan fetching process takes no more than 60 seconds.
@@ -76,9 +76,9 @@ func main() {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
 
-	cmd, err := testRunner.Command(runnableTests, cfg.TestCommand)
+	cmd, err := testRunner.Command(runnableTests)
 	if err != nil {
-		logErrorAndExit(16, "Couldn't process test command: %q, %v", cfg.TestCommand, err)
+		logErrorAndExit(16, "Couldn't process test command: %q, %v", testRunner.TestCommand, err)
 	}
 
 	if err := cmd.Start(); err != nil {

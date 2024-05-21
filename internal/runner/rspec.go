@@ -14,6 +14,17 @@ import (
 // For now, Rspec provides rspec specific behaviour to execute
 // and report on tests in the Rspec framework.
 type Rspec struct {
+	TestCommand string
+}
+
+func NewRspec(testCommand string) Rspec {
+	if testCommand == "" {
+		testCommand = "bundle exec rspec {{testExamples}}"
+	}
+
+	return Rspec{
+		TestCommand: testCommand,
+	}
 }
 
 // GetFiles returns an array of file names, for files in
@@ -35,8 +46,8 @@ func (r Rspec) GetFiles() ([]string, error) {
 }
 
 // Command returns an exec.Cmd that will run the rspec command
-func (r Rspec) Command(testCases []string, testCommand string) (*exec.Cmd, error) {
-	commandName, commandArgs, err := r.commandNameAndArgs(testCases, testCommand)
+func (r Rspec) Command(testCases []string) (*exec.Cmd, error) {
+	commandName, commandArgs, err := r.commandNameAndArgs(testCases)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +78,8 @@ func (Rspec) discoveryPattern() DiscoveryPattern {
 }
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests
-func (Rspec) commandNameAndArgs(testCases []string, testCommand string) (string, []string, error) {
-	words, err := shellquote.Split(testCommand)
+func (r Rspec) commandNameAndArgs(testCases []string) (string, []string, error) {
+	words, err := shellquote.Split(r.TestCommand)
 	if err != nil {
 		return "", []string{}, err
 	}
