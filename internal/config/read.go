@@ -29,7 +29,7 @@ func (c *Config) readFromEnv() error {
 	c.Identifier = getEnvWithDefault("BUILDKITE_SPLITTER_IDENTIFIER", fmt.Sprintf("%s/%s", os.Getenv("BUILDKITE_BUILD_ID"), os.Getenv("BUILDKITE_STEP_ID")))
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
-	c.TestCommand = getEnvWithDefault("BUILDKITE_TEST_SPLITTER_CMD", "bundle exec rspec {{testExamples}}")
+	c.TestCommand = os.Getenv("BUILDKITE_TEST_SPLITTER_CMD")
 
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	parallelismInt, err := strconv.Atoi(parallelism)

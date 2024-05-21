@@ -10,11 +10,11 @@ import (
 )
 
 func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
-	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options {{testExamples}} --format"
+	rspec := NewRspec(testCommand)
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases, testCommand)
+	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 	if err != nil {
 		t.Errorf("Rspec.commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -31,11 +31,11 @@ func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
-	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options --format"
+	rspec := NewRspec(testCommand)
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases, testCommand)
+	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 	if err != nil {
 		t.Errorf("Rspec.commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -52,11 +52,11 @@ func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	rspec := Rspec{}
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options ' {{testExamples}}"
+	rspec := NewRspec(testCommand)
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases, testCommand)
+	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 
 	wantName := ""
 	wantArgs := []string{}
