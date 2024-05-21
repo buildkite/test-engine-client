@@ -23,7 +23,7 @@ The available Go binaries
 |  `BUILDKITE_SPLITTER_IDENTIFIER` | `BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID` | Optional. Test Splitter uses the identifier to store and fetch the test plan and must be unique for each build and steps group. By default it will use a composite of `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID`, but it can be overridden by specifying the `BUILDKITE_SPLITTER_IDENTIFIER`. `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID` must be accessible by the client when using the default. |
 | `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `spec/**/*_spec.rb` | Optional, glob pattern for discovering test files that need to be executed. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library*. |
 | `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | - | Optional, glob pattern to use for excluding test files or directory. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
-| `BUILDKITE_TEST_SPLITTER_CMD` | `bundle exec rspec {{testExamples}}` | Optional, test command for running your tests. Test splitter will fill in the `{{testExamples}}` placeholder with the test splitting results |
+| `BUILDKITE_SPLITTER_TEST_CMD` | `bundle exec rspec {{testExamples}}` | Optional, test command for running your tests. Test splitter will fill in the `{{testExamples}}` placeholder with the test splitting results |
 
 For most use cases, Test Splitter should work out of the box due to the default values available from your Buildkite environment.
 

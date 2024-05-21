@@ -18,7 +18,7 @@ import (
 // - BUILDKITE_SPLITTER_BASE_URL (ServerBaseUrl)
 // - BUILDKITE_SPLITTER_MODE (Mode)
 // - BUILDKITE_SPLITTER_SUITE_TOKEN (SuiteToken)
-// - BUILDKITE_TEST_SPLITTER_CMD (TestCommand)
+// - BUILDKITE_SPLITTER_TEST_CMD (TestCommand)
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
@@ -29,7 +29,7 @@ func (c *Config) readFromEnv() error {
 	c.Identifier = getEnvWithDefault("BUILDKITE_SPLITTER_IDENTIFIER", fmt.Sprintf("%s/%s", os.Getenv("BUILDKITE_BUILD_ID"), os.Getenv("BUILDKITE_STEP_ID")))
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
-	c.TestCommand = os.Getenv("BUILDKITE_TEST_SPLITTER_CMD")
+	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
 
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	parallelismInt, err := strconv.Atoi(parallelism)
