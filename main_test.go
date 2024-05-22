@@ -31,7 +31,12 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	}
 }`
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, response)
+		// simulate cache miss for GET test_plan so it will trigger the test plan creation
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			fmt.Fprint(w, response)
+		}
 	}))
 	defer svr.Close()
 

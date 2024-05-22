@@ -154,8 +154,7 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	testCases := []plan.TestCase{}
 	for _, file := range files {
 		testCases = append(testCases, plan.TestCase{
-			Path:   file,
-			Format: plan.TestCaseFormatFile,
+			Path: file,
 		})
 	}
 
