@@ -10,8 +10,29 @@ import (
 
 	"github.com/buildkite/test-splitter/internal/config"
 	"github.com/buildkite/test-splitter/internal/plan"
+	"github.com/buildkite/test-splitter/internal/runner"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestRetryFailedTests(t *testing.T) {
+	testRunner := runner.NewRspec("true")
+	maxRetries := 3
+	exitCode := retryFailedTests(testRunner, maxRetries)
+	want := 0
+	if exitCode != want {
+		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	}
+}
+
+func TestRetryFailedTests_Failure(t *testing.T) {
+	testRunner := runner.NewRspec("false")
+	maxRetries := 3
+	exitCode := retryFailedTests(testRunner, maxRetries)
+	want := 1
+	if exitCode != want {
+		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	}
+}
 
 func TestFetchOrCreateTestPlan(t *testing.T) {
 	files := []string{"apple"}
