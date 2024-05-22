@@ -15,13 +15,10 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "123")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
-<<<<<<< HEAD
 	os.Setenv("BUILDKITE_API_ACCESS_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
-=======
 	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "3")
->>>>>>> 9af6613 (add test cases and code comments)
 	defer os.Clearenv()
 
 	c := Config{}
@@ -37,7 +34,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		AccessToken:      "my_token",
 		OrganizationSlug: "my_org",
 		SuiteSlug:        "my_suite",
-		MaxRetries:     	3,
+		MaxRetries:       3,
 	}
 
 	if err != nil {
