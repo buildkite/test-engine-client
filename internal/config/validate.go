@@ -8,14 +8,6 @@ import (
 func (c *Config) validate() error {
 	var errs InvalidConfigError
 
-	if c.SuiteToken == "" {
-		errs.appendFieldError("SuiteToken", "must not be blank")
-	}
-
-	if got, limit := len(c.SuiteToken), 1024; got > limit {
-		errs.appendFieldError("SuiteToken", "was %d bytes long, must not be longer than %d", got, limit)
-	}
-
 	if c.Identifier == "" {
 		errs.appendFieldError("Identifier", "must not be blank")
 	}
@@ -48,6 +40,18 @@ func (c *Config) validate() error {
 		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
 			errs.appendFieldError("ServerBaseUrl", "must be a valid URL")
 		}
+	}
+
+	if c.AccessToken == "" {
+		errs.appendFieldError("AccessToken", "must not be blank")
+	}
+
+	if c.OrganizationSlug == "" {
+		errs.appendFieldError("OrganizationSlug", "must not be blank")
+	}
+
+	if c.SuiteSlug == "" {
+		errs.appendFieldError("SuiteSlug", "must not be blank")
 	}
 
 	if len(errs) > 0 {

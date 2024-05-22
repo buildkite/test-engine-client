@@ -133,6 +133,24 @@ func logErrorAndExit(exitCode int, format string, v ...any) {
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
 func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []string) (plan.TestPlan, error) {
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl:    cfg.ServerBaseUrl,
+		AccessToken:      cfg.AccessToken,
+		OrganizationSlug: cfg.OrganizationSlug,
+	})
+
+	// Fetch the plan from the server's cache.
+	cachedPlan, err := apiClient.FetchTestPlan(cfg.SuiteSlug, cfg.Identifier)
+
+	if err != nil {
+		return plan.TestPlan{}, err
+	}
+
+	if cachedPlan != nil {
+		return *cachedPlan, nil
+	}
+
+	// If the cache is empty, create a new plan.
 	testCases := []plan.TestCase{}
 	for _, file := range files {
 		testCases = append(testCases, plan.TestCase{
@@ -145,12 +163,7 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		Format: "files",
 	}
 
-	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
-	})
-
-	testPlan, err := apiClient.CreateTestPlan(ctx, api.TestPlanParams{
-		SuiteToken:  cfg.SuiteToken,
+	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, api.TestPlanParams{
 		Mode:        cfg.Mode,
 		Identifier:  cfg.Identifier,
 		Parallelism: cfg.Parallelism,

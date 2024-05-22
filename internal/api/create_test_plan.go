@@ -20,7 +20,6 @@ var (
 
 // TestPlanParams represents the config params sent when fetching a test plan.
 type TestPlanParams struct {
-	SuiteToken  string     `json:"suite_token"`
 	Mode        string     `json:"mode"`
 	Identifier  string     `json:"identifier"`
 	Parallelism int        `json:"parallelism"`
@@ -28,7 +27,7 @@ type TestPlanParams struct {
 }
 
 // CreateTestPlan creates a test plan from the service, including retries.
-func (c client) CreateTestPlan(ctx context.Context, params TestPlanParams) (plan.TestPlan, error) {
+func (c client) CreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
 	// Retry using exponential backoff offerred by roko
 	// https://pkg.go.dev/github.com/buildkite/roko#ExponentialSubsecond
 	//
@@ -53,7 +52,7 @@ func (c client) CreateTestPlan(ctx context.Context, params TestPlanParams) (plan
 		roko.WithJitter(),
 	)
 	testPlan, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (plan.TestPlan, error) {
-		tp, err := c.tryCreateTestPlan(ctx, params)
+		tp, err := c.tryCreateTestPlan(ctx, suiteSlug, params)
 		// Don't retry if the request was invalid
 		if errors.Is(err, errInvalidRequest) {
 			r.Break()
@@ -65,7 +64,7 @@ func (c client) CreateTestPlan(ctx context.Context, params TestPlanParams) (plan
 }
 
 // tryCreateTestPlan creates a test plan from the service.
-func (c client) tryCreateTestPlan(ctx context.Context, params TestPlanParams) (plan.TestPlan, error) {
+func (c client) tryCreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {
@@ -77,7 +76,7 @@ func (c client) tryCreateTestPlan(ctx context.Context, params TestPlanParams) (p
 	defer cancel()
 
 	// create request
-	postUrl := c.ServerBaseUrl + "/test-splitting/plan"
+	postUrl := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan", c.ServerBaseUrl, c.OrganizationSlug, suiteSlug)
 	r, err := http.NewRequestWithContext(reqCtx, "POST", postUrl, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("creating request: %w", err)
@@ -85,28 +84,30 @@ func (c client) tryCreateTestPlan(ctx context.Context, params TestPlanParams) (p
 	r.Header.Add("Content-Type", "application/json")
 
 	// send request
-	client := &http.Client{}
-	resp, err := client.Do(r)
+	resp, err := c.httpClient.Do(r)
 	if err != nil {
 		return plan.TestPlan{}, fmt.Errorf("sending request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// read response
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return plan.TestPlan{}, fmt.Errorf("reading response body: %w", err)
+	}
 
 	switch {
 	case resp.StatusCode == http.StatusOK:
 		// This is our happy path
 
 	case resp.StatusCode >= 400 && resp.StatusCode < 500:
-		return plan.TestPlan{}, fmt.Errorf("%w: server response: %d", errInvalidRequest, resp.StatusCode)
-
+		var errorResp errorResponse
+		json.Unmarshal(responseBody, &errorResp)
+		return plan.TestPlan{}, fmt.Errorf("%w: server response: %d %s", errInvalidRequest, resp.StatusCode, errorResp.Message)
 	case resp.StatusCode >= 500 && resp.StatusCode < 600:
-		return plan.TestPlan{}, fmt.Errorf("server response: %d", resp.StatusCode)
-	}
-
-	// read response
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return plan.TestPlan{}, fmt.Errorf("reading response body: %w", err)
+		var errorResp errorResponse
+		json.Unmarshal(responseBody, &errorResp)
+		return plan.TestPlan{}, fmt.Errorf("server response: %d %s", resp.StatusCode, errorResp.Message)
 	}
 
 	// parse response
