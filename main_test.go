@@ -21,14 +21,12 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	"tasks": {
 		"0": {
 			"node_number": 0,
-			"tests": {
-				"cases": [
-					{
-						"path": "apple"
-					}
-				],
-				"format": "files"
-			}
+			"tests": [
+				{
+					"path": "apple",
+					"format": "file"
+				}
+			]
 		}
 	}
 }`
@@ -50,10 +48,7 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		Tasks: map[string]*plan.Task{
 			"0": {
 				NodeNumber: 0,
-				Tests: plan.Tests{
-					Cases:  []plan.TestCase{{Path: "apple"}},
-					Format: "files",
-				},
+				Tests:      []plan.TestCase{{Path: "apple", Format: plan.TestCaseFormatFile}},
 			},
 		},
 	}
@@ -72,14 +67,12 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 	"tasks": {
 		"0": {
 			"node_number": 0,
-			"tests": {
-				"cases": [
-					{
-						"path": "apple"
-					}
-				],
-				"format": "files"
-			}
+			"tests": [
+				{
+					"path": "apple",
+					"format": "file"
+				}
+			]
 		}
 	}
 }`
@@ -88,14 +81,12 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 	"tasks": {
 		"0": {
 			"node_number": 0,
-			"tests": {
-				"cases": [
-					{
-						"path": "banana"
-					}
-				],
-				"format": "files"
-			}
+			"tests": [
+				{
+					"path": "banana",
+					"format": "file"
+				}
+			]
 		}
 	}
 }`
@@ -124,10 +115,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		Tasks: map[string]*plan.Task{
 			"0": {
 				NodeNumber: 0,
-				Tests: plan.Tests{
-					Cases:  []plan.TestCase{{Path: "apple"}},
-					Format: "files",
-				},
+				Tests:      []plan.TestCase{{Path: "apple", Format: plan.TestCaseFormatFile}},
 			},
 		},
 	}
@@ -143,9 +131,11 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	files := []string{"apple", "banana", "cherry", "mango"}
-	tests := plan.Tests{
-		Cases:  []plan.TestCase{{Path: "apple"}, {Path: "banana"}, {Path: "cherry"}, {Path: "mango"}},
-		Format: "files",
+	tests := []plan.TestCase{
+		{Path: "apple", Format: plan.TestCaseFormatFile},
+		{Path: "banana", Format: plan.TestCaseFormatFile},
+		{Path: "cherry", Format: plan.TestCaseFormatFile},
+		{Path: "mango", Format: plan.TestCaseFormatFile},
 	}
 
 	// mock server to return an error plan
@@ -183,9 +173,14 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	files := []string{"red", "orange", "yellow", "green", "blue", "indigo", "violet"}
-	tests := plan.Tests{
-		Cases:  []plan.TestCase{{Path: "red"}, {Path: "orange"}, {Path: "yellow"}, {Path: "green"}, {Path: "blue"}, {Path: "indigo"}, {Path: "violet"}},
-		Format: "files",
+	tests := []plan.TestCase{
+		{Path: "red", Format: plan.TestCaseFormatFile},
+		{Path: "orange", Format: plan.TestCaseFormatFile},
+		{Path: "yellow", Format: plan.TestCaseFormatFile},
+		{Path: "green", Format: plan.TestCaseFormatFile},
+		{Path: "blue", Format: plan.TestCaseFormatFile},
+		{Path: "indigo", Format: plan.TestCaseFormatFile},
+		{Path: "violet", Format: plan.TestCaseFormatFile},
 	}
 
 	// mock server to return a 500 Internal Server Error
@@ -220,10 +215,6 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	files := []string{"apple", "banana"}
-	tests := plan.Tests{
-		Cases:  []plan.TestCase{{Path: "apple"}, {Path: "banana"}},
-		Format: "files",
-	}
 
 	// mock server to return 400 Bad Request
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -245,9 +236,9 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 
 	got, err := fetchOrCreateTestPlan(ctx, cfg, files)
 	if err == nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, tests, err)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
 }

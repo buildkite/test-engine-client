@@ -1,21 +1,23 @@
 package plan
 
+type TestCaseFormat string
+
+const (
+	TestCaseFormatFile    TestCaseFormat = "file"
+	TestCaseFormatExample TestCaseFormat = "example"
+)
+
 // TestCase represents a single test case.
 type TestCase struct {
-	Path              string `json:"path"`
-	EstimatedDuration *int   `json:"estimated_duration"`
-}
-
-// Tests represents a set of tests.
-type Tests struct {
-	Cases  []TestCase `json:"cases"`
-	Format string     `json:"format"`
+	Path              string         `json:"path"`
+	EstimatedDuration *int           `json:"estimated_duration"`
+	Format            TestCaseFormat `json:"format"`
 }
 
 // Task represents the task for the given node.
 type Task struct {
-	NodeNumber int   `json:"node_number"`
-	Tests      Tests `json:"tests"`
+	NodeNumber int        `json:"node_number"`
+	Tests      []TestCase `json:"tests"`
 }
 
 // TestPlan represents the entire test plan.

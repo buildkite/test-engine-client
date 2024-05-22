@@ -18,12 +18,16 @@ var (
 	errInvalidRequest = errors.New("request was invalid")
 )
 
+type TestPlanParamsTest struct {
+	Files []plan.TestCase `json:"files"`
+}
+
 // TestPlanParams represents the config params sent when fetching a test plan.
 type TestPlanParams struct {
-	Mode        string     `json:"mode"`
-	Identifier  string     `json:"identifier"`
-	Parallelism int        `json:"parallelism"`
-	Tests       plan.Tests `json:"tests"`
+	Mode        string             `json:"mode"`
+	Identifier  string             `json:"identifier"`
+	Parallelism int                `json:"parallelism"`
+	Tests       TestPlanParamsTest `json:"tests"`
 }
 
 // CreateTestPlan creates a test plan from the service, including retries.

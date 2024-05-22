@@ -16,14 +16,12 @@ func TestFetchTestPlan(t *testing.T) {
 	"tasks": {
 		"task_1": {
 			"node_number": 1,
-			"tests": {
-				"cases": [
-					{
-						"path": "hello_world_spec.rb"
-					}
-				],
-				"format": "files"
-			}
+			"tests": [
+				{
+					"path": "hello_world_spec.rb",
+					"format": "file"
+				}
+			]
 		}
 	}
 }`)
@@ -43,12 +41,10 @@ func TestFetchTestPlan(t *testing.T) {
 		Tasks: map[string]*plan.Task{
 			"task_1": {
 				NodeNumber: 1,
-				Tests: plan.Tests{
-					Cases: []plan.TestCase{{
-						Path: "hello_world_spec.rb",
-					}},
-					Format: "files",
-				},
+				Tests: []plan.TestCase{{
+					Path:   "hello_world_spec.rb",
+					Format: "file",
+				}},
 			},
 		},
 	}

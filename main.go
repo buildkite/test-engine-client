@@ -72,7 +72,7 @@ func main() {
 
 	// execute tests
 	runnableTests := []string{}
-	for _, testCase := range thisNodeTask.Tests.Cases {
+	for _, testCase := range thisNodeTask.Tests {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
 
@@ -154,20 +154,18 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	testCases := []plan.TestCase{}
 	for _, file := range files {
 		testCases = append(testCases, plan.TestCase{
-			Path: file,
+			Path:   file,
+			Format: plan.TestCaseFormatFile,
 		})
-	}
-
-	tests := plan.Tests{
-		Cases:  testCases,
-		Format: "files",
 	}
 
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, api.TestPlanParams{
 		Mode:        cfg.Mode,
 		Identifier:  cfg.Identifier,
 		Parallelism: cfg.Parallelism,
-		Tests:       tests,
+		Tests: api.TestPlanParamsTest{
+			Files: testCases,
+		},
 	})
 
 	if err != nil {
@@ -178,14 +176,14 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		}
 		// Create the fallback plan
 		fmt.Println("Could not fetch plan from server, using fallback mode. Your build may take longer than usual.")
-		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+		testPlan = plan.CreateFallbackPlan(testCases, cfg.Parallelism)
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		fmt.Println("Test splitter server returned an error, using fallback mode. Your build may take longer than usual.")
-		testPlan = plan.CreateFallbackPlan(tests, cfg.Parallelism)
+		testPlan = plan.CreateFallbackPlan(testCases, cfg.Parallelism)
 	}
 
 	return testPlan, nil
