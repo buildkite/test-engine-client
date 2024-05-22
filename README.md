@@ -26,6 +26,7 @@ The available Go binaries
 | `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `spec/**/*_spec.rb` | Optional, glob pattern for discovering test files that need to be executed. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library*. |
 | `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | - | Optional, glob pattern to use for excluding test files or directory. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
 | `BUILDKITE_SPLITTER_SUITE_SLUG` | - | Required, the slug of your test suite. |
+| `BUILDKITE_SPLITTER_RETRY_COUNT` | 0 | Optional. Test splitter runs the test command defined in `BUILDKITE_SPLITTER_TEST_CMD`, and retries the failing tests maximum `BUILDKITE_SPLITTER_RETRY_COUNT` times. For Rspec, the test splitter runs `BUILDKITE_SPLITTER_TEST_CMD` with `--only-failures` as the retry command. |
 
 For most use cases, Test Splitter should work out of the box due to the default values available from your Buildkite environment.
 
