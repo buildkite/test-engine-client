@@ -137,10 +137,10 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	files := []string{"apple", "banana", "cherry", "mango"}
 	tests := []plan.TestCase{
-		{Path: "apple", Format: plan.TestCaseFormatFile},
-		{Path: "banana", Format: plan.TestCaseFormatFile},
-		{Path: "cherry", Format: plan.TestCaseFormatFile},
-		{Path: "mango", Format: plan.TestCaseFormatFile},
+		{Path: "apple"},
+		{Path: "banana"},
+		{Path: "cherry"},
+		{Path: "mango"},
 	}
 
 	// mock server to return an error plan
@@ -179,13 +179,13 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	files := []string{"red", "orange", "yellow", "green", "blue", "indigo", "violet"}
 	tests := []plan.TestCase{
-		{Path: "red", Format: plan.TestCaseFormatFile},
-		{Path: "orange", Format: plan.TestCaseFormatFile},
-		{Path: "yellow", Format: plan.TestCaseFormatFile},
-		{Path: "green", Format: plan.TestCaseFormatFile},
-		{Path: "blue", Format: plan.TestCaseFormatFile},
-		{Path: "indigo", Format: plan.TestCaseFormatFile},
-		{Path: "violet", Format: plan.TestCaseFormatFile},
+		{Path: "red"},
+		{Path: "orange"},
+		{Path: "yellow"},
+		{Path: "green"},
+		{Path: "blue"},
+		{Path: "indigo"},
+		{Path: "violet"},
 	}
 
 	// mock server to return a 500 Internal Server Error
