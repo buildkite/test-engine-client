@@ -12,24 +12,36 @@ import (
 // set default values for ServerBaseUrl and Mode if they are not set.
 //
 // Currently, it reads the following environment variables:
-// - BUILDKITE_SPLITTER_IDENTIFIER (Identifier)
+// - BUILDKITE_API_ACCESS_TOKEN (AccessToken)
+// - BUILDKITE_ORGANIZATION_SLUG (OrganizationSlug)
 // - BUILDKITE_PARALLEL_JOB_COUNT (Parallelism)
 // - BUILDKITE_PARALLEL_JOB (NodeIndex)
+// - BUILDKITE_SPLITTER_IDENTIFIER (Identifier)
 // - BUILDKITE_SPLITTER_BASE_URL (ServerBaseUrl)
 // - BUILDKITE_SPLITTER_MODE (Mode)
-// - BUILDKITE_SPLITTER_SUITE_TOKEN (SuiteToken)
-// - BUILDKITE_TEST_SPLITTER_CMD (TestCommand)
+// - BUILDKITE_SPLITTER_SUITE_SLUG (SuiteSlug)
+// - BUILDKITE_SPLITTER_TEST_CMD (TestCommand)
+// - BUILDKITE_SPLITTER_RETRY_COUNT (MaxRetries)
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
 func (c *Config) readFromEnv() error {
 	var errs InvalidConfigError
 
-	c.SuiteToken = getEnvWithDefault("BUILDKITE_SPLITTER_SUITE_TOKEN", os.Getenv("BUILDKITE_ANALYTICS_TOKEN"))
+	c.AccessToken = os.Getenv("BUILDKITE_API_ACCESS_TOKEN")
+	c.OrganizationSlug = os.Getenv("BUILDKITE_ORGANIZATION_SLUG")
+	c.SuiteSlug = os.Getenv("BUILDKITE_SPLITTER_SUITE_SLUG")
+
 	c.Identifier = getEnvWithDefault("BUILDKITE_SPLITTER_IDENTIFIER", fmt.Sprintf("%s/%s", os.Getenv("BUILDKITE_BUILD_ID"), os.Getenv("BUILDKITE_STEP_ID")))
-	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.com")
+	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://api.buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
-	c.TestCommand = getEnvWithDefault("BUILDKITE_TEST_SPLITTER_CMD", "bundle exec rspec {{testExamples}}")
+	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
+
+	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_SPLITTER_RETRY_COUNT", 0)
+	c.MaxRetries = MaxRetries
+	if err != nil {
+		errs.appendFieldError("MaxRetries", "was %q, must be a number", os.Getenv("BUILDKITE_SPLITTER_RETRY_COUNT"))
+	}
 
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	parallelismInt, err := strconv.Atoi(parallelism)

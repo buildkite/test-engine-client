@@ -21,15 +21,13 @@ func TestCreateTestPlan(t *testing.T) {
 	"tasks": {
 		"task_1": {
 			"node_number": 1,
-			"tests": {
-				"cases": [
-					{
-						"path": "dummy.spec",
-						"estimated_duration": 1000000
-					}
-				],
-				"format": "junit"
-			}
+			"tests": [
+				{
+					"path": "dummy.spec",
+					"estimated_duration": 1000000,
+					"format": "file"
+				}
+			]
 		}
 	}
 }`)
@@ -39,10 +37,10 @@ func TestCreateTestPlan(t *testing.T) {
 	ctx := context.Background()
 
 	params := TestPlanParams{}
-	apiClient := client{
+	apiClient := NewClient(ClientConfig{
 		ServerBaseUrl: svr.URL,
-	}
-	got, err := apiClient.CreateTestPlan(ctx, params)
+	})
+	got, err := apiClient.CreateTestPlan(ctx, "my-suite", params)
 	if err != nil {
 		t.Errorf("CreateTestPlan(ctx, %v) error = %v", params, err)
 	}
@@ -50,12 +48,12 @@ func TestCreateTestPlan(t *testing.T) {
 		Tasks: map[string]*plan.Task{
 			"task_1": {
 				NodeNumber: 1,
-				Tests: plan.Tests{
-					Cases: []plan.TestCase{{
+				Tests: []plan.TestCase{
+					{
 						Path:              "dummy.spec",
 						EstimatedDuration: ptr(1_000_000),
-					}},
-					Format: "junit",
+						Format:            plan.TestCaseFormatFile,
+					},
 				},
 			},
 		},
@@ -74,11 +72,11 @@ func TestCreateTestPlan_Error4xx(t *testing.T) {
 
 	ctx := context.Background()
 	params := TestPlanParams{}
-	apiClient := client{
+	apiClient := NewClient(ClientConfig{
 		ServerBaseUrl: svr.URL,
-	}
+	})
 
-	got, err := apiClient.CreateTestPlan(ctx, params)
+	got, err := apiClient.CreateTestPlan(ctx, "my-suite", params)
 
 	wantTestPlan := plan.TestPlan{}
 
@@ -104,11 +102,11 @@ func TestCreateTestPlan_Timeout(t *testing.T) {
 	defer cancel()
 
 	params := TestPlanParams{}
-	apiClient := client{
+	apiClient := NewClient(ClientConfig{
 		ServerBaseUrl: svr.URL,
-	}
+	})
 
-	got, err := apiClient.CreateTestPlan(fetchCtx, params)
+	got, err := apiClient.CreateTestPlan(fetchCtx, "my-suite", params)
 
 	wantTestPlan := plan.TestPlan{}
 

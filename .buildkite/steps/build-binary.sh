@@ -13,6 +13,7 @@ BUILD_NUMBER="${BUILDKITE_BUILD_NUMBER}"
 NAME="test-splitter"
 BUILD_PATH="pkg"
 BINARY_FILENAME="${NAME}-${GOOS}-${GOARCH}"
+VERSION=$(cat version/VERSION)
 
 if [[ "${GOOS}" = "dragonflybsd" ]]; then
   export GOOS="dragonfly"
@@ -42,7 +43,11 @@ fi
 export CGO_ENABLED=0
 
 mkdir -p "${BUILD_PATH}"
-go build -v -o "${BUILD_PATH}/${BINARY_FILENAME}" .
+go build \
+  -v \
+  -o "${BUILD_PATH}/${BINARY_FILENAME}" \
+  -ldflags="-X 'main.Version=v${VERSION}'" \
+  .
 
 chmod +x "${BUILD_PATH}/${BINARY_FILENAME}"
 

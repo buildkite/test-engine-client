@@ -1,4 +1,13 @@
 # Buildkite Test Splitter
+
+## Migrating to 0.5.0
+0.5.0 introduces authentication mechanism changes. Previously, the test splitter used a suite token set in the `BUILDKITE_SPLITTER_SUITE_TOKEN` environment variable to authenticate.
+From version 0.5.0 onwards, you will need to use a Buildkite API Access Token with the `read_suites`, `read_test_plan`, and `write_test_plan` scopes.
+The API access token can be created from your [personal setting page](https://buildkite.com/user/api-access-tokens) in Buildkite, and needs to be configured for the test splitter using the `BUILDKITE_API_ACCESS_TOKEN` environment variable.
+
+Additionally, you will need to ensure that the organization and suite slugs are present in the environment. The organization slug is readily available in your Pipeline environment as `BUILDKITE_ORGANIZATION_SLUG` so you do not have to set it manually, however, you will need to pass this variable to the docker container if you are using docker-compose plugin.
+The suite slug needs to be manually configured using the `BUILDKITE_SPLITTER_SUITE_SLUG` environment variable. You can find the suite slug in the url for your suite, for example, the slug for the url: https://buildkite.com/organizations/my-organization/analytics/suites/my-suite?branch=main is `my-suite`. 
+
 ## Installation
 The latest version of Buildkite Test Splitter can be downloaded from https://github.com/buildkite/test-splitter/releases
 
@@ -17,17 +26,20 @@ The available Go binaries
 
 | Environment Variable | Default Value | Description |
 | ---- | ---- | ----------- |
-|  `BUILDKITE_PARALLEL_JOB_COUNT` | - | Required, total number of parallelism |
-|  `BUILDKITE_PARALLEL_JOB` | - | Required, test plan for specific node |
-| `BUILDKITE_SPLITTER_SUITE_TOKEN` | `BUILDKITE_ANALYTICS_TOKEN` | Required, unique token for Test Suite that is being parallelised |
-|  `BUILDKITE_SPLITTER_IDENTIFIER` | `BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID` | Optional. Test Splitter uses the identifier to store and fetch the test plan and must be unique for each build and steps group. By default it will use a composite of `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID`, but it can be overridden by specifying the `BUILDKITE_SPLITTER_IDENTIFIER`. `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID` must be accessible by the client when using the default. |
+| `BUILDKITE_API_ACCESS_TOKEN ` | - | Required, Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can create access token from [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite |
+| `BUILDKITE_ORGANIZATION_SLUG` | - | Required, the slug of your Buildkite organization. This is available in your pipeline environment, so you don't need to set it manually |
+| `BUILDKITE_PARALLEL_JOB_COUNT` | - | Required, total number of parallelism. |
+| `BUILDKITE_PARALLEL_JOB` | - | Required, test plan for specific node |
+| `BUILDKITE_SPLITTER_IDENTIFIER` | `BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID` | Optional. Test Splitter uses the identifier to store and fetch the test plan and must be unique for each build and steps group. By default it will use a composite of `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID`, but it can be overridden by specifying the `BUILDKITE_SPLITTER_IDENTIFIER`. `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID` must be accessible by the client when using the default. |
+| `BUILDKITE_SPLITTER_TEST_CMD` | `bundle exec rspec {{testExamples}}` | Optional, test command for running your tests. Test splitter will fill in the `{{testExamples}}` placeholder with the test splitting results |
 | `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `spec/**/*_spec.rb` | Optional, glob pattern for discovering test files that need to be executed. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library*. |
 | `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | - | Optional, glob pattern to use for excluding test files or directory. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
-| `BUILDKITE_TEST_SPLITTER_CMD` | `bundle exec rspec {{testExamples}}` | Optional, test command for running your tests. Test splitter will fill in the `{{testExamples}}` placeholder with the test splitting results |
+| `BUILDKITE_SPLITTER_SUITE_SLUG` | - | Required, the slug of your test suite. |
+| `BUILDKITE_SPLITTER_RETRY_COUNT` | 0 | Optional. Test splitter runs the test command defined in `BUILDKITE_SPLITTER_TEST_CMD`, and retries the failing tests maximum `BUILDKITE_SPLITTER_RETRY_COUNT` times. For Rspec, the test splitter runs `BUILDKITE_SPLITTER_TEST_CMD` with `--only-failures` as the retry command. |
 
 For most use cases, Test Splitter should work out of the box due to the default values available from your Buildkite environment.
 
-However, you'll need to set `BUILDKITE_SPLITTER_SUITE_TOKEN` if your test collector doesn't use the `BUILDKITE_ANALYTICS_TOKEN` value, or your pipeline has multiple suites.
+However, you'll have to set `BUILDKITE_API_ACCESS_TOKEN` and `BUILDKITE_SPLITTER_SUITE_SLUG`.
 
 You can also set the `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` or `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` if you need to filter the tests selected for execution.
 

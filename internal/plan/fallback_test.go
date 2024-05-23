@@ -78,15 +78,10 @@ func TestCreateFallbackPlan(t *testing.T) {
 	}
 
 	for _, s := range scenarios {
-		tests := Tests{
-			Cases:  s.testCases,
-			Format: "files",
-		}
-
-		plan := CreateFallbackPlan(tests, s.parallelism)
+		plan := CreateFallbackPlan(s.testCases, s.parallelism)
 		got := make([][]TestCase, s.parallelism)
 		for _, task := range plan.Tasks {
-			got[task.NodeNumber] = task.Tests.Cases
+			got[task.NodeNumber] = task.Tests
 		}
 
 		if diff := cmp.Diff(got, s.want); diff != "" {

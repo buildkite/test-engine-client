@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 )
 
 // getEnvWithDefault retrieves the value of the environment variable named by the key.
@@ -16,4 +17,19 @@ func getEnvWithDefault(key string, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func getIntEnvWithDefault(key string, defaultValue int) (int, error) {
+	value := os.Getenv(key)
+	// If the environment variable is not set, return the default value.
+	if value == "" {
+		return defaultValue, nil
+	}
+	// Convert the value to int, and return error if it fails.
+	valueInt, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue, err
+	}
+	// Return the value if it's successfully converted to int.
+	return valueInt, nil
 }

@@ -8,12 +8,15 @@ import (
 
 func createConfig() Config {
 	return Config{
-		ServerBaseUrl: "http://example.com",
-		Mode:          "static",
-		Parallelism:   10,
-		NodeIndex:     0,
-		SuiteToken:    "my_suite_token",
-		Identifier:    "my_identifier",
+		ServerBaseUrl:    "http://example.com",
+		Mode:             "static",
+		Parallelism:      10,
+		NodeIndex:        0,
+		Identifier:       "my_identifier",
+		OrganizationSlug: "my_org",
+		SuiteSlug:        "my_suite",
+		AccessToken:      "my_token",
+		MaxRetries:       3,
 	}
 }
 
@@ -50,16 +53,6 @@ func TestConfigValidate_Invalid(t *testing.T) {
 			value: "dynamic",
 		},
 		{
-			name:  "SuiteToken is missing",
-			field: "SuiteToken",
-			value: "",
-		},
-		{
-			name:  "SuiteToken is greater than 1024",
-			field: "SuiteToken",
-			value: strings.Repeat("a", 1025),
-		},
-		{
 			name:  "Identifier is missing",
 			field: "Identifier",
 			value: "",
@@ -84,6 +77,21 @@ func TestConfigValidate_Invalid(t *testing.T) {
 			field: "Parallelism",
 			value: 1341,
 		},
+		{
+			name:  "OrganizationSlug is missing",
+			field: "OrganizationSlug",
+			value: "",
+		},
+		{
+			name:  "SuiteSlug is missing",
+			field: "SuiteSlug",
+			value: "",
+		},
+		{
+			name:  "AccessToken is missing",
+			field: "AccessToken",
+			value: "",
+		},
 	}
 
 	for _, s := range scenario {
@@ -94,14 +102,18 @@ func TestConfigValidate_Invalid(t *testing.T) {
 				c.ServerBaseUrl = s.value.(string)
 			case "Mode":
 				c.Mode = s.value.(string)
-			case "SuiteToken":
-				c.SuiteToken = s.value.(string)
 			case "Identifier":
 				c.Identifier = s.value.(string)
 			case "NodeIndex":
 				c.NodeIndex = s.value.(int)
 			case "Parallelism":
 				c.Parallelism = s.value.(int)
+			case "OrganizationSlug":
+				c.OrganizationSlug = s.value.(string)
+			case "SuiteSlug":
+				c.SuiteSlug = s.value.(string)
+			case "AccessToken":
+				c.AccessToken = s.value.(string)
 			}
 
 			err := c.validate()
@@ -136,6 +148,22 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		// So, we expect 2 validation errors.
 		if len(invConfigError) != 2 {
 			t.Errorf("config.validate() error length = %d, want 2", len(invConfigError))
+		}
+	})
+
+	t.Run("MaxRetries is less than 0", func(t *testing.T) {
+		c := createConfig()
+		c.MaxRetries = -1
+		err := c.validate()
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+			return
+		}
+
+		if len(invConfigError) != 1 {
+			t.Errorf("config.validate() error length = %d, want 1", len(invConfigError))
 		}
 	})
 }

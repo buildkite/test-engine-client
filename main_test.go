@@ -10,8 +10,29 @@ import (
 
 	"github.com/buildkite/test-splitter/internal/config"
 	"github.com/buildkite/test-splitter/internal/plan"
+	"github.com/buildkite/test-splitter/internal/runner"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestRetryFailedTests(t *testing.T) {
+	testRunner := runner.NewRspec("true")
+	maxRetries := 3
+	exitCode := retryFailedTests(testRunner, maxRetries)
+	want := 0
+	if exitCode != want {
+		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	}
+}
+
+func TestRetryFailedTests_Failure(t *testing.T) {
+	testRunner := runner.NewRspec("false")
+	maxRetries := 3
+	exitCode := retryFailedTests(testRunner, maxRetries)
+	want := 1
+	if exitCode != want {
+		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	}
+}
 
 func TestFetchOrCreateTestPlan(t *testing.T) {
 	files := []string{"apple"}
@@ -21,19 +42,22 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	"tasks": {
 		"0": {
 			"node_number": 0,
-			"tests": {
-				"cases": [
-					{
-						"path": "apple"
-					}
-				],
-				"format": "files"
-			}
+			"tests": [
+				{
+					"path": "apple",
+					"format": "file"
+				}
+			]
 		}
 	}
 }`
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, response)
+		// simulate cache miss for GET test_plan so it will trigger the test plan creation
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			fmt.Fprint(w, response)
+		}
 	}))
 	defer svr.Close()
 
@@ -41,7 +65,6 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   10,
-		SuiteToken:    "suite_token",
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
@@ -51,10 +74,7 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		Tasks: map[string]*plan.Task{
 			"0": {
 				NodeNumber: 0,
-				Tests: plan.Tests{
-					Cases:  []plan.TestCase{{Path: "apple"}},
-					Format: "files",
-				},
+				Tests:      []plan.TestCase{{Path: "apple", Format: plan.TestCaseFormatFile}},
 			},
 		},
 	}
@@ -68,11 +88,80 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	}
 }
 
+func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
+	cachedPlan := `{
+	"tasks": {
+		"0": {
+			"node_number": 0,
+			"tests": [
+				{
+					"path": "apple",
+					"format": "file"
+				}
+			]
+		}
+	}
+}`
+
+	newPlan := `{
+	"tasks": {
+		"0": {
+			"node_number": 0,
+			"tests": [
+				{
+					"path": "banana",
+					"format": "file"
+				}
+			]
+		}
+	}
+}`
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			fmt.Fprint(w, cachedPlan)
+		} else {
+			fmt.Fprint(w, newPlan)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		NodeIndex:        0,
+		Parallelism:      10,
+		Identifier:       "identifier",
+		ServerBaseUrl:    svr.URL,
+		OrganizationSlug: "org",
+		SuiteSlug:        "suite",
+	}
+
+	tests := []string{"banana"}
+
+	want := plan.TestPlan{
+		Tasks: map[string]*plan.Task{
+			"0": {
+				NodeNumber: 0,
+				Tests:      []plan.TestCase{{Path: "apple", Format: plan.TestCaseFormatFile}},
+			},
+		},
+	}
+
+	got, err := fetchOrCreateTestPlan(context.Background(), cfg, tests)
+	if err != nil {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
+	}
+}
+
 func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	files := []string{"apple", "banana", "cherry", "mango"}
-	tests := plan.Tests{
-		Cases:  []plan.TestCase{{Path: "apple"}, {Path: "banana"}, {Path: "cherry"}, {Path: "mango"}},
-		Format: "files",
+	tests := []plan.TestCase{
+		{Path: "apple"},
+		{Path: "banana"},
+		{Path: "cherry"},
+		{Path: "mango"},
 	}
 
 	// mock server to return an error plan
@@ -80,6 +169,10 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	"tasks": {}
 }`
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// simulate cache miss for GET test_plan so it will trigger the test plan creation
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+		}
 		fmt.Fprint(w, response)
 	}))
 	defer svr.Close()
@@ -88,7 +181,6 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   2,
-		SuiteToken:    "suite_token",
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
@@ -107,9 +199,14 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	files := []string{"red", "orange", "yellow", "green", "blue", "indigo", "violet"}
-	tests := plan.Tests{
-		Cases:  []plan.TestCase{{Path: "red"}, {Path: "orange"}, {Path: "yellow"}, {Path: "green"}, {Path: "blue"}, {Path: "indigo"}, {Path: "violet"}},
-		Format: "files",
+	tests := []plan.TestCase{
+		{Path: "red"},
+		{Path: "orange"},
+		{Path: "yellow"},
+		{Path: "green"},
+		{Path: "blue"},
+		{Path: "indigo"},
+		{Path: "violet"},
 	}
 
 	// mock server to return a 500 Internal Server Error
@@ -126,7 +223,6 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   3,
-		SuiteToken:    "suite_token",
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
@@ -145,10 +241,6 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	files := []string{"apple", "banana"}
-	tests := plan.Tests{
-		Cases:  []plan.TestCase{{Path: "apple"}, {Path: "banana"}},
-		Format: "files",
-	}
 
 	// mock server to return 400 Bad Request
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +253,6 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   2,
-		SuiteToken:    "suite_token",
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
@@ -171,9 +262,9 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 
 	got, err := fetchOrCreateTestPlan(ctx, cfg, files)
 	if err == nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, tests, err)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
 }

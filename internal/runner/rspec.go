@@ -14,6 +14,17 @@ import (
 // For now, Rspec provides rspec specific behaviour to execute
 // and report on tests in the Rspec framework.
 type Rspec struct {
+	TestCommand string
+}
+
+func NewRspec(testCommand string) Rspec {
+	if testCommand == "" {
+		testCommand = "bundle exec rspec {{testExamples}}"
+	}
+
+	return Rspec{
+		TestCommand: testCommand,
+	}
 }
 
 // GetFiles returns an array of file names, for files in
@@ -34,9 +45,30 @@ func (r Rspec) GetFiles() ([]string, error) {
 	return files, nil
 }
 
+func (r Rspec) RetryCommand() (*exec.Cmd, error) {
+	// use default test command to build retry command
+	// remove all occurrences of "{{testExamples}}" and append "--only-failures"
+
+	// TODO: support custom retry command in the future
+	words, err := shellquote.Split(r.TestCommand)
+	if err != nil {
+		return nil, err
+	}
+	words = slices.DeleteFunc(words, func(n string) bool {
+		return n == "{{testExamples}}"
+	})
+	words = slices.Insert(words, len(words), "--only-failures")
+	fmt.Println(shellquote.Join(words...))
+
+	cmd := exec.Command(words[0], words[1:]...)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	return cmd, nil
+}
+
 // Command returns an exec.Cmd that will run the rspec command
-func (r Rspec) Command(testCases []string, testCommand string) (*exec.Cmd, error) {
-	commandName, commandArgs, err := r.commandNameAndArgs(testCases, testCommand)
+func (r Rspec) Command(testCases []string) (*exec.Cmd, error) {
+	commandName, commandArgs, err := r.commandNameAndArgs(testCases)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +99,8 @@ func (Rspec) discoveryPattern() DiscoveryPattern {
 }
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests
-func (Rspec) commandNameAndArgs(testCases []string, testCommand string) (string, []string, error) {
-	words, err := shellquote.Split(testCommand)
+func (r Rspec) commandNameAndArgs(testCases []string) (string, []string, error) {
+	words, err := shellquote.Split(r.TestCommand)
 	if err != nil {
 		return "", []string{}, err
 	}

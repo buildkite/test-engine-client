@@ -2,20 +2,26 @@ package config
 
 // Config is the internal representation of the complete test splitter client configuration.
 type Config struct {
+	// AccessToken is the access token for the API.
+	AccessToken string
+	// Identifier is the identifier of the build.
+	Identifier string
+	// Mode is the mode of the test splitter.
+	Mode string
+	// Node index is index of the current node.
+	NodeIndex int
+	// OrganizationSlug is the slug of the organization.
+	OrganizationSlug string
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int
 	// ServerBaseUrl is the base URL of the test splitter server.
 	ServerBaseUrl string
-	// SuiteToken is the token of the test suite.
-	SuiteToken string
-	// Mode is the mode of the test splitter.
-	Mode string
-	// Identifier is the identifier of the build.
-	Identifier string
-	// Node index is index of the current node.
-	NodeIndex int
+	// SuiteSlug is the slug of the suite.
+	SuiteSlug string
 	// TestCommand is the command to run the tests.
 	TestCommand string
+	// MaxRetries is the maximum number of retries for a failed test.
+	MaxRetries int
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.
