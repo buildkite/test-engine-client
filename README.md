@@ -1,4 +1,13 @@
 # Buildkite Test Splitter
+
+## Migrating to 0.5.0
+0.5.0 introduced changes in the authorization. Previously, test splitter uses suite token configured via `BUILDKITE_SPLITTER_SUITE_TOKEN` to authorize.
+From version 0.5.0 onwards, you need to use Buildkite API Access Token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes.
+The API access token can be created from [personal setting page](https://buildkite.com/user/api-access-tokens) in Buildkite, and needs to be configured in test splitter using `BUILDKITE_API_ACCESS_TOKEN` environment variable.
+
+Additionally, you need to configure the organization and suite slug. The organization slug is readily available in your Pipeline environment as `BUILDKITE_ORGANIZATION_SLUG` so you don't have to set it manually, however you need to pass this variable to the docker container if you are using docker.
+The suite slug needs to be manually configured using `BUILDKITE_SPLITTER_SUITE_SLUG` environment variable.
+
 ## Installation
 The latest version of Buildkite Test Splitter can be downloaded from https://github.com/buildkite/test-splitter/releases
 
