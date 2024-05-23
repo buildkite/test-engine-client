@@ -115,13 +115,56 @@ func main() {
 	if err := cmd.Wait(); err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
-			logErrorAndExit(exitCode, "Rspec exited with error %d", err)
+			if cfg.MaxRetries == 0 {
+				// If retry is disabled, we exit immediately with the same exit code from the test runner
+				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
+			} else {
+				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries)
+				if retryExitCode == 0 {
+					os.Exit(0)
+				} else {
+					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
+				}
+			}
 		}
 		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
+}
+
+func retryFailedTests(testRunner runner.Rspec, maxRetries int) int {
+	// Retry failed tests
+	retries := 0
+	for retries < maxRetries {
+		retries++
+		fmt.Printf("Attempt %d of %d to retry failing tests\n", retries, maxRetries)
+
+		cmd, err := testRunner.RetryCommand()
+		if err != nil {
+			logErrorAndExit(16, "Couldn't process retry command: %v", err)
+		}
+
+		if err := cmd.Start(); err != nil {
+			logErrorAndExit(16, "Couldn't start tests: %v", err)
+		}
+
+		err = cmd.Wait()
+		if err != nil {
+			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
+				exitCode := exitError.ExitCode()
+				if retries >= maxRetries {
+					// If the command exits with an error and we've reached the maximum number of retries, we exit.
+					return exitCode
+				}
+			}
+		} else {
+			// If the failing tests pass after retry (test command exits without error), we exit with code 0.
+			return 0
+		}
+	}
+	return 1
 }
 
 // logErrorAndExit logs an error message and exits with the given exit code.

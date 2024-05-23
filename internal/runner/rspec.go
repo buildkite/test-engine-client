@@ -45,6 +45,27 @@ func (r Rspec) GetFiles() ([]string, error) {
 	return files, nil
 }
 
+func (r Rspec) RetryCommand() (*exec.Cmd, error) {
+	// use default test command to build retry command
+	// remove all occurrences of "{{testExamples}}" and append "--only-failures"
+
+	// TODO: support custom retry command in the future
+	words, err := shellquote.Split(r.TestCommand)
+	if err != nil {
+		return nil, err
+	}
+	words = slices.DeleteFunc(words, func(n string) bool {
+		return n == "{{testExamples}}"
+	})
+	words = slices.Insert(words, len(words), "--only-failures")
+	fmt.Println(shellquote.Join(words...))
+
+	cmd := exec.Command(words[0], words[1:]...)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	return cmd, nil
+}
+
 // Command returns an exec.Cmd that will run the rspec command
 func (r Rspec) Command(testCases []string) (*exec.Cmd, error) {
 	commandName, commandArgs, err := r.commandNameAndArgs(testCases)

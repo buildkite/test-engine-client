@@ -18,6 +18,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_API_ACCESS_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
+	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "3")
 	defer os.Clearenv()
 
 	c := Config{}
@@ -33,6 +34,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		AccessToken:      "my_token",
 		OrganizationSlug: "my_org",
 		SuiteSlug:        "my_suite",
+		MaxRetries:       3,
 	}
 
 	if err != nil {
@@ -49,6 +51,7 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
 	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "")
+	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
 	os.Setenv("BUILDKITE_STEP_ID", "456")
 	defer os.Clearenv()
@@ -65,6 +68,10 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 
 	if c.Identifier != "123/456" {
 		t.Errorf("Identifier = %v, want %v", c.Identifier, "123/456")
+	}
+
+	if c.MaxRetries != 0 {
+		t.Errorf("MaxRetries = %v, want %v", c.MaxRetries, 0)
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 // - BUILDKITE_SPLITTER_MODE (Mode)
 // - BUILDKITE_SPLITTER_SUITE_SLUG (SuiteSlug)
 // - BUILDKITE_SPLITTER_TEST_CMD (TestCommand)
+// - BUILDKITE_SPLITTER_RETRY_COUNT (MaxRetries)
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
@@ -35,6 +36,12 @@ func (c *Config) readFromEnv() error {
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://api.buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
+
+	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_SPLITTER_RETRY_COUNT", 0)
+	c.MaxRetries = MaxRetries
+	if err != nil {
+		errs.appendFieldError("MaxRetries", "was %q, must be a number", os.Getenv("BUILDKITE_SPLITTER_RETRY_COUNT"))
+	}
 
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	parallelismInt, err := strconv.Atoi(parallelism)

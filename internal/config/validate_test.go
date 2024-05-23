@@ -16,6 +16,7 @@ func createConfig() Config {
 		OrganizationSlug: "my_org",
 		SuiteSlug:        "my_suite",
 		AccessToken:      "my_token",
+		MaxRetries:       3,
 	}
 }
 
@@ -147,6 +148,22 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		// So, we expect 2 validation errors.
 		if len(invConfigError) != 2 {
 			t.Errorf("config.validate() error length = %d, want 2", len(invConfigError))
+		}
+	})
+
+	t.Run("MaxRetries is less than 0", func(t *testing.T) {
+		c := createConfig()
+		c.MaxRetries = -1
+		err := c.validate()
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+			return
+		}
+
+		if len(invConfigError) != 1 {
+			t.Errorf("config.validate() error length = %d, want 1", len(invConfigError))
 		}
 	})
 }

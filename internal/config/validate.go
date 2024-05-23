@@ -8,6 +8,10 @@ import (
 func (c *Config) validate() error {
 	var errs InvalidConfigError
 
+	if c.MaxRetries < 0 {
+		errs.appendFieldError("MaxRetries", "was %d, must be greater than or equal to 0", c.MaxRetries)
+	}
+
 	if c.Identifier == "" {
 		errs.appendFieldError("Identifier", "must not be blank")
 	}
