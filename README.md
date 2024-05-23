@@ -1,12 +1,12 @@
 # Buildkite Test Splitter
 
 ## Migrating to 0.5.0
-0.5.0 introduced changes in the authorization. Previously, test splitter uses suite token configured via `BUILDKITE_SPLITTER_SUITE_TOKEN` to authorize.
-From version 0.5.0 onwards, you need to use Buildkite API Access Token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes.
-The API access token can be created from [personal setting page](https://buildkite.com/user/api-access-tokens) in Buildkite, and needs to be configured in test splitter using `BUILDKITE_API_ACCESS_TOKEN` environment variable.
+0.5.0 introduces authentication mechanism changes. Previously, the test splitter used a suite token set in the `BUILDKITE_SPLITTER_SUITE_TOKEN` environment variable to authenticate.
+From version 0.5.0 onwards, you will need to use a Buildkite API Access Token with the `read_suites`, `read_test_plan`, and `write_test_plan` scopes.
+The API access token can be created from your [personal setting page](https://buildkite.com/user/api-access-tokens) in Buildkite, and needs to be configured for the test splitter using the `BUILDKITE_API_ACCESS_TOKEN` environment variable.
 
-Additionally, you need to configure the organization and suite slug. The organization slug is readily available in your Pipeline environment as `BUILDKITE_ORGANIZATION_SLUG` so you don't have to set it manually, however you need to pass this variable to the docker container if you are using docker.
-The suite slug needs to be manually configured using `BUILDKITE_SPLITTER_SUITE_SLUG` environment variable.
+Additionally, you will need to ensure that the organization and suite slugs are present in the environment. The organization slug is readily available in your Pipeline environment as `BUILDKITE_ORGANIZATION_SLUG` so you do not have to set it manually, however, you will need to pass this variable to the docker container if you are using docker-compose plugin.
+The suite slug needs to be manually configured using the `BUILDKITE_SPLITTER_SUITE_SLUG` environment variable. You can find the suite slug in the url for your suite, for example, the slug for the url: https://buildkite.com/organizations/my-organization/analytics/suites/my-suite?branch=main is `my-suite`. 
 
 ## Installation
 The latest version of Buildkite Test Splitter can be downloaded from https://github.com/buildkite/test-splitter/releases
