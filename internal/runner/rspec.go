@@ -1,11 +1,13 @@
 package runner
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"slices"
 
+	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
 
@@ -27,8 +29,7 @@ func NewRspec(testCommand string) Rspec {
 	}
 }
 
-// GetFiles returns an array of file names, for files in
-// the "spec" directory that end in "spec.rb".
+// GetFiles returns an array of file names using the discovery pattern.
 func (r Rspec) GetFiles() ([]string, error) {
 	pattern := r.discoveryPattern()
 
@@ -111,4 +112,57 @@ func (r Rspec) commandNameAndArgs(testCases []string) (string, []string, error) 
 	}
 	words = slices.Replace(words, idx, idx+1, testCases...)
 	return words[0], words[1:], nil
+}
+
+// RspecExample represents a single test example in an Rspec report.
+type RspecExample struct {
+	Id              string  `json:"id"`
+	Description     string  `json:"description"`
+	FullDescription string  `json:"full_description"`
+	Status          string  `json:"status"`
+	FilePath        string  `json:"file_path"`
+	LineNumber      int     `json:"line_number"`
+	RunTime         float64 `json:"run_time"`
+}
+
+// RspecReport is the structure for Rspec JSON report.
+type RspecReport struct {
+	Version  string         `json:"version"`
+	Seed     int            `json:"seed"`
+	Examples []RspecExample `json:"examples"`
+}
+
+// GetExamples returns an array of test examples within the given files.
+func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
+	cmdName, cmdArgs, err := r.commandNameAndArgs(files)
+	if err != nil {
+		return nil, err
+	}
+
+	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json")
+
+	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
+
+	outputStr := string(output)
+	if err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %v", outputStr)
+	}
+
+	var report RspecReport
+	if err := json.Unmarshal(output, &report); err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to parse rspec dry run output: %v", outputStr)
+	}
+
+	var testCases []plan.TestCase
+	for _, example := range report.Examples {
+		testCases = append(testCases, plan.TestCase{
+			Format:     plan.TestCaseFormatExample,
+			Identifier: example.Id,
+			Name:       example.Description,
+			Path:       fmt.Sprintf("%s:%d", example.FilePath, example.LineNumber),
+			Scope:      example.FullDescription,
+		})
+	}
+
+	return testCases, nil
 }

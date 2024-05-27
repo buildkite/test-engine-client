@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+# This script is used to simulate the output of the rspec dry-run command
+echo '
+	{
+  "version": "3.13.0",
+  "messages": [
+    "Run options: exclude {:docker=\u003etrue}"
+  ],
+  "seed": 59255,
+  "examples": [
+    {
+      "id": "./spec/spells/expelliarmus_spec.rb[1:1]",
+      "description": "disarms the opponent",
+      "full_description": "Spells Expelliarmus disarms the opponent",
+      "status": "passed",
+      "file_path": "./spec/spells/expelliarmus_spec.rb",
+      "line_number": 3,
+      "run_time": 7.0e-06,
+      "pending_message": null
+    },
+    {
+      "id": "./spec/spells/expelliarmus_spec.rb[1:2]",
+      "description": "knocks the wand out of the opponents hand",
+      "full_description": "Spells Expelliarmus knocks the wand out of the opponents hand",
+      "status": "passed",
+      "file_path": "./spec/spells/expelliarmus_spec.rb",
+      "line_number": 7,
+      "run_time": 2.0e-06,
+      "pending_message": null
+    }
+  ],
+  "summary": {
+    "duration": 0.000332,
+    "example_count": 2,
+    "failure_count": 0,
+    "pending_count": 0,
+    "errors_outside_of_examples_count": 0
+  },
+  "summary_line": "2 examples, 0 failures"
+}'
