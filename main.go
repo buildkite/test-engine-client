@@ -88,30 +88,39 @@ func main() {
 	initRunResult := waitForCommandToComplete(cmd)
 
 	if initRunResult == 0 {
+		// initial test run succeeded
 		os.Exit(0)
-	} else if cfg.MaxRetries == 0 {
+	} else if initRunResult == 16 {
 		logErrorAndExit(initRunResult, "Rspec exited with error %v", initRunResult)
-	} else {
-		retries := 0
-		for retries < cfg.MaxRetries {
-			retries++
-			fmt.Printf("Retrying tests, attempt %d\n", retries)
-			// create the retry command
-			retryCmd, err := testRunner.RetryCommand()
-			if err != nil {
-				logErrorAndExit(16, "Couldn't process retry command: %q, %v", testRunner.TestCommand, err)
-			}
+	} else if initRunResult == 1 {
+		// initial test run failed
+		if cfg.MaxRetries <= 0 {
+			// retry is not enabled
+			logErrorAndExit(initRunResult, "Rspec exited with error %v", initRunResult)
+		} else {
+			// retry tests
+			retries := 0
+			for retries < cfg.MaxRetries {
+				retries++
+				fmt.Printf("Retrying tests, attempt %d\n", retries)
+				// create the retry command
+				retryCmd, err := testRunner.RetryCommand()
+				if err != nil {
+					logErrorAndExit(16, "Couldn't process retry command: %q, %v", testRunner.TestCommand, err)
+				}
+				if err := retryCmd.Start(); err != nil {
+					logErrorAndExit(16, "Couldn't start tests: %v", err)
+				}
+				// wait for the retry command to complete
+				retryResult := waitForCommandToComplete(retryCmd)
 
-			if err := retryCmd.Start(); err != nil {
-				logErrorAndExit(16, "Couldn't start tests: %v", err)
-			}
-			// wait for the retry command to complete
-			retryResult := waitForCommandToComplete(retryCmd)
-
-			if retryResult == 0 {
-				os.Exit(0)
-			} else if retries >= cfg.MaxRetries {
-				logErrorAndExit(retryResult, "Rspec exited with error %v", retryResult)
+				if retryResult == 0 {
+					os.Exit(0)
+				} else if retryResult == 16 {
+					logErrorAndExit(retryResult, "Rspec exited with error %v", retryResult)
+				} else if retries >= cfg.MaxRetries {
+					logErrorAndExit(retryResult, "Rspec exited with error %v", retryResult)
+				}
 			}
 		}
 	}
@@ -119,7 +128,6 @@ func main() {
 
 func waitForCommandToComplete(cmd *exec.Cmd) int {
 	finishCh := make(chan struct{})
-
 	// Start a goroutine to that waits for a signal or the command to finish.
 	go func() {
 		// Create another channel to receive the signals.
@@ -137,6 +145,9 @@ func waitForCommandToComplete(cmd *exec.Cmd) int {
 				// When a signal is received, forward it to the command.
 				fmt.Printf("Received signal %v, forwarding to test command\n", sig)
 				cmd.Process.Signal(sig)
+				// if sig == os.Interrupt {
+				// 	os.Exit(16)
+				// }
 			case <-finishCh:
 				// When the the command finishes, we stop listening for signals and return.
 				fmt.Println("Test command finished, stopping signal listener")
@@ -147,14 +158,18 @@ func waitForCommandToComplete(cmd *exec.Cmd) int {
 	}()
 
 	err := cmd.Wait()
+	fmt.Printf("Test command finished with error: %v\n", err)
+	close(finishCh)
+
 	if err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
+			fmt.Printf("Test command exited with error code: %d\n", exitCode)
 			return exitCode
 		}
+		// other errors
+		return 16
 	}
-	close(finishCh)
-	// If the failing tests pass after retry (test command exits without error), we exit with code 0.
 	return 0
 }
 
