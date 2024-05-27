@@ -95,6 +95,7 @@ func main() {
 		retries := 0
 		for retries < cfg.MaxRetries {
 			retries++
+			fmt.Printf("Retrying tests, attempt %d\n", retries)
 			// create the retry command
 			retryCmd, err := testRunner.RetryCommand()
 			if err != nil {
@@ -134,9 +135,11 @@ func waitForCommandToComplete(cmd *exec.Cmd) int {
 			select {
 			case sig := <-sigCh:
 				// When a signal is received, forward it to the command.
+				fmt.Printf("Received signal %v, forwarding to test command\n", sig)
 				cmd.Process.Signal(sig)
 			case <-finishCh:
 				// When the the command finishes, we stop listening for signals and return.
+				fmt.Println("Test command finished, stopping signal listener")
 				signal.Stop(sigCh)
 				return
 			}
