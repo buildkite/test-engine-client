@@ -169,8 +169,7 @@ func retryFailedTests(testRunner runner.Rspec, maxRetries int) int {
 
 // logErrorAndExit logs an error message and exits with the given exit code.
 func logErrorAndExit(exitCode int, format string, v ...any) {
-	fmt.Printf(format, v...)
-	fmt.Print("\n")
+	fmt.Printf(format+"\n", v...)
 	os.Exit(exitCode)
 }
 
