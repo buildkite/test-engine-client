@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
 )
@@ -150,5 +151,36 @@ func TestRspecDiscoveryPattern_ExcludePattern(t *testing.T) {
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("Rspec.discoveryPattern() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestRspecGetExamples(t *testing.T) {
+	rspec := NewRspec("./test/mock_rspec_dry_run")
+	files := []string{"spec/spells/expelliarmus_spec.rb"}
+	got, err := rspec.GetExamples(files)
+
+	want := []plan.TestCase{
+		{
+			Format:     plan.TestCaseFormatExample,
+			Identifier: "./spec/spells/expelliarmus_spec.rb[1:1]",
+			Name:       "disarms the opponent",
+			Path:       "./spec/spells/expelliarmus_spec.rb:3",
+			Scope:      "Spells Expelliarmus disarms the opponent",
+		},
+		{
+			Format:     plan.TestCaseFormatExample,
+			Identifier: "./spec/spells/expelliarmus_spec.rb[1:2]",
+			Name:       "knocks the wand out of the opponents hand",
+			Path:       "./spec/spells/expelliarmus_spec.rb:7",
+			Scope:      "Spells Expelliarmus knocks the wand out of the opponents hand",
+		},
+	}
+
+	if err != nil {
+		t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
 	}
 }
