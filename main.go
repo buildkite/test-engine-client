@@ -75,7 +75,7 @@ func main() {
 	for _, testCase := range thisNodeTask.Tests {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
-
+	// create the initial test command
 	cmd, err := testRunner.Command(runnableTests)
 	if err != nil {
 		logErrorAndExit(16, "Couldn't process test command: %q, %v", testRunner.TestCommand, err)
@@ -85,7 +85,38 @@ func main() {
 		logErrorAndExit(16, "Couldn't start tests: %v", err)
 	}
 
-	// Create a channel that will be closed when the command finishes.
+	initRunResult := waitForCommandToComplete(cmd)
+
+	if initRunResult == 0 {
+		os.Exit(0)
+	} else if cfg.MaxRetries == 0 {
+		logErrorAndExit(initRunResult, "Rspec exited with error %v", initRunResult)
+	} else {
+		retries := 0
+		for retries < cfg.MaxRetries {
+			retries++
+			// create the retry command
+			retryCmd, err := testRunner.RetryCommand()
+			if err != nil {
+				logErrorAndExit(16, "Couldn't process retry command: %q, %v", testRunner.TestCommand, err)
+			}
+
+			if err := retryCmd.Start(); err != nil {
+				logErrorAndExit(16, "Couldn't start tests: %v", err)
+			}
+			// wait for the retry command to complete
+			retryResult := waitForCommandToComplete(retryCmd)
+
+			if retryResult == 0 {
+				os.Exit(0)
+			} else if retries >= cfg.MaxRetries {
+				logErrorAndExit(retryResult, "Rspec exited with error %v", retryResult)
+			}
+		}
+	}
+}
+
+func waitForCommandToComplete(cmd *exec.Cmd) int {
 	finishCh := make(chan struct{})
 
 	// Start a goroutine to that waits for a signal or the command to finish.
@@ -112,59 +143,16 @@ func main() {
 		}
 	}()
 
-	if err := cmd.Wait(); err != nil {
+	err := cmd.Wait()
+	if err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
-			if cfg.MaxRetries == 0 {
-				// If retry is disabled, we exit immediately with the same exit code from the test runner
-				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
-			} else {
-				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries)
-				if retryExitCode == 0 {
-					os.Exit(0)
-				} else {
-					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
-				}
-			}
+			return exitCode
 		}
-		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
-
-	// Close the channel that will stop the goroutine.
 	close(finishCh)
-}
-
-func retryFailedTests(testRunner runner.Rspec, maxRetries int) int {
-	// Retry failed tests
-	retries := 0
-	for retries < maxRetries {
-		retries++
-		fmt.Printf("Attempt %d of %d to retry failing tests\n", retries, maxRetries)
-
-		cmd, err := testRunner.RetryCommand()
-		if err != nil {
-			logErrorAndExit(16, "Couldn't process retry command: %v", err)
-		}
-
-		if err := cmd.Start(); err != nil {
-			logErrorAndExit(16, "Couldn't start tests: %v", err)
-		}
-
-		err = cmd.Wait()
-		if err != nil {
-			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-				exitCode := exitError.ExitCode()
-				if retries >= maxRetries {
-					// If the command exits with an error and we've reached the maximum number of retries, we exit.
-					return exitCode
-				}
-			}
-		} else {
-			// If the failing tests pass after retry (test command exits without error), we exit with code 0.
-			return 0
-		}
-	}
-	return 1
+	// If the failing tests pass after retry (test command exits without error), we exit with code 0.
+	return 0
 }
 
 // logErrorAndExit logs an error message and exits with the given exit code.
