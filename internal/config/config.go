@@ -6,6 +6,8 @@ type Config struct {
 	AccessToken string
 	// Identifier is the identifier of the build.
 	Identifier string
+	// MaxRetries is the maximum number of retries for a failed test.
+	MaxRetries int
 	// Mode is the mode of the test splitter.
 	Mode string
 	// Node index is index of the current node.
@@ -16,12 +18,12 @@ type Config struct {
 	Parallelism int
 	// ServerBaseUrl is the base URL of the test splitter server.
 	ServerBaseUrl string
+	// SplitByExample is the flag to enable split the test by example.
+	SplitByExample bool
 	// SuiteSlug is the slug of the suite.
 	SuiteSlug string
 	// TestCommand is the command to run the tests.
 	TestCommand string
-	// MaxRetries is the maximum number of retries for a failed test.
-	MaxRetries int
 	// Version is the current splitter version
 	Version string
 }
