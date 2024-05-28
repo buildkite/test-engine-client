@@ -189,21 +189,8 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	}
 
 	// If the cache is empty, create a new plan.
-	testCases := []plan.TestCase{}
-	for _, file := range files {
-		testCases = append(testCases, plan.TestCase{
-			Path: file,
-		})
-	}
-
-	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, api.TestPlanParams{
-		Mode:        cfg.Mode,
-		Identifier:  cfg.Identifier,
-		Parallelism: cfg.Parallelism,
-		Tests: api.TestPlanParamsTest{
-			Files: testCases,
-		},
-	})
+	params := createRequestParam(cfg, files)
+	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 
 	if err != nil {
 		// Didn't exceed context deadline? Must have been some kind of error that
@@ -213,15 +200,41 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		}
 		// Create the fallback plan
 		fmt.Println("Could not fetch plan from server, using fallback mode. Your build may take longer than usual.")
-		testPlan = plan.CreateFallbackPlan(testCases, cfg.Parallelism)
+		testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		fmt.Println("Test splitter server returned an error, using fallback mode. Your build may take longer than usual.")
-		testPlan = plan.CreateFallbackPlan(testCases, cfg.Parallelism)
+		testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
 	}
 
 	return testPlan, nil
+}
+
+func createRequestParam(cfg config.Config, files []string) api.TestPlanParams {
+	if !cfg.SplitByExample {
+		testCases := []plan.TestCase{}
+		for _, file := range files {
+			testCases = append(testCases, plan.TestCase{
+				Path: file,
+			})
+		}
+		return api.TestPlanParams{
+			Mode:        cfg.Mode,
+			Identifier:  cfg.Identifier,
+			Parallelism: cfg.Parallelism,
+			Tests: api.TestPlanParamsTest{
+				Files: testCases,
+			},
+		}
+	}
+
+	return api.TestPlanParams{
+		Mode:        cfg.Mode,
+		Identifier:  cfg.Identifier,
+		Parallelism: cfg.Parallelism,
+		Tests:       api.TestPlanParamsTest{},
+	}
 }

@@ -157,12 +157,6 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	files := []string{"apple", "banana", "cherry", "mango"}
-	tests := []plan.TestCase{
-		{Path: "apple"},
-		{Path: "banana"},
-		{Path: "cherry"},
-		{Path: "mango"},
-	}
 
 	// mock server to return an error plan
 	response := `{
@@ -186,28 +180,19 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	}
 
 	// we want the function to return a fallback plan
-	want := plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
 	got, err := fetchOrCreateTestPlan(ctx, cfg, files)
 	if err != nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
 }
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	files := []string{"red", "orange", "yellow", "green", "blue", "indigo", "violet"}
-	tests := []plan.TestCase{
-		{Path: "red"},
-		{Path: "orange"},
-		{Path: "yellow"},
-		{Path: "green"},
-		{Path: "blue"},
-		{Path: "indigo"},
-		{Path: "violet"},
-	}
 
 	// mock server to return a 500 Internal Server Error
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -228,14 +213,14 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	}
 
 	// we want the function to return a fallback plan
-	want := plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
 	got, err := fetchOrCreateTestPlan(fetchCtx, cfg, files)
 	if err != nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
 }
 
