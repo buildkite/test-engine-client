@@ -156,7 +156,7 @@ func TestRspecDiscoveryPattern_ExcludePattern(t *testing.T) {
 
 func TestRspecGetExamples(t *testing.T) {
 	rspec := NewRspec("rspec")
-	files := []string{"fixtures/spec/spells/expelliarmus_spec.rb"}
+	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
 	got, err := rspec.GetExamples(files)
 
 	want := []plan.TestCase{
@@ -186,7 +186,7 @@ func TestRspecGetExamples(t *testing.T) {
 }
 
 func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
-	files := []string{"fixtures/spec/spells/expelliarmus_spec.rb"}
+	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
 	want := []plan.TestCase{
 		{
 			Format:     plan.TestCaseFormatExample,
@@ -204,7 +204,18 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 		},
 	}
 
-	commands := []string{"rspec --format documentation", "rspec --format json --out rspec.json", "rspec --format html"}
+	// Create a temporary file to store the JSON output of the rspec dry run.
+	// So we don't end up with a lot of files after running this test.
+	// We'll clean up the file after the test.
+	f, err := os.CreateTemp("", "rspec.json")
+	if err != nil {
+		t.Errorf("os.CreateTemp() error = %v", err)
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+	withOtherJson := "rspec --format json --out " + f.Name()
+
+	commands := []string{"rspec --format documentation", "rspec --format html", withOtherJson}
 	for _, command := range commands {
 		rspec := NewRspec(command)
 		got, err := rspec.GetExamples(files)
