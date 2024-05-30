@@ -186,10 +186,7 @@ func TestRspecGetExamples(t *testing.T) {
 }
 
 func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
-	rspec := NewRspec("rspec --format documentation")
 	files := []string{"fixtures/spec/spells/expelliarmus_spec.rb"}
-	got, err := rspec.GetExamples(files)
-
 	want := []plan.TestCase{
 		{
 			Format:     plan.TestCaseFormatExample,
@@ -207,11 +204,20 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 		},
 	}
 
-	if err != nil {
-		t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
-	}
+	commands := []string{"rspec --format documentation", "rspec --format json --out rspec.json", "rspec --format html"}
+	for _, command := range commands {
+		rspec := NewRspec(command)
+		got, err := rspec.GetExamples(files)
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
+		t.Run(command, func(t *testing.T) {
+
+			if err != nil {
+				t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
+			}
+
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
+			}
+		})
 	}
 }
