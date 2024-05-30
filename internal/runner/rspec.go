@@ -153,9 +153,8 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 
 	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
 
-	outputStr := string(output)
 	if err != nil {
-		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %v", outputStr)
+		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %s", output)
 	}
 
 	var report RspecReport
@@ -165,7 +164,7 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	}
 
 	if err := json.Unmarshal(data, &report); err != nil {
-		return []plan.TestCase{}, fmt.Errorf("failed to parse rspec dry run output: %v", outputStr)
+		return []plan.TestCase{}, fmt.Errorf("failed to parse rspec dry run output: %s", output)
 	}
 
 	var testCases []plan.TestCase
