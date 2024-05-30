@@ -134,12 +134,22 @@ type RspecReport struct {
 
 // GetExamples returns an array of test examples within the given files.
 func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
+	// Create a temporary file to store the JSON output of the rspec dry run.
+	// We cannot simply read the dry run output from stdout because
+	// users may have custom formatters that do not output JSON.
+	f, err := os.CreateTemp("", "dry-run-*.json")
+	if err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to create temporary file for rspec dry run: %v", err)
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+
 	cmdName, cmdArgs, err := r.commandNameAndArgs(files)
 	if err != nil {
 		return nil, err
 	}
 
-	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json")
+	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
 
 	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
 
@@ -149,7 +159,12 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	}
 
 	var report RspecReport
-	if err := json.Unmarshal(output, &report); err != nil {
+	data, err := os.ReadFile(f.Name())
+	if err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to read rspec dry run output: %v", err)
+	}
+
+	if err := json.Unmarshal(data, &report); err != nil {
 		return []plan.TestCase{}, fmt.Errorf("failed to parse rspec dry run output: %v", outputStr)
 	}
 
