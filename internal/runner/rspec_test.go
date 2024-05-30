@@ -155,24 +155,24 @@ func TestRspecDiscoveryPattern_ExcludePattern(t *testing.T) {
 }
 
 func TestRspecGetExamples(t *testing.T) {
-	rspec := NewRspec("./test/mock_rspec_dry_run")
-	files := []string{"spec/spells/expelliarmus_spec.rb"}
+	rspec := NewRspec("rspec")
+	files := []string{"fixtures/spec/spells/expelliarmus_spec.rb"}
 	got, err := rspec.GetExamples(files)
 
 	want := []plan.TestCase{
 		{
 			Format:     plan.TestCaseFormatExample,
-			Identifier: "./spec/spells/expelliarmus_spec.rb[1:1]",
+			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
-			Path:       "./spec/spells/expelliarmus_spec.rb:3",
-			Scope:      "Spells Expelliarmus disarms the opponent",
+			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:2",
+			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
 			Format:     plan.TestCaseFormatExample,
-			Identifier: "./spec/spells/expelliarmus_spec.rb[1:2]",
+			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
-			Path:       "./spec/spells/expelliarmus_spec.rb:7",
-			Scope:      "Spells Expelliarmus knocks the wand out of the opponents hand",
+			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:6",
+			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
 		},
 	}
 
