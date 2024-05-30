@@ -184,3 +184,34 @@ func TestRspecGetExamples(t *testing.T) {
 		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
 	}
 }
+
+func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
+	rspec := NewRspec("rspec --format documentation")
+	files := []string{"fixtures/spec/spells/expelliarmus_spec.rb"}
+	got, err := rspec.GetExamples(files)
+
+	want := []plan.TestCase{
+		{
+			Format:     plan.TestCaseFormatExample,
+			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:1]",
+			Name:       "disarms the opponent",
+			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:2",
+			Scope:      "Expelliarmus disarms the opponent",
+		},
+		{
+			Format:     plan.TestCaseFormatExample,
+			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:2]",
+			Name:       "knocks the wand out of the opponents hand",
+			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:6",
+			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
+		},
+	}
+
+	if err != nil {
+		t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
+	}
+}
