@@ -13,6 +13,7 @@ import (
 //
 // Currently, it reads the following environment variables:
 // - BUILDKITE_API_ACCESS_TOKEN (AccessToken)
+// - BUILDKITE_SPLITTER_DEBUG_ENABLED (DebugEnabled)
 // - BUILDKITE_ORGANIZATION_SLUG (OrganizationSlug)
 // - BUILDKITE_PARALLEL_JOB_COUNT (Parallelism)
 // - BUILDKITE_PARALLEL_JOB (NodeIndex)
@@ -36,6 +37,7 @@ func (c *Config) readFromEnv() error {
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://api.buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
+	c.DebugEnabled = os.Getenv("BUILDKITE_SPLITTER_DEBUG_ENABLED") == "true"
 
 	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_SPLITTER_RETRY_COUNT", 0)
 	c.MaxRetries = MaxRetries

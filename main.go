@@ -180,6 +180,7 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
+		DebugEnabled:     cfg.DebugEnabled,
 	})
 
 	// Fetch the plan from the server's cache.

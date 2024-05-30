@@ -4,6 +4,8 @@ package config
 type Config struct {
 	// AccessToken is the access token for the API.
 	AccessToken string
+	// DebugEnabled is a flag to enable debug logging.
+	DebugEnabled bool
 	// Identifier is the identifier of the build.
 	Identifier string
 	// Mode is the mode of the test splitter.

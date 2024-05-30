@@ -19,6 +19,7 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_API_ACCESS_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
+	os.Setenv("BUILDKITE_SPLITTER_DEBUG_ENABLED", "true")
 }
 
 func TestNewConfig(t *testing.T) {
@@ -40,6 +41,7 @@ func TestNewConfig(t *testing.T) {
 		AccessToken:      "my_token",
 		OrganizationSlug: "my_org",
 		SuiteSlug:        "my_suite",
+		DebugEnabled:     true,
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {
@@ -62,6 +64,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	os.Unsetenv("BUILDKITE_SPLITTER_MODE")
 	os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
 	os.Unsetenv("BUILDKITE_SPLITTER_TEST_CMD")
+	os.Unsetenv("BUILDKITE_SPLITTER_DEBUG_ENABLED")
 	defer os.Clearenv()
 
 	c, err := New()
@@ -78,6 +81,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		AccessToken:      "my_token",
 		OrganizationSlug: "my_org",
 		SuiteSlug:        "my_suite",
+		DebugEnabled:     false,
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {

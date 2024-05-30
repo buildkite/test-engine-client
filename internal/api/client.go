@@ -1,6 +1,9 @@
 package api
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -17,17 +20,41 @@ type ClientConfig struct {
 	AccessToken      string
 	OrganizationSlug string
 	ServerBaseUrl    string
+	DebugEnabled     bool
 }
 
 // authTransport is a middleware for the HTTP client.
 type authTransport struct {
-	accessToken string
+	accessToken  string
+	debugEnabled bool
 }
 
 // RoundTrip adds the Authorization header to all requests made by the HTTP client.
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.debugEnabled {
+		fmt.Println("--- 🕵️ DEBUG")
+		fmt.Println("Request:")
+		fmt.Printf("%s %s\n\n", req.Method, req.URL.String())
+	}
+
+	// IMPORTANT: We need to set the token after printing the request to avoid leaking the token in logs.
 	req.Header.Set("Authorization", "Bearer "+t.accessToken)
-	return http.DefaultTransport.RoundTrip(req)
+
+	resp, err := http.DefaultTransport.RoundTrip(req)
+
+	if t.debugEnabled {
+		body, _ := io.ReadAll(resp.Body)
+		defer resp.Body.Close()
+
+		// We need to replace the body with a new reader, so it can be read again by the caller.
+		resp.Body = io.NopCloser(bytes.NewBuffer(body))
+
+		fmt.Println("Response:")
+		fmt.Println(resp.Status)
+		fmt.Println(string(body))
+	}
+
+	return resp, err
 }
 
 // NewClient creates a new client for the test splitter API with the given configuration.
@@ -35,7 +62,8 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func NewClient(cfg ClientConfig) *client {
 	httpClient := &http.Client{
 		Transport: &authTransport{
-			accessToken: cfg.AccessToken,
+			accessToken:  cfg.AccessToken,
+			debugEnabled: cfg.DebugEnabled,
 		},
 	}
 
