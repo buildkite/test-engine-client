@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
@@ -35,24 +34,16 @@ func main() {
 	versionFlag := flag.Bool("version", false, "print version information")
 
 	// Gathering files
-	filesFlag := flag.String("files", "", "string of file names for splitting")
 	flag.Parse()
-
-	var files []string
 
 	if *versionFlag {
 		fmt.Println(Version)
 		os.Exit(0)
 	}
 
-	if *filesFlag != "" {
-		files = strings.Split(*filesFlag, ",")
-	} else {
-		fs, err := testRunner.GetFiles()
-		if err != nil {
-			logErrorAndExit(16, "Couldn't get files: %v", err)
-		}
-		files = fs
+	files, err := testRunner.GetFiles()
+	if err != nil {
+		logErrorAndExit(16, "Couldn't get files: %v", err)
 	}
 
 	// get plan
