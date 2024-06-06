@@ -7,7 +7,7 @@ import (
 )
 
 var enabled = false
-var logger = log.New(os.Stderr, "DEBUG: ", log.LstdFlags|log.Lmsgprefix)
+var logger = log.New(os.Stdout, "DEBUG: ", log.LstdFlags|log.Lmsgprefix)
 
 // Printf works like log.Printf, but only when debugging is enabled.
 func Printf(format string, v ...interface{}) {
