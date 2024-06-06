@@ -16,6 +16,7 @@ import (
 
 	"github.com/buildkite/test-splitter/internal/api"
 	"github.com/buildkite/test-splitter/internal/config"
+	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/buildkite/test-splitter/internal/runner"
 )
@@ -23,6 +24,8 @@ import (
 var Version = ""
 
 func main() {
+	debug.SetDebug(os.Getenv("BUILDKITE_SPLITTER_DEBUG_ENABLED") == "true")
+
 	// get config
 	cfg, err := config.New()
 	if err != nil {
