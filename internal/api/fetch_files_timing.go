@@ -27,6 +27,8 @@ func (c Client) FetchFilesTiming(suiteSlug string, files []string) (map[string]t
 	}
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(requestBody))
+	req.Header.Add("Content-Type", "application/json")
+
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
