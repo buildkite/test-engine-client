@@ -179,6 +179,7 @@ func logErrorAndExit(exitCode int, format string, v ...any) {
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
 func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
+	debug.Println("Fetching test plan")
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		AccessToken:      cfg.AccessToken,
@@ -194,9 +195,11 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	}
 
 	if cachedPlan != nil {
+		debug.Println("Test plan found")
 		return *cachedPlan, nil
 	}
 
+	debug.Println("No test plan found, creating a new plan")
 	// If the cache is empty, create a new plan.
 	params, err := createRequestParam(cfg, files, *apiClient, testRunner)
 	if err != nil {
@@ -204,6 +207,10 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	}
 
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+
+	if err == nil {
+		debug.Println("Test plan created")
+	}
 
 	if err != nil {
 		// Didn't exceed context deadline? Must have been some kind of error that
@@ -238,6 +245,7 @@ type fileTiming struct {
 // Error is returned if there is a failure to fetch test file timings or to get the test examples from test files when SplitByExample is enabled.
 func createRequestParam(cfg config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	if !cfg.SplitByExample {
+		debug.Println("Splitting by file")
 		testCases := []plan.TestCase{}
 		for _, file := range files {
 			testCases = append(testCases, plan.TestCase{
@@ -255,6 +263,9 @@ func createRequestParam(cfg config.Config, files []string, client api.Client, ru
 		}, nil
 	}
 
+	debug.Println("Splitting by example")
+
+	debug.Println("Fetching file timings")
 	// Fetch the timings for all files.
 	timings, err := client.FetchFilesTiming(cfg.SuiteSlug, files)
 	if err != nil {
@@ -295,6 +306,8 @@ func createRequestParam(cfg config.Config, files []string, client api.Client, ru
 			})
 		}
 	}
+
+	debug.Printf("Getting examples for slow files: %d files", len(slowFiles))
 
 	// Get the examples for the slow files.
 	slowFilesExamples, err := runner.GetExamples(slowFiles)
