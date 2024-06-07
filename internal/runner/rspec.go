@@ -170,7 +170,6 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	var testCases []plan.TestCase
 	for _, example := range report.Examples {
 		testCases = append(testCases, plan.TestCase{
-			Format:     plan.TestCaseFormatExample,
 			Identifier: example.Id,
 			Name:       example.Description,
 			Path:       fmt.Sprintf("%s:%d", example.FilePath, example.LineNumber),

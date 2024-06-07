@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -13,9 +14,9 @@ func TestFetchFilesTiming(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 {
-	"apple_spec.rb": 100,
-	"banana_spec.rb": 300,
-	"cherry_spec.rb": 200
+	"apple_spec.rb": 1.1214749813079834,
+	"banana_spec.rb": 3.1212387234762763,
+	"cherry_spec.rb": 2.1436827355762394
 }`)
 	}))
 	defer svr.Close()
@@ -31,10 +32,10 @@ func TestFetchFilesTiming(t *testing.T) {
 		t.Errorf("FetchFilesTiming() error = %v", err)
 	}
 
-	want := []fileTiming{
-		{Path: "banana_spec.rb", Duration: 300},
-		{Path: "cherry_spec.rb", Duration: 200},
-		{Path: "apple_spec.rb", Duration: 100},
+	want := map[string]time.Duration{
+		"apple_spec.rb":  1121474981,
+		"banana_spec.rb": 3121238723,
+		"cherry_spec.rb": 2143682735,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {

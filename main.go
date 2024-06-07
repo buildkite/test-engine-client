@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
@@ -21,6 +23,13 @@ import (
 )
 
 var Version = ""
+
+type TestRunner interface {
+	Command(testCases []string) (*exec.Cmd, error)
+	GetExamples(files []string) ([]plan.TestCase, error)
+	GetFiles() ([]string, error)
+	RetryCommand() (*exec.Cmd, error)
+}
 
 func main() {
 	debug.SetDebug(os.Getenv("BUILDKITE_SPLITTER_DEBUG_ENABLED") == "true")
@@ -56,7 +65,7 @@ func main() {
 	fetchCtx, cancel := context.WithTimeout(ctx, 70*time.Second)
 	defer cancel()
 
-	testPlan, err := fetchOrCreateTestPlan(fetchCtx, cfg, files)
+	testPlan, err := fetchOrCreateTestPlan(fetchCtx, cfg, files, testRunner)
 	if err != nil {
 		logErrorAndExit(16, "Couldn't create test plan: %v", err)
 	}
@@ -128,7 +137,7 @@ func main() {
 	close(finishCh)
 }
 
-func retryFailedTests(testRunner runner.Rspec, maxRetries int) int {
+func retryFailedTests(testRunner TestRunner, maxRetries int) int {
 	// Retry failed tests
 	retries := 0
 	for retries < maxRetries {
@@ -169,7 +178,7 @@ func logErrorAndExit(exitCode int, format string, v ...any) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []string) (plan.TestPlan, error) {
+func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		AccessToken:      cfg.AccessToken,
@@ -189,7 +198,11 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	}
 
 	// If the cache is empty, create a new plan.
-	params := createRequestParam(cfg, files)
+	params, err := createRequestParam(cfg, files, *apiClient, testRunner)
+	if err != nil {
+		return plan.TestPlan{}, err
+	}
+
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 
 	if err != nil {
@@ -213,7 +226,17 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	return testPlan, nil
 }
 
-func createRequestParam(cfg config.Config, files []string) api.TestPlanParams {
+type fileTiming struct {
+	Path     string
+	Duration time.Duration
+}
+
+// createRequestParam creates the request parameters for the test plan.
+// If SplitByExample is disabled (default), it will return the default params that contain all the files.
+// If SplitByExample is enabled, it will split the slow files into examples and return it along with the rest of the files.
+//
+// Error is returned if there is a failure to fetch test file timings or to get the test examples from test files when SplitByExample is enabled.
+func createRequestParam(cfg config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	if !cfg.SplitByExample {
 		testCases := []plan.TestCase{}
 		for _, file := range files {
@@ -221,6 +244,7 @@ func createRequestParam(cfg config.Config, files []string) api.TestPlanParams {
 				Path: file,
 			})
 		}
+
 		return api.TestPlanParams{
 			Mode:        cfg.Mode,
 			Identifier:  cfg.Identifier,
@@ -228,13 +252,63 @@ func createRequestParam(cfg config.Config, files []string) api.TestPlanParams {
 			Tests: api.TestPlanParamsTest{
 				Files: testCases,
 			},
+		}, nil
+	}
+
+	// Fetch the timings for all files.
+	timings, err := client.FetchFilesTiming(cfg.SuiteSlug, files)
+	if err != nil {
+		return api.TestPlanParams{}, fmt.Errorf("failed to fetch file timings: %v", err)
+	}
+
+	// The server only returns timings for the files that has been run before.
+	// Therefore, we need to merge the response with the requested files.
+	// The files that are not in the response will have a duration of 0.
+	allFilesTiming := []fileTiming{}
+	for _, file := range files {
+		allFilesTiming = append(allFilesTiming, fileTiming{
+			Path:     file,
+			Duration: timings[file],
+		})
+	}
+
+	// Sort the files by duration.
+	// If the duration is the same, sort by path.
+	slices.SortFunc(allFilesTiming, func(a, b fileTiming) int {
+		if a.Duration == b.Duration {
+			return strings.Compare(a.Path, b.Path)
 		}
+		return int(b.Duration - a.Duration)
+	})
+
+	// Split the timings into slow files and the rest of the files.
+	threshold := int(float64(len(allFilesTiming)) * 0.3)
+	slowFiles := []string{}
+	restOfFiles := []plan.TestCase{}
+
+	for i, timing := range allFilesTiming {
+		if i < threshold {
+			slowFiles = append(slowFiles, timing.Path)
+		} else {
+			restOfFiles = append(restOfFiles, plan.TestCase{
+				Path: timing.Path,
+			})
+		}
+	}
+
+	// Get the examples for the slow files.
+	slowFilesExamples, err := runner.GetExamples(slowFiles)
+	if err != nil {
+		return api.TestPlanParams{}, fmt.Errorf("failed to get examples for slow files: %v", err)
 	}
 
 	return api.TestPlanParams{
 		Mode:        cfg.Mode,
 		Identifier:  cfg.Identifier,
 		Parallelism: cfg.Parallelism,
-		Tests:       api.TestPlanParamsTest{},
-	}
+		Tests: api.TestPlanParamsTest{
+			Examples: slowFilesExamples,
+			Files:    restOfFiles,
+		},
+	}, nil
 }
