@@ -12,10 +12,10 @@ import (
 // set default values for ServerBaseUrl and Mode if they are not set.
 //
 // Currently, it reads the following environment variables:
-// - BUILDKITE_API_ACCESS_TOKEN (AccessToken)
 // - BUILDKITE_ORGANIZATION_SLUG (OrganizationSlug)
 // - BUILDKITE_PARALLEL_JOB_COUNT (Parallelism)
 // - BUILDKITE_PARALLEL_JOB (NodeIndex)
+// - BUILDKITE_SPLITTER_API_ACCESS_TOKEN (AccessToken)
 // - BUILDKITE_SPLITTER_IDENTIFIER (Identifier)
 // - BUILDKITE_SPLITTER_BASE_URL (ServerBaseUrl)
 // - BUILDKITE_SPLITTER_MODE (Mode)
@@ -28,7 +28,7 @@ import (
 func (c *Config) readFromEnv() error {
 	var errs InvalidConfigError
 
-	c.AccessToken = os.Getenv("BUILDKITE_API_ACCESS_TOKEN")
+	c.AccessToken = os.Getenv("BUILDKITE_SPLITTER_API_ACCESS_TOKEN")
 	c.OrganizationSlug = os.Getenv("BUILDKITE_ORGANIZATION_SLUG")
 	c.SuiteSlug = os.Getenv("BUILDKITE_SPLITTER_SUITE_SLUG")
 
