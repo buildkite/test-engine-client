@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"runtime"
 )
 
 // client is a client for the test splitter API.
@@ -17,16 +19,19 @@ type ClientConfig struct {
 	AccessToken      string
 	OrganizationSlug string
 	ServerBaseUrl    string
+	Version          string
 }
 
 // authTransport is a middleware for the HTTP client.
 type authTransport struct {
 	accessToken string
+	version     string
 }
 
 // RoundTrip adds the Authorization header to all requests made by the HTTP client.
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+t.accessToken)
+	req.Header.Set("User-Agent", fmt.Sprintf("Buildkite Test Splitter/%s (%s/%s)", t.version, runtime.GOOS, runtime.GOARCH))
 	return http.DefaultTransport.RoundTrip(req)
 }
 
@@ -36,6 +41,7 @@ func NewClient(cfg ClientConfig) *client {
 	httpClient := &http.Client{
 		Transport: &authTransport{
 			accessToken: cfg.AccessToken,
+			version:     cfg.Version,
 		},
 	}
 

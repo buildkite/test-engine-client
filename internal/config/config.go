@@ -22,6 +22,8 @@ type Config struct {
 	TestCommand string
 	// MaxRetries is the maximum number of retries for a failed test.
 	MaxRetries int
+	// Version is the current splitter version
+	Version string
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.
