@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"slices"
 
+	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
@@ -150,6 +151,8 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	}
 
 	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
+
+	debug.Println("Running rspec --dry-run")
 
 	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
 

@@ -195,7 +195,7 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	}
 
 	if cachedPlan != nil {
-		debug.Println("Test plan found")
+		debug.Printf("Test plan found. Identifier: %q", cfg.Identifier)
 		return *cachedPlan, nil
 	}
 
@@ -206,10 +206,11 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		return plan.TestPlan{}, err
 	}
 
+	debug.Println("Creating test plan")
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 
 	if err == nil {
-		debug.Println("Test plan created")
+		debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)
 	}
 
 	if err != nil {
@@ -265,12 +266,13 @@ func createRequestParam(cfg config.Config, files []string, client api.Client, ru
 
 	debug.Println("Splitting by example")
 
-	debug.Println("Fetching file timings")
+	debug.Printf("Fetching timings for %d files", len(files))
 	// Fetch the timings for all files.
 	timings, err := client.FetchFilesTiming(cfg.SuiteSlug, files)
 	if err != nil {
 		return api.TestPlanParams{}, fmt.Errorf("failed to fetch file timings: %v", err)
 	}
+	debug.Printf("Got timings for %d files", len(timings))
 
 	// The server only returns timings for the files that has been run before.
 	// Therefore, we need to merge the response with the requested files.
@@ -307,13 +309,15 @@ func createRequestParam(cfg config.Config, files []string, client api.Client, ru
 		}
 	}
 
-	debug.Printf("Getting examples for slow files: %d files", len(slowFiles))
+	debug.Printf("Getting examples for %d slow files", len(slowFiles))
 
 	// Get the examples for the slow files.
 	slowFilesExamples, err := runner.GetExamples(slowFiles)
 	if err != nil {
 		return api.TestPlanParams{}, fmt.Errorf("failed to get examples for slow files: %v", err)
 	}
+
+	debug.Printf("Got %d examples within the slow files", len(slowFilesExamples))
 
 	return api.TestPlanParams{
 		Mode:        cfg.Mode,
