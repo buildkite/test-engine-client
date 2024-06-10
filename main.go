@@ -174,6 +174,7 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
+		Version:          cfg.Version,
 	})
 
 	// Fetch the plan from the server's cache.
