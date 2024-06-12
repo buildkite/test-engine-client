@@ -11,7 +11,9 @@ steps:
   - name: ":go: Tests with race detector"
     key: tests
     command: ".buildkite/steps/tests.sh -race"
-    artifact_paths: cover.{html,out}
+    artifact_paths:
+      - cover.{html,out}
+      - internal/api/pacts/*
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
