@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
-
-	"github.com/buildkite/test-splitter/internal/debug"
 )
 
 // client is a client for the test splitter API.
@@ -34,12 +32,8 @@ type authTransport struct {
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+t.accessToken)
 	req.Header.Set("User-Agent", fmt.Sprintf("Buildkite Test Splitter/%s (%s/%s)", t.version, runtime.GOOS, runtime.GOARCH))
-	debug.Printf("Request: %s %s\n", req.Method, req.URL.String())
 
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	debug.Printf("Response: %d\n", resp.StatusCode)
-
-	return resp, err
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 // NewClient creates a new client for the test splitter API with the given configuration.

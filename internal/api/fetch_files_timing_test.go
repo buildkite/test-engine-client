@@ -14,9 +14,9 @@ func TestFetchFilesTiming(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 {
-	"apple_spec.rb": 1.1214749813079834,
-	"banana_spec.rb": 3.1212387234762763,
-	"cherry_spec.rb": 2.1436827355762394
+	"apple_spec.rb": 1121,
+	"banana_spec.rb": 3121,
+	"cherry_spec.rb": 2143
 }`)
 	}))
 	defer svr.Close()
@@ -33,9 +33,9 @@ func TestFetchFilesTiming(t *testing.T) {
 	}
 
 	want := map[string]time.Duration{
-		"apple_spec.rb":  1121474981,
-		"banana_spec.rb": 3121238723,
-		"cherry_spec.rb": 2143682735,
+		"apple_spec.rb":  1121 * time.Millisecond,
+		"banana_spec.rb": 3121 * time.Millisecond,
+		"cherry_spec.rb": 2143 * time.Millisecond,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {

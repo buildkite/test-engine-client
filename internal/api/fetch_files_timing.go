@@ -50,7 +50,7 @@ func (c Client) FetchFilesTiming(suiteSlug string, files []string) (map[string]t
 		return nil, fmt.Errorf(errorResp.Message)
 	}
 
-	var filesTiming map[string]float64
+	var filesTiming map[string]int
 	err = json.Unmarshal(responseBody, &filesTiming)
 	if err != nil {
 		return nil, fmt.Errorf("parsing response: %w", err)
@@ -59,7 +59,7 @@ func (c Client) FetchFilesTiming(suiteSlug string, files []string) (map[string]t
 	result := map[string]time.Duration{}
 
 	for path, duration := range filesTiming {
-		result[path] = time.Duration(duration * float64(time.Second))
+		result[path] = time.Duration(duration * int(time.Millisecond))
 	}
 
 	return result, nil
