@@ -19,6 +19,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
 	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "3")
+	os.Setenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE", "TRUE")
 	defer os.Clearenv()
 
 	c := Config{}
@@ -35,6 +36,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		OrganizationSlug: "my_org",
 		SuiteSlug:        "my_suite",
 		MaxRetries:       3,
+		SplitByExample:   true,
 	}
 
 	if err != nil {

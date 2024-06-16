@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // readFromEnv reads the configuration from environment variables and sets it to the Config struct.
@@ -38,7 +39,7 @@ func (c *Config) readFromEnv() error {
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
 
-	c.SplitByExample = os.Getenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE") == "true"
+	c.SplitByExample = strings.ToLower(os.Getenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE")) == "true"
 
 	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_SPLITTER_RETRY_COUNT", 0)
 	c.MaxRetries = MaxRetries
