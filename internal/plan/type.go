@@ -9,7 +9,7 @@ const (
 
 // TestCase represents a single test case.
 type TestCase struct {
-	EstimatedDuration *int           `json:"estimated_duration,omitempty"`
+	EstimatedDuration int            `json:"estimated_duration,omitempty"`
 	Format            TestCaseFormat `json:"format,omitempty"`
 	Identifier        string         `json:"identifier,omitempty"`
 	Name              string         `json:"name,omitempty"`

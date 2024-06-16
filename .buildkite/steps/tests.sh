@@ -6,6 +6,10 @@ echo arch is "$(uname -m)"
 
 go install gotest.tools/gotestsum@v1.8.0
 
+# Install pact-go
+go install github.com/pact-foundation/pact-go/v2@latest
+pact-go -l DEBUG install
+
 echo '+++ Running tests'
 gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- -count=1 -coverprofile=cover.out -failfast "$@" ./...
 
