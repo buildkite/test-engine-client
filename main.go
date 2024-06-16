@@ -239,7 +239,8 @@ type fileTiming struct {
 	Duration time.Duration
 }
 
-// createRequestParam creates the request parameters for the test plan.
+// createRequestParam creates the request parameters for the test plan with the given configuration and files.
+// The files should have been filtered by include/exclude patterns before passing to this function.
 // If SplitByExample is disabled (default), it will return the default params that contain all the files.
 // If SplitByExample is enabled, it will split the slow files into examples and return it along with the rest of the files.
 //

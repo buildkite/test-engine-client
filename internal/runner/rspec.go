@@ -152,7 +152,7 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 
 	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
 
-	debug.Println("Running rspec --dry-run")
+	debug.Println("Running `rspec --dry-run`")
 
 	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
 
