@@ -1,1 +1,1 @@
-FROM public.ecr.aws/docker/library/golang:1.21.11
+FROM public.ecr.aws/docker/library/golang:1.22.4
