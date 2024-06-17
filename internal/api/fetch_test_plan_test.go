@@ -71,6 +71,9 @@ func TestFetchTestPlan(t *testing.T) {
 						NodeNumber: 1,
 						Tests: []plan.TestCase{{
 							Path:              "sky_spec.rb:2",
+							Identifier:        "sky_spec.rb[1,1]",
+							Name:              "is blue",
+							Scope:             "sky",
 							Format:            "example",
 							EstimatedDuration: 1000,
 						}},
