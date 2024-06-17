@@ -10,9 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
@@ -286,22 +284,14 @@ func createRequestParam(cfg config.Config, files []string, client api.Client, ru
 		})
 	}
 
-	// Sort the files by duration.
-	// If the duration is the same, sort by path.
-	slices.SortFunc(allFilesTiming, func(a, b fileTiming) int {
-		if a.Duration == b.Duration {
-			return strings.Compare(a.Path, b.Path)
-		}
-		return int(b.Duration - a.Duration)
-	})
-
-	// Split the timings into slow files and the rest of the files.
-	threshold := int(float64(len(allFilesTiming)) * 0.3)
+	// Get files that has duration greater or equal to the slow file threshold.
+	// Currently, the slow file threshold is set to 3 minutes which is roughly 70% of optimal 4 minutes node duration.
+	slowFileThreshold := 3 * time.Minute
 	slowFiles := []string{}
 	restOfFiles := []plan.TestCase{}
 
-	for i, timing := range allFilesTiming {
-		if i < threshold {
+	for _, timing := range allFilesTiming {
+		if timing.Duration >= slowFileThreshold {
 			slowFiles = append(slowFiles, timing.Path)
 		} else {
 			restOfFiles = append(restOfFiles, plan.TestCase{

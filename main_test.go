@@ -294,13 +294,13 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 {
-	"test/spec/fruits/apple_spec.rb": 1,
-	"test/spec/fruits/banana_spec.rb": 7,
-	"test/spec/fruits/cherry_spec.rb": 2,
-	"test/spec/fruits/dragonfruit_spec.rb": 5,
-	"test/spec/fruits/elderberry_spec.rb": 4,
-	"test/spec/fruits/fig_spec.rb": 6,
-	"test/spec/fruits/grape_spec.rb": 3
+	"test/spec/fruits/apple_spec.rb": 100000,
+	"test/spec/fruits/banana_spec.rb": 180000,
+	"test/spec/fruits/cherry_spec.rb": 120000,
+	"test/spec/fruits/dragonfruit_spec.rb": 50000,
+	"test/spec/fruits/elderberry_spec.rb": 40000,
+	"test/spec/fruits/fig_spec.rb": 200000,
+	"test/spec/fruits/grape_spec.rb": 30000
 }`)
 	}))
 	defer svr.Close()
@@ -332,27 +332,18 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 		t.Errorf("createRequestParam() error = %v", err)
 	}
 
-	// files by descending order of duration
-	// banna_spec.rb: 7
-	// fig_spec.rb: 6
-	// dragonfruit_spec.rb: 5
-	// elderberry_spec.rb: 4
-	// grape_spec.rb: 3
-	// cherry_spec.rb: 2
-	// apple_spec.rb: 1
-
-	// slow files: banana_spec.rb, fig_spec.rb
-	// the rest: dragonfruit_spec.rb, elderberry_spec.rb, grape_spec.rb, cherry_spec.rb, apple_spec.rb
+	// slow files (more than or equal to 3minutes): banana_spec.rb, fig_spec.rb
+	// the rest: apple_spec.rb, cherry_spec.rb, dragonfruit_spec.rb, elderberry_spec.rb, grape_spec.rb
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
+				{Path: "test/spec/fruits/apple_spec.rb"},
+				{Path: "test/spec/fruits/cherry_spec.rb"},
 				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
 				{Path: "test/spec/fruits/elderberry_spec.rb"},
 				{Path: "test/spec/fruits/grape_spec.rb"},
-				{Path: "test/spec/fruits/cherry_spec.rb"},
-				{Path: "test/spec/fruits/apple_spec.rb"},
 			},
 			Examples: []plan.TestCase{
 				{
@@ -421,12 +412,11 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 {
-	"test/spec/fruits/apple_spec.rb": 1,
-	"test/spec/fruits/banana_spec.rb": 7,
-	"test/spec/fruits/cherry_spec.rb": 2,
-	"test/spec/fruits/dragonfruit_spec.rb": 5,
-	"test/spec/fruits/elderberry_spec.rb": 4,
-	"test/spec/fruits/fig_spec.rb": 6
+	"test/spec/fruits/apple_spec.rb": 100000,
+	"test/spec/fruits/banana_spec.rb": 200000,
+	"test/spec/fruits/cherry_spec.rb": 120000,
+	"test/spec/fruits/dragonfruit_spec.rb": 50000,
+	"test/spec/fruits/elderberry_spec.rb": 40000
 }`)
 	}))
 	defer svr.Close()
@@ -458,118 +448,18 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 		t.Errorf("createRequestParam() error = %v", err)
 	}
 
-	// files by descending order of duration
-	// banna_spec.rb: 7
-	// fig_spec.rb: 6
-	// dragonfruit_spec.rb: 5
-	// elderberry_spec.rb: 4
-	// cherry_spec.rb: 2
-	// apple_spec.rb: 1
-	// grape_spec.rb: 0 (missing)
-
-	// slow files: banana_spec.rb, fig_spec.rb
-	// the rest: dragonfruit_spec.rb, elderberry_spec.rb, cherry_spec.rb, apple_spec.rb, grape_spec.rb
+	// slow files (more than or equal to 3minutes): banana_spec.rb, fig_spec.rb
+	// the rest: apple_spec.rb, cherry_spec.rb, dragonfruit_spec.rb, elderberry_spec.rb, grape_spec.rb
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
-				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
-				{Path: "test/spec/fruits/elderberry_spec.rb"},
-				{Path: "test/spec/fruits/cherry_spec.rb"},
 				{Path: "test/spec/fruits/apple_spec.rb"},
-				{Path: "test/spec/fruits/grape_spec.rb"},
-			},
-			Examples: []plan.TestCase{
-				{
-					Identifier: "./test/spec/fruits/banana_spec.rb[1:1]",
-					Name:       "is yellow",
-					Path:       "./test/spec/fruits/banana_spec.rb:2",
-					Scope:      "Banana is yellow",
-				},
-				{
-					Identifier: "./test/spec/fruits/banana_spec.rb[1:2:1]",
-					Name:       "is green",
-					Path:       "./test/spec/fruits/banana_spec.rb:7",
-					Scope:      "Banana when not ripe is green",
-				},
-				{
-					Identifier: "./test/spec/fruits/fig_spec.rb[1:1]",
-					Name:       "is purple",
-					Path:       "./test/spec/fruits/fig_spec.rb:2",
-					Scope:      "Fig is purple",
-				},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCreateRequestParams_SplitByExample_FilesWithSameDuration(t *testing.T) {
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `
-{
-	"test/spec/fruits/banana_spec.rb": 700,
-	"test/spec/fruits/cherry_spec.rb": 200,
-	"test/spec/fruits/dragonfruit_spec.rb": 500,
-	"test/spec/fruits/elderberry_spec.rb": 400,
-	"test/spec/fruits/fig_spec.rb": 600,
-	"test/spec/fruits/grape_spec.rb": 100,
-	"test/spec/fruits/apple_spec.rb": 600
-}`)
-	}))
-	defer svr.Close()
-
-	cfg := config.Config{
-		OrganizationSlug: "my-org",
-		SuiteSlug:        "my-suite",
-		Identifier:       "identifier",
-		Parallelism:      7,
-		SplitByExample:   true,
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
-	})
-	files := []string{
-		"test/spec/fruits/banana_spec.rb",
-		"test/spec/fruits/cherry_spec.rb",
-		"test/spec/fruits/dragonfruit_spec.rb",
-		"test/spec/fruits/elderberry_spec.rb",
-		"test/spec/fruits/fig_spec.rb",
-		"test/spec/fruits/grape_spec.rb",
-		"test/spec/fruits/apple_spec.rb",
-	}
-
-	got, err := createRequestParam(cfg, files, *client, runner.NewRspec("rspec"))
-
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	// files by descending order of duration
-	// banna_spec.rb: 700
-	// apple_spec.rb: 600 -> same as fig_spec.rb but apple comes first alphabetically
-	// fig_spec.rb: 600
-	// dragonfruit_spec.rb: 500
-	// elderberry_spec.rb: 400
-	// cherry_spec.rb: 200
-	// grape_spec.rb: 100
-
-	// slow files: banana_spec.rb, apple_spec.rb
-	// the rest: fig_spec.rb, dragonfruit_spec.rb, elderberry_spec.rb, cherry_spec.rb, grape_spec.rb
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 7,
-		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
-				{Path: "test/spec/fruits/fig_spec.rb"},
+				{Path: "test/spec/fruits/cherry_spec.rb"},
 				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
 				{Path: "test/spec/fruits/elderberry_spec.rb"},
-				{Path: "test/spec/fruits/cherry_spec.rb"},
+				{Path: "test/spec/fruits/fig_spec.rb"},
 				{Path: "test/spec/fruits/grape_spec.rb"},
 			},
 			Examples: []plan.TestCase{
@@ -584,12 +474,6 @@ func TestCreateRequestParams_SplitByExample_FilesWithSameDuration(t *testing.T) 
 					Name:       "is green",
 					Path:       "./test/spec/fruits/banana_spec.rb:7",
 					Scope:      "Banana when not ripe is green",
-				},
-				{
-					Identifier: "./test/spec/fruits/apple_spec.rb[1:1]",
-					Name:       "is red",
-					Path:       "./test/spec/fruits/apple_spec.rb:2",
-					Scope:      "Apple is red",
 				},
 			},
 		},
