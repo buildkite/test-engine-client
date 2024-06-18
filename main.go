@@ -286,18 +286,29 @@ func createRequestParam(cfg config.Config, files []string, client api.Client, ru
 
 	// Get files that has duration greater or equal to the slow file threshold.
 	// Currently, the slow file threshold is set to 3 minutes which is roughly 70% of optimal 4 minutes node duration.
-	slowFileThreshold := 3 * time.Minute
 	slowFiles := []string{}
 	restOfFiles := []plan.TestCase{}
 
 	for _, timing := range allFilesTiming {
-		if timing.Duration >= slowFileThreshold {
+		if timing.Duration >= cfg.SlowFileThreshold {
 			slowFiles = append(slowFiles, timing.Path)
 		} else {
 			restOfFiles = append(restOfFiles, plan.TestCase{
 				Path: timing.Path,
 			})
 		}
+	}
+
+	if len(slowFiles) == 0 {
+		debug.Println("No slow files found")
+		return api.TestPlanParams{
+			Mode:        cfg.Mode,
+			Identifier:  cfg.Identifier,
+			Parallelism: cfg.Parallelism,
+			Tests: api.TestPlanParamsTest{
+				Files: restOfFiles,
+			},
+		}, nil
 	}
 
 	debug.Printf("Getting examples for %d slow files", len(slowFiles))

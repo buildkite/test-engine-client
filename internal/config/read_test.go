@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -26,17 +27,18 @@ func TestConfigReadFromEnv(t *testing.T) {
 	err := c.readFromEnv()
 
 	want := Config{
-		Parallelism:      10,
-		NodeIndex:        0,
-		ServerBaseUrl:    "https://buildkite.localhost",
-		Mode:             "static",
-		Identifier:       "123",
-		TestCommand:      "bin/rspec {{testExamples}}",
-		AccessToken:      "my_token",
-		OrganizationSlug: "my_org",
-		SuiteSlug:        "my_suite",
-		MaxRetries:       3,
-		SplitByExample:   true,
+		Parallelism:       10,
+		NodeIndex:         0,
+		ServerBaseUrl:     "https://buildkite.localhost",
+		Mode:              "static",
+		Identifier:        "123",
+		TestCommand:       "bin/rspec {{testExamples}}",
+		AccessToken:       "my_token",
+		OrganizationSlug:  "my_org",
+		SuiteSlug:         "my_suite",
+		MaxRetries:        3,
+		SplitByExample:    true,
+		SlowFileThreshold: 3 * time.Minute,
 	}
 
 	if err != nil {

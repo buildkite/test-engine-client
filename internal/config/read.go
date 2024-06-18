@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // readFromEnv reads the configuration from environment variables and sets it to the Config struct.
@@ -53,6 +54,13 @@ func (c *Config) readFromEnv() error {
 	if err != nil {
 		errs.appendFieldError("Parallelism", "was %q, must be a number", parallelism)
 	}
+
+	slowFileThreshold := getEnvWithDefault("BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD", "180000")
+	slowFileThresholdInt, err := strconv.Atoi(slowFileThreshold)
+	if err != nil {
+		errs.appendFieldError("SlowFileThreshold", "was %q, must be a number", slowFileThreshold)
+	}
+	c.SlowFileThreshold = time.Duration(slowFileThresholdInt) * time.Millisecond
 
 	nodeIndex := os.Getenv("BUILDKITE_PARALLEL_JOB")
 	nodeIndexInt, err := strconv.Atoi(nodeIndex)
