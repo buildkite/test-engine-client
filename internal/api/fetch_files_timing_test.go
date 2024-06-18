@@ -37,9 +37,9 @@ func TestFetchFilesTiming(t *testing.T) {
 		WillRespondWith(200, func(b *consumer.V2ResponseBuilder) {
 			b.Header("Content-Type", matchers.Like("application/json; charset=utf-8"))
 			b.JSONBody(matchers.MapMatcher{
-				"apple_spec.rb":  matchers.Like(1121),
-				"banana_spec.rb": matchers.Like(3121),
-				"cherry_spec.rb": matchers.Like(2143),
+				"./apple_spec.rb":  matchers.Like(1121),
+				"./banana_spec.rb": matchers.Like(3121),
+				"./cherry_spec.rb": matchers.Like(2143),
 			})
 		}).
 		ExecuteTest(t, func(config consumer.MockServerConfig) error {
@@ -54,9 +54,9 @@ func TestFetchFilesTiming(t *testing.T) {
 				t.Errorf("FetchFilesTiming() error = %v", err)
 			}
 			want := map[string]time.Duration{
-				"apple_spec.rb":  1121 * time.Millisecond,
-				"banana_spec.rb": 3121 * time.Millisecond,
-				"cherry_spec.rb": 2143 * time.Millisecond,
+				"./apple_spec.rb":  1121 * time.Millisecond,
+				"./banana_spec.rb": 3121 * time.Millisecond,
+				"./cherry_spec.rb": 2143 * time.Millisecond,
 			}
 			if diff := cmp.Diff(got, want); diff != "" {
 				t.Errorf("FetchFilesTiming() diff (-got +want):\n%s", diff)

@@ -32,6 +32,14 @@ func TestCreateTestPlan(t *testing.T) {
 			Files: []plan.TestCase{
 				{Path: "sky_spec.rb"},
 			},
+			Examples: []plan.TestCase{
+				{
+					Path:       "sea_spec.rb:4",
+					Name:       "is blue",
+					Scope:      "sea",
+					Identifier: "sea_spec.rb[1,1]",
+				},
+			},
 		},
 	}
 
@@ -51,14 +59,21 @@ func TestCreateTestPlan(t *testing.T) {
 					"0": matchers.Like(map[string]interface{}{
 						"node_number": matchers.Like(0),
 						"tests": matchers.EachLike(matchers.MapMatcher{
-							"path":               matchers.Like("sky_spec.rb"),
-							"format":             matchers.Like("file"),
+							"path":               matchers.Like("sea_spec.rb:4"),
+							"name":               matchers.Like("is blue"),
+							"scope":              matchers.Like("sea"),
+							"identifier":         matchers.Like("sea_spec.rb[1,1]"),
+							"format":             matchers.Like("example"),
 							"estimated_duration": matchers.Like(1000),
 						}, 1),
 					}),
 					"1": matchers.Like(map[string]interface{}{
 						"node_number": matchers.Like(1),
-						"tests":       []plan.TestCase{},
+						"tests": matchers.EachLike(matchers.MapMatcher{
+							"path":               matchers.Like("sky_spec.rb"),
+							"format":             matchers.Like("file"),
+							"estimated_duration": matchers.Like(1000),
+						}, 1),
 					}),
 					"2": matchers.Like(map[string]interface{}{
 						"node_number": matchers.Like(2),
@@ -89,14 +104,21 @@ func TestCreateTestPlan(t *testing.T) {
 					"0": {
 						NodeNumber: 0,
 						Tests: []plan.TestCase{{
-							Path:              "sky_spec.rb",
-							Format:            "file",
+							Path:              "sea_spec.rb:4",
+							Name:              "is blue",
+							Scope:             "sea",
+							Identifier:        "sea_spec.rb[1,1]",
+							Format:            "example",
 							EstimatedDuration: 1000,
 						}},
 					},
 					"1": {
 						NodeNumber: 1,
-						Tests:      []plan.TestCase{},
+						Tests: []plan.TestCase{{
+							Path:              "sky_spec.rb",
+							Format:            "file",
+							EstimatedDuration: 1000,
+						}},
 					},
 					"2": {
 						NodeNumber: 2,
