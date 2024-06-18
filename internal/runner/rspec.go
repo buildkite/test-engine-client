@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"slices"
 
+	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
@@ -34,6 +35,13 @@ func (r Rspec) GetFiles() ([]string, error) {
 	pattern := r.discoveryPattern()
 
 	files, err := discoverTestFiles(pattern)
+
+	// rspec test in Test Analytics is stored with leading "./"
+	// therefore, we need to add "./" to the file path
+	// to match the test path in Test Analytics
+	for i, file := range files {
+		files[i] = "./" + file
+	}
 
 	if err != nil {
 		return nil, err
@@ -151,6 +159,8 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 
 	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
 
+	debug.Println("Running `rspec --dry-run`")
+
 	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
 
 	if err != nil {
@@ -170,7 +180,6 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	var testCases []plan.TestCase
 	for _, example := range report.Examples {
 		testCases = append(testCases, plan.TestCase{
-			Format:     plan.TestCaseFormatExample,
 			Identifier: example.Id,
 			Name:       example.Description,
 			Path:       fmt.Sprintf("%s:%d", example.FilePath, example.LineNumber),

@@ -19,7 +19,8 @@ var (
 )
 
 type TestPlanParamsTest struct {
-	Files []plan.TestCase `json:"files"`
+	Files    []plan.TestCase `json:"files"`
+	Examples []plan.TestCase `json:"examples"`
 }
 
 // TestPlanParams represents the config params sent when fetching a test plan.
@@ -31,7 +32,7 @@ type TestPlanParams struct {
 }
 
 // CreateTestPlan creates a test plan from the service, including retries.
-func (c client) CreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
+func (c Client) CreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
 	// Retry using exponential backoff offerred by roko
 	// https://pkg.go.dev/github.com/buildkite/roko#ExponentialSubsecond
 	//
@@ -68,7 +69,7 @@ func (c client) CreateTestPlan(ctx context.Context, suiteSlug string, params Tes
 }
 
 // tryCreateTestPlan creates a test plan from the service.
-func (c client) tryCreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
+func (c Client) tryCreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
 	// convert params to json string
 	requestBody, err := json.Marshal(params)
 	if err != nil {

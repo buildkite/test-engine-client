@@ -8,7 +8,7 @@ import (
 
 // client is a client for the test splitter API.
 // It contains the organization slug, server base URL, and an HTTP client.
-type client struct {
+type Client struct {
 	OrganizationSlug string
 	ServerBaseUrl    string
 	httpClient       *http.Client
@@ -32,12 +32,13 @@ type authTransport struct {
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+t.accessToken)
 	req.Header.Set("User-Agent", fmt.Sprintf("Buildkite Test Splitter/%s (%s/%s)", t.version, runtime.GOOS, runtime.GOARCH))
+
 	return http.DefaultTransport.RoundTrip(req)
 }
 
 // NewClient creates a new client for the test splitter API with the given configuration.
 // It also creates an HTTP client with an authTransport middleware.
-func NewClient(cfg ClientConfig) *client {
+func NewClient(cfg ClientConfig) *Client {
 	httpClient := &http.Client{
 		Transport: &authTransport{
 			accessToken: cfg.AccessToken,
@@ -45,7 +46,7 @@ func NewClient(cfg ClientConfig) *client {
 		},
 	}
 
-	return &client{
+	return &Client{
 		OrganizationSlug: cfg.OrganizationSlug,
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		httpClient:       httpClient,

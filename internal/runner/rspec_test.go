@@ -161,14 +161,12 @@ func TestRspecGetExamples(t *testing.T) {
 
 	want := []plan.TestCase{
 		{
-			Format:     plan.TestCaseFormatExample,
 			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
 			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:2",
 			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
-			Format:     plan.TestCaseFormatExample,
 			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
 			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:6",
@@ -189,14 +187,12 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
 	want := []plan.TestCase{
 		{
-			Format:     plan.TestCaseFormatExample,
 			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
 			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:2",
 			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
-			Format:     plan.TestCaseFormatExample,
 			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
 			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:6",

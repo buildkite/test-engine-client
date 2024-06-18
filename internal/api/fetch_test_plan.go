@@ -17,7 +17,7 @@ type errorResponse struct {
 // If the plan is found, it returns the plan, otherwise it returns nil.
 // Error is returned if there is a client side failure or invalid request (400, 401, 403).
 // Other server errors are ignored and treated as "not found".
-func (c client) FetchTestPlan(suiteSlug string, identifier string) (*plan.TestPlan, error) {
+func (c Client) FetchTestPlan(suiteSlug string, identifier string) (*plan.TestPlan, error) {
 	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan?identifier=%s", c.ServerBaseUrl, c.OrganizationSlug, suiteSlug, identifier)
 
 	// send request

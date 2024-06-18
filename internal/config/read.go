@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // readFromEnv reads the configuration from environment variables and sets it to the Config struct.
@@ -19,9 +21,10 @@ import (
 // - BUILDKITE_SPLITTER_IDENTIFIER (Identifier)
 // - BUILDKITE_SPLITTER_BASE_URL (ServerBaseUrl)
 // - BUILDKITE_SPLITTER_MODE (Mode)
+// - BUILDKITE_SPLITTER_RETRY_COUNT (MaxRetries)
+// - BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE (SplitByExample)
 // - BUILDKITE_SPLITTER_SUITE_SLUG (SuiteSlug)
 // - BUILDKITE_SPLITTER_TEST_CMD (TestCommand)
-// - BUILDKITE_SPLITTER_RETRY_COUNT (MaxRetries)
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
@@ -37,6 +40,8 @@ func (c *Config) readFromEnv() error {
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
 
+	c.SplitByExample = strings.ToLower(os.Getenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE")) == "true"
+
 	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_SPLITTER_RETRY_COUNT", 0)
 	c.MaxRetries = MaxRetries
 	if err != nil {
@@ -49,6 +54,13 @@ func (c *Config) readFromEnv() error {
 	if err != nil {
 		errs.appendFieldError("Parallelism", "was %q, must be a number", parallelism)
 	}
+
+	slowFileThreshold := getEnvWithDefault("BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD", "180000")
+	slowFileThresholdInt, err := strconv.Atoi(slowFileThreshold)
+	if err != nil {
+		errs.appendFieldError("SlowFileThreshold", "was %q, must be a number", slowFileThreshold)
+	}
+	c.SlowFileThreshold = time.Duration(slowFileThresholdInt) * time.Millisecond
 
 	nodeIndex := os.Getenv("BUILDKITE_PARALLEL_JOB")
 	nodeIndexInt, err := strconv.Atoi(nodeIndex)
