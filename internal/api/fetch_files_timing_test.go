@@ -26,8 +26,8 @@ func TestFetchFilesTiming(t *testing.T) {
 
 	err = mockProvider.
 		AddInteraction().
-		Given("Set of test files exists").
-		UponReceiving("A request for test files").
+		Given("Test file timings exist").
+		UponReceiving("A request for test file timings").
 		WithRequest("POST", "/v2/analytics/organizations/buildkite/suites/rspec/test_files", func(b *consumer.V2RequestBuilder) {
 			b.Header("Authorization", matchers.Like("Bearer asdf1234"))
 			b.JSONBody(fetchFilesTimingParams{
