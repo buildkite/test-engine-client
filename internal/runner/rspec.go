@@ -36,6 +36,13 @@ func (r Rspec) GetFiles() ([]string, error) {
 
 	files, err := discoverTestFiles(pattern)
 
+	// rspec test in Test Analytics is stored with leading "./"
+	// therefore, we need to add "./" to the file path
+	// to match the test path in Test Analytics
+	for i, file := range files {
+		files[i] = "./" + file
+	}
+
 	if err != nil {
 		return nil, err
 	}
