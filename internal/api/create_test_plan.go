@@ -20,7 +20,7 @@ var (
 
 type TestPlanParamsTest struct {
 	Files    []plan.TestCase `json:"files"`
-	Examples []plan.TestCase `json:"examples"`
+	Examples []plan.TestCase `json:"examples,omitempty"`
 }
 
 // TestPlanParams represents the config params sent when fetching a test plan.
