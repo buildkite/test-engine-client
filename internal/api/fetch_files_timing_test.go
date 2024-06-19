@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -49,7 +51,7 @@ func TestFetchFilesTiming(t *testing.T) {
 				OrganizationSlug: "buildkite",
 				ServerBaseUrl:    url,
 			})
-			got, err := c.FetchFilesTiming("rspec", files)
+			got, err := c.FetchFilesTiming(context.Background(), "rspec", files)
 			if err != nil {
 				t.Errorf("FetchFilesTiming() error = %v", err)
 			}
@@ -69,8 +71,45 @@ func TestFetchFilesTiming(t *testing.T) {
 	}
 }
 
-func TestFetchFilesTiming_Error(t *testing.T) {
+func TestFetchFilesTiming_BadRequest(t *testing.T) {
+	requestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, `{"message": "bad request"}`, http.StatusBadRequest)
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{
+		OrganizationSlug: "my-org",
+		ServerBaseUrl:    svr.URL,
+	})
+
+	files := []string{"apple_spec.rb", "banana_spec.rb"}
+	_, err := c.FetchFilesTiming(context.Background(), "my-suite", files)
+
+	if requestCount > 1 {
+		t.Errorf("http request count = %v, want  %d", requestCount, 1)
+	}
+
+	if err.Error() != "bad request" {
+		t.Errorf("FetchFilesTiming() error = %v, want %v", err, ErrRetryTimeout)
+	}
+}
+
+func TestFetchFilesTiming_InternalServerError(t *testing.T) {
+	originalTimeout := retryTimeout
+	originalInitialDelay := initialDelay
+
+	retryTimeout = 500 * time.Millisecond
+	initialDelay = 1 * time.Millisecond
+	t.Cleanup(func() {
+		retryTimeout = originalTimeout
+		initialDelay = originalInitialDelay
+	})
+
+	requestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
 		http.Error(w, `{"message": "something went wrong"}`, http.StatusInternalServerError)
 	}))
 	defer svr.Close()
@@ -81,13 +120,13 @@ func TestFetchFilesTiming_Error(t *testing.T) {
 	})
 
 	files := []string{"apple_spec.rb", "banana_spec.rb"}
-	_, err := c.FetchFilesTiming("my-suite", files)
-	if err == nil {
-		t.Errorf("FetchFilesTiming() error = %v, want an error", err)
+	_, err := c.FetchFilesTiming(context.Background(), "my-suite", files)
+
+	if requestCount < 2 {
+		t.Errorf("http request count = %v, want at least %d", requestCount, 2)
 	}
 
-	want := "something went wrong"
-	if got := err.Error(); got != want {
-		t.Errorf("FetchFilesTiming() error = %v, want %v", got, want)
+	if !errors.Is(err, ErrRetryTimeout) {
+		t.Errorf("FetchFilesTiming() error = %v, want %v", err, ErrRetryTimeout)
 	}
 }

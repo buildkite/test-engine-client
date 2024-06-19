@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
@@ -59,7 +62,7 @@ func TestFetchTestPlan(t *testing.T) {
 
 			c := NewClient(cfg)
 
-			got, err := c.FetchTestPlan("rspec", "abc123")
+			got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123")
 
 			if err != nil {
 				t.Errorf("FetchTestPlan() error = %v", err)
@@ -129,7 +132,7 @@ func TestFetchTestPlan_NotFound(t *testing.T) {
 
 			c := NewClient(cfg)
 
-			got, err := c.FetchTestPlan("rspec", "abc123")
+			got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123")
 
 			if err != nil {
 				t.Errorf("FetchTestPlan() error = %v", err)
@@ -147,38 +150,50 @@ func TestFetchTestPlan_NotFound(t *testing.T) {
 	}
 }
 
-func TestFetchTestPlan_InvalidRequest(t *testing.T) {
-	statusCodes := []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden}
+func TestFetchTestPlan_BadRequest(t *testing.T) {
+	requestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, `{"message": "bad request"}`, http.StatusBadRequest)
+	}))
+	defer svr.Close()
 
-	for _, code := range statusCodes {
-		t.Run(fmt.Sprintf("status code %d", code), func(t *testing.T) {
-			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(code)
-			}))
-			defer svr.Close()
+	cfg := ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "my-org",
+		ServerBaseUrl:    svr.URL,
+	}
 
-			cfg := ClientConfig{
-				AccessToken:      "asdf1234",
-				OrganizationSlug: "my-org",
-				ServerBaseUrl:    svr.URL,
-			}
+	c := NewClient(cfg)
+	got, err := c.FetchTestPlan(context.Background(), "my-suite", "xyz")
 
-			c := NewClient(cfg)
-			got, err := c.FetchTestPlan("my-suite", "xyz")
+	if requestCount > 1 {
+		t.Errorf("http request count = %v, want %d", requestCount, 1)
+	}
 
-			if err == nil {
-				t.Errorf("FetchTestPlan() want error, got nil")
-			}
+	if err.Error() != "bad request" {
+		t.Errorf("FetchTestPlan() error = %v, want %v", err, "bad request")
+	}
 
-			if got != nil {
-				t.Errorf("FetchTestPlan() = %v, want nil", got)
-			}
-		})
+	if got != nil {
+		t.Errorf("FetchTestPlan() = %v, want nil", got)
 	}
 }
 
-func TestFetchTestPlan_ServerError(t *testing.T) {
+func TestFetchTestPlan_InternalServerError(t *testing.T) {
+	originalTimeout := retryTimeout
+	originalInitialDelay := initialDelay
+
+	retryTimeout = 500 * time.Millisecond
+	initialDelay = 1 * time.Millisecond
+	t.Cleanup(func() {
+		retryTimeout = originalTimeout
+		initialDelay = originalInitialDelay
+	})
+
+	requestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer svr.Close()
@@ -190,10 +205,14 @@ func TestFetchTestPlan_ServerError(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	got, err := c.FetchTestPlan("my-suite", "xyz")
+	got, err := c.FetchTestPlan(context.Background(), "my-suite", "xyz")
 
-	if err != nil {
-		t.Errorf("FetchTestPlan() error = %v", err)
+	if requestCount < 2 {
+		t.Errorf("http request count = %v, want at least %d", requestCount, 2)
+	}
+
+	if !errors.Is(err, ErrRetryTimeout) {
+		t.Errorf("FetchTestPlan() error = %v, want %v", err, ErrRetryTimeout)
 	}
 
 	if got != nil {

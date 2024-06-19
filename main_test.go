@@ -167,10 +167,6 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	"tasks": {}
 }`
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// simulate cache miss for GET test_plan so it will trigger the test plan creation
-		if r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusNotFound)
-		}
 		fmt.Fprint(w, response)
 	}))
 	defer svr.Close()
@@ -269,7 +265,7 @@ func TestCreateRequestParams_SplitByFile(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{})
-	got, err := createRequestParam(cfg, []string{"apple", "banana"}, *client, runner.NewRspec(""))
+	got, err := createRequestParam(context.Background(), cfg, []string{"apple", "banana"}, *client, runner.NewRspec(""))
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
@@ -327,7 +323,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(cfg, files, *client, runner.NewRspec("rspec"))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
@@ -376,7 +372,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 
 func TestCreateRequestParams_SplitByExample_NoFileTiming(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusForbidden)
 	}))
 
 	defer svr.Close()
@@ -402,7 +398,7 @@ func TestCreateRequestParams_SplitByExample_NoFileTiming(t *testing.T) {
 		"grape_spec.rb",
 	}
 
-	_, err := createRequestParam(cfg, files, *client, runner.NewRspec(""))
+	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec(""))
 
 	if err == nil {
 		t.Errorf("createRequestParam() want error, got nil")
@@ -444,7 +440,7 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(cfg, files, *client, runner.NewRspec("rspec"))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
@@ -521,7 +517,7 @@ func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(cfg, files, *client, runner.NewRspec("rspec"))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)

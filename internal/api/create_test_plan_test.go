@@ -139,9 +139,11 @@ func TestCreateTestPlan(t *testing.T) {
 	}
 }
 
-func TestCreateTestPlan_Error4xx(t *testing.T) {
+func TestCreateTestPlan_BadRequest(t *testing.T) {
+	requestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(400)
+		requestCount++
+		http.Error(w, `{"message": "bad request"}`, http.StatusBadRequest)
 	}))
 	defer svr.Close()
 
@@ -155,41 +157,55 @@ func TestCreateTestPlan_Error4xx(t *testing.T) {
 
 	wantTestPlan := plan.TestPlan{}
 
-	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
-		t.Errorf("CreateTestPlan(ctx, %v) diff (-got +want):\n%s", params, diff)
+	if requestCount > 1 {
+		t.Errorf("http request count = %v, want %d", requestCount, 1)
 	}
 
-	if !errors.Is(err, errInvalidRequest) {
-		t.Errorf("CreateTestPlan(ctx, %v) want %v got %v", params, errInvalidRequest, err)
+	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
+		t.Errorf("CreateTestPlan() diff (-got +want):\n%s", diff)
+	}
+
+	if err.Error() != "bad request" {
+		t.Errorf("CreateTestPlan() error = %v, want %v", err, ErrRetryTimeout)
 	}
 }
 
-// Test the client keeps getting 5xx error until reached context deadline
-func TestCreateTestPlan_Timeout(t *testing.T) {
+func TestCreateTestPlan_InternalServerError(t *testing.T) {
+	originalTimeout := retryTimeout
+	originalInitialDelay := initialDelay
 
+	retryTimeout = 500 * time.Millisecond
+	initialDelay = 1 * time.Millisecond
+	t.Cleanup(func() {
+		retryTimeout = originalTimeout
+		initialDelay = originalInitialDelay
+	})
+
+	requestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(500)
+		requestCount++
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer svr.Close()
-
-	ctx := context.Background()
-	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
-	defer cancel()
 
 	params := TestPlanParams{}
 	apiClient := NewClient(ClientConfig{
 		ServerBaseUrl: svr.URL,
 	})
 
-	got, err := apiClient.CreateTestPlan(fetchCtx, "my-suite", params)
+	got, err := apiClient.CreateTestPlan(context.Background(), "my-suite", params)
 
 	wantTestPlan := plan.TestPlan{}
 
-	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
-		t.Errorf("CreateTestPlan(ctx, %v) diff (-got +want):\n%s", params, diff)
+	if requestCount < 2 {
+		t.Errorf("http request count = %v, want at least %d", requestCount, 2)
 	}
 
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("FetchTestPlan(ctx, %v) want %v, got %v", params, context.DeadlineExceeded, err)
+	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
+		t.Errorf("CreateTestPlan() diff (-got +want):\n%s", diff)
+	}
+
+	if !errors.Is(err, ErrRetryTimeout) {
+		t.Errorf("CreateTestPlan() want %v, got %v", ErrRetryTimeout, err)
 	}
 }
