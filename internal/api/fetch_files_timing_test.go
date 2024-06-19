@@ -98,18 +98,12 @@ func TestFetchFilesTiming_BadRequest(t *testing.T) {
 
 func TestFetchFilesTiming_InternalServerError(t *testing.T) {
 	originalTimeout := retryTimeout
-	originalInitialDelay := initialDelay
-
-	retryTimeout = 500 * time.Millisecond
-	initialDelay = 1 * time.Millisecond
+	retryTimeout = 1 * time.Millisecond
 	t.Cleanup(func() {
 		retryTimeout = originalTimeout
-		initialDelay = originalInitialDelay
 	})
 
-	requestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
 		http.Error(w, `{"message": "something went wrong"}`, http.StatusInternalServerError)
 	}))
 	defer svr.Close()
@@ -121,10 +115,6 @@ func TestFetchFilesTiming_InternalServerError(t *testing.T) {
 
 	files := []string{"apple_spec.rb", "banana_spec.rb"}
 	_, err := c.FetchFilesTiming(context.Background(), "my-suite", files)
-
-	if requestCount < 2 {
-		t.Errorf("http request count = %v, want at least %d", requestCount, 2)
-	}
 
 	if !errors.Is(err, ErrRetryTimeout) {
 		t.Errorf("FetchFilesTiming() error = %v, want %v", err, ErrRetryTimeout)

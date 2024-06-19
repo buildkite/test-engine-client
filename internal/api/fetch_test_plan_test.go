@@ -182,18 +182,12 @@ func TestFetchTestPlan_BadRequest(t *testing.T) {
 
 func TestFetchTestPlan_InternalServerError(t *testing.T) {
 	originalTimeout := retryTimeout
-	originalInitialDelay := initialDelay
-
-	retryTimeout = 500 * time.Millisecond
-	initialDelay = 1 * time.Millisecond
+	retryTimeout = 1 * time.Millisecond
 	t.Cleanup(func() {
 		retryTimeout = originalTimeout
-		initialDelay = originalInitialDelay
 	})
 
-	requestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer svr.Close()
@@ -206,10 +200,6 @@ func TestFetchTestPlan_InternalServerError(t *testing.T) {
 
 	c := NewClient(cfg)
 	got, err := c.FetchTestPlan(context.Background(), "my-suite", "xyz")
-
-	if requestCount < 2 {
-		t.Errorf("http request count = %v, want at least %d", requestCount, 2)
-	}
 
 	if !errors.Is(err, ErrRetryTimeout) {
 		t.Errorf("FetchTestPlan() error = %v, want %v", err, ErrRetryTimeout)

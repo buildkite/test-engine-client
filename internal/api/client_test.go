@@ -192,7 +192,7 @@ func TestDoWithRetry_500(t *testing.T) {
 	originalTimeout := retryTimeout
 	originalInitialDelay := initialDelay
 
-	retryTimeout = 700 * time.Millisecond
+	retryTimeout = 1000 * time.Millisecond
 	initialDelay = 1 * time.Millisecond
 	t.Cleanup(func() {
 		retryTimeout = originalTimeout

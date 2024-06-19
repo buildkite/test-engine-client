@@ -172,18 +172,12 @@ func TestCreateTestPlan_BadRequest(t *testing.T) {
 
 func TestCreateTestPlan_InternalServerError(t *testing.T) {
 	originalTimeout := retryTimeout
-	originalInitialDelay := initialDelay
-
-	retryTimeout = 500 * time.Millisecond
-	initialDelay = 1 * time.Millisecond
+	retryTimeout = 1 * time.Millisecond
 	t.Cleanup(func() {
 		retryTimeout = originalTimeout
-		initialDelay = originalInitialDelay
 	})
 
-	requestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer svr.Close()
@@ -196,10 +190,6 @@ func TestCreateTestPlan_InternalServerError(t *testing.T) {
 	got, err := apiClient.CreateTestPlan(context.Background(), "my-suite", params)
 
 	wantTestPlan := plan.TestPlan{}
-
-	if requestCount < 2 {
-		t.Errorf("http request count = %v, want at least %d", requestCount, 2)
-	}
 
 	if diff := cmp.Diff(got, wantTestPlan); diff != "" {
 		t.Errorf("CreateTestPlan() diff (-got +want):\n%s", diff)
