@@ -184,15 +184,17 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	// Fetch the plan from the server's cache.
 	cachedPlan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier)
 
-	if err != nil {
-		// If the request hits the retry timeout, we should create a fallback plan.
+	handleError := func(err error) (plan.TestPlan, error) {
 		if errors.Is(err, api.ErrRetryTimeout) {
-			fmt.Println("Could not fetch plan from server, using fallback mode. Your build may take longer than usual.")
-			testPlan := plan.CreateFallbackPlan(files, cfg.Parallelism)
-			return testPlan, nil
+			fmt.Println("Could not fetch or create plan from server, using fallback mode. Your build may take longer than usual.")
+			p := plan.CreateFallbackPlan(files, cfg.Parallelism)
+			return p, nil
 		}
-		// If other errors occur, terminate the client
 		return plan.TestPlan{}, err
+	}
+
+	if err != nil {
+		return handleError(err)
 	}
 
 	if cachedPlan != nil {
@@ -212,27 +214,14 @@ func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []strin
 	// If the cache is empty, create a new plan.
 	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
 	if err != nil {
-		// If the request hits the retry timeout, we should create a fallback plan.
-		if errors.Is(err, api.ErrRetryTimeout) {
-			fmt.Println("Could not create plan from server, using fallback mode. Your build may take longer than usual.")
-			testPlan := plan.CreateFallbackPlan(files, cfg.Parallelism)
-			return testPlan, nil
-		}
-
-		return plan.TestPlan{}, err
+		return handleError(err)
 	}
 
 	debug.Println("Creating test plan")
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 
 	if err != nil {
-		// If the request hits the retry timeout, we should create a fallback plan.
-		if errors.Is(err, api.ErrRetryTimeout) {
-			fmt.Println("Could not create plan from server, using fallback mode. Your build may take longer than usual.")
-			testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
-			return testPlan, nil
-		}
-		return plan.TestPlan{}, err
+		return handleError(err)
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
