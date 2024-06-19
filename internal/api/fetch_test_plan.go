@@ -9,10 +9,6 @@ import (
 	"github.com/buildkite/test-splitter/internal/plan"
 )
 
-type errorResponse struct {
-	Message string `json:"message"`
-}
-
 // FetchTestPlan fetchs a test plan from the server.
 // If the plan is found, it returns the plan, otherwise it returns nil.
 // Error is returned if there is a client side failure or invalid request (400, 401, 403).

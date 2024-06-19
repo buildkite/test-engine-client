@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -14,8 +15,6 @@ import (
 	"github.com/buildkite/roko"
 	"github.com/buildkite/test-splitter/internal/debug"
 )
-
-var ErrRetryTimeout = errors.New("request retry timeout")
 
 // client is a client for the test splitter API.
 // It contains the organization slug, server base URL, and an HTTP client.
@@ -63,37 +62,58 @@ func NewClient(cfg ClientConfig) *Client {
 	}
 }
 
-var retryTimeout = 130 * time.Second
-var initialDelay = 3000 * time.Millisecond
+var (
+	retryTimeout = 130 * time.Second
+	initialDelay = 3000 * time.Millisecond
+)
+
+var ErrRetryTimeout = errors.New("request retry timeout")
+
+type errorResponse struct {
+	Message string `json:"message"`
+}
+
+type httpRequest struct {
+	Method string
+	URL    string
+	Body   any
+}
 
 // DoWithRetry sends http request with retries.
-// It retries on request errors (e.g. redirects, protocol errors), 429, and 5xx status codes.
-// It uses an exponential backoff strategy with jitter, except for 429 status codes where it waits until the rate limit resets.
-// DeadlineExceeded error is returned if the request cannot be fulfilled within the retry timeout which is 130 seconds.
-// 130 seconds is chosen to allow for 2 API rate limit windows.
-func (c *Client) DoWithRetry(ctx context.Context, method string, url string, body any) (*http.Response, error) {
+// Successful API response (status code 200) is JSON decoded and stored in the value pointed to by v.
+// The request will be retried when the server returns 429 or 5xx status code, or when there is a network error.
+// After reaching the retry timeout, the function will return ErrRetryTimeout.
+// The request will not be retried when the server returns 4xx status code,
+// and the error message will be returned as an error.
+func (c *Client) DoWithRetry(ctx context.Context, req httpRequest, v interface{}) (*http.Response, error) {
 	r := roko.NewRetrier(
 		roko.TryForever(),
 		roko.WithStrategy(roko.ExponentialSubsecond(initialDelay)),
 		roko.WithJitter(),
 	)
 
-	retryContext, cancel := context.WithTimeout(ctx, retryTimeout)
-	defer cancel()
+	retryContext, cancelRetryContext := context.WithTimeout(ctx, retryTimeout)
+	defer cancelRetryContext()
 
-	debug.Printf("Sending request %s %s", method, url)
+	// retry loop
+	debug.Printf("Sending request %s %s", req.Method, req.URL)
 	resp, err := roko.DoFunc(retryContext, r, func(r *roko.Retrier) (*http.Response, error) {
 		if r.AttemptCount() > 0 {
 			debug.Printf("Retrying requests, attempt %d", r.AttemptCount())
 		}
 
-		reqBody, err := json.Marshal(body)
+		reqBody, err := json.Marshal(req.Body)
 		if err != nil {
 			r.Break()
 			return nil, fmt.Errorf("converting body to json: %w", err)
 		}
 
-		req, err := http.NewRequest(method, url, bytes.NewBuffer(reqBody))
+		// Each request times out after 15 seconds, chosen to provide some
+		// headroom on top of the goal p99 time to fetch of 10s.
+		reqContext, cancelReqContext := context.WithTimeout(ctx, 15*time.Second)
+		defer cancelReqContext()
+
+		req, err := http.NewRequestWithContext(reqContext, req.Method, req.URL, bytes.NewBuffer(reqBody))
 		if err != nil {
 			r.Break()
 			return nil, fmt.Errorf("creating request: %w", err)
@@ -103,8 +123,8 @@ func (c *Client) DoWithRetry(ctx context.Context, method string, url string, bod
 		resp, err := c.httpClient.Do(req)
 
 		// If we get an error before getting a response,
-		// which means there is a redirect or protocol error,
-		// we should retry.
+		// which means there is a network error (e.g. protocol error, timeout),
+		// we should return and retry.
 		if err != nil {
 			debug.Printf("Error sending request: %v", err)
 			return nil, err
@@ -112,7 +132,7 @@ func (c *Client) DoWithRetry(ctx context.Context, method string, url string, bod
 
 		debug.Printf("Response code %d", resp.StatusCode)
 
-		// If we get a 429, we should wait until the rate limit resets and retry.
+		// If we get a 429, we should return and rety after the rate limit resets.
 		if resp.StatusCode == http.StatusTooManyRequests {
 			if rateLimitReset, err := strconv.Atoi(resp.Header.Get("RateLimit-Reset")); err == nil {
 				r.SetNextInterval(time.Duration(rateLimitReset) * time.Second)
@@ -120,14 +140,33 @@ func (c *Client) DoWithRetry(ctx context.Context, method string, url string, bod
 			return resp, fmt.Errorf("response code: 429")
 		}
 
-		// If we get a 5xx, we should retry
+		// If we get a 5xx, we should return and retry
 		if resp.StatusCode >= 500 {
 			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
 		}
 
-		// If we get a 4xx, we should not retry
-		if resp.StatusCode >= 400 {
-			r.Break()
+		// Other than above cases, we should break from the retry loop.
+		r.Break()
+
+		responseBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			var errorResp errorResponse
+			err = json.Unmarshal(responseBody, &errorResp)
+			if err != nil {
+				return resp, fmt.Errorf("parsing response: %w", err)
+			}
+			return resp, fmt.Errorf(errorResp.Message)
+		}
+
+		// parse response
+		err = json.Unmarshal(responseBody, v)
+		if err != nil {
+			return nil, fmt.Errorf("parsing response: %w", err)
 		}
 
 		return resp, nil
