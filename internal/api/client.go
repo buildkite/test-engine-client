@@ -132,7 +132,7 @@ func (c *Client) DoWithRetry(ctx context.Context, req httpRequest, v interface{}
 
 		debug.Printf("Response code %d", resp.StatusCode)
 
-		// If we get a 429, we should return and rety after the rate limit resets.
+		// If we get a 429, we should return and retry after the rate limit resets.
 		if resp.StatusCode == http.StatusTooManyRequests {
 			if rateLimitReset, err := strconv.Atoi(resp.Header.Get("RateLimit-Reset")); err == nil {
 				r.SetNextInterval(time.Duration(rateLimitReset) * time.Second)
