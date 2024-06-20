@@ -1,11 +1,14 @@
 package runner
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"slices"
 
+	"github.com/buildkite/test-splitter/internal/debug"
+	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
 
@@ -27,12 +30,18 @@ func NewRspec(testCommand string) Rspec {
 	}
 }
 
-// GetFiles returns an array of file names, for files in
-// the "spec" directory that end in "spec.rb".
+// GetFiles returns an array of file names using the discovery pattern.
 func (r Rspec) GetFiles() ([]string, error) {
 	pattern := r.discoveryPattern()
 
 	files, err := discoverTestFiles(pattern)
+
+	// rspec test in Test Analytics is stored with leading "./"
+	// therefore, we need to add "./" to the file path
+	// to match the test path in Test Analytics
+	for i, file := range files {
+		files[i] = "./" + file
+	}
 
 	if err != nil {
 		return nil, err
@@ -111,4 +120,72 @@ func (r Rspec) commandNameAndArgs(testCases []string) (string, []string, error) 
 	}
 	words = slices.Replace(words, idx, idx+1, testCases...)
 	return words[0], words[1:], nil
+}
+
+// RspecExample represents a single test example in an Rspec report.
+type RspecExample struct {
+	Id              string  `json:"id"`
+	Description     string  `json:"description"`
+	FullDescription string  `json:"full_description"`
+	Status          string  `json:"status"`
+	FilePath        string  `json:"file_path"`
+	LineNumber      int     `json:"line_number"`
+	RunTime         float64 `json:"run_time"`
+}
+
+// RspecReport is the structure for Rspec JSON report.
+type RspecReport struct {
+	Version  string         `json:"version"`
+	Seed     int            `json:"seed"`
+	Examples []RspecExample `json:"examples"`
+}
+
+// GetExamples returns an array of test examples within the given files.
+func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
+	// Create a temporary file to store the JSON output of the rspec dry run.
+	// We cannot simply read the dry run output from stdout because
+	// users may have custom formatters that do not output JSON.
+	f, err := os.CreateTemp("", "dry-run-*.json")
+	if err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to create temporary file for rspec dry run: %v", err)
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+
+	cmdName, cmdArgs, err := r.commandNameAndArgs(files)
+	if err != nil {
+		return nil, err
+	}
+
+	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
+
+	debug.Println("Running `rspec --dry-run`")
+
+	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
+
+	if err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %s", output)
+	}
+
+	var report RspecReport
+	data, err := os.ReadFile(f.Name())
+	if err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to read rspec dry run output: %v", err)
+	}
+
+	if err := json.Unmarshal(data, &report); err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to parse rspec dry run output: %s", output)
+	}
+
+	var testCases []plan.TestCase
+	for _, example := range report.Examples {
+		testCases = append(testCases, plan.TestCase{
+			Identifier: example.Id,
+			Name:       example.Description,
+			Path:       fmt.Sprintf("%s:%d", example.FilePath, example.LineNumber),
+			Scope:      example.FullDescription,
+		})
+	}
+
+	return testCases, nil
 }

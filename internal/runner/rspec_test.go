@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
 )
@@ -150,5 +151,80 @@ func TestRspecDiscoveryPattern_ExcludePattern(t *testing.T) {
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("Rspec.discoveryPattern() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestRspecGetExamples(t *testing.T) {
+	rspec := NewRspec("rspec")
+	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
+	got, err := rspec.GetExamples(files)
+
+	want := []plan.TestCase{
+		{
+			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:1]",
+			Name:       "disarms the opponent",
+			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:2",
+			Scope:      "Expelliarmus disarms the opponent",
+		},
+		{
+			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:2]",
+			Name:       "knocks the wand out of the opponents hand",
+			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:6",
+			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
+		},
+	}
+
+	if err != nil {
+		t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
+	}
+}
+
+func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
+	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
+	want := []plan.TestCase{
+		{
+			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:1]",
+			Name:       "disarms the opponent",
+			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:2",
+			Scope:      "Expelliarmus disarms the opponent",
+		},
+		{
+			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:2]",
+			Name:       "knocks the wand out of the opponents hand",
+			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:6",
+			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
+		},
+	}
+
+	// Create a temporary file to store the JSON output of the rspec dry run.
+	// So we don't end up with a lot of files after running this test.
+	// We'll clean up the file after the test.
+	f, err := os.CreateTemp("", "rspec.json")
+	if err != nil {
+		t.Errorf("os.CreateTemp() error = %v", err)
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+	withOtherJson := "rspec --format json --out " + f.Name()
+
+	commands := []string{"rspec --format documentation", "rspec --format html", withOtherJson}
+	for _, command := range commands {
+		rspec := NewRspec(command)
+		got, err := rspec.GetExamples(files)
+
+		t.Run(command, func(t *testing.T) {
+
+			if err != nil {
+				t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
+			}
+
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
+			}
+		})
 	}
 }

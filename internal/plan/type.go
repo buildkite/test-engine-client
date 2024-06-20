@@ -9,9 +9,12 @@ const (
 
 // TestCase represents a single test case.
 type TestCase struct {
-	Path              string         `json:"path"`
 	EstimatedDuration int            `json:"estimated_duration,omitempty"`
 	Format            TestCaseFormat `json:"format,omitempty"`
+	Identifier        string         `json:"identifier,omitempty"`
+	Name              string         `json:"name,omitempty"`
+	Path              string         `json:"path"`
+	Scope             string         `json:"scope,omitempty"`
 }
 
 // Task represents the task for the given node.

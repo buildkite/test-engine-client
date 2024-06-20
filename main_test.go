@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/test-splitter/internal/api"
 	"github.com/buildkite/test-splitter/internal/config"
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/buildkite/test-splitter/internal/runner"
@@ -36,6 +37,7 @@ func TestRetryFailedTests_Failure(t *testing.T) {
 
 func TestFetchOrCreateTestPlan(t *testing.T) {
 	files := []string{"apple"}
+	testRunner := runner.NewRspec("")
 
 	// mock server to return a test plan
 	response := `{
@@ -79,7 +81,7 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files)
+	got, err := fetchOrCreateTestPlan(ctx, cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -136,6 +138,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 	}
 
 	tests := []string{"banana"}
+	testRunner := runner.NewRspec("")
 
 	want := plan.TestPlan{
 		Tasks: map[string]*plan.Task{
@@ -146,7 +149,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(context.Background(), cfg, tests)
+	got, err := fetchOrCreateTestPlan(context.Background(), cfg, tests, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
 	}
@@ -157,22 +160,13 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	files := []string{"apple", "banana", "cherry", "mango"}
-	tests := []plan.TestCase{
-		{Path: "apple"},
-		{Path: "banana"},
-		{Path: "cherry"},
-		{Path: "mango"},
-	}
+	TestRunner := runner.NewRspec("")
 
 	// mock server to return an error plan
 	response := `{
 	"tasks": {}
 }`
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// simulate cache miss for GET test_plan so it will trigger the test plan creation
-		if r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusNotFound)
-		}
 		fmt.Fprint(w, response)
 	}))
 	defer svr.Close()
@@ -186,28 +180,20 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	}
 
 	// we want the function to return a fallback plan
-	want := plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files)
+	got, err := fetchOrCreateTestPlan(ctx, cfg, files, TestRunner)
 	if err != nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
 }
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	files := []string{"red", "orange", "yellow", "green", "blue", "indigo", "violet"}
-	tests := []plan.TestCase{
-		{Path: "red"},
-		{Path: "orange"},
-		{Path: "yellow"},
-		{Path: "green"},
-		{Path: "blue"},
-		{Path: "indigo"},
-		{Path: "violet"},
-	}
+	testRunner := runner.NewRspec("")
 
 	// mock server to return a 500 Internal Server Error
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -228,19 +214,20 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	}
 
 	// we want the function to return a fallback plan
-	want := plan.CreateFallbackPlan(tests, cfg.Parallelism)
+	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(fetchCtx, cfg, files)
+	got, err := fetchOrCreateTestPlan(fetchCtx, cfg, files, testRunner)
 	if err != nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
 }
 
 func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	files := []string{"apple", "banana"}
+	testRunner := runner.NewRspec("")
 
 	// mock server to return 400 Bad Request
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -260,11 +247,299 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	// we want the function to return an empty test plan and an error
 	want := plan.TestPlan{}
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files)
+	got, err := fetchOrCreateTestPlan(ctx, cfg, files, testRunner)
 	if err == nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
+	}
+}
+
+func TestCreateRequestParams_SplitByFile(t *testing.T) {
+	cfg := config.Config{
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      7,
+	}
+
+	client := api.NewClient(api.ClientConfig{})
+	got, err := createRequestParam(context.Background(), cfg, []string{"apple", "banana"}, *client, runner.NewRspec(""))
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 7,
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "apple"},
+				{Path: "banana"},
+			},
+		},
+	}
+
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_SplitByExample(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `
+{
+	"test/spec/fruits/apple_spec.rb": 100000,
+	"test/spec/fruits/banana_spec.rb": 180000,
+	"test/spec/fruits/cherry_spec.rb": 120000,
+	"test/spec/fruits/dragonfruit_spec.rb": 50000,
+	"test/spec/fruits/elderberry_spec.rb": 40000,
+	"test/spec/fruits/fig_spec.rb": 200000,
+	"test/spec/fruits/grape_spec.rb": 30000
+}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       7,
+		SplitByExample:    true,
+		SlowFileThreshold: 3 * time.Minute,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: svr.URL,
+	})
+	files := []string{
+		"test/spec/fruits/apple_spec.rb",
+		"test/spec/fruits/banana_spec.rb",
+		"test/spec/fruits/cherry_spec.rb",
+		"test/spec/fruits/dragonfruit_spec.rb",
+		"test/spec/fruits/elderberry_spec.rb",
+		"test/spec/fruits/fig_spec.rb",
+		"test/spec/fruits/grape_spec.rb",
+	}
+
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
+
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	// slow files (more than or equal to 3minutes): banana_spec.rb, fig_spec.rb
+	// the rest: apple_spec.rb, cherry_spec.rb, dragonfruit_spec.rb, elderberry_spec.rb, grape_spec.rb
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 7,
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "test/spec/fruits/apple_spec.rb"},
+				{Path: "test/spec/fruits/cherry_spec.rb"},
+				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
+				{Path: "test/spec/fruits/elderberry_spec.rb"},
+				{Path: "test/spec/fruits/grape_spec.rb"},
+			},
+			Examples: []plan.TestCase{
+				{
+					Identifier: "./test/spec/fruits/banana_spec.rb[1:1]",
+					Name:       "is yellow",
+					Path:       "./test/spec/fruits/banana_spec.rb:2",
+					Scope:      "Banana is yellow",
+				},
+				{
+					Identifier: "./test/spec/fruits/banana_spec.rb[1:2:1]",
+					Name:       "is green",
+					Path:       "./test/spec/fruits/banana_spec.rb:7",
+					Scope:      "Banana when not ripe is green",
+				},
+				{
+					Identifier: "./test/spec/fruits/fig_spec.rb[1:1]",
+					Name:       "is purple",
+					Path:       "./test/spec/fruits/fig_spec.rb:2",
+					Scope:      "Fig is purple",
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_SplitByExample_NoFileTiming(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      7,
+		SplitByExample:   true,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: svr.URL,
+	})
+	files := []string{
+		"apple_spec.rb",
+		"banana_spec.rb",
+		"cherry_spec.rb",
+		"dragonfruit_spec.rb",
+		"elderberry_spec.rb",
+		"fig_spec.rb",
+		"grape_spec.rb",
+	}
+
+	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec(""))
+
+	if err == nil {
+		t.Errorf("createRequestParam() want error, got nil")
+	}
+}
+
+func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `
+{
+	"test/spec/fruits/apple_spec.rb": 100000,
+	"test/spec/fruits/banana_spec.rb": 200000,
+	"test/spec/fruits/cherry_spec.rb": 120000,
+	"test/spec/fruits/dragonfruit_spec.rb": 50000,
+	"test/spec/fruits/elderberry_spec.rb": 40000
+}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       7,
+		SplitByExample:    true,
+		SlowFileThreshold: 3 * time.Minute,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: svr.URL,
+	})
+	files := []string{
+		"test/spec/fruits/apple_spec.rb",
+		"test/spec/fruits/banana_spec.rb",
+		"test/spec/fruits/cherry_spec.rb",
+		"test/spec/fruits/dragonfruit_spec.rb",
+		"test/spec/fruits/elderberry_spec.rb",
+		"test/spec/fruits/fig_spec.rb",
+		"test/spec/fruits/grape_spec.rb",
+	}
+
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
+
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	// slow files (more than or equal to 3minutes): banana_spec.rb, fig_spec.rb
+	// the rest: apple_spec.rb, cherry_spec.rb, dragonfruit_spec.rb, elderberry_spec.rb, grape_spec.rb
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 7,
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "test/spec/fruits/apple_spec.rb"},
+				{Path: "test/spec/fruits/cherry_spec.rb"},
+				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
+				{Path: "test/spec/fruits/elderberry_spec.rb"},
+				{Path: "test/spec/fruits/fig_spec.rb"},
+				{Path: "test/spec/fruits/grape_spec.rb"},
+			},
+			Examples: []plan.TestCase{
+				{
+					Identifier: "./test/spec/fruits/banana_spec.rb[1:1]",
+					Name:       "is yellow",
+					Path:       "./test/spec/fruits/banana_spec.rb:2",
+					Scope:      "Banana is yellow",
+				},
+				{
+					Identifier: "./test/spec/fruits/banana_spec.rb[1:2:1]",
+					Name:       "is green",
+					Path:       "./test/spec/fruits/banana_spec.rb:7",
+					Scope:      "Banana when not ripe is green",
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `
+{
+	"test/spec/fruits/apple_spec.rb": 100000,
+	"test/spec/fruits/banana_spec.rb": 100000,
+	"test/spec/fruits/cherry_spec.rb": 120000,
+	"test/spec/fruits/dragonfruit_spec.rb": 50000,
+	"test/spec/fruits/elderberry_spec.rb": 40000
+}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       7,
+		SplitByExample:    true,
+		SlowFileThreshold: 3 * time.Minute,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: svr.URL,
+	})
+	files := []string{
+		"test/spec/fruits/apple_spec.rb",
+		"test/spec/fruits/banana_spec.rb",
+		"test/spec/fruits/cherry_spec.rb",
+		"test/spec/fruits/dragonfruit_spec.rb",
+		"test/spec/fruits/elderberry_spec.rb",
+		"test/spec/fruits/fig_spec.rb",
+		"test/spec/fruits/grape_spec.rb",
+	}
+
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
+
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 7,
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "test/spec/fruits/apple_spec.rb"},
+				{Path: "test/spec/fruits/banana_spec.rb"},
+				{Path: "test/spec/fruits/cherry_spec.rb"},
+				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
+				{Path: "test/spec/fruits/elderberry_spec.rb"},
+				{Path: "test/spec/fruits/fig_spec.rb"},
+				{Path: "test/spec/fruits/grape_spec.rb"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
 	}
 }
