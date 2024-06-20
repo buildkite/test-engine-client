@@ -38,7 +38,7 @@ func TestCreateTestPlan(t *testing.T) {
 	err = mockProvider.
 		AddInteraction().
 		Given("A test plan doesn't exist").
-		UponReceiving("A request to create test plan with identifier abc123").
+		UponReceiving("A request to create test plan with identifier abc123 and split by example disabled").
 		WithRequest("POST", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan", func(b *consumer.V2RequestBuilder) {
 			b.Header("Authorization", matchers.String("Bearer asdf1234"))
 			b.Header("Content-Type", matchers.String("application/json"))
