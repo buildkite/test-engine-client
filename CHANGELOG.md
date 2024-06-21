@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.1 - 2024-06-21
+- Ignore request body when it is empty or when the request is a GET request.
+
 ## 0.6.0 - 2024-06-21
 
 - ⚠️ **BREAKING** Remove support for the undocumented `--files` flag.
