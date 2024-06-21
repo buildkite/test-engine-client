@@ -164,9 +164,11 @@ func (c *Client) DoWithRetry(ctx context.Context, req httpRequest, v interface{}
 		}
 
 		// parse response
-		err = json.Unmarshal(responseBody, v)
-		if err != nil {
-			return nil, fmt.Errorf("parsing response: %w", err)
+		if v != nil {
+			err = json.Unmarshal(responseBody, v)
+			if err != nil {
+				return nil, fmt.Errorf("parsing response: %w", err)
+			}
 		}
 
 		return resp, nil
