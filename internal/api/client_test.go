@@ -120,7 +120,11 @@ func TestDoWithRetry_Succesful_GET(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
-		bodyBytes, _ := io.ReadAll(r.Body)
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+
 		if len(bodyBytes) > 0 {
 			t.Errorf("request body = %q, want empty", string(bodyBytes))
 		}
