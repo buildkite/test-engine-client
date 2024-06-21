@@ -82,7 +82,7 @@ func TestHttpClient_AttachUserAgentToRequest(t *testing.T) {
 	}
 }
 
-func TestDoWithRetry_Success(t *testing.T) {
+func TestDoWithRetry_Succesful_POST(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		io.Copy(w, r.Body)
@@ -113,6 +113,39 @@ func TestDoWithRetry_Success(t *testing.T) {
 	want := map[string]string{"message": "hello"}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("DoWithRetry() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestDoWithRetry_Succesful_GET(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+
+		bodyBytes, _ := io.ReadAll(r.Body)
+		if len(bodyBytes) > 0 {
+			t.Errorf("request body = %q, want empty", string(bodyBytes))
+		}
+
+	}))
+	defer svr.Close()
+
+	cfg := ClientConfig{
+		ServerBaseUrl: svr.URL,
+	}
+	c := NewClient(cfg)
+
+	var got map[string]string
+
+	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+		Method: http.MethodGet,
+		URL:    svr.URL,
+	}, &got)
+
+	if err != nil {
+		t.Errorf("DoWithRetry() error = %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusOK)
 	}
 }
 

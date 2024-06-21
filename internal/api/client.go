@@ -85,7 +85,7 @@ type httpRequest struct {
 // After reaching the retry timeout, the function will return ErrRetryTimeout.
 // The request will not be retried when the server returns 4xx status code,
 // and the error message will be returned as an error.
-func (c *Client) DoWithRetry(ctx context.Context, req httpRequest, v interface{}) (*http.Response, error) {
+func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v interface{}) (*http.Response, error) {
 	r := roko.NewRetrier(
 		roko.TryForever(),
 		roko.WithStrategy(roko.ExponentialSubsecond(initialDelay)),
@@ -96,16 +96,10 @@ func (c *Client) DoWithRetry(ctx context.Context, req httpRequest, v interface{}
 	defer cancelRetryContext()
 
 	// retry loop
-	debug.Printf("Sending request %s %s", req.Method, req.URL)
+	debug.Printf("Sending request %s %s", reqOptions.Method, reqOptions.URL)
 	resp, err := roko.DoFunc(retryContext, r, func(r *roko.Retrier) (*http.Response, error) {
 		if r.AttemptCount() > 0 {
 			debug.Printf("Retrying requests, attempt %d", r.AttemptCount())
-		}
-
-		reqBody, err := json.Marshal(req.Body)
-		if err != nil {
-			r.Break()
-			return nil, fmt.Errorf("converting body to json: %w", err)
 		}
 
 		// Each request times out after 15 seconds, chosen to provide some
@@ -113,11 +107,22 @@ func (c *Client) DoWithRetry(ctx context.Context, req httpRequest, v interface{}
 		reqContext, cancelReqContext := context.WithTimeout(ctx, 15*time.Second)
 		defer cancelReqContext()
 
-		req, err := http.NewRequestWithContext(reqContext, req.Method, req.URL, bytes.NewBuffer(reqBody))
+		req, err := http.NewRequestWithContext(reqContext, reqOptions.Method, reqOptions.URL, nil)
 		if err != nil {
 			r.Break()
 			return nil, fmt.Errorf("creating request: %w", err)
 		}
+
+		if reqOptions.Method != http.MethodGet && reqOptions.Body != nil {
+			// add body to request
+			reqBody, err := json.Marshal(reqOptions.Body)
+			if err != nil {
+				r.Break()
+				return nil, fmt.Errorf("converting body to json: %w", err)
+			}
+			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		}
+
 		req.Header.Add("Content-Type", "application/json")
 
 		resp, err := c.httpClient.Do(req)
@@ -164,9 +169,11 @@ func (c *Client) DoWithRetry(ctx context.Context, req httpRequest, v interface{}
 		}
 
 		// parse response
-		err = json.Unmarshal(responseBody, v)
-		if err != nil {
-			return nil, fmt.Errorf("parsing response: %w", err)
+		if v != nil && len(responseBody) > 0 {
+			err = json.Unmarshal(responseBody, v)
+			if err != nil {
+				return nil, fmt.Errorf("parsing response: %w", err)
+			}
 		}
 
 		return resp, nil
