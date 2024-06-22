@@ -78,6 +78,11 @@ func main() {
 		logErrorAndExit(16, "Couldn't process test command: %q, %v", testRunner.TestCommand, err)
 	}
 
+	var timeline []api.Timeline
+	timeline = append(timeline, api.Timeline{
+		Event:     "test_start",
+		Timestamp: createTimestamp(),
+	})
 	if err := cmd.Start(); err != nil {
 		logErrorAndExit(16, "Couldn't start tests: %v", err)
 	}
@@ -109,17 +114,26 @@ func main() {
 		}
 	}()
 
-	if err := cmd.Wait(); err != nil {
+	err = cmd.Wait()
+	timeline = append(timeline, api.Timeline{
+		Event:     "test_end",
+		Timestamp: createTimestamp(),
+	})
+
+	if err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
 			if cfg.MaxRetries == 0 {
 				// If retry is disabled, we exit immediately with the same exit code from the test runner
+				sendMetadata(cfg, timeline)
 				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
 			} else {
-				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries)
+				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries, &timeline)
 				if retryExitCode == 0 {
+					sendMetadata(cfg, timeline)
 					os.Exit(0)
 				} else {
+					sendMetadata(cfg, timeline)
 					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
 				}
 			}
@@ -127,11 +141,24 @@ func main() {
 		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
+	sendMetadata(cfg, timeline)
+
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
 }
 
-func retryFailedTests(testRunner TestRunner, maxRetries int) int {
+func createTimestamp() string {
+	return time.Now().Format(time.RFC3339Nano)
+}
+
+func sendMetadata(cfg config.Config, timeline []api.Timeline) {
+	debug.Printf("Timeline: %v", timeline)
+
+	env := cfg.DumpEnv()
+	debug.Printf("Env: %v", env)
+}
+
+func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Timeline) int {
 	// Retry failed tests
 	retries := 0
 	for retries < maxRetries {
@@ -143,11 +170,19 @@ func retryFailedTests(testRunner TestRunner, maxRetries int) int {
 			logErrorAndExit(16, "Couldn't process retry command: %v", err)
 		}
 
+		*timeline = append(*timeline, api.Timeline{
+			Event:     fmt.Sprintf("retry_%d_start", retries),
+			Timestamp: createTimestamp(),
+		})
 		if err := cmd.Start(); err != nil {
 			logErrorAndExit(16, "Couldn't start tests: %v", err)
 		}
 
 		err = cmd.Wait()
+		*timeline = append(*timeline, api.Timeline{
+			Event:     fmt.Sprintf("retry_%d_end", retries),
+			Timestamp: createTimestamp(),
+		})
 		if err != nil {
 			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 				exitCode := exitError.ExitCode()

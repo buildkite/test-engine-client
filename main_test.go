@@ -18,20 +18,30 @@ import (
 func TestRetryFailedTests(t *testing.T) {
 	testRunner := runner.NewRspec("true")
 	maxRetries := 3
-	exitCode := retryFailedTests(testRunner, maxRetries)
+	timeline := []api.Timeline{}
+	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
 	want := 0
 	if exitCode != want {
 		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	}
+
+	if len(timeline) != 2 {
+		t.Errorf("retryFailedTests(%v, %v) timeline length = %v, want %d", testRunner, maxRetries, len(timeline), 2)
 	}
 }
 
 func TestRetryFailedTests_Failure(t *testing.T) {
 	testRunner := runner.NewRspec("false")
 	maxRetries := 3
-	exitCode := retryFailedTests(testRunner, maxRetries)
+	timeline := []api.Timeline{}
+	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
 	want := 1
 	if exitCode != want {
 		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	}
+
+	if len(timeline) != 6 {
+		t.Errorf("retryFailedTests(%v, %v) timeline length = %v, want %d", testRunner, maxRetries, len(timeline), 6)
 	}
 }
 
