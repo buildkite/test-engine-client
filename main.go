@@ -129,16 +129,14 @@ func main() {
 				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
 			} else {
 				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries, &timeline)
-				if retryExitCode == 0 {
-					sendMetadata(cfg, timeline)
-					os.Exit(0)
-				} else {
+				if retryExitCode != 0 {
 					sendMetadata(cfg, timeline)
 					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
 				}
 			}
+		} else {
+			logErrorAndExit(16, "Couldn't run tests: %v", err)
 		}
-		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
 	sendMetadata(cfg, timeline)
