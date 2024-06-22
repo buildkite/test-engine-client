@@ -12,9 +12,9 @@ type Timeline struct {
 }
 
 type TestPlanMetadataParams struct {
-	Version     string                 `json:"version"`
-	SplitterEnv map[string]interface{} `json:"splitter_env"`
-	Timeline    []Timeline             `json:"timeline"`
+	Version     string            `json:"version"`
+	SplitterEnv map[string]string `json:"splitter_env"`
+	Timeline    []Timeline        `json:"timeline"`
 }
 
 func (c Client) PostTestPlanMetadata(ctx context.Context, suiteSlug string, identifier string, params TestPlanMetadataParams) error {

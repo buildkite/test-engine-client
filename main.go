@@ -125,12 +125,12 @@ func main() {
 			exitCode := exitError.ExitCode()
 			if cfg.MaxRetries == 0 {
 				// If retry is disabled, we exit immediately with the same exit code from the test runner
-				sendMetadata(cfg, timeline)
+				sendMetadata(ctx, cfg, timeline)
 				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
 			} else {
 				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries, &timeline)
 				if retryExitCode != 0 {
-					sendMetadata(cfg, timeline)
+					sendMetadata(ctx, cfg, timeline)
 					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
 				}
 			}
@@ -139,7 +139,7 @@ func main() {
 		}
 	}
 
-	sendMetadata(cfg, timeline)
+	sendMetadata(ctx, cfg, timeline)
 
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
@@ -149,11 +149,23 @@ func createTimestamp() string {
 	return time.Now().Format(time.RFC3339Nano)
 }
 
-func sendMetadata(cfg config.Config, timeline []api.Timeline) {
-	debug.Printf("Timeline: %v", timeline)
+func sendMetadata(ctx context.Context, cfg config.Config, timeline []api.Timeline) {
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl:    cfg.ServerBaseUrl,
+		AccessToken:      cfg.AccessToken,
+		OrganizationSlug: cfg.OrganizationSlug,
+		Version:          cfg.Version,
+	})
 
-	env := cfg.DumpEnv()
-	debug.Printf("Env: %v", env)
+	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
+		Timeline:    timeline,
+		SplitterEnv: cfg.DumpEnv(),
+		Version:     Version,
+	})
+
+	if err != nil {
+		fmt.Printf("Failed to send metadata: %v\n", err)
+	}
 }
 
 func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Timeline) int {

@@ -21,12 +21,12 @@ func TestPostTestPlanMetadata(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		SplitterEnv: map[string]interface{}{
-			"BUILDKITE_PARALLEL_JOB_COUNT":            3,
-			"BUILDKITE_PARALLEL_JOB":                  1,
+		SplitterEnv: map[string]string{
+			"BUILDKITE_PARALLEL_JOB_COUNT":            "3",
+			"BUILDKITE_PARALLEL_JOB":                  "1",
 			"BUILDKITE_SPLITTER_SUITE_SLUG":           "my_slug",
-			"BUILDKITE_SPLITTER_TEST_EXCLUDE_PATTERN": nil,
-			"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":     false,
+			"BUILDKITE_SPLITTER_TEST_EXCLUDE_PATTERN": "",
+			"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":     "false",
 			"BUILDKITE_SPLITTER_IDENTIFIER":           "abc123",
 		},
 		Timeline: []Timeline{
@@ -94,12 +94,12 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		SplitterEnv: map[string]interface{}{
-			"BUILDKITE_PARALLEL_JOB_COUNT":            3,
-			"BUILDKITE_PARALLEL_JOB":                  1,
+		SplitterEnv: map[string]string{
+			"BUILDKITE_PARALLEL_JOB_COUNT":            "3",
+			"BUILDKITE_PARALLEL_JOB":                  "1",
 			"BUILDKITE_SPLITTER_SUITE_SLUG":           "my_slug",
-			"BUILDKITE_SPLITTER_TEST_EXCLUDE_PATTERN": nil,
-			"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":     false,
+			"BUILDKITE_SPLITTER_TEST_EXCLUDE_PATTERN": "",
+			"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":     "false",
 			"BUILDKITE_SPLITTER_IDENTIFIER":           "abc123",
 		},
 		Timeline: []Timeline{
