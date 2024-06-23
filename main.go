@@ -84,14 +84,14 @@ func main() {
 		logErrorAndExit(16, "Couldn't process test command: %q, %v", testRunner.TestCommand, err)
 	}
 
+	if err := cmd.Start(); err != nil {
+		logErrorAndExit(16, "Couldn't start tests: %v", err)
+	}
 	var timeline []api.Timeline
 	timeline = append(timeline, api.Timeline{
 		Event:     "test_start",
 		Timestamp: createTimestamp(),
 	})
-	if err := cmd.Start(); err != nil {
-		logErrorAndExit(16, "Couldn't start tests: %v", err)
-	}
 
 	// Create a channel that will be closed when the command finishes.
 	finishCh := make(chan struct{})
@@ -164,7 +164,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 
 	// Error is suppressed because we don't want to fail the build if we can't send metadata.
 	if err != nil {
-		fmt.Printf("Failed to send metadata: %v\n", err)
+		fmt.Printf("Failed to send metadata to Test Analytics: %v\n", err)
 	}
 }
 
@@ -180,13 +180,13 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 			logErrorAndExit(16, "Couldn't process retry command: %v", err)
 		}
 
+		if err := cmd.Start(); err != nil {
+			logErrorAndExit(16, "Couldn't start tests: %v", err)
+		}
 		*timeline = append(*timeline, api.Timeline{
 			Event:     fmt.Sprintf("retry_%d_start", retries),
 			Timestamp: createTimestamp(),
 		})
-		if err := cmd.Start(); err != nil {
-			logErrorAndExit(16, "Couldn't start tests: %v", err)
-		}
 
 		err = cmd.Wait()
 		*timeline = append(*timeline, api.Timeline{
