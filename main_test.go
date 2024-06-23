@@ -80,6 +80,9 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
 
 	// we want the function to return the test plan fetched from the server
 	want := plan.TestPlan{
@@ -91,7 +94,7 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files, testRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -146,6 +149,10 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		OrganizationSlug: "org",
 		SuiteSlug:        "suite",
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl:    cfg.ServerBaseUrl,
+		OrganizationSlug: cfg.OrganizationSlug,
+	})
 
 	tests := []string{"banana"}
 	testRunner := runner.NewRspec("")
@@ -159,7 +166,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(context.Background(), cfg, tests, testRunner)
+	got, err := fetchOrCreateTestPlan(context.Background(), apiClient, cfg, tests, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
 	}
@@ -188,11 +195,14 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
 
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files, TestRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, TestRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -222,11 +232,14 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
 
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(fetchCtx, cfg, files, testRunner)
+	got, err := fetchOrCreateTestPlan(fetchCtx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -253,11 +266,14 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
 
 	// we want the function to return an empty test plan and an error
 	want := plan.TestPlan{}
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files, testRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err == nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
 	}

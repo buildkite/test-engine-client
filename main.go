@@ -58,8 +58,14 @@ func main() {
 
 	// get plan
 	ctx := context.Background()
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl:    cfg.ServerBaseUrl,
+		AccessToken:      cfg.AccessToken,
+		OrganizationSlug: cfg.OrganizationSlug,
+		Version:          cfg.Version,
+	})
 
-	testPlan, err := fetchOrCreateTestPlan(ctx, cfg, files, testRunner)
+	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		logErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
 	}
@@ -125,12 +131,12 @@ func main() {
 			exitCode := exitError.ExitCode()
 			if cfg.MaxRetries == 0 {
 				// If retry is disabled, we exit immediately with the same exit code from the test runner
-				sendMetadata(ctx, cfg, timeline)
+				sendMetadata(ctx, apiClient, cfg, timeline)
 				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
 			} else {
 				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries, &timeline)
 				if retryExitCode != 0 {
-					sendMetadata(ctx, cfg, timeline)
+					sendMetadata(ctx, apiClient, cfg, timeline)
 					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
 				}
 			}
@@ -139,7 +145,7 @@ func main() {
 		}
 	}
 
-	sendMetadata(ctx, cfg, timeline)
+	sendMetadata(ctx, apiClient, cfg, timeline)
 
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
@@ -149,14 +155,7 @@ func createTimestamp() string {
 	return time.Now().Format(time.RFC3339Nano)
 }
 
-func sendMetadata(ctx context.Context, cfg config.Config, timeline []api.Timeline) {
-	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl:    cfg.ServerBaseUrl,
-		AccessToken:      cfg.AccessToken,
-		OrganizationSlug: cfg.OrganizationSlug,
-		Version:          cfg.Version,
-	})
-
+func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline) {
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
 		Timeline:    timeline,
 		SplitterEnv: cfg.DumpEnv(),
@@ -217,14 +216,8 @@ func logErrorAndExit(exitCode int, format string, v ...any) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
 	debug.Println("Fetching test plan")
-	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl:    cfg.ServerBaseUrl,
-		AccessToken:      cfg.AccessToken,
-		OrganizationSlug: cfg.OrganizationSlug,
-		Version:          cfg.Version,
-	})
 
 	// Fetch the plan from the server's cache.
 	cachedPlan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier)
