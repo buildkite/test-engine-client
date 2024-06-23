@@ -162,6 +162,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 		Version:     Version,
 	})
 
+	// Error is suppressed because we don't want to fail the build if we can't send metadata.
 	if err != nil {
 		fmt.Printf("Failed to send metadata: %v\n", err)
 	}
