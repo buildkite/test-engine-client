@@ -588,6 +588,7 @@ func TestSendMetadata(t *testing.T) {
 	env := map[string]string{
 		"BUILDKITE_BUILD_ID":               "xyz",
 		"BUILDKITE_JOB_ID":                 "abc",
+		"BUILDKITE_STEP_ID":                "pqr",
 		"BUILDKITE_ORGANIZATION_SLUG":      "buildkite",
 		"BUILDKITE_PARALLEL_JOB_COUNT":     "10",
 		"BUILDKITE_PARALLEL_JOB":           "5",
@@ -629,6 +630,7 @@ func TestSendMetadata(t *testing.T) {
 				"BUILDKITE_SPLITTER_RETRY_COUNT": "2",
 				"BUILDKITE_SPLITTER_SUITE_SLUG":  "rspec",
 				"BUILDKITE_SPLITTER_TEST_CMD":    "bundle exec rspec",
+				"BUILDKITE_STEP_ID":              "pqr",
 				// ensure that empty env vars is included in the request
 				"BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD":       "",
 				"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":          "",
