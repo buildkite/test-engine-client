@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.2 - 2024-06-24
+- Fix issue where the client version is not set in the user agent.
+
 ## 0.6.1 - 2024-06-21
 - Ignore request body when it is empty or when the request is a GET request.
 
