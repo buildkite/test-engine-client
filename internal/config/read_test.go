@@ -14,13 +14,14 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "0")
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.localhost")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
-	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "123")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
 	os.Setenv("BUILDKITE_SPLITTER_API_ACCESS_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
 	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "3")
 	os.Setenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE", "TRUE")
+	os.Setenv("BUILDKITE_BUILD_ID", "123")
+	os.Setenv("BUILDKITE_STEP_ID", "456")
 	defer os.Clearenv()
 
 	c := Config{}
@@ -31,7 +32,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		NodeIndex:         0,
 		ServerBaseUrl:     "https://buildkite.localhost",
 		Mode:              "static",
-		Identifier:        "123",
+		Identifier:        "123/456",
 		TestCommand:       "bin/rspec {{testExamples}}",
 		AccessToken:       "my_token",
 		OrganizationSlug:  "my_org",
@@ -54,7 +55,6 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
-	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "")
 	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
 	os.Setenv("BUILDKITE_STEP_ID", "456")

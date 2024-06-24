@@ -18,7 +18,6 @@ import (
 // - BUILDKITE_PARALLEL_JOB_COUNT (Parallelism)
 // - BUILDKITE_PARALLEL_JOB (NodeIndex)
 // - BUILDKITE_SPLITTER_API_ACCESS_TOKEN (AccessToken)
-// - BUILDKITE_SPLITTER_IDENTIFIER (Identifier)
 // - BUILDKITE_SPLITTER_BASE_URL (ServerBaseUrl)
 // - BUILDKITE_SPLITTER_MODE (Mode)
 // - BUILDKITE_SPLITTER_RETRY_COUNT (MaxRetries)
@@ -35,7 +34,7 @@ func (c *Config) readFromEnv() error {
 	c.OrganizationSlug = os.Getenv("BUILDKITE_ORGANIZATION_SLUG")
 	c.SuiteSlug = os.Getenv("BUILDKITE_SPLITTER_SUITE_SLUG")
 
-	c.Identifier = getEnvWithDefault("BUILDKITE_SPLITTER_IDENTIFIER", fmt.Sprintf("%s/%s", os.Getenv("BUILDKITE_BUILD_ID"), os.Getenv("BUILDKITE_STEP_ID")))
+	c.Identifier = fmt.Sprintf("%s/%s", os.Getenv("BUILDKITE_BUILD_ID"), os.Getenv("BUILDKITE_STEP_ID"))
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://api.buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
