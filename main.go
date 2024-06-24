@@ -62,7 +62,7 @@ func main() {
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
-		Version:          cfg.Version,
+		Version:          Version,
 	})
 
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
