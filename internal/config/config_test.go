@@ -16,11 +16,12 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_API_ACCESS_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://build.kite")
 	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
-	os.Setenv("BUILDKITE_SPLITTER_IDENTIFIER", "xyz")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
 	os.Setenv("BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD", "200")
+	os.Setenv("BUILDKITE_BUILD_ID", "123")
+	os.Setenv("BUILDKITE_STEP_ID", "456")
 }
 
 func TestNewConfig(t *testing.T) {
@@ -37,7 +38,7 @@ func TestNewConfig(t *testing.T) {
 		NodeIndex:         7,
 		ServerBaseUrl:     "https://build.kite",
 		Mode:              "static",
-		Identifier:        "xyz",
+		Identifier:        "123/456",
 		TestCommand:       "bin/rspec {{testExamples}}",
 		AccessToken:       "my_token",
 		OrganizationSlug:  "my_org",
@@ -78,7 +79,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		NodeIndex:         7,
 		ServerBaseUrl:     "https://api.buildkite.com",
 		Mode:              "static",
-		Identifier:        "xyz",
+		Identifier:        "123/456",
 		AccessToken:       "my_token",
 		OrganizationSlug:  "my_org",
 		SuiteSlug:         "my_suite",

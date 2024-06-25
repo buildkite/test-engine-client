@@ -42,7 +42,6 @@ func (c Config) DumpEnv() map[string]string {
 		"BUILDKITE_PARALLEL_JOB_COUNT",
 		"BUILDKITE_PARALLEL_JOB",
 		"BUILDKITE_SPLITTER_DEBUG_ENABLED",
-		"BUILDKITE_SPLITTER_IDENTIFIER",
 		"BUILDKITE_SPLITTER_RETRY_COUNT",
 		"BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD",
 		"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE",
@@ -58,9 +57,7 @@ func (c Config) DumpEnv() map[string]string {
 		envs[key] = os.Getenv(key)
 	}
 
-	if envs["BUILDKITE_SPLITTER_IDENTIFIER"] == "" {
-		envs["BUILDKITE_SPLITTER_IDENTIFIER"] = c.Identifier
-	}
+	envs["BUILDKITE_SPLITTER_IDENTIFIER"] = c.Identifier
 
 	return envs
 }
