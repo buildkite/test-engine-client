@@ -30,8 +30,8 @@ You don't need to set them manually, but if you are running your test in a Docke
 | -------------------- | ----------- |
 | `BUILDKITE_BUILD_ID` | The UUID of the Buildkite build. Test Splitter uses this UUID along with `BUILDKITE_STEP_ID` to uniquely identify the test plan. |
 | `BUILDKITE_ORGANIZATION_SLUG` | The slug of your Buildkite organization. |
-| `BUILDKITE_PARALLEL_JOB` | The index of parallel job created from a Buildkite parallel build step. Test Splitter uses this value to get specific test plan for each parallel job. | 
-| `BUILDKITE_PARALLEL_JOB_COUNT` | The total number of parallel jobs created from a Buildkite parallel build step. Test Splitter uses this value to split the tests and create the test plan. |
+| `BUILDKITE_PARALLEL_JOB` | The index of parallel job created from a Buildkite parallel build step. Test Splitter uses this value to get specific test plan for each parallel job. <br>Make sure you configure `parallelism` for your Buildkite build step.  You can read more on Buildkite parallel build step on this [page](https://buildkite.com/docs/pipelines/controlling-concurrency#concurrency-and-parallelism).| 
+| `BUILDKITE_PARALLEL_JOB_COUNT` | The total number of parallel jobs created from a Buildkite parallel build step. Test Splitter uses this value to split the tests and create the test plan. <br>Make sure you configure `parallelism` for your Buildkite build step.  You can read more on Buildkite parallel build step on this [page](https://buildkite.com/docs/pipelines/controlling-concurrency#concurrency-and-parallelism) |
 | `BUILDKITE_STEP_ID` | The UUID of the step group in Buildkite build. Test Splitter uses this UUID along with `BUILDKITE_BUILD_ID` to uniquely identify the test plan.
 
 <br>
