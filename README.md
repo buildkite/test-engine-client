@@ -1,5 +1,8 @@
 # Buildkite Test Splitter
 
+Buildkite Test Splitter is an open source tool to orchestrate your test suites. It uses your Buildkite Test Analytic suite data to intelligently partition and parallelise your tests. 
+Test Splitter currently only support RSpec but support for other frameworks is coming soon.
+
 ## Migrating from 0.4.0
 
 0.5.0 introduces authentication mechanism changes. Previously, the test splitter used a suite token set in the `BUILDKITE_SPLITTER_SUITE_TOKEN` environment variable to authenticate.
@@ -24,11 +27,12 @@ The available Go binaries
 ## Using the Test Splitter
 
 ### ENV variables
-Test Splitter requires the following environment variables from your Buildkite build environment. 
-You don't need to set them manually, but if you are running your test in a Docker container, make sure you pass these environment variable to your container.
+Test Splitter uses the following environment variables provided in your Buildkite build environment. 
+Please make sure that the following environment variables are available in your testing environment, particularly if you use Docker or some other type of containerization to run your tests.
 | Environment Variable | Description|
 | -------------------- | ----------- |
 | `BUILDKITE_BUILD_ID` | The UUID of the Buildkite build. Test Splitter uses this UUID along with `BUILDKITE_STEP_ID` to uniquely identify the test plan. |
+| `BUILDKITE_JOB_ID` | The UUID of the job in Buildkite build. |
 | `BUILDKITE_ORGANIZATION_SLUG` | The slug of your Buildkite organization. |
 | `BUILDKITE_PARALLEL_JOB` | The index of parallel job created from a Buildkite parallel build step. Test Splitter uses this value to get specific test plan for each parallel job. <br>Make sure you configure `parallelism` for your Buildkite build step.  You can read more on Buildkite parallel build step on this [page](https://buildkite.com/docs/pipelines/controlling-concurrency#concurrency-and-parallelism).| 
 | `BUILDKITE_PARALLEL_JOB_COUNT` | The total number of parallel jobs created from a Buildkite parallel build step. Test Splitter uses this value to split the tests and create the test plan. <br>Make sure you configure `parallelism` for your Buildkite build step.  You can read more on Buildkite parallel build step on this [page](https://buildkite.com/docs/pipelines/controlling-concurrency#concurrency-and-parallelism) |
@@ -40,11 +44,11 @@ In addition to above variables, you must set following environment variables.
 | Environment Variable | Description |
 | -------------------- | ----------- |
 | `BUILDKITE_SPLITTER_API_ACCESS_TOKEN ` | Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can create access token from [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite |
-| `BUILDKITE_SPLITTER_SUITE_SLUG` | The slug of your Buildkite Test Analytics test suite. |
+| `BUILDKITE_SPLITTER_SUITE_SLUG` | The slug of your Buildkite Test Analytics test suite. You can find the suite slug in the url for your suite, for example, the slug for the url: https://buildkite.com/organizations/my-organization/analytics/suites/my-suite is `my-suite` |
 
 
 <br>
-Following environment variables can be used to configure your test splitter.
+Following environment variables can be used optionally to configure your test splitter.
 
 | Environment Variable | Default Value | Description |
 | ---- | ---- | ----------- |
@@ -66,6 +70,18 @@ Otherwise, your script for executing specs may look something like:
 chmod +x test-splitter
 ./test-splitter # fetches the test plan for this node, and then executes the rspec tests
 ```
+
+To parallelise your tests in your Buildkite build, you can amend your pipeline step configuration to:
+```
+steps:
+  - name: "Rspec"
+    command: ./test-splitter
+    parallelism: 10
+    env:
+      BUILDKITE_SPLITTER_SUITE_SLUG: my-suite
+      BUILDKITE_SPLITTER_API_ACCESS_TOKEN: your-secret-tokens
+```
+
 ### Exit code
 | Exit code | Description |
 | ---- | ---- |
