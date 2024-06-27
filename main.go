@@ -58,8 +58,14 @@ func main() {
 
 	// get plan
 	ctx := context.Background()
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl:    cfg.ServerBaseUrl,
+		AccessToken:      cfg.AccessToken,
+		OrganizationSlug: cfg.OrganizationSlug,
+		Version:          Version,
+	})
 
-	testPlan, err := fetchOrCreateTestPlan(ctx, cfg, files, testRunner)
+	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		logErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
 	}
@@ -81,6 +87,11 @@ func main() {
 	if err := cmd.Start(); err != nil {
 		logErrorAndExit(16, "Couldn't start tests: %v", err)
 	}
+	var timeline []api.Timeline
+	timeline = append(timeline, api.Timeline{
+		Event:     "test_start",
+		Timestamp: createTimestamp(),
+	})
 
 	// Create a channel that will be closed when the command finishes.
 	finishCh := make(chan struct{})
@@ -109,29 +120,55 @@ func main() {
 		}
 	}()
 
-	if err := cmd.Wait(); err != nil {
+	err = cmd.Wait()
+	timeline = append(timeline, api.Timeline{
+		Event:     "test_end",
+		Timestamp: createTimestamp(),
+	})
+
+	if err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
 			if cfg.MaxRetries == 0 {
 				// If retry is disabled, we exit immediately with the same exit code from the test runner
+				sendMetadata(ctx, apiClient, cfg, timeline)
 				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
 			} else {
-				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries)
-				if retryExitCode == 0 {
-					os.Exit(0)
-				} else {
+				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries, &timeline)
+				if retryExitCode != 0 {
+					sendMetadata(ctx, apiClient, cfg, timeline)
 					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
 				}
 			}
+		} else {
+			logErrorAndExit(16, "Couldn't run tests: %v", err)
 		}
-		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
+
+	sendMetadata(ctx, apiClient, cfg, timeline)
 
 	// Close the channel that will stop the goroutine.
 	close(finishCh)
 }
 
-func retryFailedTests(testRunner TestRunner, maxRetries int) int {
+func createTimestamp() string {
+	return time.Now().Format(time.RFC3339Nano)
+}
+
+func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline) {
+	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
+		Timeline:    timeline,
+		SplitterEnv: cfg.DumpEnv(),
+		Version:     Version,
+	})
+
+	// Error is suppressed because we don't want to fail the build if we can't send metadata.
+	if err != nil {
+		fmt.Printf("Failed to send metadata to Test Analytics: %v\n", err)
+	}
+}
+
+func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Timeline) int {
 	// Retry failed tests
 	retries := 0
 	for retries < maxRetries {
@@ -146,8 +183,16 @@ func retryFailedTests(testRunner TestRunner, maxRetries int) int {
 		if err := cmd.Start(); err != nil {
 			logErrorAndExit(16, "Couldn't start tests: %v", err)
 		}
+		*timeline = append(*timeline, api.Timeline{
+			Event:     fmt.Sprintf("retry_%d_start", retries),
+			Timestamp: createTimestamp(),
+		})
 
 		err = cmd.Wait()
+		*timeline = append(*timeline, api.Timeline{
+			Event:     fmt.Sprintf("retry_%d_end", retries),
+			Timestamp: createTimestamp(),
+		})
 		if err != nil {
 			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 				exitCode := exitError.ExitCode()
@@ -172,14 +217,8 @@ func logErrorAndExit(exitCode int, format string, v ...any) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
 	debug.Println("Fetching test plan")
-	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl:    cfg.ServerBaseUrl,
-		AccessToken:      cfg.AccessToken,
-		OrganizationSlug: cfg.OrganizationSlug,
-		Version:          Version,
-	})
 
 	// Fetch the plan from the server's cache.
 	cachedPlan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier)

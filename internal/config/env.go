@@ -33,3 +33,31 @@ func getIntEnvWithDefault(key string, defaultValue int) (int, error) {
 	// Return the value if it's successfully converted to int.
 	return valueInt, nil
 }
+
+func (c Config) DumpEnv() map[string]string {
+	keys := []string{
+		"BUILDKITE_BUILD_ID",
+		"BUILDKITE_JOB_ID",
+		"BUILDKITE_ORGANIZATION_SLUG",
+		"BUILDKITE_PARALLEL_JOB_COUNT",
+		"BUILDKITE_PARALLEL_JOB",
+		"BUILDKITE_SPLITTER_DEBUG_ENABLED",
+		"BUILDKITE_SPLITTER_RETRY_COUNT",
+		"BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD",
+		"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE",
+		"BUILDKITE_SPLITTER_SUITE_SLUG",
+		"BUILDKITE_SPLITTER_TEST_CMD",
+		"BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN",
+		"BUILDKITE_SPLITTER_TEST_FILE_PATTERN",
+		"BUILDKITE_STEP_ID",
+	}
+
+	envs := make(map[string]string)
+	for _, key := range keys {
+		envs[key] = os.Getenv(key)
+	}
+
+	envs["BUILDKITE_SPLITTER_IDENTIFIER"] = c.Identifier
+
+	return envs
+}

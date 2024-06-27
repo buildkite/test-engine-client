@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -18,20 +21,30 @@ import (
 func TestRetryFailedTests(t *testing.T) {
 	testRunner := runner.NewRspec("true")
 	maxRetries := 3
-	exitCode := retryFailedTests(testRunner, maxRetries)
+	timeline := []api.Timeline{}
+	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
 	want := 0
 	if exitCode != want {
 		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	}
+
+	if len(timeline) != 2 {
+		t.Errorf("retryFailedTests(%v, %v) timeline length = %v, want %d", testRunner, maxRetries, len(timeline), 2)
 	}
 }
 
 func TestRetryFailedTests_Failure(t *testing.T) {
 	testRunner := runner.NewRspec("false")
 	maxRetries := 3
-	exitCode := retryFailedTests(testRunner, maxRetries)
+	timeline := []api.Timeline{}
+	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
 	want := 1
 	if exitCode != want {
 		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	}
+
+	if len(timeline) != 6 {
+		t.Errorf("retryFailedTests(%v, %v) timeline length = %v, want %d", testRunner, maxRetries, len(timeline), 6)
 	}
 }
 
@@ -70,6 +83,9 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
 
 	// we want the function to return the test plan fetched from the server
 	want := plan.TestPlan{
@@ -81,7 +97,7 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files, testRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -136,6 +152,10 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		OrganizationSlug: "org",
 		SuiteSlug:        "suite",
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl:    cfg.ServerBaseUrl,
+		OrganizationSlug: cfg.OrganizationSlug,
+	})
 
 	tests := []string{"banana"}
 	testRunner := runner.NewRspec("")
@@ -149,7 +169,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(context.Background(), cfg, tests, testRunner)
+	got, err := fetchOrCreateTestPlan(context.Background(), apiClient, cfg, tests, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
 	}
@@ -178,11 +198,14 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
 
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files, TestRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, TestRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -212,11 +235,14 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
 
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(fetchCtx, cfg, files, testRunner)
+	got, err := fetchOrCreateTestPlan(fetchCtx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -243,11 +269,14 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
 	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
 
 	// we want the function to return an empty test plan and an error
 	want := plan.TestPlan{}
 
-	got, err := fetchOrCreateTestPlan(ctx, cfg, files, testRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err == nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
 	}
@@ -542,4 +571,114 @@ func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
 	}
+}
+
+func TestSendMetadata(t *testing.T) {
+	originalVersion := Version
+	Version = "0.1.0"
+	defer func() {
+		Version = originalVersion
+	}()
+
+	timeline := []api.Timeline{
+		{Event: "test_start", Timestamp: "2024-06-20T04:46:13.60977Z"},
+		{Event: "test_end", Timestamp: "2024-06-20T04:49:09.609793Z"},
+	}
+
+	env := map[string]string{
+		"BUILDKITE_BUILD_ID":               "xyz",
+		"BUILDKITE_JOB_ID":                 "abc",
+		"BUILDKITE_STEP_ID":                "pqr",
+		"BUILDKITE_ORGANIZATION_SLUG":      "buildkite",
+		"BUILDKITE_PARALLEL_JOB_COUNT":     "10",
+		"BUILDKITE_PARALLEL_JOB":           "5",
+		"BUILDKITE_SPLITTER_DEBUG_ENABLED": "true",
+		"BUILDKITE_SPLITTER_RETRY_COUNT":   "2",
+		"BUILDKITE_SPLITTER_SUITE_SLUG":    "rspec",
+		"BUILDKITE_SPLITTER_TEST_CMD":      "bundle exec rspec",
+	}
+	for k, v := range env {
+		_ = os.Setenv(k, v)
+	}
+	defer os.Clearenv()
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var got api.TestPlanMetadataParams
+
+		err = json.Unmarshal(b, &got)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		want := api.TestPlanMetadataParams{
+			Version:  "0.1.0",
+			Timeline: timeline,
+			SplitterEnv: map[string]string{
+				"BUILDKITE_BUILD_ID":               "xyz",
+				"BUILDKITE_JOB_ID":                 "abc",
+				"BUILDKITE_ORGANIZATION_SLUG":      "buildkite",
+				"BUILDKITE_PARALLEL_JOB_COUNT":     "10",
+				"BUILDKITE_PARALLEL_JOB":           "5",
+				"BUILDKITE_SPLITTER_DEBUG_ENABLED": "true",
+				// ensure that the identifier is included in the request
+				"BUILDKITE_SPLITTER_IDENTIFIER":  "fruitsabc",
+				"BUILDKITE_SPLITTER_RETRY_COUNT": "2",
+				"BUILDKITE_SPLITTER_SUITE_SLUG":  "rspec",
+				"BUILDKITE_SPLITTER_TEST_CMD":    "bundle exec rspec",
+				"BUILDKITE_STEP_ID":              "pqr",
+				// ensure that empty env vars is included in the request
+				"BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD":       "",
+				"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":          "",
+				"BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN": "",
+				"BUILDKITE_SPLITTER_TEST_FILE_PATTERN":         "",
+			},
+		}
+
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Errorf("sendMetadata() request params diff (-got +want):\n%s", diff)
+			w.WriteHeader(http.StatusBadRequest)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug: "buildkite",
+		SuiteSlug:        "rspec",
+		Identifier:       "fruitsabc",
+		ServerBaseUrl:    svr.URL,
+	}
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
+
+	sendMetadata(context.Background(), client, cfg, timeline)
+}
+
+func TestSendMetadata_Unauthorized(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"message": "Unauthorized"}`, http.StatusUnauthorized)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		ServerBaseUrl:    svr.URL,
+	}
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
+
+	timeline := []api.Timeline{}
+
+	sendMetadata(context.Background(), client, cfg, timeline)
 }
