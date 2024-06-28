@@ -32,6 +32,15 @@ type TestRunner interface {
 func main() {
 	debug.SetDebug(os.Getenv("BUILDKITE_SPLITTER_DEBUG_ENABLED") == "true")
 
+	versionFlag := flag.Bool("version", false, "print version information")
+
+	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
+
 	// get config
 	cfg, err := config.New()
 	if err != nil {
@@ -40,16 +49,6 @@ func main() {
 
 	// TODO: detect test runner and use appropriate runner
 	testRunner := runner.NewRspec(cfg.TestCommand)
-
-	versionFlag := flag.Bool("version", false, "print version information")
-
-	// Gathering files
-	flag.Parse()
-
-	if *versionFlag {
-		fmt.Println(Version)
-		os.Exit(0)
-	}
 
 	files, err := testRunner.GetFiles()
 	if err != nil {
