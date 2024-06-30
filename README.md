@@ -30,11 +30,11 @@ Please make sure that the following environment variables are available in your 
 | `BUILDKITE_STEP_ID` | The UUID of the step group in Buildkite build. Test Splitter uses this UUID along with `BUILDKITE_BUILD_ID` to uniquely identify the test plan.
 
 <br>
-In addition to above variables, you must set following environment variables.
+In addition to the above variables, you must set the following environment variables.
 
 | Environment Variable | Description |
 | -------------------- | ----------- |
-| `BUILDKITE_SPLITTER_API_ACCESS_TOKEN ` | Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can create access token from [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite |
+| `BUILDKITE_SPLITTER_API_ACCESS_TOKEN ` | Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can create an access token from [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite |
 | `BUILDKITE_SPLITTER_SUITE_SLUG` | The slug of your Buildkite Test Analytics test suite. You can find the suite slug in the url for your suite. For example, the slug for the url: https://buildkite.com/organizations/my-organization/analytics/suites/my-suite is `my-suite` |
 
 
@@ -53,7 +53,7 @@ The following environment variables can be used optionally to configure your Tes
 
 ### Run the Test Splitter
 Please download the executable and make it available in your testing environment.
-To parallelise your tests in your Buildkite build, you can amend your pipeline step configuration to:
+To parallelize your tests in your Buildkite build, you can amend your pipeline step configuration to:
 ```
 steps:
   - name: "Rspec"
@@ -69,5 +69,5 @@ steps:
 | ---- | ---- |
 | 0 | Success (passed through from test runner) |
 | 1 | Failure (passed through from test runner) |
-| 16 | Test Splitter failure (eg. config error) |
+| 16 | Test Splitter failure (e.g., config error) |
 | * | Other errors (passed through from the test runner) |
