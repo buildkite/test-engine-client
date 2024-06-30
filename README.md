@@ -46,9 +46,9 @@ The following environment variables can be used optionally to configure your Tes
 | `BUILDKITE_SPLITTER_DEBUG_ENABLED` | `false` | Flag to enable more verbose logging. |
 | `BUILDKITE_SPLITTER_RETRY_COUNT` | `0` | The number of retries permitted. Test splitter runs the test command defined in `BUILDKITE_SPLITTER_TEST_CMD`, and retries only the failing tests for a maximum of `BUILDKITE_SPLITTER_RETRY_COUNT` times. For Rspec, the Test Splitter runs `BUILDKITE_SPLITTER_TEST_CMD` with `--only-failures` as the retry command. |
 | `BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE` | `false` | Flag to enable split by example. When this option is `true`, the Test Splitter will split the execution of slow test files over multiple partitions. |
-| `BUILDKITE_SPLITTER_TEST_CMD` | `bundle exec rspec {{testExamples}}` | Test command for running your tests. Test splitter will fill in the `{{testExamples}}` placeholder with the test splitting results |
-| `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | - | Glob pattern to use for excluding test files or directory. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
-| `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `spec/**/*_spec.rb` | Glob pattern for discovering test files that need to be executed. </br> *It accepts pattern syntax supported by [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library*. |
+| `BUILDKITE_SPLITTER_TEST_CMD` | `bundle exec rspec {{testExamples}}` | Test command to run your tests. Test splitter will fill in the `{{testExamples}}` placeholder with the test splitting results |
+| `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | - | Glob pattern to exclude certain test files or directories. The exclusion will be applied after discovering the test files using a pattern configured with `BUILDKITE_SPLITTER_TEST_FILE_PATTERN`. </br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
+| `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `spec/**/*_spec.rb` | Glob pattern to discover test files. You can exclude certain test files or directories from the discovered test files using a pattern that can be configured with `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN`.</br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
 
 
 ### Run the Test Splitter
