@@ -172,7 +172,8 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 	retries := 0
 	for retries < maxRetries {
 		retries++
-		fmt.Printf("Attempt %d of %d to retry failing tests\n", retries, maxRetries)
+
+		fmt.Printf("+++ Buildkite Test Splitter: ♻️ Attempt %d of %d to retry failing tests\n", retries, maxRetries)
 
 		cmd, err := testRunner.RetryCommand()
 		if err != nil {
@@ -210,7 +211,7 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 
 // logErrorAndExit logs an error message and exits with the given exit code.
 func logErrorAndExit(exitCode int, format string, v ...any) {
-	fmt.Printf(format+"\n", v...)
+	fmt.Printf("Buildkite Test Splitter: "+format+"\n", v...)
 	os.Exit(exitCode)
 }
 
