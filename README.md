@@ -1,6 +1,6 @@
 # Buildkite Test Splitter
 
-Buildkite Test Splitter is an open source tool to orchestrate your test suites. It uses your Buildkite Test Analytic suite data to intelligently partition and parallelise your tests. 
+Buildkite Test Splitter is an open source tool to orchestrate your test suites. It uses your Buildkite Test Analytics suite data to intelligently partition and parallelise your tests. 
 Test Splitter currently only supports RSpec but support for other frameworks is coming soon.
 
 ## Installation
