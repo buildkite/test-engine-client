@@ -78,6 +78,7 @@ func main() {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
 
+	fmt.Printf("+++ Buildkite Test Splitter: Running tests")
 	cmd, err := testRunner.Command(runnableTests)
 	if err != nil {
 		logErrorAndExit(16, "Couldn't process test command: %q, %v", testRunner.TestCommand, err)
