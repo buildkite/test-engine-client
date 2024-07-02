@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 - 2024-07-02
+- Fix issue where `--version` would fail if no environment configured.
+- Prefix log statements with 'Buildkite Test Splitter'.
+
 ## 0.7.0 - 2024-06-27
 - Remove the ability to override the test plan identifier via `BUILDKITE_SPLITTER_IDENTIFIER`.
 - Add support for orchestration page in Buildkite, by sending metadata after tests execution.
