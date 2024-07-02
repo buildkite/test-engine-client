@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0 - 2024-06-27
+- Remove the ability to override the test plan identifier via `BUILDKITE_SPLITTER_IDENTIFIER`.
+- Add support for orchestration page in Buildkite, by sending metadata after tests execution.
+
 ## 0.6.2 - 2024-06-24
 - Fix issue where the client version is not set in the user agent.
 
