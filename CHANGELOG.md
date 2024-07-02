@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.2 - 2024-07-03
+- Fix log statement newline issue.
+
 ## 0.7.1 - 2024-07-02
 - Fix issue where `--version` would fail if no environment configured.
 - Prefix log statements with 'Buildkite Test Splitter'.
