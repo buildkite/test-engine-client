@@ -15,6 +15,10 @@ func DetectRunner(cfg config.Config) (*Rspec, error) {
 			TestFileExcludePattern: cfg.TestFileExcludePattern,
 			RetryTestCommand:       cfg.RetryCommand,
 		}), nil
+	case "jest":
+		return NewJest(Jest{
+			TestCommand: cfg.TestCommand,
+		}), nil
 	default:
 		return nil, errors.New("Runner value is invalid, possible values are 'rspec'")
 	}
