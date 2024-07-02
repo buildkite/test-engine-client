@@ -54,6 +54,10 @@ func (c *Config) validate() error {
 		errs.appendFieldError("SuiteSlug", "must not be blank")
 	}
 
+	if c.ResultPath == "" {
+		errs.appendFieldError("ResultPath", "must not be blank")
+	}
+
 	if len(errs) > 0 {
 		return errs
 	}
