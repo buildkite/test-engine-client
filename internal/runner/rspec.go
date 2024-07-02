@@ -12,6 +12,8 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
+var defaultTestFilePattern = "spec/**/*_spec.rb"
+
 // In future, Rspec will implement an interface that defines
 // behaviour common to all test runners.
 // For now, Rspec provides rspec specific behaviour to execute
@@ -32,9 +34,7 @@ func NewRspec(testCommand string) Rspec {
 
 // GetFiles returns an array of file names using the discovery pattern.
 func (r Rspec) GetFiles() ([]string, error) {
-	pattern := r.discoveryPattern()
-
-	files, err := discoverTestFiles(pattern)
+	files, err := discoverTestFiles(defaultTestFilePattern)
 
 	// rspec test in Test Analytics is stored with leading "./"
 	// therefore, we need to add "./" to the file path
@@ -45,10 +45,6 @@ func (r Rspec) GetFiles() ([]string, error) {
 
 	if err != nil {
 		return nil, err
-	}
-
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no files found with pattern %q and exclude pattern %q", pattern.IncludePattern, pattern.ExcludePattern)
 	}
 
 	return files, nil
@@ -89,23 +85,6 @@ func (r Rspec) Command(testCases []string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// discoveryPattern returns the pattern to use for discovering test files.
-// It uses the BUILDKITE_SPLITTER_TEST_FILE_PATTERN and BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN.
-// If BUILDKITE_SPLITTER_TEST_FILE_PATTERN is not set, it defaults to "spec/**/*_spec.rb"
-func (Rspec) discoveryPattern() DiscoveryPattern {
-	includePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
-
-	if includePattern == "" {
-		includePattern = "spec/**/*_spec.rb"
-	}
-
-	excludePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
-
-	return DiscoveryPattern{
-		IncludePattern: includePattern,
-		ExcludePattern: excludePattern,
-	}
-}
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests
 func (r Rspec) commandNameAndArgs(testCases []string) (string, []string, error) {

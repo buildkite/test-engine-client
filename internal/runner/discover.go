@@ -3,6 +3,7 @@ package runner
 import (
 	"fmt"
 	"io/fs"
+	"os"
 
 	"github.com/DrJosh9000/zzglob"
 )
@@ -12,7 +13,20 @@ type DiscoveryPattern struct {
 	ExcludePattern string
 }
 
-func discoverTestFiles(pattern DiscoveryPattern) ([]string, error) {
+func discoverTestFiles(defaultIncludePattern string) ([]string, error) {
+	includePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
+
+	if includePattern == "" {
+		includePattern = defaultIncludePattern
+	}
+
+	excludePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
+
+	pattern := DiscoveryPattern {
+		IncludePattern: includePattern,
+		ExcludePattern: excludePattern,
+	}
+
 	parsedPattern, err := zzglob.Parse(pattern.IncludePattern)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing test file pattern %q", pattern)
@@ -49,6 +63,10 @@ func discoverTestFiles(pattern DiscoveryPattern) ([]string, error) {
 		discoveredFiles = append(discoveredFiles, path)
 		return nil
 	}, zzglob.WalkIntermediateDirs(true))
+
+	if len(discoveredFiles) == 0 {
+		return nil, fmt.Errorf("no files found with pattern %q and exclude pattern %q", pattern.IncludePattern, pattern.ExcludePattern)
+	}
 
 	return discoveredFiles, nil
 }

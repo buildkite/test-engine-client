@@ -106,54 +106,6 @@ func TestRetryCommand_DefaultRetryCommand(t *testing.T) {
 	}
 }
 
-func TestRspecDiscoveryPattern_Default(t *testing.T) {
-	rspec := Rspec{}
-	got := rspec.discoveryPattern()
-
-	want := DiscoveryPattern{
-		IncludePattern: "spec/**/*_spec.rb",
-		ExcludePattern: "",
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.discoveryPattern() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestRspecDiscoveryPattern_IncludePattern(t *testing.T) {
-	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN", "spec/models/**/*_spec.rb")
-	defer os.Unsetenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
-
-	rspec := Rspec{}
-	got := rspec.discoveryPattern()
-
-	want := DiscoveryPattern{
-		IncludePattern: "spec/models/**/*_spec.rb",
-		ExcludePattern: "",
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.discoveryPattern() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestRspecDiscoveryPattern_ExcludePattern(t *testing.T) {
-	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN", "spec/features/**")
-	defer os.Unsetenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
-
-	rspec := Rspec{}
-	got := rspec.discoveryPattern()
-
-	want := DiscoveryPattern{
-		IncludePattern: "spec/**/*_spec.rb",
-		ExcludePattern: "spec/features/**",
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.discoveryPattern() diff (-got +want):\n%s", diff)
-	}
-}
-
 func TestRspecGetExamples(t *testing.T) {
 	rspec := NewRspec("rspec")
 	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
