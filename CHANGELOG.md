@@ -29,6 +29,6 @@
 
 ## 0.5.0
 - ⚠️ **BREAKING** Rename `BUILDKITE_TEST_SPLITTER_CMD` to `BUILDKITE_SPLITTER_TEST_CMD`.
-- ⚠️ **BREAKING** Change the authentication mechanism to use Buildkite API access token. See [Migrating to 0.5.0](https://github.com/buildkite/test-splitter/tree/main?tab=readme-ov-file#migrating-to-050).
+- ⚠️ **BREAKING** Change the authentication mechanism to use Buildkite API access token. See [Migrating to 0.5.0](https://github.com/buildkite/test-splitter/tree/cdbbe348a0eb10bb6ca3211f2c5cd870f0dadfdd?tab=readme-ov-file#migrating-from-040).
 - Add support for automatically retrying failed tests using `BUILDKITE_SPLITTER_RETRY_COUNT`.
 - Add `--version` flag to aid in debugging.
