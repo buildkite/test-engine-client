@@ -106,6 +106,22 @@ func TestRetryCommand_DefaultRetryCommand(t *testing.T) {
 	}
 }
 
+func TestRetryCommand_CustomRetryCommand(t *testing.T) {
+	testCommand := "bin/rspec --options {{testExamples}}"
+	retryCommand := "bin/rspec --only-failures --fast-fail"
+	rspec := NewRspec(testCommand, retryCommand)
+
+	got, err := rspec.RetryCommand()
+	if err != nil {
+		t.Errorf("Rspec.RetryCommand() error = %v", err)
+	}
+
+	want := "bin/rspec --only-failures --fast-fail"
+	if diff := cmp.Diff(got.String(), want); diff != "" {
+		t.Errorf("Rspec.RetryCommand() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestRspecDiscoveryPattern_Default(t *testing.T) {
 	rspec := Rspec{}
 	got := rspec.discoveryPattern()
