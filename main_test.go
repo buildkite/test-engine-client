@@ -594,6 +594,7 @@ func TestSendMetadata(t *testing.T) {
 		"BUILDKITE_PARALLEL_JOB":           "5",
 		"BUILDKITE_SPLITTER_DEBUG_ENABLED": "true",
 		"BUILDKITE_SPLITTER_RETRY_COUNT":   "2",
+		"BUILDKITE_SPLITTER_RETRY_CMD":     "bundle exec rspec --only-failures",
 		"BUILDKITE_SPLITTER_SUITE_SLUG":    "rspec",
 		"BUILDKITE_SPLITTER_TEST_CMD":      "bundle exec rspec",
 	}
@@ -628,6 +629,7 @@ func TestSendMetadata(t *testing.T) {
 				// ensure that the identifier is included in the request
 				"BUILDKITE_SPLITTER_IDENTIFIER":  "fruitsabc",
 				"BUILDKITE_SPLITTER_RETRY_COUNT": "2",
+				"BUILDKITE_SPLITTER_RETRY_CMD":   "bundle exec rspec --only-failures",
 				"BUILDKITE_SPLITTER_SUITE_SLUG":  "rspec",
 				"BUILDKITE_SPLITTER_TEST_CMD":    "bundle exec rspec",
 				"BUILDKITE_STEP_ID":              "pqr",
