@@ -175,7 +175,7 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 		return nil, err
 	}
 
-	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
+	cmdArgs = append(cmdArgs, "--dry-run", "--format", "progress", "--format", "json", "--out", f.Name())
 
 	debug.Println("Running `rspec --dry-run`")
 
