@@ -1,6 +1,6 @@
 FROM ruby:3.3.3-slim-bookworm@sha256:87a8adb9322542cfb623d8044f70184dbdd8026e08fd7fcf9b4a474f69362e1e AS ruby
 
-FROM public.ecr.aws/docker/library/golang:1.21.11 AS golang
+FROM public.ecr.aws/docker/library/golang:1.21.12 AS golang
 COPY --from=ruby / /
 
 RUN gem install rspec
