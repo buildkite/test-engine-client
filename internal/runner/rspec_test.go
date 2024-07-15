@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"errors"
 	"os"
 	"testing"
@@ -157,7 +158,7 @@ func TestRspecDiscoveryPattern_ExcludePattern(t *testing.T) {
 func TestRspecGetExamples(t *testing.T) {
 	rspec := NewRspec("rspec")
 	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
-	got, err := rspec.GetExamples(files)
+	got, err := rspec.GetExamples(context.Background(), files)
 
 	want := []plan.TestCase{
 		{
@@ -214,7 +215,7 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 	commands := []string{"rspec --format documentation", "rspec --format html", withOtherJson}
 	for _, command := range commands {
 		rspec := NewRspec(command)
-		got, err := rspec.GetExamples(files)
+		got, err := rspec.GetExamples(context.Background(), files)
 
 		t.Run(command, func(t *testing.T) {
 

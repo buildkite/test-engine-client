@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -141,7 +142,7 @@ type RspecReport struct {
 }
 
 // GetExamples returns an array of test examples within the given files.
-func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
+func (r Rspec) GetExamples(ctx context.Context, files []string) ([]plan.TestCase, error) {
 	// Create a temporary file to store the JSON output of the rspec dry run.
 	// We cannot simply read the dry run output from stdout because
 	// users may have custom formatters that do not output JSON.
@@ -157,11 +158,11 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 		return nil, err
 	}
 
-	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
+	cmdArgs = append(cmdArgs, "--format", "json", "--out", f.Name())
 
 	debug.Println("Running `rspec --dry-run`")
 
-	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
+	output, err := exec.CommandContext(ctx, cmdName, cmdArgs...).CombinedOutput()
 
 	if err != nil {
 		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %s", output)
