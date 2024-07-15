@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/buildkite/roko"
 	"github.com/buildkite/test-splitter/internal/api"
 	"github.com/buildkite/test-splitter/internal/config"
 	"github.com/buildkite/test-splitter/internal/debug"
@@ -24,7 +25,7 @@ var Version = ""
 
 type TestRunner interface {
 	Command(testCases []string) (*exec.Cmd, error)
-	GetExamples(files []string) ([]plan.TestCase, error)
+	GetExamples(ctx context.Context, files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	RetryCommand() (*exec.Cmd, error)
 }
@@ -250,29 +251,85 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 		return *cachedPlan, nil
 	}
 
-	debug.Println("No test plan found, creating a new plan")
-	// If the cache is empty, create a new plan.
-	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
-	if err != nil {
-		return handleError(err)
+	planChan := make(chan plan.TestPlan)
+	errChan := make(chan error)
+	cancelCtx, cancel := context.WithCancel(ctx)
+
+	// Create a new plan in the background.
+	go func() {
+		debug.Println("No test plan found, creating a new plan")
+		// If the cache is empty, create a new plan.
+		params, err := createRequestParam(cancelCtx, cfg, files, *apiClient, testRunner)
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		debug.Println("Creating test plan")
+		testPlan, err := apiClient.CreateTestPlan(cancelCtx, cfg.SuiteSlug, params)
+
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
+		// In this case, we should create a fallback plan.
+		if len(testPlan.Tasks) == 0 {
+			fmt.Println("Error plan received, using fallback mode. Your build may take longer than usual.")
+			testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
+		}
+
+		debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)
+		planChan <- testPlan
+	}()
+
+	// While attempting to create a new plan, fetch the test plan in the background
+	// periodically to check if other nodes have successfully created the plan.
+	// If the plan is found, the task to create the test plan will be cancelled.
+	go func() {
+		// Add a delay after the first plan creation attempt.
+		time.Sleep(3 * time.Second)
+
+		r := roko.NewRetrier(
+			roko.TryForever(),
+			roko.WithJitter(),
+			roko.WithStrategy(roko.Constant(3*time.Second)),
+		)
+
+		plan, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*plan.TestPlan, error) {
+			plan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier)
+			if err != nil {
+				r.Break()
+				return nil, err
+			}
+
+			if plan == nil {
+				// retry if the plan is not found
+				return nil, errors.New("test plan not found")
+			}
+
+			return plan, nil
+		})
+
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		// If the plan is found, cancel the other background task.
+		cancel()
+		planChan <- *plan
+	}()
+
+	for {
+		select {
+		case err := <-errChan:
+			return handleError(err)
+		case testPlan := <-planChan:
+			return testPlan, nil
+		}
 	}
-
-	debug.Println("Creating test plan")
-	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
-
-	if err != nil {
-		return handleError(err)
-	}
-
-	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
-	// In this case, we should create a fallback plan.
-	if len(testPlan.Tasks) == 0 {
-		fmt.Println("Error plan received, using fallback mode. Your build may take longer than usual.")
-		testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
-	}
-
-	debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)
-	return testPlan, nil
 }
 
 type fileTiming struct {
@@ -357,7 +414,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 	debug.Printf("Getting examples for %d slow files", len(slowFiles))
 
 	// Get the examples for the slow files.
-	slowFilesExamples, err := runner.GetExamples(slowFiles)
+	slowFilesExamples, err := runner.GetExamples(ctx, slowFiles)
 	if err != nil {
 		return api.TestPlanParams{}, fmt.Errorf("failed to get examples for slow files: %w", err)
 	}
