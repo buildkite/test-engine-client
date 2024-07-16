@@ -27,6 +27,7 @@ type TestRunner interface {
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	RetryCommand() (*exec.Cmd, error)
+	Name() string
 }
 
 func main() {
@@ -129,15 +130,20 @@ func main() {
 	if err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
+			if exitCode == -1 {
+				logErrorAndExit(-1, "%s exited abnormally, cannot continue", testRunner.Name())
+			}
+
 			if cfg.MaxRetries == 0 {
 				// If retry is disabled, we exit immediately with the same exit code from the test runner
 				sendMetadata(ctx, apiClient, cfg, timeline)
-				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
+				logErrorAndExit(exitCode, "%s exited with error %v", testRunner.Name(), err)
 			} else {
 				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries, &timeline)
+
 				if retryExitCode != 0 {
 					sendMetadata(ctx, apiClient, cfg, timeline)
-					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
+					logErrorAndExit(retryExitCode, "%s exited with error %v after retry failing tests", testRunner.Name(), err)
 				}
 			}
 		} else {
@@ -197,6 +203,10 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 		if err != nil {
 			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 				exitCode := exitError.ExitCode()
+				if exitCode == -1 {
+					logErrorAndExit(-1, "%s exited abnormally, cannot continue", testRunner.Name())
+				}
+
 				if retries >= maxRetries {
 					// If the command exits with an error and we've reached the maximum number of retries, we exit.
 					return exitCode

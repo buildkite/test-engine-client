@@ -30,6 +30,10 @@ func NewRspec(testCommand string) Rspec {
 	}
 }
 
+func (r Rspec) Name() string {
+	return "RSpec"
+}
+
 // GetFiles returns an array of file names using the discovery pattern.
 func (r Rspec) GetFiles() ([]string, error) {
 	pattern := r.discoveryPattern()
