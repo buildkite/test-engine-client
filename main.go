@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
@@ -130,8 +131,9 @@ func main() {
 	if err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
-			if exitCode == -1 {
-				logErrorAndExit(-1, "%s exited abnormally, cannot continue", testRunner.Name())
+
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+				logErrorAndExit(-1, "%s was terminated with signal: %v", testRunner.Name(), status.Signal())
 			}
 
 			if cfg.MaxRetries == 0 {
@@ -203,8 +205,9 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 		if err != nil {
 			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 				exitCode := exitError.ExitCode()
-				if exitCode == -1 {
-					logErrorAndExit(-1, "%s exited abnormally, cannot continue", testRunner.Name())
+
+				if status, ok := exitError.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+					logErrorAndExit(-1, "%s was terminated with signal: %v", testRunner.Name(), status.Signal())
 				}
 
 				if retries >= maxRetries {
