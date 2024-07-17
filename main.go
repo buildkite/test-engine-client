@@ -19,6 +19,7 @@ import (
 	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/buildkite/test-splitter/internal/runner"
+	"golang.org/x/sys/unix"
 )
 
 var Version = ""
@@ -133,7 +134,7 @@ func main() {
 			exitCode := exitError.ExitCode()
 
 			if status, ok := exitError.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-				logErrorAndExit(-1, "%s was terminated with signal: %v", testRunner.Name(), status.Signal())
+				logSignalAndExit(testRunner.Name(), status.Signal())
 			}
 
 			if cfg.MaxRetries == 0 {
@@ -207,7 +208,7 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 				exitCode := exitError.ExitCode()
 
 				if status, ok := exitError.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-					logErrorAndExit(-1, "%s was terminated with signal: %v", testRunner.Name(), status.Signal())
+					logSignalAndExit(testRunner.Name(), status.Signal())
 				}
 
 				if retries >= maxRetries {
@@ -221,6 +222,13 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 		}
 	}
 	return 1
+}
+
+func logSignalAndExit(name string, signal syscall.Signal) {
+	fmt.Printf("Buildkite Test Splitter: %s was terminated with signal: %v (%v)", name, unix.SignalName(signal), signal)
+
+	exitCode := 128 + int(signal)
+	os.Exit(exitCode)
 }
 
 // logErrorAndExit logs an error message and exits with the given exit code.

@@ -62,12 +62,18 @@ steps:
     env:
       BUILDKITE_SPLITTER_SUITE_SLUG: my-suite
       BUILDKITE_SPLITTER_API_ACCESS_TOKEN: your-secret-token
-``` 
+```
 
-### Exit code
-| Exit code | Description |
-| ---- | ---- |
-| 0 | Success (passed through from test runner) |
-| 1 | Failure (passed through from test runner) |
-| 16 | Test Splitter failure (e.g., config error) |
-| * | Other errors (passed through from the test runner) |
+### Possible exit statuses
+
+The test-splitter client may exit with a variety of exit statuses, outlined below:
+
+- If there is a configuration error, the test-splitter client will exit with
+  status 16.
+- If the test-splitter runner (such as RSpec) exits cleanly, the exit status of
+  the runner is returned. This will likely be 0 for successful test runs, 1 for
+  failing test runs, but may be any other error status returned by the runner.
+- If the test-splitter runner raises an OS level signal, such as SIGSEGV or
+  SIGABRT, the exit status returned will be equal to 128 plus the signal number.
+  For example, if the runner raises a SIGSEGV, the exit status will be (128 +
+  11) = 139.
