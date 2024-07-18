@@ -12,7 +12,6 @@ steps:
           cli-version: 2
           run: release
           mount-checkout: true
-          mount-ssh-agent: true
           mount-buildkite-agent: true
           env:
             - GH_TOKEN
