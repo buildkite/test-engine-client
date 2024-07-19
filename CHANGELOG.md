@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.3 - 2024-07-19
+- Improve handling when the runner terminates due to an OS-level signal.
+
 ## 0.7.2 - 2024-07-03
 - Fix log statement newline issue.
 

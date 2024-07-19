@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/test-splitter/internal/api"
@@ -18,6 +19,7 @@ import (
 	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/buildkite/test-splitter/internal/runner"
+	"golang.org/x/sys/unix"
 )
 
 var Version = ""
@@ -27,6 +29,7 @@ type TestRunner interface {
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	RetryCommand() (*exec.Cmd, error)
+	Name() string
 }
 
 func main() {
@@ -129,15 +132,21 @@ func main() {
 	if err != nil {
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			exitCode := exitError.ExitCode()
+
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+				logSignalAndExit(testRunner.Name(), status.Signal())
+			}
+
 			if cfg.MaxRetries == 0 {
 				// If retry is disabled, we exit immediately with the same exit code from the test runner
 				sendMetadata(ctx, apiClient, cfg, timeline)
-				logErrorAndExit(exitCode, "Rspec exited with error %v", err)
+				logErrorAndExit(exitCode, "%s exited with error %v", testRunner.Name(), err)
 			} else {
 				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries, &timeline)
+
 				if retryExitCode != 0 {
 					sendMetadata(ctx, apiClient, cfg, timeline)
-					logErrorAndExit(retryExitCode, "Rspec exited with error %v after retry failing tests", err)
+					logErrorAndExit(retryExitCode, "%s exited with error %v after retry failing tests", testRunner.Name(), err)
 				}
 			}
 		} else {
@@ -197,6 +206,11 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 		if err != nil {
 			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 				exitCode := exitError.ExitCode()
+
+				if status, ok := exitError.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+					logSignalAndExit(testRunner.Name(), status.Signal())
+				}
+
 				if retries >= maxRetries {
 					// If the command exits with an error and we've reached the maximum number of retries, we exit.
 					return exitCode
@@ -208,6 +222,13 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 		}
 	}
 	return 1
+}
+
+func logSignalAndExit(name string, signal syscall.Signal) {
+	fmt.Printf("Buildkite Test Splitter: %s was terminated with signal: %v (%v)", name, unix.SignalName(signal), signal)
+
+	exitCode := 128 + int(signal)
+	os.Exit(exitCode)
 }
 
 // logErrorAndExit logs an error message and exits with the given exit code.
