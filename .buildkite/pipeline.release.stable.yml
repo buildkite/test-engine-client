@@ -24,3 +24,14 @@
         mount-buildkite-agent: true
         env:
           - GH_TOKEN
+
+- name: ":docker: :rocket: Push Docker image to Docker Hub"
+  command: ".buildkite/steps/release-dockerhub.sh"
+  depends_on: create-release
+  plugins:
+    - aws-assume-role-with-web-identity:
+        role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-splitter-client-release
+    - aws-ssm#v1.0.0:
+        parameters:
+          DOCKERHUB_USER: /pipelines/buildkite/test-splitter-client-release/dockerhub-user
+          DOCKERHUB_PASSWORD: /pipelines/buildkite/test-splitter-client-release/dockerhub-password
