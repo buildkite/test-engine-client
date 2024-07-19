@@ -10,8 +10,8 @@ if git ls-remote --tags origin | grep "refs/tags/v${splitter_version}" ; then
   exit 0
 fi
 
-echo "--- :package: Downloading built binaries from build ${ARTIFACTS_BUILD_ID}"
-buildkite-agent artifact download --build "${ARTIFACTS_BUILD_ID}" "pkg/test-splitter-*" .
+echo "--- :package: Downloading built binaries"
+buildkite-agent artifact download "pkg/test-splitter-*" .
 
 echo "--- :octocat: :rocket: Creating GitHub release for v${splitter_version}"
 gh release create "v${splitter_version}" ./pkg/* --generate-notes

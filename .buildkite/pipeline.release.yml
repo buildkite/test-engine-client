@@ -12,8 +12,6 @@ steps:
           cli-version: 2
           run: release
           mount-checkout: true
-          mount-ssh-agent: true
           mount-buildkite-agent: true
           env:
-            - ARTIFACTS_BUILD_ID
             - GH_TOKEN
