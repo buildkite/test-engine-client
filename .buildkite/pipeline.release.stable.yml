@@ -1,0 +1,26 @@
+- name: ":buildkite: :package: Publish Docker image to Buildkite Packages"
+  command: ".buildkite/steps/release-buildkite-packages.sh"
+
+- wait 
+
+- block: ":rocket: Create stable release?"
+  key: create-release
+  blocked_state: "passed"
+
+- name: ":octocat: :rocket: Create Github Release"
+  command: ".buildkite/steps/release-github.sh"
+  depends_on: create-release
+  plugins:
+    - aws-assume-role-with-web-identity:
+        role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-splitter-client-release
+    - aws-ssm#v1.0.0:
+        parameters:
+          GH_TOKEN: /pipelines/buildkite/test-splitter-client-release/GH_TOKEN
+    - docker-compose#v4.14.0:
+        config: .buildkite/docker-compose.yml
+        cli-version: 2
+        run: release
+        mount-checkout: true
+        mount-buildkite-agent: true
+        env:
+          - GH_TOKEN

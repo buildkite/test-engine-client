@@ -1,0 +1,2 @@
+- name: ":buildkite: :package: Publish Docker image to Buildkite Packages"
+  command: ".buildkite/steps/release-buildkite-packages.sh"

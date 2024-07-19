@@ -2,13 +2,7 @@
 
 set -euo pipefail
 
-splitter_version="$(cat version/VERSION)" 
-
-# Skip release if version already exists
-if git ls-remote --tags origin | grep "refs/tags/v${splitter_version}" ; then
-  echo "Version ${splitter_version} already exists"
-  exit 0
-fi
+splitter_version="$(buildkite-agent meta-data get "version")" 
 
 echo "--- :package: Downloading built binaries"
 buildkite-agent artifact download "pkg/test-splitter-*" .
