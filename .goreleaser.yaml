@@ -1,0 +1,10 @@
+version: 2
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    no_unique_dist_dir: true
+    binary: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
+    ldflags: "-X 'main.Version={{ .Version }}'"
