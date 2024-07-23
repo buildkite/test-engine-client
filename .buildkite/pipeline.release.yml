@@ -1,17 +1,26 @@
 steps:
-  - name: ":octocat: :rocket: Create Github Release"
-    command: ".buildkite/steps/github-release.sh"
+  - name: ":cook: Prepare release"
+    plugins:
+      - docker#v5.11.0:
+          image: ghcr.io/caarlos0/svu:v2.1.0
+          entrypoint: ""
+          command: [".buildkite/steps/prepare-release.sh"]
+          mount-buildkite-agent: true
+  
+  - wait 
+
+  - name: ":rocket: Release"
+    artifact_paths: "dist/test-splitter-*"
     plugins:
       - aws-assume-role-with-web-identity:
           role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-splitter-client-release
       - aws-ssm#v1.0.0:
           parameters:
-            GH_TOKEN: /pipelines/buildkite/test-splitter-client-release/GH_TOKEN
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: release
-          mount-checkout: true
+            GITHUB_TOKEN: /pipelines/buildkite/test-splitter-client-release/GH_TOKEN
+      - docker#v5.11.0:
+          image: goreleaser/goreleaser:v2.1.0
+          entrypoint: ""
+          command: [".buildkite/steps/release.sh"]
           mount-buildkite-agent: true
-          env:
-            - GH_TOKEN
+          environment:
+            - GITHUB_TOKEN
