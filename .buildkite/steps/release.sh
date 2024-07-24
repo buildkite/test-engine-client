@@ -10,5 +10,5 @@ echo "--- :key: Login to Buildkite Packages"
    --lifetime 300 \
    | docker login packages.buildkite.com/buildkite/test-splitter-docker --username=buildkite --password-stdin
 
-eco "--- :github: Creating Release"
+echo "--- :github: Creating Release"
 goreleaser release --clean
