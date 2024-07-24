@@ -17,6 +17,8 @@ steps:
       - aws-ssm#v1.0.0:
           parameters:
             GITHUB_TOKEN: /pipelines/buildkite/test-splitter-client-release/GH_TOKEN
+            DOCKERHUB_USER: /pipelines/buildkite/test-splitter-client-release/dockerhub-user
+            DOCKERHUB_PASSWORD: /pipelines/buildkite/test-splitter-client-release/dockerhub-password
       - docker#v5.11.0:
           image: goreleaser/goreleaser:v2.1.0
           entrypoint: ""
@@ -26,3 +28,5 @@ steps:
             - "/var/run/docker.sock:/var/run/docker.sock"
           environment:
             - GITHUB_TOKEN
+            - DOCKERHUB_USER
+            - DOCKERHUB_PASSWORD
