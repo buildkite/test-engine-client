@@ -31,7 +31,3 @@ services:
       - "BUILDKITE_BUILD_PATH=/buildkite"
       - GOCACHE=/gocache
       - GOMODCACHE=/gomodcache
-  release:
-    build:
-      context: .
-      dockerfile: Dockerfile-release
