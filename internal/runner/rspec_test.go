@@ -12,7 +12,7 @@ import (
 
 func TestNewRspec_DefaultCommand(t *testing.T) {
 	defaultCommand := "bundle exec rspec {{testExamples}}"
-	rspec := NewRspec("")
+	rspec := NewRspec("", "")
 
 	if rspec.TestCommand != defaultCommand {
 		t.Errorf("rspec.TestCommand = %q, want %q", rspec.TestCommand, defaultCommand)
@@ -21,7 +21,7 @@ func TestNewRspec_DefaultCommand(t *testing.T) {
 
 func TestNewRspec_CustomCommand(t *testing.T) {
 	customCommand := "bin/rspec --options {{testExamples}} --format"
-	rspec := NewRspec(customCommand)
+	rspec := NewRspec(customCommand, "")
 
 	if rspec.TestCommand != customCommand {
 		t.Errorf("rspec.TestCommand = %q, want %q", rspec.TestCommand, customCommand)
@@ -31,7 +31,7 @@ func TestNewRspec_CustomCommand(t *testing.T) {
 func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options {{testExamples}} --format"
-	rspec := NewRspec(testCommand)
+	rspec := NewRspec(testCommand, "")
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 	if err != nil {
@@ -52,7 +52,7 @@ func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options --format"
-	rspec := NewRspec(testCommand)
+	rspec := NewRspec(testCommand, "")
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 	if err != nil {
@@ -73,7 +73,7 @@ func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 func TestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options ' {{testExamples}}"
-	rspec := NewRspec(testCommand)
+	rspec := NewRspec(testCommand, "")
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
 
@@ -93,7 +93,7 @@ func TestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 
 func TestRetryCommand_DefaultRetryCommand(t *testing.T) {
 	testCommand := "bin/rspec --options {{testExamples}}"
-	rspec := NewRspec(testCommand)
+	rspec := NewRspec(testCommand, "")
 
 	got, err := rspec.RetryCommand()
 	if err != nil {
@@ -101,6 +101,22 @@ func TestRetryCommand_DefaultRetryCommand(t *testing.T) {
 	}
 
 	want := "bin/rspec --options --only-failures"
+	if diff := cmp.Diff(got.String(), want); diff != "" {
+		t.Errorf("Rspec.RetryCommand() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestRetryCommand_CustomRetryCommand(t *testing.T) {
+	testCommand := "bin/rspec --options {{testExamples}}"
+	retryCommand := "bin/rspec --only-failures --fast-fail"
+	rspec := NewRspec(testCommand, retryCommand)
+
+	got, err := rspec.RetryCommand()
+	if err != nil {
+		t.Errorf("Rspec.RetryCommand() error = %v", err)
+	}
+
+	want := "bin/rspec --only-failures --fast-fail"
 	if diff := cmp.Diff(got.String(), want); diff != "" {
 		t.Errorf("Rspec.RetryCommand() diff (-got +want):\n%s", diff)
 	}
@@ -155,7 +171,7 @@ func TestRspecDiscoveryPattern_ExcludePattern(t *testing.T) {
 }
 
 func TestRspecGetExamples(t *testing.T) {
-	rspec := NewRspec("rspec")
+	rspec := NewRspec("rspec", "")
 	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
 	got, err := rspec.GetExamples(files)
 
@@ -213,7 +229,7 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 
 	commands := []string{"rspec --format documentation", "rspec --format html", withOtherJson}
 	for _, command := range commands {
-		rspec := NewRspec(command)
+		rspec := NewRspec(command, "")
 		got, err := rspec.GetExamples(files)
 
 		t.Run(command, func(t *testing.T) {

@@ -21,6 +21,7 @@ import (
 // - BUILDKITE_SPLITTER_BASE_URL (ServerBaseUrl)
 // - BUILDKITE_SPLITTER_MODE (Mode)
 // - BUILDKITE_SPLITTER_RETRY_COUNT (MaxRetries)
+// - BUILDKITE_SPLITTER_RETRY_CMD (RetryCommand)
 // - BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE (SplitByExample)
 // - BUILDKITE_SPLITTER_SUITE_SLUG (SuiteSlug)
 // - BUILDKITE_SPLITTER_TEST_CMD (TestCommand)
@@ -46,6 +47,7 @@ func (c *Config) readFromEnv() error {
 	if err != nil {
 		errs.appendFieldError("MaxRetries", "was %q, must be a number", os.Getenv("BUILDKITE_SPLITTER_RETRY_COUNT"))
 	}
+	c.RetryCommand = os.Getenv("BUILDKITE_SPLITTER_RETRY_CMD")
 
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	parallelismInt, err := strconv.Atoi(parallelism)

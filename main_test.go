@@ -19,7 +19,7 @@ import (
 )
 
 func TestRetryFailedTests(t *testing.T) {
-	testRunner := runner.NewRspec("true")
+	testRunner := runner.NewRspec("true", "")
 	maxRetries := 3
 	timeline := []api.Timeline{}
 	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
@@ -34,7 +34,7 @@ func TestRetryFailedTests(t *testing.T) {
 }
 
 func TestRetryFailedTests_Failure(t *testing.T) {
-	testRunner := runner.NewRspec("false")
+	testRunner := runner.NewRspec("false", "")
 	maxRetries := 3
 	timeline := []api.Timeline{}
 	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
@@ -50,7 +50,7 @@ func TestRetryFailedTests_Failure(t *testing.T) {
 
 func TestFetchOrCreateTestPlan(t *testing.T) {
 	files := []string{"apple"}
-	testRunner := runner.NewRspec("")
+	testRunner := runner.NewRspec("", "")
 
 	// mock server to return a test plan
 	response := `{
@@ -158,7 +158,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 	})
 
 	tests := []string{"banana"}
-	testRunner := runner.NewRspec("")
+	testRunner := runner.NewRspec("", "")
 
 	want := plan.TestPlan{
 		Tasks: map[string]*plan.Task{
@@ -180,7 +180,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	files := []string{"apple", "banana", "cherry", "mango"}
-	TestRunner := runner.NewRspec("")
+	TestRunner := runner.NewRspec("", "")
 
 	// mock server to return an error plan
 	response := `{
@@ -216,7 +216,7 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	files := []string{"red", "orange", "yellow", "green", "blue", "indigo", "violet"}
-	testRunner := runner.NewRspec("")
+	testRunner := runner.NewRspec("", "")
 
 	// mock server to return a 500 Internal Server Error
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -253,7 +253,7 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	files := []string{"apple", "banana"}
-	testRunner := runner.NewRspec("")
+	testRunner := runner.NewRspec("", "")
 
 	// mock server to return 400 Bad Request
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +294,7 @@ func TestCreateRequestParams_SplitByFile(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{})
-	got, err := createRequestParam(context.Background(), cfg, []string{"apple", "banana"}, *client, runner.NewRspec(""))
+	got, err := createRequestParam(context.Background(), cfg, []string{"apple", "banana"}, *client, runner.NewRspec("", ""))
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
@@ -352,7 +352,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec", ""))
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
@@ -427,7 +427,7 @@ func TestCreateRequestParams_SplitByExample_NoFileTiming(t *testing.T) {
 		"grape_spec.rb",
 	}
 
-	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec(""))
+	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("", ""))
 
 	if err == nil {
 		t.Errorf("createRequestParam() want error, got nil")
@@ -469,7 +469,7 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec", ""))
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
@@ -546,7 +546,7 @@ func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec"))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec", ""))
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
@@ -594,6 +594,7 @@ func TestSendMetadata(t *testing.T) {
 		"BUILDKITE_PARALLEL_JOB":           "5",
 		"BUILDKITE_SPLITTER_DEBUG_ENABLED": "true",
 		"BUILDKITE_SPLITTER_RETRY_COUNT":   "2",
+		"BUILDKITE_SPLITTER_RETRY_CMD":     "bundle exec rspec --only-failures",
 		"BUILDKITE_SPLITTER_SUITE_SLUG":    "rspec",
 		"BUILDKITE_SPLITTER_TEST_CMD":      "bundle exec rspec",
 	}
@@ -628,6 +629,7 @@ func TestSendMetadata(t *testing.T) {
 				// ensure that the identifier is included in the request
 				"BUILDKITE_SPLITTER_IDENTIFIER":  "fruitsabc",
 				"BUILDKITE_SPLITTER_RETRY_COUNT": "2",
+				"BUILDKITE_SPLITTER_RETRY_CMD":   "bundle exec rspec --only-failures",
 				"BUILDKITE_SPLITTER_SUITE_SLUG":  "rspec",
 				"BUILDKITE_SPLITTER_TEST_CMD":    "bundle exec rspec",
 				"BUILDKITE_STEP_ID":              "pqr",

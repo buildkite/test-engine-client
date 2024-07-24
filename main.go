@@ -51,7 +51,7 @@ func main() {
 	}
 
 	// TODO: detect test runner and use appropriate runner
-	testRunner := runner.NewRspec(cfg.TestCommand)
+	testRunner := runner.NewRspec(cfg.TestCommand, cfg.RetryCommand)
 
 	files, err := testRunner.GetFiles()
 	if err != nil {

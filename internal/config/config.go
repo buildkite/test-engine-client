@@ -10,6 +10,8 @@ type Config struct {
 	Identifier string
 	// MaxRetries is the maximum number of retries for a failed test.
 	MaxRetries int
+	// RetryCommand is the command to run the retry tests.
+	RetryCommand string
 	// Mode is the mode of the test splitter.
 	Mode string
 	// Node index is index of the current node.

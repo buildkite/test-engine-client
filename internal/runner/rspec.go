@@ -17,16 +17,18 @@ import (
 // For now, Rspec provides rspec specific behaviour to execute
 // and report on tests in the Rspec framework.
 type Rspec struct {
-	TestCommand string
+	TestCommand      string
+	RetryTestCommand string
 }
 
-func NewRspec(testCommand string) Rspec {
+func NewRspec(testCommand string, retryCommand string) Rspec {
 	if testCommand == "" {
 		testCommand = "bundle exec rspec {{testExamples}}"
 	}
 
 	return Rspec{
-		TestCommand: testCommand,
+		TestCommand:      testCommand,
+		RetryTestCommand: retryCommand,
 	}
 }
 
@@ -59,18 +61,28 @@ func (r Rspec) GetFiles() ([]string, error) {
 }
 
 func (r Rspec) RetryCommand() (*exec.Cmd, error) {
-	// use default test command to build retry command
-	// remove all occurrences of "{{testExamples}}" and append "--only-failures"
+	words := []string{}
 
-	// TODO: support custom retry command in the future
-	words, err := shellquote.Split(r.TestCommand)
-	if err != nil {
-		return nil, err
+	if r.RetryTestCommand == "" {
+		// use test command to build retry command if retry command is not provided
+		// remove all occurrences of "{{testExamples}}" from the test command and append "--only-failures"
+		splits, err := shellquote.Split(r.TestCommand)
+		if err != nil {
+			return nil, err
+		}
+		splits = slices.DeleteFunc(splits, func(n string) bool {
+			return n == "{{testExamples}}"
+		})
+		splits = slices.Insert(splits, len(splits), "--only-failures")
+		words = append(words, splits...)
+	} else {
+		splits, err := shellquote.Split(r.RetryTestCommand)
+		if err != nil {
+			return nil, err
+		}
+		words = append(words, splits...)
 	}
-	words = slices.DeleteFunc(words, func(n string) bool {
-		return n == "{{testExamples}}"
-	})
-	words = slices.Insert(words, len(words), "--only-failures")
+
 	fmt.Println(shellquote.Join(words...))
 
 	cmd := exec.Command(words[0], words[1:]...)
