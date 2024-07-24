@@ -13,5 +13,5 @@ echo "--- :key: :buildkite: Login to Buildkite Packages"
 echo "--- :key: :docker: Login to Docker"
 echo "${DOCKERHUB_PASSWORD}" | docker login --username "${DOCKERHUB_USER}" --password-stdin
 
-echo "--- :rocket: Creating Release"
+echo "+++ :rocket: Creating Release"
 goreleaser release --clean
