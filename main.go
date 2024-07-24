@@ -225,7 +225,7 @@ func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Tim
 }
 
 func logSignalAndExit(name string, signal syscall.Signal) {
-	fmt.Printf("Buildkite Test Splitter: %s was terminated with signal: %v (%v)", name, unix.SignalName(signal), signal)
+	fmt.Printf("Buildkite Test Splitter: %s was terminated with signal: %v (%v)\n", name, unix.SignalName(signal), signal)
 
 	exitCode := 128 + int(signal)
 	os.Exit(exitCode)
