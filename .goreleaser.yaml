@@ -17,3 +17,22 @@ builds:
     goos: [linux, darwin]
     goarch: [amd64, arm64]
     ldflags: "-X 'main.Version={{ .Version }}'"
+
+dockers:
+  - image_templates:
+      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:{{ .Version }}-amd64"
+    dockerfile: "packaging/Dockerfile"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+  - image_templates:
+      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:{{ .Version }}-arm64"
+    goarch: arm64
+    dockerfile: "packaging/Dockerfile"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+
+docker_manifests:
+  - name_template: "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:{{ .Version }}"
+    image_templates:
+      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:{{ .Version }}-amd64"
+      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:{{ .Version }}-arm64"
