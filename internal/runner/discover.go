@@ -29,7 +29,8 @@ func discoverTestFiles(pattern DiscoveryPattern) ([]string, error) {
 	// and append the matched file paths to the discoveredFiles slice
 	parsedPattern.Glob(func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			fmt.Printf("Error walking: %v\n", err)
+			fmt.Printf("Error walking at path %q: %v\n", path, err)
+			return nil
 		}
 
 		// Check if the path matches the exclude pattern. If so, skip it.
