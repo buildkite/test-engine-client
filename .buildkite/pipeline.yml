@@ -1,6 +1,5 @@
 steps:
   - name: ":go::robot_face: Check Code Committed"
-    key: check-code-committed
     command: .buildkite/steps/check-code-committed.sh
     plugins:
       - docker-compose#v4.14.0:
@@ -9,7 +8,6 @@ steps:
           run: build
 
   - name: ":go: Tests with race detector"
-    key: tests
     command: ".buildkite/steps/tests.sh -race"
     artifact_paths:
       - cover.{html,out}
@@ -22,17 +20,21 @@ steps:
 
   - wait
 
-  - group: ":hammer_and_wrench: Binary builds"
+  - group: ":hammer_and_wrench: Build binaries"
     steps:
     - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-      command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
-      key: build-binary
-      artifact_paths: "pkg/*"
+      artifact_paths: "dist/**/*"
       plugins:
-        docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: build
+        docker#v5.11.0:
+          image: goreleaser/goreleaser:v2.1.0
+          mount-buildkite-agent: true
+          environment:
+            - GOOS={{matrix.os}}
+            - GOARCH={{matrix.arch}}
+          command:
+            - build
+            - --single-target
+            - --snapshot
       matrix:
         setup:
           os:

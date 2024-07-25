@@ -22,3 +22,5 @@ go.work
 
 # Pact generated files
 internal/api/pacts/
+
+dist/
