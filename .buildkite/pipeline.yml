@@ -23,14 +23,14 @@ steps:
   - group: ":hammer_and_wrench: Build binaries"
     steps:
     - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-      artifact_paths: "dist/test-splitter-*"
+      artifact_paths: "dist/**/*"
       plugins:
         docker#v5.11.0:
           image: goreleaser/goreleaser:v2.1.0
           mount-buildkite-agent: true
-          env:
-            - GOOS = "{{matrix.os}}"
-            - GOARCH = "{{matrix.arch}}"
+          environment:
+            - GOOS={{matrix.os}}
+            - GOARCH={{matrix.arch}}
           command:
             - build
             - --single-target

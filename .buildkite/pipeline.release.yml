@@ -10,7 +10,7 @@ steps:
   - wait 
 
   - name: ":rocket: Release"
-    artifact_paths: "dist/test-splitter-*"
+    artifact_paths: "dist/**/*"
     plugins:
       - aws-assume-role-with-web-identity:
           role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-splitter-client-release
