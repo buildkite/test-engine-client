@@ -40,7 +40,9 @@ func (r Rspec) Name() string {
 func (r Rspec) GetFiles() ([]string, error) {
 	pattern := r.discoveryPattern()
 
+	debug.Println("Discovering test files with include pattern:", pattern.IncludePattern, "exclude pattern:", pattern.ExcludePattern)
 	files, err := discoverTestFiles(pattern)
+	debug.Println("Discovered", len(files), "files")
 
 	// rspec test in Test Analytics is stored with leading "./"
 	// therefore, we need to add "./" to the file path
