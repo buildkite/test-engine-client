@@ -1,6 +1,8 @@
 module github.com/buildkite/test-splitter
 
-go 1.20
+go 1.21
+
+toolchain go1.22.4
 
 require (
 	github.com/buildkite/roko v1.2.0
@@ -8,7 +10,7 @@ require (
 )
 
 require (
-	github.com/DrJosh9000/zzglob v0.2.0
+	github.com/DrJosh9000/zzglob v0.3.1
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/pact-foundation/pact-go/v2 v2.0.5
 	golang.org/x/sys v0.18.0
