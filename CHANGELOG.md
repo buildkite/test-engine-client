@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0 - 2024-07-26
+- Add support to customize the rspec retry command.
+- Fix issue with file globbing during the file discovery.
+
 ## 0.7.3 - 2024-07-19
 - Improve handling when the runner terminates due to an OS-level signal.
 
