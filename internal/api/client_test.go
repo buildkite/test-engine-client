@@ -185,7 +185,7 @@ func TestDoWithRetry_RequestError(t *testing.T) {
 
 func TestDoWithRetry_429(t *testing.T) {
 	originalTimeout := retryTimeout
-	retryTimeout = 2 * time.Second
+	retryTimeout = 1500 * time.Millisecond
 	t.Cleanup(func() {
 		retryTimeout = originalTimeout
 	})
