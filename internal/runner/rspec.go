@@ -17,19 +17,22 @@ import (
 // For now, Rspec provides rspec specific behaviour to execute
 // and report on tests in the Rspec framework.
 type Rspec struct {
-	TestCommand      string
-	RetryTestCommand string
+	TestCommand            string
+	TestFileExcludePattern string
+	TestFilePattern        string
+	RetryTestCommand       string
 }
 
-func NewRspec(testCommand string, retryCommand string) Rspec {
-	if testCommand == "" {
-		testCommand = "bundle exec rspec {{testExamples}}"
+func NewRspec(r Rspec) Rspec {
+	if r.TestCommand == "" {
+		r.TestCommand = "bundle exec rspec {{testExamples}}"
 	}
 
-	return Rspec{
-		TestCommand:      testCommand,
-		RetryTestCommand: retryCommand,
+	if r.TestFilePattern == "" {
+		r.TestFilePattern = "spec/**/*_spec.rb"
 	}
+
+	return r
 }
 
 func (r Rspec) Name() string {
@@ -38,10 +41,8 @@ func (r Rspec) Name() string {
 
 // GetFiles returns an array of file names using the discovery pattern.
 func (r Rspec) GetFiles() ([]string, error) {
-	pattern := r.discoveryPattern()
-
-	debug.Println("Discovering test files with include pattern:", pattern.IncludePattern, "exclude pattern:", pattern.ExcludePattern)
-	files, err := discoverTestFiles(pattern)
+	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
+	files, err := discoverTestFiles(r.TestFilePattern, r.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
 
 	// rspec test in Test Analytics is stored with leading "./"
@@ -56,7 +57,7 @@ func (r Rspec) GetFiles() ([]string, error) {
 	}
 
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no files found with pattern %q and exclude pattern %q", pattern.IncludePattern, pattern.ExcludePattern)
+		return nil, fmt.Errorf("no files found with pattern %q and exclude pattern %q", r.TestFilePattern, r.TestFileExcludePattern)
 	}
 
 	return files, nil
@@ -105,24 +106,6 @@ func (r Rspec) Command(testCases []string) (*exec.Cmd, error) {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	return cmd, nil
-}
-
-// discoveryPattern returns the pattern to use for discovering test files.
-// It uses the BUILDKITE_SPLITTER_TEST_FILE_PATTERN and BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN.
-// If BUILDKITE_SPLITTER_TEST_FILE_PATTERN is not set, it defaults to "spec/**/*_spec.rb"
-func (Rspec) discoveryPattern() DiscoveryPattern {
-	includePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
-
-	if includePattern == "" {
-		includePattern = "spec/**/*_spec.rb"
-	}
-
-	excludePattern := os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
-
-	return DiscoveryPattern{
-		IncludePattern: includePattern,
-		ExcludePattern: excludePattern,
-	}
 }
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests

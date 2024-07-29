@@ -22,24 +22,28 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE", "TRUE")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
 	os.Setenv("BUILDKITE_STEP_ID", "456")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN", "spec/unit/**/*_spec.rb")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN", "spec/feature/**/*_spec.rb")
 	defer os.Clearenv()
 
 	c := Config{}
 	err := c.readFromEnv()
 
 	want := Config{
-		Parallelism:       10,
-		NodeIndex:         0,
-		ServerBaseUrl:     "https://buildkite.localhost",
-		Mode:              "static",
-		Identifier:        "123/456",
-		TestCommand:       "bin/rspec {{testExamples}}",
-		AccessToken:       "my_token",
-		OrganizationSlug:  "my_org",
-		SuiteSlug:         "my_suite",
-		MaxRetries:        3,
-		SplitByExample:    true,
-		SlowFileThreshold: 3 * time.Minute,
+		Parallelism:            10,
+		NodeIndex:              0,
+		ServerBaseUrl:          "https://buildkite.localhost",
+		Mode:                   "static",
+		Identifier:             "123/456",
+		TestCommand:            "bin/rspec {{testExamples}}",
+		AccessToken:            "my_token",
+		OrganizationSlug:       "my_org",
+		SuiteSlug:              "my_suite",
+		MaxRetries:             3,
+		SplitByExample:         true,
+		SlowFileThreshold:      3 * time.Minute,
+		TestFilePattern:        "spec/unit/**/*_spec.rb",
+		TestFileExcludePattern: "spec/feature/**/*_spec.rb",
 	}
 
 	if err != nil {

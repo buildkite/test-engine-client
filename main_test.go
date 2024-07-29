@@ -19,7 +19,9 @@ import (
 )
 
 func TestRetryFailedTests(t *testing.T) {
-	testRunner := runner.NewRspec("true", "")
+	testRunner := runner.Rspec{
+		TestCommand: "true",
+	}
 	maxRetries := 3
 	timeline := []api.Timeline{}
 	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
@@ -34,7 +36,9 @@ func TestRetryFailedTests(t *testing.T) {
 }
 
 func TestRetryFailedTests_Failure(t *testing.T) {
-	testRunner := runner.NewRspec("false", "")
+	testRunner := runner.Rspec{
+		TestCommand: "false",
+	}
 	maxRetries := 3
 	timeline := []api.Timeline{}
 	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
@@ -50,7 +54,7 @@ func TestRetryFailedTests_Failure(t *testing.T) {
 
 func TestFetchOrCreateTestPlan(t *testing.T) {
 	files := []string{"apple"}
-	testRunner := runner.NewRspec("", "")
+	testRunner := runner.Rspec{}
 
 	// mock server to return a test plan
 	response := `{
@@ -158,7 +162,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 	})
 
 	tests := []string{"banana"}
-	testRunner := runner.NewRspec("", "")
+	testRunner := runner.Rspec{}
 
 	want := plan.TestPlan{
 		Tasks: map[string]*plan.Task{
@@ -180,7 +184,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	files := []string{"apple", "banana", "cherry", "mango"}
-	TestRunner := runner.NewRspec("", "")
+	TestRunner := runner.Rspec{}
 
 	// mock server to return an error plan
 	response := `{
@@ -216,7 +220,7 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	files := []string{"red", "orange", "yellow", "green", "blue", "indigo", "violet"}
-	testRunner := runner.NewRspec("", "")
+	testRunner := runner.Rspec{}
 
 	// mock server to return a 500 Internal Server Error
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -253,7 +257,7 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 
 func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	files := []string{"apple", "banana"}
-	testRunner := runner.NewRspec("", "")
+	testRunner := runner.Rspec{}
 
 	// mock server to return 400 Bad Request
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +298,7 @@ func TestCreateRequestParams_SplitByFile(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{})
-	got, err := createRequestParam(context.Background(), cfg, []string{"apple", "banana"}, *client, runner.NewRspec("", ""))
+	got, err := createRequestParam(context.Background(), cfg, []string{"apple", "banana"}, *client, runner.Rspec{})
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
@@ -352,7 +356,9 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec", ""))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
+		TestCommand: "rspec",
+	})
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
@@ -427,7 +433,7 @@ func TestCreateRequestParams_SplitByExample_NoFileTiming(t *testing.T) {
 		"grape_spec.rb",
 	}
 
-	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("", ""))
+	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{})
 
 	if err == nil {
 		t.Errorf("createRequestParam() want error, got nil")
@@ -469,7 +475,9 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec", ""))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
+		TestCommand: "rspec",
+	})
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
@@ -546,7 +554,9 @@ func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
 		"test/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.NewRspec("rspec", ""))
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
+		TestCommand: "rspec",
+	})
 
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)

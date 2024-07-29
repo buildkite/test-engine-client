@@ -8,10 +8,7 @@ import (
 
 func TestDiscoverTestFiles(t *testing.T) {
 	pattern := "fixtures/**/*_test"
-	got, err := discoverTestFiles(DiscoveryPattern{
-		IncludePattern: pattern,
-		ExcludePattern: "",
-	})
+	got, err := discoverTestFiles(pattern, "")
 
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, "", err)
@@ -33,10 +30,7 @@ func TestDiscoverTestFiles(t *testing.T) {
 func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
 	pattern := "fixtures/**/*_test"
 	excludePattern := "fixtures/animals/*"
-	got, err := discoverTestFiles(DiscoveryPattern{
-		IncludePattern: pattern,
-		ExcludePattern: excludePattern,
-	})
+	got, err := discoverTestFiles(pattern, excludePattern)
 
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, excludePattern, err)
@@ -56,10 +50,7 @@ func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
 func TestDiscoverTestFiles_WithExcludeDirectory(t *testing.T) {
 	pattern := "fixtures/**/*_test"
 	excludePattern := "fixtures/animals"
-	got, err := discoverTestFiles(DiscoveryPattern{
-		IncludePattern: pattern,
-		ExcludePattern: excludePattern,
-	})
+	got, err := discoverTestFiles(pattern, excludePattern)
 
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, excludePattern, err)
