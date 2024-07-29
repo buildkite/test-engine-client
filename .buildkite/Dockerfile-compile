@@ -1,4 +1,4 @@
-FROM ruby:3.3.4-slim-bookworm@sha256:ea8d4225e07dd9f0acc27f2a02c1a5a11e69ca9b261e1cf6556ba0987cb55538 AS ruby
+FROM ruby:3.3.4-slim-bookworm@sha256:92039798d0c27c37ae83955d8a26de5b46b374720675a38b1593e29dba040578 AS ruby
 
 FROM public.ecr.aws/docker/library/golang:1.21.12 AS golang
 COPY --from=ruby / /
