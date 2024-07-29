@@ -5,7 +5,7 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
-          run: build
+          run: ci
 
   - name: ":go: Tests with race detector"
     command: ".buildkite/steps/tests.sh -race"
@@ -16,7 +16,7 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
-          run: build
+          run: ci
 
   - wait
 

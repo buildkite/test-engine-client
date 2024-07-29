@@ -1,3 +1,0 @@
-FROM ruby:3.3.4-slim-bookworm@sha256:92039798d0c27c37ae83955d8a26de5b46b374720675a38b1593e29dba040578
-
-RUN gem install rspec
