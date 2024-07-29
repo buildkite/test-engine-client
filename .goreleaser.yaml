@@ -20,6 +20,20 @@ builds:
     goarch: [amd64, arm64]
     ldflags: "-X 'main.Version=v{{ .Version }}'"
 
+brews:
+  - name: test-splitter
+    description: "Buildkite test splitting client"
+    homepage: "https://github.com/buildkite/test-splitter"
+    skip_upload: auto
+    directory: .
+    test: |
+      version_output = shell_output("test-splitter --version")
+      assert_match "v#{version}\n", version_output
+    repository:
+      owner: buildkite
+      name: homebrew-buildkite
+      branch: master
+
 dockers:
   - image_templates:
       - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-amd64"
