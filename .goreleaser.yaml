@@ -71,6 +71,7 @@ docker_manifests:
 
 nfpms:
   - vendor: Buildkite
+    id: linux-pkg
     homepage: https://github.com/buildkite/test-splitter
     maintainer: Buildkite <support@buildkite.com>
     description: Buildkite test splitting client
@@ -81,3 +82,14 @@ nfpms:
       - rpm
     provides:
       - test-splitter
+    release: 0
+
+publishers:
+  - name: buildkite-packages
+    disable: "{{if .Prerelease}}true{{end}}"
+    cmd: .buildkite/steps/upload-linux-packages.sh {{ .ArtifactPath }}
+    ids:
+      - linux-pkg
+    env:
+      - BUILDKITE_JOB_ID={{ .Env.BUILDKITE_JOB_ID }}
+      - BUILDKITE_AGENT_ACCESS_TOKEN={{ .Env.BUILDKITE_AGENT_ACCESS_TOKEN }}
