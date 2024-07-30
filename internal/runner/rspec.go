@@ -176,10 +176,14 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	}
 
 	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
+	if debug.Enabled {
+		cmdArgs = append(cmdArgs, "--format", "progress")
+	}
 
 	debug.Println("Running `rspec --dry-run`")
 
 	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
+	debug.Println(string(output))
 
 	if err != nil {
 		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %s", output)

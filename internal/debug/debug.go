@@ -6,19 +6,19 @@ import (
 	"os"
 )
 
-var enabled = false
+var Enabled = false
 var logger = log.New(os.Stdout, "DEBUG: ", log.LstdFlags|log.Lmsgprefix)
 
 // Printf works like log.Printf, but only when debugging is enabled.
 func Printf(format string, v ...interface{}) {
-	if enabled {
+	if Enabled {
 		logger.Printf(format, v...)
 	}
 }
 
 // Println works like log.Println, but only when debugging is enabled.
 func Println(v ...interface{}) {
-	if enabled {
+	if Enabled {
 		logger.Println(v...)
 	}
 }
@@ -27,7 +27,7 @@ func Println(v ...interface{}) {
 // When debugging is enabled (true), debug.Printf and debug.Println will print to output.
 // Output by default is os.Stdout, and can be changed with debug.SetOutput.
 func SetDebug(b bool) {
-	enabled = b
+	Enabled = b
 }
 
 // SetOutput sets the destination for the logger.
