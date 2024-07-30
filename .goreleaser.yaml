@@ -68,3 +68,16 @@ docker_manifests:
       - "buildkite/test-splitter:v{{ .Version }}-arm64"
     # skip pushing latest tag to Dockerhub if it's a prerelease  
     skip_push: auto
+
+nfpms:
+  - vendor: Buildkite
+    homepage: https://github.com/buildkite/test-splitter
+    maintainer: Buildkite <support@buildkite.com>
+    description: Buildkite test splitting client
+    license: MIT
+    formats:
+      - apk
+      - deb
+      - rpm
+    provides:
+      - test-splitter
