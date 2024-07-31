@@ -77,12 +77,10 @@ nfpms:
     description: Buildkite test splitting client
     license: MIT
     formats:
-      - apk
       - deb
       - rpm
     provides:
       - test-splitter
-    release: 0
 
 publishers:
   - name: buildkite-packages
