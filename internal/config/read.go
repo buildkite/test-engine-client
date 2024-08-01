@@ -25,6 +25,8 @@ import (
 // - BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE (SplitByExample)
 // - BUILDKITE_SPLITTER_SUITE_SLUG (SuiteSlug)
 // - BUILDKITE_SPLITTER_TEST_CMD (TestCommand)
+// - BUILDKITE_SPLITTER_TEST_FILE_PATTERN (TestFilePattern)
+// - BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN (TestFileExcludePattern)
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
@@ -39,6 +41,8 @@ func (c *Config) readFromEnv() error {
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://api.buildkite.com")
 	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
+	c.TestFilePattern = os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
+	c.TestFileExcludePattern = os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
 
 	c.SplitByExample = strings.ToLower(os.Getenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE")) == "true"
 

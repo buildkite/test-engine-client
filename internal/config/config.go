@@ -30,6 +30,10 @@ type Config struct {
 	SuiteSlug string
 	// TestCommand is the command to run the tests.
 	TestCommand string
+	// TestFilePattern is the pattern to match the test files.
+	TestFilePattern string
+	// TestFileExcludePattern is the pattern to exclude the test files.
+	TestFileExcludePattern string
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.
