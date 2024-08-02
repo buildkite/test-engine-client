@@ -34,6 +34,8 @@ type Config struct {
 	TestFilePattern string
 	// TestFileExcludePattern is the pattern to exclude the test files.
 	TestFileExcludePattern string
+	// TestRunner is the name of the runner.
+	TestRunner string
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.

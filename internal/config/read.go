@@ -43,6 +43,7 @@ func (c *Config) readFromEnv() error {
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
 	c.TestFilePattern = os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
 	c.TestFileExcludePattern = os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
+	c.TestRunner = getEnvWithDefault("BUILDKITE_SPLITTER_TEST_RUNNER", "rspec")
 
 	c.SplitByExample = strings.ToLower(os.Getenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE")) == "true"
 

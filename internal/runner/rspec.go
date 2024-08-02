@@ -23,7 +23,7 @@ type Rspec struct {
 	RetryTestCommand       string
 }
 
-func NewRspec(r Rspec) Rspec {
+func NewRspec(r Rspec) *Rspec {
 	if r.TestCommand == "" {
 		r.TestCommand = "bundle exec rspec {{testExamples}}"
 	}
@@ -32,7 +32,7 @@ func NewRspec(r Rspec) Rspec {
 		r.TestFilePattern = "spec/**/*_spec.rb"
 	}
 
-	return r
+	return &r
 }
 
 func (r Rspec) Name() string {

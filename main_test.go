@@ -607,6 +607,7 @@ func TestSendMetadata(t *testing.T) {
 		"BUILDKITE_SPLITTER_RETRY_CMD":     "bundle exec rspec --only-failures",
 		"BUILDKITE_SPLITTER_SUITE_SLUG":    "rspec",
 		"BUILDKITE_SPLITTER_TEST_CMD":      "bundle exec rspec",
+		"BUILDKITE_SPLITTER_TEST_RUNNER":   "rspec",
 	}
 	for k, v := range env {
 		_ = os.Setenv(k, v)
@@ -648,6 +649,7 @@ func TestSendMetadata(t *testing.T) {
 				"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":          "",
 				"BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN": "",
 				"BUILDKITE_SPLITTER_TEST_FILE_PATTERN":         "",
+				"BUILDKITE_SPLITTER_TEST_RUNNER":               "rspec",
 			},
 		}
 
