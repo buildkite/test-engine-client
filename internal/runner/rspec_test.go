@@ -37,7 +37,7 @@ func TestNewRspec_DefaultPattern(t *testing.T) {
 	want := "spec/**/*_spec.rb"
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.discoveryPattern() diff (-got +want):\n%s", diff)
+		t.Errorf("Rspec.TestFilePattern diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -53,7 +53,7 @@ func TestNewRspec_CustomPattern(t *testing.T) {
 	want := "spec/models/**/*_spec.rb"
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.discoveryPattern() diff (-got +want):\n%s", diff)
+		t.Errorf("Rspec.TestFilePattern diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestNewRspec_EcludePattern(t *testing.T) {
 	want := "spec/features/**"
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.discoveryPattern() diff (-got +want):\n%s", diff)
+		t.Errorf("Rspec.TestFilePattern diff (-got +want):\n%s", diff)
 	}
 }
 
