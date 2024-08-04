@@ -13,7 +13,7 @@ require (
 	github.com/DrJosh9000/zzglob v0.3.1
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/pact-foundation/pact-go/v2 v2.0.6
-	golang.org/x/sys v0.18.0
+	golang.org/x/sys v0.22.0
 )
 
 require (
