@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"syscall"
 
 	"github.com/kballard/go-shellquote"
@@ -66,4 +67,20 @@ func runAndForwardSignal(cmd *exec.Cmd) error {
 	}
 
 	return nil
+}
+
+// commandNameAndArgs replaces the "{{testExamples}}" placeholder in the test command with the test cases.
+// It returns the command name and arguments to run the tests.
+func commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+	words, err := shellquote.Split(cmd)
+	if err != nil {
+		return "", []string{}, err
+	}
+	idx := slices.Index(words, "{{testExamples}}")
+	if idx < 0 {
+		words = append(words, testCases...)
+		return words[0], words[1:], nil
+	}
+	words = slices.Replace(words, idx, idx+1, testCases...)
+	return words[0], words[1:], nil
 }

@@ -95,7 +95,7 @@ func (r Rspec) RetryCommand() (*exec.Cmd, error) {
 }
 
 func (r Rspec) Run(testCases []string) error {
-	commandName, commandArgs, err := r.commandNameAndArgs(testCases)
+	commandName, commandArgs, err := commandNameAndArgs(r.TestCommand, testCases)
 	if err != nil {
 		return err
 	}
@@ -103,21 +103,6 @@ func (r Rspec) Run(testCases []string) error {
 	cmd := exec.Command(commandName, commandArgs...)
 
 	return runAndForwardSignal(cmd)
-}
-
-// commandNameAndArgs returns the command name and arguments to run the Rspec tests
-func (r Rspec) commandNameAndArgs(testCases []string) (string, []string, error) {
-	words, err := shellquote.Split(r.TestCommand)
-	if err != nil {
-		return "", []string{}, err
-	}
-	idx := slices.Index(words, "{{testExamples}}")
-	if idx < 0 {
-		words = append(words, testCases...)
-		return words[0], words[1:], nil
-	}
-	words = slices.Replace(words, idx, idx+1, testCases...)
-	return words[0], words[1:], nil
 }
 
 // RspecExample represents a single test example in an Rspec report.
@@ -150,7 +135,7 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	defer f.Close()
 	defer os.Remove(f.Name())
 
-	cmdName, cmdArgs, err := r.commandNameAndArgs(files)
+	cmdName, cmdArgs, err := commandNameAndArgs(r.TestCommand, files)
 	if err != nil {
 		return nil, err
 	}

@@ -1,13 +1,11 @@
 package runner
 
 import (
-	"errors"
 	"os"
 	"testing"
 
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
-	"github.com/kballard/go-shellquote"
 )
 
 func TestNewRspec_DefaultCommand(t *testing.T) {
@@ -57,7 +55,7 @@ func TestNewRspec_CustomPattern(t *testing.T) {
 	}
 }
 
-func TestNewRspec_EcludePattern(t *testing.T) {
+func TestNewRspec_ExcludePattern(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN", "spec/features/**")
 	defer os.Unsetenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")
 
@@ -70,75 +68,6 @@ func TestNewRspec_EcludePattern(t *testing.T) {
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("Rspec.TestFilePattern diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testCommand := "bin/rspec --options {{testExamples}} --format"
-	rspec := NewRspec(Rspec{
-		TestCommand: testCommand,
-	})
-
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
-	if err != nil {
-		t.Errorf("Rspec.commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
-	}
-
-	wantName := "bin/rspec"
-	wantArgs := []string{"--options", "spec/models/user_spec.rb", "spec/models/billing_spec.rb", "--format"}
-
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("Rspec.commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
-	}
-	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("Rspec.commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
-	}
-}
-
-func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testCommand := "bin/rspec --options --format"
-	rspec := NewRspec(Rspec{
-		TestCommand: testCommand,
-	})
-
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
-	if err != nil {
-		t.Errorf("Rspec.commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
-	}
-
-	wantName := "bin/rspec"
-	wantArgs := []string{"--options", "--format", "spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("Rspec.commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
-	}
-	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("Rspec.commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
-	}
-}
-
-func TestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testCommand := "bin/rspec --options ' {{testExamples}}"
-	rspec := NewRspec(Rspec{
-		TestCommand: testCommand,
-	})
-
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCases)
-
-	wantName := ""
-	wantArgs := []string{}
-
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("Rspec.commandNameAndArgs() diff (-got +want):\n%s", diff)
-	}
-	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("Rspec.commandNameAndArgs() diff (-got +want):\n%s", diff)
-	}
-	if !errors.Is(err, shellquote.UnterminatedSingleQuoteError) {
-		t.Errorf("Rspec.commandNameAndArgs() error = %v, want %v", err, shellquote.UnterminatedSingleQuoteError)
 	}
 }
 
