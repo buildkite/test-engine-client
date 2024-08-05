@@ -24,14 +24,6 @@ import (
 
 var Version = ""
 
-type TestRunner interface {
-	Command(testCases []string) (*exec.Cmd, error)
-	GetExamples(files []string) ([]plan.TestCase, error)
-	GetFiles() ([]string, error)
-	RetryCommand() (*exec.Cmd, error)
-	Name() string
-}
-
 func main() {
 	debug.SetDebug(os.Getenv("BUILDKITE_SPLITTER_DEBUG_ENABLED") == "true")
 
@@ -88,7 +80,7 @@ func main() {
 	fmt.Printf("+++ Buildkite Test Splitter: Running tests\n")
 	cmd, err := testRunner.Command(runnableTests)
 	if err != nil {
-		logErrorAndExit(16, "Couldn't process test command: %q, %v", testRunner.TestCommand, err)
+		logErrorAndExit(16, "Couldn't process test command: %q, %v", cfg.TestCommand, err)
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -181,7 +173,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Timeline) int {
+func retryFailedTests(testRunner runner.TestRunner, maxRetries int, timeline *[]api.Timeline) int {
 	// Retry failed tests
 	retries := 0
 	for retries < maxRetries {
@@ -243,7 +235,7 @@ func logErrorAndExit(exitCode int, format string, v ...any) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg config.Config, files []string, testRunner runner.TestRunner) (plan.TestPlan, error) {
 	debug.Println("Fetching test plan")
 
 	// Fetch the plan from the server's cache.
@@ -311,7 +303,7 @@ type fileTiming struct {
 // If SplitByExample is enabled, it will split the slow files into examples and return it along with the rest of the files.
 //
 // Error is returned if there is a failure to fetch test file timings or to get the test examples from test files when SplitByExample is enabled.
-func createRequestParam(ctx context.Context, cfg config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
+func createRequestParam(ctx context.Context, cfg config.Config, files []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
 	if !cfg.SplitByExample {
 		debug.Println("Splitting by file")
 		testCases := []plan.TestCase{}
