@@ -84,7 +84,7 @@ func main() {
 	}
 
 	var timeline []api.Timeline
-	testResult, err := runTestsWithRetry(testRunner, runnableTests, cfg.MaxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &runnableTests, cfg.MaxRetries, &timeline)
 
 	if err != nil {
 		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
@@ -127,7 +127,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func runTestsWithRetry(testRunner TestRunner, testsCases []string, maxRetries int, timeline *[]api.Timeline) (runner.TestResult, error) {
+func runTestsWithRetry(testRunner TestRunner, testsCases *[]string, maxRetries int, timeline *[]api.Timeline) (runner.TestResult, error) {
 	attemptCount := 0
 
 	var testResult runner.TestResult
@@ -148,7 +148,7 @@ func runTestsWithRetry(testRunner TestRunner, testsCases []string, maxRetries in
 			})
 		}
 
-		testResult, err = testRunner.Run(testsCases, false)
+		testResult, err = testRunner.Run(*testsCases, false)
 
 		if attemptCount == 0 {
 			*timeline = append(*timeline, api.Timeline{
@@ -178,7 +178,7 @@ func runTestsWithRetry(testRunner TestRunner, testsCases []string, maxRetries in
 		}
 
 		// Retry only the failed tests.
-		testsCases = testResult.FailedTests
+		*testsCases = testResult.FailedTests
 		attemptCount++
 	}
 

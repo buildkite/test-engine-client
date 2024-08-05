@@ -27,7 +27,7 @@ func TestRunTestsWithRetry(t *testing.T) {
 	maxRetries := 3
 	testCases := []string{"test/spec/fruits/apple_spec.rb"}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, testCases, maxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
@@ -57,7 +57,7 @@ func TestRunTestsWithRetry_TestFailed(t *testing.T) {
 	maxRetries := 2
 	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, testCases, maxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
@@ -69,6 +69,10 @@ func TestRunTestsWithRetry_TestFailed(t *testing.T) {
 
 	if diff := cmp.Diff(testResult.FailedTests, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
 		t.Errorf("runTestsWithRetry(...) testResult.FailedTests diff (-got +want):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(testCases, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+		t.Errorf("testCases diff (-got +want):\n%s", diff)
 	}
 
 	if len(timeline) != 6 {
@@ -91,7 +95,7 @@ func TestRunTestsWithRetry_Error(t *testing.T) {
 	maxRetries := 2
 	testCases := []string{"test/spec/fruits/fig_spec.rb"}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, testCases, maxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
