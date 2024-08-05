@@ -77,6 +77,8 @@ func main() {
 		logErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
 	}
 
+	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
+
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
 
