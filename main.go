@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
@@ -25,7 +24,7 @@ import (
 var Version = ""
 
 type TestRunner interface {
-	Command(testCases []string) (*exec.Cmd, error)
+	Run(testCases []string) error
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	RetryCommand() (*exec.Cmd, error)
@@ -86,48 +85,12 @@ func main() {
 	}
 
 	fmt.Printf("+++ Buildkite Test Splitter: Running tests\n")
-	cmd, err := testRunner.Command(runnableTests)
-	if err != nil {
-		logErrorAndExit(16, "Couldn't process test command: %q, %v", testRunner.TestCommand, err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		logErrorAndExit(16, "Couldn't start tests: %v", err)
-	}
 	var timeline []api.Timeline
 	timeline = append(timeline, api.Timeline{
 		Event:     "test_start",
 		Timestamp: createTimestamp(),
 	})
-
-	// Create a channel that will be closed when the command finishes.
-	finishCh := make(chan struct{})
-
-	// Start a goroutine to that waits for a signal or the command to finish.
-	go func() {
-		// Create another channel to receive the signals.
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh)
-
-		// Wait for a signal to be received or the command to finish.
-		// Because a message can come through both channels asynchronously,
-		// we use for loop to listen to both channels and select the one that has a message.
-		// Without for loop, only one case would be selected and the other would be ignored.
-		// If the signal is received first, the finishCh will never get processed and the goroutine will run forever.
-		for {
-			select {
-			case sig := <-sigCh:
-				// When a signal is received, forward it to the command.
-				cmd.Process.Signal(sig)
-			case <-finishCh:
-				// When the the command finishes, we stop listening for signals and return.
-				signal.Stop(sigCh)
-				return
-			}
-		}
-	}()
-
-	err = cmd.Wait()
+	err = testRunner.Run(runnableTests)
 	timeline = append(timeline, api.Timeline{
 		Event:     "test_end",
 		Timestamp: createTimestamp(),
@@ -159,9 +122,6 @@ func main() {
 	}
 
 	sendMetadata(ctx, apiClient, cfg, timeline)
-
-	// Close the channel that will stop the goroutine.
-	close(finishCh)
 }
 
 func createTimestamp() string {

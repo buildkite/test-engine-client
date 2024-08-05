@@ -94,18 +94,15 @@ func (r Rspec) RetryCommand() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// Command returns an exec.Cmd that will run the rspec command
-func (r Rspec) Command(testCases []string) (*exec.Cmd, error) {
+func (r Rspec) Run(testCases []string) error {
 	commandName, commandArgs, err := r.commandNameAndArgs(testCases)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	fmt.Println(shellquote.Join(append([]string{commandName}, commandArgs...)...))
 
 	cmd := exec.Command(commandName, commandArgs...)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	return cmd, nil
+
+	return runAndForwardSignal(cmd)
 }
 
 // commandNameAndArgs returns the command name and arguments to run the Rspec tests
