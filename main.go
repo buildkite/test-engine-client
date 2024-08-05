@@ -148,7 +148,7 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]string, maxRetries i
 			})
 		}
 
-		testResult, err = testRunner.Run(*testsCases, false)
+		testResult, err = testRunner.Run(*testsCases, attemptCount > 0)
 
 		if attemptCount == 0 {
 			*timeline = append(*timeline, api.Timeline{
