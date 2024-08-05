@@ -44,6 +44,7 @@ func TestNewConfig(t *testing.T) {
 		OrganizationSlug:  "my_org",
 		SuiteSlug:         "my_suite",
 		SlowFileThreshold: 200 * time.Millisecond,
+		TestRunner:        "rspec",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {
@@ -84,6 +85,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		OrganizationSlug:  "my_org",
 		SuiteSlug:         "my_suite",
 		SlowFileThreshold: 3 * time.Minute,
+		TestRunner:        "rspec",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {

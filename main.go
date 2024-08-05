@@ -50,13 +50,10 @@ func main() {
 		logErrorAndExit(16, "Invalid configuration: %v", err)
 	}
 
-	// TODO: detect test runner and use appropriate runner
-	testRunner := runner.NewRspec(runner.Rspec{
-		TestCommand:            cfg.TestCommand,
-		TestFilePattern:        cfg.TestFilePattern,
-		TestFileExcludePattern: cfg.TestFileExcludePattern,
-		RetryTestCommand:       cfg.RetryCommand,
-	})
+	testRunner, err := runner.DetectRunner(cfg)
+	if err != nil {
+		logErrorAndExit(16, "Unsupported value for BUILDKITE_SPLITTER_TEST_RUNNER")
+	}
 
 	files, err := testRunner.GetFiles()
 	if err != nil {

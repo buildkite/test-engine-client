@@ -44,6 +44,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		SlowFileThreshold:      3 * time.Minute,
 		TestFilePattern:        "spec/unit/**/*_spec.rb",
 		TestFileExcludePattern: "spec/feature/**/*_spec.rb",
+		TestRunner:             "rspec",
 	}
 
 	if err != nil {
