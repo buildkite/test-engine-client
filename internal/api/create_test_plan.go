@@ -19,6 +19,7 @@ type TestPlanParams struct {
 	Runner      Runner             `json:"runner"`
 	Identifier  string             `json:"identifier"`
 	Parallelism int                `json:"parallelism"`
+	Branch      string             `json:"branch"`
 	Tests       TestPlanParamsTest `json:"tests"`
 }
 

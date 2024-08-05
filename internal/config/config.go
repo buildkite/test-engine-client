@@ -36,6 +36,8 @@ type Config struct {
 	TestFileExcludePattern string
 	// TestRunner is the name of the runner.
 	TestRunner string
+	// Branch is the string value of the git branch name, used by Buildkite only.
+	Branch string
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.

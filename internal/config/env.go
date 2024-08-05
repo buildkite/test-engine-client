@@ -52,6 +52,7 @@ func (c Config) DumpEnv() map[string]string {
 		"BUILDKITE_SPLITTER_TEST_FILE_PATTERN",
 		"BUILDKITE_SPLITTER_TEST_RUNNER",
 		"BUILDKITE_STEP_ID",
+		"BUILDKITE_BRANCH",
 	}
 
 	envs := make(map[string]string)
