@@ -15,7 +15,6 @@ type TestPlanParamsTest struct {
 
 // TestPlanParams represents the config params sent when fetching a test plan.
 type TestPlanParams struct {
-	Mode        string             `json:"mode"`
 	Runner      Runner             `json:"runner"`
 	Identifier  string             `json:"identifier"`
 	Parallelism int                `json:"parallelism"`

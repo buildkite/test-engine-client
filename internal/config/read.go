@@ -10,8 +10,8 @@ import (
 
 // readFromEnv reads the configuration from environment variables and sets it to the Config struct.
 // It returns an InvalidConfigError if there is an error while reading the configuration
-// such as when parallelism and node index are not numbers, and
-// set default values for ServerBaseUrl and Mode if they are not set.
+// such as when parallelism and node index are not numbers, and set a default
+// value for ServerBaseUrl if they are not set.
 //
 // Currently, it reads the following environment variables:
 // - BUILDKITE_ORGANIZATION_SLUG (OrganizationSlug)
@@ -19,7 +19,6 @@ import (
 // - BUILDKITE_PARALLEL_JOB (NodeIndex)
 // - BUILDKITE_SPLITTER_API_ACCESS_TOKEN (AccessToken)
 // - BUILDKITE_SPLITTER_BASE_URL (ServerBaseUrl)
-// - BUILDKITE_SPLITTER_MODE (Mode)
 // - BUILDKITE_SPLITTER_RETRY_COUNT (MaxRetries)
 // - BUILDKITE_SPLITTER_RETRY_CMD (RetryCommand)
 // - BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE (SplitByExample)
@@ -40,7 +39,6 @@ func (c *Config) readFromEnv() error {
 
 	c.Identifier = fmt.Sprintf("%s/%s", os.Getenv("BUILDKITE_BUILD_ID"), os.Getenv("BUILDKITE_STEP_ID"))
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://api.buildkite.com")
-	c.Mode = getEnvWithDefault("BUILDKITE_SPLITTER_MODE", "static")
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
 	c.TestFilePattern = os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
 	c.TestFileExcludePattern = os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN")

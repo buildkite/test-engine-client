@@ -12,8 +12,6 @@ type Config struct {
 	MaxRetries int
 	// RetryCommand is the command to run the retry tests.
 	RetryCommand string
-	// Mode is the mode of the test splitter.
-	Mode string
 	// Node index is index of the current node.
 	NodeIndex int
 	// OrganizationSlug is the slug of the organization.

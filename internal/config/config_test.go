@@ -15,7 +15,6 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "7")
 	os.Setenv("BUILDKITE_SPLITTER_API_ACCESS_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://build.kite")
-	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
@@ -37,7 +36,6 @@ func TestNewConfig(t *testing.T) {
 		Parallelism:       60,
 		NodeIndex:         7,
 		ServerBaseUrl:     "https://build.kite",
-		Mode:              "static",
 		Identifier:        "123/456",
 		TestCommand:       "bin/rspec {{testExamples}}",
 		AccessToken:       "my_token",
@@ -79,7 +77,6 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		Parallelism:       60,
 		NodeIndex:         7,
 		ServerBaseUrl:     "https://api.buildkite.com",
-		Mode:              "static",
 		Identifier:        "123/456",
 		AccessToken:       "my_token",
 		OrganizationSlug:  "my_org",
@@ -106,7 +103,7 @@ func TestNewConfig_InvalidConfig(t *testing.T) {
 		t.Errorf("config.Validate() error = %v, want InvalidConfigError", err)
 	}
 
-	if len(invConfigError) != 2 {
+	if len(invConfigError) != 1 {
 		t.Errorf("config.readFromEnv() error length = %d, want 2", len(invConfigError))
 	}
 }
