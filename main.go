@@ -24,10 +24,9 @@ import (
 var Version = ""
 
 type TestRunner interface {
-	Run(testCases []string) error
+	Run(testCases []string, retry bool) (runner.TestResult, error)
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
-	RetryCommand() (*exec.Cmd, error)
 	Name() string
 }
 
@@ -84,41 +83,28 @@ func main() {
 		runnableTests = append(runnableTests, testCase.Path)
 	}
 
-	fmt.Printf("+++ Buildkite Test Splitter: Running tests\n")
 	var timeline []api.Timeline
-	timeline = append(timeline, api.Timeline{
-		Event:     "test_start",
-		Timestamp: createTimestamp(),
-	})
-	err = testRunner.Run(runnableTests)
-	timeline = append(timeline, api.Timeline{
-		Event:     "test_end",
-		Timestamp: createTimestamp(),
-	})
+	testResult, err := runTestsWithRetry(testRunner, runnableTests, cfg.MaxRetries, &timeline)
 
 	if err != nil {
-		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-			exitCode := exitError.ExitCode()
-
-			if status, ok := exitError.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-				logSignalAndExit(testRunner.Name(), status.Signal())
-			}
-
-			if cfg.MaxRetries == 0 {
-				// If retry is disabled, we exit immediately with the same exit code from the test runner
-				sendMetadata(ctx, apiClient, cfg, timeline)
-				logErrorAndExit(exitCode, "%s exited with error %v", testRunner.Name(), err)
-			} else {
-				retryExitCode := retryFailedTests(testRunner, cfg.MaxRetries, &timeline)
-
-				if retryExitCode != 0 {
-					sendMetadata(ctx, apiClient, cfg, timeline)
-					logErrorAndExit(retryExitCode, "%s exited with error %v after retry failing tests", testRunner.Name(), err)
-				}
-			}
-		} else {
-			logErrorAndExit(16, "Couldn't run tests: %v", err)
+		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
+			logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
 		}
+
+		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
+			sendMetadata(ctx, apiClient, cfg, timeline)
+			logErrorAndExit(exitError.ExitCode(), "%s exited with error %v", testRunner.Name(), err)
+		}
+
+		logErrorAndExit(16, "Couldn't run tests: %v", err)
+	}
+
+	if testResult.Status == runner.TestStatusFailed {
+		sendMetadata(ctx, apiClient, cfg, timeline)
+		if failedCount := len(testResult.FailedTests); failedCount > 1 {
+			logErrorAndExit(1, "%s exited with %d failures", testRunner.Name(), failedCount)
+		}
+		logErrorAndExit(1, "%s exited with 1 failure", testRunner.Name())
 	}
 
 	sendMetadata(ctx, apiClient, cfg, timeline)
@@ -141,51 +127,62 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func retryFailedTests(testRunner TestRunner, maxRetries int, timeline *[]api.Timeline) int {
-	// Retry failed tests
-	retries := 0
-	for retries < maxRetries {
-		retries++
+func runTestsWithRetry(testRunner TestRunner, testsCases []string, maxRetries int, timeline *[]api.Timeline) (runner.TestResult, error) {
+	attemptCount := 0
 
-		fmt.Printf("+++ Buildkite Test Splitter: ♻️ Attempt %d of %d to retry failing tests\n", retries, maxRetries)
+	var testResult runner.TestResult
+	var err error
 
-		cmd, err := testRunner.RetryCommand()
-		if err != nil {
-			logErrorAndExit(16, "Couldn't process retry command: %v", err)
-		}
-
-		if err := cmd.Start(); err != nil {
-			logErrorAndExit(16, "Couldn't start tests: %v", err)
-		}
-		*timeline = append(*timeline, api.Timeline{
-			Event:     fmt.Sprintf("retry_%d_start", retries),
-			Timestamp: createTimestamp(),
-		})
-
-		err = cmd.Wait()
-		*timeline = append(*timeline, api.Timeline{
-			Event:     fmt.Sprintf("retry_%d_end", retries),
-			Timestamp: createTimestamp(),
-		})
-		if err != nil {
-			if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-				exitCode := exitError.ExitCode()
-
-				if status, ok := exitError.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-					logSignalAndExit(testRunner.Name(), status.Signal())
-				}
-
-				if retries >= maxRetries {
-					// If the command exits with an error and we've reached the maximum number of retries, we exit.
-					return exitCode
-				}
-			}
+	for attemptCount <= maxRetries {
+		if attemptCount == 0 {
+			fmt.Printf("+++ Buildkite Test Splitter: Running tests\n")
+			*timeline = append(*timeline, api.Timeline{
+				Event:     "test_start",
+				Timestamp: createTimestamp(),
+			})
 		} else {
-			// If the failing tests pass after retry (test command exits without error), we exit with code 0.
-			return 0
+			fmt.Printf("+++ Buildkite Test Splitter: ♻️ Attempt %d of %d to retry failing tests\n", attemptCount, maxRetries)
+			*timeline = append(*timeline, api.Timeline{
+				Event:     fmt.Sprintf("retry_%d_start", attemptCount),
+				Timestamp: createTimestamp(),
+			})
 		}
+
+		testResult, err = testRunner.Run(testsCases, false)
+
+		if attemptCount == 0 {
+			*timeline = append(*timeline, api.Timeline{
+				Event:     "test_end",
+				Timestamp: createTimestamp(),
+			})
+		} else {
+			*timeline = append(*timeline, api.Timeline{
+				Event:     fmt.Sprintf("retry_%d_end", attemptCount),
+				Timestamp: createTimestamp(),
+			})
+		}
+
+		// Don't retry if we've reached max retries.
+		if attemptCount == maxRetries {
+			break
+		}
+
+		// Don't retry if there is an error that is not a test failure.
+		if err != nil {
+			break
+		}
+
+		// Don't retry if tests are passed.
+		if testResult.Status == runner.TestStatusPassed {
+			break
+		}
+
+		// Retry only the failed tests.
+		testsCases = testResult.FailedTests
+		attemptCount++
 	}
-	return 1
+
+	return testResult, err
 }
 
 func logSignalAndExit(name string, signal syscall.Signal) {
