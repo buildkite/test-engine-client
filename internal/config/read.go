@@ -27,6 +27,7 @@ import (
 // - BUILDKITE_SPLITTER_TEST_CMD (TestCommand)
 // - BUILDKITE_SPLITTER_TEST_FILE_PATTERN (TestFilePattern)
 // - BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN (TestFileExcludePattern)
+// - BUILDKITE_BRANCH (Branch)
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
@@ -46,6 +47,9 @@ func (c *Config) readFromEnv() error {
 	c.TestRunner = getEnvWithDefault("BUILDKITE_SPLITTER_TEST_RUNNER", "rspec")
 
 	c.SplitByExample = strings.ToLower(os.Getenv("BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE")) == "true"
+
+	// used by Buildkite only, for experimental plans
+	c.Branch = os.Getenv("BUILDKITE_BRANCH")
 
 	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_SPLITTER_RETRY_COUNT", 0)
 	c.MaxRetries = MaxRetries

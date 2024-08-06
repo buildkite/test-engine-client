@@ -155,6 +155,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		ServerBaseUrl:    svr.URL,
 		OrganizationSlug: "org",
 		SuiteSlug:        "suite",
+		Branch:           "tat-123/my-cool-feature",
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl:    cfg.ServerBaseUrl,
@@ -200,6 +201,7 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 		NodeIndex:     0,
 		Parallelism:   2,
 		Identifier:    "identifier",
+		Branch:        "tat-123/my-cool-feature",
 		ServerBaseUrl: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
@@ -237,6 +239,7 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 		NodeIndex:     0,
 		Parallelism:   3,
 		Identifier:    "identifier",
+		Branch:        "tat-123/my-cool-feature",
 		ServerBaseUrl: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
@@ -271,6 +274,7 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 		NodeIndex:     0,
 		Parallelism:   2,
 		Identifier:    "identifier",
+		Branch:        "",
 		ServerBaseUrl: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
@@ -295,6 +299,7 @@ func TestCreateRequestParams_SplitByFile(t *testing.T) {
 		SuiteSlug:        "my-suite",
 		Identifier:       "identifier",
 		Parallelism:      7,
+		Branch:           "",
 	}
 
 	client := api.NewClient(api.ClientConfig{})
@@ -302,6 +307,7 @@ func TestCreateRequestParams_SplitByFile(t *testing.T) {
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
+		Branch:      "",
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
 				{Path: "apple"},
@@ -339,6 +345,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 		SuiteSlug:         "my-suite",
 		Identifier:        "identifier",
 		Parallelism:       7,
+		Branch:            "",
 		SplitByExample:    true,
 		SlowFileThreshold: 3 * time.Minute,
 	}
@@ -369,6 +376,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
+		Branch:      "",
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
 				{Path: "test/spec/fruits/apple_spec.rb"},
@@ -417,6 +425,7 @@ func TestCreateRequestParams_SplitByExample_NoFileTiming(t *testing.T) {
 		SuiteSlug:        "my-suite",
 		Identifier:       "identifier",
 		Parallelism:      7,
+		Branch:           "",
 		SplitByExample:   true,
 	}
 
@@ -458,6 +467,7 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 		SuiteSlug:         "my-suite",
 		Identifier:        "identifier",
 		Parallelism:       7,
+		Branch:            "",
 		SplitByExample:    true,
 		SlowFileThreshold: 3 * time.Minute,
 	}
@@ -488,6 +498,7 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
+		Branch:      "",
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
 				{Path: "test/spec/fruits/apple_spec.rb"},
@@ -537,6 +548,7 @@ func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
 		SuiteSlug:         "my-suite",
 		Identifier:        "identifier",
 		Parallelism:       7,
+		Branch:            "",
 		SplitByExample:    true,
 		SlowFileThreshold: 3 * time.Minute,
 	}
@@ -565,6 +577,7 @@ func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
 		Parallelism: 7,
+		Branch:      "",
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
 				{Path: "test/spec/fruits/apple_spec.rb"},
@@ -650,6 +663,7 @@ func TestSendMetadata(t *testing.T) {
 				"BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN": "",
 				"BUILDKITE_SPLITTER_TEST_FILE_PATTERN":         "",
 				"BUILDKITE_SPLITTER_TEST_RUNNER":               "rspec",
+				"BUILDKITE_BRANCH":                             "",
 			},
 		}
 

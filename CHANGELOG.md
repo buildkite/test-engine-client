@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1 - 2024-08-06
+- Add BUILDKITE_BRANCH env var for test plan experiments
+- Fix to zzglob library issue where files not matching the include pattern are in the test plan
+
 ## 0.8.0 - 2024-07-26
 - Add support to customize the rspec retry command.
 - Fix issue with file globbing during the file discovery.
