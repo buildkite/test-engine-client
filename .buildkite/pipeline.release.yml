@@ -1,4 +1,19 @@
 steps:
+  - name: ":banana: Publish Pact"
+    env:
+      PACT_BROKER_BASE_URL: "https://buildkite.pactflow.io"
+    plugins:
+      - aws-ssm#v1.0.0:
+          parameters:
+            PACT_BROKER_TOKEN: /pipelines/buildkite/test-splitter-client-release/PACT_BROKER_TOKEN
+      - docker#v5.11.0:
+        image: pactfoundation/pact-cli:latest
+        command: ["./buildkite/steps/publish-pacts.sh"]
+        environment:
+          - BUILDKITE_COMMIT
+          - PACT_BROKER_BASE_URL
+          - PACT_BROKER_TOKEN
+
   - name: ":cook: Prepare release"
     plugins:
       - docker#v5.11.0:
@@ -6,8 +21,8 @@ steps:
           entrypoint: ""
           command: [".buildkite/steps/prepare-release.sh"]
           mount-buildkite-agent: true
-  
-  - wait 
+
+  - wait
 
   - name: ":rocket: Release"
     artifact_paths: "dist/**/*"
