@@ -26,6 +26,8 @@ func TestCreateTestPlan(t *testing.T) {
 	}
 
 	params := TestPlanParams{
+		Runner: "rspec",
+		Branch: "tat-123-add-branch-name",
 		Identifier:  "abc123",
 		Parallelism: 3,
 		Tests: TestPlanParamsTest{
