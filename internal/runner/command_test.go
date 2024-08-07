@@ -35,7 +35,7 @@ func TestRunAndForwardSignal_CommandExitsWithNonZero(t *testing.T) {
 func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
 	cmd := exec.Command("sleep", "10")
 
-	// Send a SIGTERM signal to the process after 1 second.
+	// Send a SIGTERM signal to the main process.
 	go func() {
 		pid := os.Getpid()
 		process, err := os.FindProcess(pid)
@@ -58,13 +58,7 @@ func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
 }
 
 func TestRunAndForwardSignal_SignalReceivedInSubProcess(t *testing.T) {
-	cmd := exec.Command("sleep", "10")
-
-	// Send a SIGSEGV signal to the sub process after 1 second.
-	go func() {
-		time.Sleep(300 * time.Millisecond)
-		cmd.Process.Signal(syscall.SIGSEGV)
-	}()
+	cmd := exec.Command("../../test/support/segv.sh")
 
 	err := runAndForwardSignal(cmd)
 

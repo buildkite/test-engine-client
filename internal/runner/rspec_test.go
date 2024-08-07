@@ -150,20 +150,9 @@ func TestRspecRun_CommandFailed(t *testing.T) {
 
 func TestRspecRun_SignaledError(t *testing.T) {
 	rspec := NewRspec(Rspec{
-		TestCommand: "rspec",
+		TestCommand: "../../test/support/segv.sh",
 	})
 	files := []string{"./fixtures/spec/failure_spec.rb"}
-
-	// Send a SIGTERM signal to the process after 1 second.
-	go func() {
-		pid := os.Getpid()
-		process, err := os.FindProcess(pid)
-		if err != nil {
-			fmt.Println(err)
-		}
-		time.Sleep(100 * time.Millisecond)
-		process.Signal(syscall.SIGTERM)
-	}()
 
 	got, err := rspec.Run(files, false)
 
@@ -179,8 +168,8 @@ func TestRspecRun_SignaledError(t *testing.T) {
 	if !errors.As(err, &signalError) {
 		t.Errorf("Expected ErrProcessSignaled, but got %v", err)
 	}
-	if signalError.Signal != syscall.SIGTERM {
-		t.Errorf("Expected signal %d, but got %d", syscall.SIGTERM, signalError.Signal)
+	if signalError.Signal != syscall.SIGSEGV {
+		t.Errorf("Expected signal %d, but got %d", syscall.SIGSEGV, signalError.Signal)
 	}
 }
 
