@@ -93,7 +93,7 @@ func main() {
 
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 			sendMetadata(ctx, apiClient, cfg, timeline)
-			logErrorAndExit(exitError.ExitCode(), "%s exited with error %v", testRunner.Name(), err)
+			logErrorAndExit(exitError.ExitCode(), "%s exited with error: %v", testRunner.Name(), err)
 		}
 
 		logErrorAndExit(16, "Couldn't run tests: %v", err)

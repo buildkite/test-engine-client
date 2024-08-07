@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -20,7 +19,6 @@ func runAndForwardSignal(cmd *exec.Cmd) error {
 	finishCh := make(chan struct{})
 	defer close(finishCh)
 
-	fmt.Println(shellquote.Join(cmd.Args...))
 	if err := cmd.Start(); err != nil {
 		return err
 	}

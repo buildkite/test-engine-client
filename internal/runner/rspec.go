@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
@@ -97,6 +98,7 @@ func (r Rspec) Run(testCases []string, retry bool) (TestResult, error) {
 	defer f.Close()
 	defer os.Remove(f.Name())
 
+	fmt.Printf("%s %s\n", commandName, strings.Join(commandArgs, " "))
 	commandArgs = append(commandArgs, "--format", "json", "--out", f.Name())
 	cmd := exec.Command(commandName, commandArgs...)
 
@@ -115,6 +117,7 @@ func (r Rspec) Run(testCases []string, retry bool) (TestResult, error) {
 		if parseErr != nil {
 			// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
 			// therefore we need to bubble up the error.
+			fmt.Println("Buildkite Test Splitter: Failed to read Rspec output, tests will not be retried.")
 			return TestResult{Status: TestStatusError}, err
 		}
 
