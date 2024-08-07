@@ -2,12 +2,10 @@ package runner
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
@@ -22,10 +20,10 @@ func TestNewRspec(t *testing.T) {
 		{
 			input: Rspec{},
 			want: Rspec{
-				TestCommand:            "bundle exec rspec {{testExamples}}",
+				TestCommand:            "bundle exec rspec --format progress {{testExamples}}",
 				TestFilePattern:        "spec/**/*_spec.rb",
 				TestFileExcludePattern: "",
-				RetryTestCommand:       "bundle exec rspec {{testExamples}}",
+				RetryTestCommand:       "bundle exec rspec --format progress {{testExamples}}",
 			},
 		},
 		// custom

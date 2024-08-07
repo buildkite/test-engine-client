@@ -24,7 +24,7 @@ type Rspec struct {
 
 func NewRspec(r Rspec) *Rspec {
 	if r.TestCommand == "" {
-		r.TestCommand = "bundle exec rspec {{testExamples}}"
+		r.TestCommand = "bundle exec rspec --format progress {{testExamples}}"
 	}
 
 	if r.TestFilePattern == "" {
