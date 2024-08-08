@@ -13,7 +13,6 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "0")
 	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://buildkite.localhost")
-	os.Setenv("BUILDKITE_SPLITTER_MODE", "static")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
 	os.Setenv("BUILDKITE_SPLITTER_API_ACCESS_TOKEN", "my_token")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
@@ -33,7 +32,6 @@ func TestConfigReadFromEnv(t *testing.T) {
 		Parallelism:            10,
 		NodeIndex:              0,
 		ServerBaseUrl:          "https://buildkite.localhost",
-		Mode:                   "static",
 		Identifier:             "123/456",
 		TestCommand:            "bin/rspec {{testExamples}}",
 		AccessToken:            "my_token",
@@ -69,10 +67,6 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 	c.readFromEnv()
 	if c.ServerBaseUrl != "https://api.buildkite.com" {
 		t.Errorf("ServerBaseUrl = %v, want %v", c.ServerBaseUrl, "https://api.buildkite.com")
-	}
-
-	if c.Mode != "static" {
-		t.Errorf("Mode = %v, want %v", c.Mode, "static")
 	}
 
 	if c.Identifier != "123/456" {

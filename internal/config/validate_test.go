@@ -9,7 +9,6 @@ import (
 func createConfig() Config {
 	return Config{
 		ServerBaseUrl:    "http://example.com",
-		Mode:             "static",
 		Parallelism:      10,
 		NodeIndex:        0,
 		Identifier:       "my_identifier",
@@ -46,11 +45,6 @@ func TestConfigValidate_Invalid(t *testing.T) {
 			name:  "ServerBaseUrl is not a valid url",
 			field: "ServerBaseUrl",
 			value: "foo",
-		},
-		{
-			name:  "Mode is not static",
-			field: "Mode",
-			value: "dynamic",
 		},
 		{
 			name:  "Identifier is missing",
@@ -100,8 +94,6 @@ func TestConfigValidate_Invalid(t *testing.T) {
 			switch s.field {
 			case "ServerBaseUrl":
 				c.ServerBaseUrl = s.value.(string)
-			case "Mode":
-				c.Mode = s.value.(string)
 			case "Identifier":
 				c.Identifier = s.value.(string)
 			case "NodeIndex":

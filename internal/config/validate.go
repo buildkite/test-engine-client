@@ -36,10 +36,6 @@ func (c *Config) validate() error {
 		errs.appendFieldError("NodeIndex", "was %d, must not be greater than %d", got, max)
 	}
 
-	if c.Mode != "static" {
-		errs.appendFieldError("Mode", "%q is not a valid %s, valid values are %v", c.Mode, "Mode", []string{"static"})
-	}
-
 	if c.ServerBaseUrl != "" {
 		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
 			errs.appendFieldError("ServerBaseUrl", "must be a valid URL")

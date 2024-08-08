@@ -322,7 +322,6 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		}
 
 		return api.TestPlanParams{
-			Mode:        cfg.Mode,
 			Identifier:  cfg.Identifier,
 			Parallelism: cfg.Parallelism,
 			Branch:      cfg.Branch,
@@ -371,7 +370,6 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 	if len(slowFiles) == 0 {
 		debug.Println("No slow files found")
 		return api.TestPlanParams{
-			Mode:        cfg.Mode,
 			Identifier:  cfg.Identifier,
 			Parallelism: cfg.Parallelism,
 			Branch:      cfg.Branch,
@@ -392,7 +390,6 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 	debug.Printf("Got %d examples within the slow files", len(slowFilesExamples))
 
 	return api.TestPlanParams{
-		Mode:        cfg.Mode,
 		Identifier:  cfg.Identifier,
 		Parallelism: cfg.Parallelism,
 		Branch:      cfg.Branch,
