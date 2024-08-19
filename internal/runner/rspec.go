@@ -17,22 +17,21 @@ import (
 // For now, Rspec provides rspec specific behaviour to execute
 // and report on tests in the Rspec framework.
 type Rspec struct {
-	TestCommand            string
-	TestFileExcludePattern string
-	TestFilePattern        string
-	RetryTestCommand       string
+	cfg RunnerConfig
 }
 
-func NewRspec(r Rspec) *Rspec {
-	if r.TestCommand == "" {
-		r.TestCommand = "bundle exec rspec {{testExamples}}"
+func NewRspec(cfg *RunnerConfig) *Rspec {
+	if cfg.TestCommand == "" {
+		cfg.TestCommand = "bundle exec rspec {{testExamples}}"
 	}
 
-	if r.TestFilePattern == "" {
-		r.TestFilePattern = "spec/**/*_spec.rb"
+	if cfg.TestFilePattern == "" {
+		cfg.TestFilePattern = "spec/**/*_spec.rb"
 	}
 
-	return &r
+	return Rspec{
+		cfg: cfg
+	}
 }
 
 func (r Rspec) Name() string {

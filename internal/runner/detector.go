@@ -4,9 +4,15 @@ import (
 	"errors"
 	"os/exec"
 
-	"github.com/buildkite/test-splitter/internal/config"
 	"github.com/buildkite/test-splitter/internal/plan"
 )
+
+type RunnerConfig struct {
+  TestCommand string
+  TestFilePattern string
+  TestFileExcludePattern string
+  RetryTestCommand string
+}
 
 type TestRunner interface {
 	Command(testCases []string) (*exec.Cmd, error)
@@ -16,15 +22,10 @@ type TestRunner interface {
 	Name() string
 }
 
-func DetectRunner(cfg config.Config) (TestRunner, error) {
+func DetectRunner(runner string, cfg RunnerConfig) (TestRunner, error) {
 	switch cfg.TestRunner {
 	case "rspec":
-		return NewRspec(Rspec{
-			TestCommand:            cfg.TestCommand,
-			TestFilePattern:        cfg.TestFilePattern,
-			TestFileExcludePattern: cfg.TestFileExcludePattern,
-			RetryTestCommand:       cfg.RetryCommand,
-		}), nil
+		return NewRspec(cfg), nil
 	default:
 		return nil, errors.New("Runner value is invalid, possible values are 'rspec'")
 	}
