@@ -24,7 +24,7 @@ import (
 var Version = ""
 
 type TestRunner interface {
-	Run(testCases []string, retry bool) (runner.TestResult, error)
+	Run(testCases []string, retry bool) (runner.RunResult, error)
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string
@@ -99,7 +99,7 @@ func main() {
 		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
-	if testResult.Status == runner.TestStatusFailed {
+	if testResult.Status == runner.RunStatusFailed {
 		sendMetadata(ctx, apiClient, cfg, timeline)
 		if failedCount := len(testResult.FailedTests); failedCount > 1 {
 			logErrorAndExit(1, "%s exited with %d failures", testRunner.Name(), failedCount)
@@ -127,10 +127,10 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func runTestsWithRetry(testRunner TestRunner, testsCases *[]string, maxRetries int, timeline *[]api.Timeline) (runner.TestResult, error) {
+func runTestsWithRetry(testRunner TestRunner, testsCases *[]string, maxRetries int, timeline *[]api.Timeline) (runner.RunResult, error) {
 	attemptCount := 0
 
-	var testResult runner.TestResult
+	var testResult runner.RunResult
 	var err error
 
 	for attemptCount <= maxRetries {
@@ -173,7 +173,7 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]string, maxRetries i
 		}
 
 		// Don't retry if tests are passed.
-		if testResult.Status == runner.TestStatusPassed {
+		if testResult.Status == runner.RunStatusPassed {
 			break
 		}
 

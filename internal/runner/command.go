@@ -23,7 +23,7 @@ func runAndForwardSignal(cmd *exec.Cmd) error {
 		return err
 	}
 
-	// Start a goroutine to that waits for a signal or the command to finish.
+	// Start a goroutine that waits for a signal or the command to finish.
 	go func() {
 		// Create another channel to receive the signals.
 		sigCh := make(chan os.Signal, 1)

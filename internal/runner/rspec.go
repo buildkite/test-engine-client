@@ -74,8 +74,8 @@ func (r Rspec) GetFiles() ([]string, error) {
 // Error is returned if the command fails to run, exits prematurely, or if the
 // output cannot be parsed.
 //
-// Test failure is not considered an error, and is instead returned as a TestResult.
-func (r Rspec) Run(testCases []string, retry bool) (TestResult, error) {
+// Test failure is not considered an error, and is instead returned as a RunResult.
+func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 	var command string
 
 	if retry {
@@ -86,14 +86,14 @@ func (r Rspec) Run(testCases []string, retry bool) (TestResult, error) {
 
 	commandName, commandArgs, err := commandNameAndArgs(command, testCases)
 	if err != nil {
-		return TestResult{Status: TestStatusError}, fmt.Errorf("failed to build command: %w", err)
+		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 	}
 
 	// Create a temporary file to store the JSON output of the rspec run.
 	// This is a temporary solution, until we have an option to specify the output file.
 	f, err := os.CreateTemp("", "rspec-*.json")
 	if err != nil {
-		return TestResult{Status: TestStatusError}, fmt.Errorf("failed to create temporary file for rspec output: %v", err)
+		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to create temporary file for rspec output: %v", err)
 	}
 	defer f.Close()
 	defer os.Remove(f.Name())
@@ -105,11 +105,11 @@ func (r Rspec) Run(testCases []string, retry bool) (TestResult, error) {
 	err = runAndForwardSignal(cmd)
 
 	if err == nil {
-		return TestResult{Status: TestStatusPassed}, nil
+		return RunResult{Status: RunStatusPassed}, nil
 	}
 
 	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		return TestResult{Status: TestStatusError}, err
+		return RunResult{Status: RunStatusError}, err
 	}
 
 	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
@@ -118,7 +118,7 @@ func (r Rspec) Run(testCases []string, retry bool) (TestResult, error) {
 			// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
 			// therefore we need to bubble up the error.
 			fmt.Println("Buildkite Test Splitter: Failed to read Rspec output, tests will not be retried.")
-			return TestResult{Status: TestStatusError}, err
+			return RunResult{Status: RunStatusError}, err
 		}
 
 		if report.Summary.FailureCount > 0 {
@@ -128,11 +128,11 @@ func (r Rspec) Run(testCases []string, retry bool) (TestResult, error) {
 					failedTests = append(failedTests, example.Id)
 				}
 			}
-			return TestResult{Status: TestStatusFailed, FailedTests: failedTests}, nil
+			return RunResult{Status: RunStatusFailed, FailedTests: failedTests}, nil
 		}
 	}
 
-	return TestResult{Status: TestStatusError}, err
+	return RunResult{Status: RunStatusError}, err
 }
 
 // RspecExample represents a single test example in an Rspec report.

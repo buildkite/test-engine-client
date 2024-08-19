@@ -33,8 +33,8 @@ func TestRunTestsWithRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
 	}
 
-	if testResult.Status != runner.TestStatusPassed {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.TestStatusPassed)
+	if testResult.Status != runner.RunStatusPassed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
 	}
 
 	if len(timeline) != 2 {
@@ -65,8 +65,8 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
 	}
 
-	if testResult.Status != runner.TestStatusPassed {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.TestStatusPassed)
+	if testResult.Status != runner.RunStatusPassed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
 	}
 
 	if diff := cmp.Diff(testCases, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
@@ -100,8 +100,8 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
 	}
 
-	if testResult.Status != runner.TestStatusFailed {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.TestStatusFailed)
+	if testResult.Status != runner.RunStatusFailed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusFailed)
 	}
 
 	if diff := cmp.Diff(testResult.FailedTests, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
@@ -139,8 +139,8 @@ func TestRunTestsWithRetry_Error(t *testing.T) {
 		t.Errorf("Expected exec.ExitError, but got %v", err)
 	}
 
-	if testResult.Status != runner.TestStatusError {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.TestStatusError)
+	if testResult.Status != runner.RunStatusError {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusError)
 	}
 
 	if len(timeline) != 2 {
