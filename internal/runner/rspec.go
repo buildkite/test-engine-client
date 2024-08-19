@@ -30,7 +30,7 @@ func NewRspec(cfg *RunnerConfig) *Rspec {
 	}
 
 	return Rspec{
-		cfg: cfg
+		cfg: cfg,
 	}
 }
 
