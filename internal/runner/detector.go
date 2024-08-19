@@ -8,10 +8,10 @@ import (
 )
 
 type RunnerConfig struct {
-  TestCommand string
-  TestFilePattern string
-  TestFileExcludePattern string
-  RetryTestCommand string
+	TestCommand            string
+	TestFilePattern        string
+	TestFileExcludePattern string
+	RetryTestCommand       string
 }
 
 type TestRunner interface {
