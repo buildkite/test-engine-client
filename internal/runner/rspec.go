@@ -20,7 +20,7 @@ type Rspec struct {
 	cfg RunnerConfig
 }
 
-func NewRspec(cfg *RunnerConfig) *Rspec {
+func NewRspec(cfg RunnerConfig) Rspec {
 	if cfg.TestCommand == "" {
 		cfg.TestCommand = "bundle exec rspec {{testExamples}}"
 	}
@@ -40,8 +40,8 @@ func (r Rspec) Name() string {
 
 // GetFiles returns an array of file names using the discovery pattern.
 func (r Rspec) GetFiles() ([]string, error) {
-	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
-	files, err := discoverTestFiles(r.TestFilePattern, r.TestFileExcludePattern)
+	debug.Println("Discovering test files with include pattern:", r.cfg.TestFilePattern, "exclude pattern:", r.cfg.TestFileExcludePattern)
+	files, err := discoverTestFiles(r.cfg.TestFilePattern, r.cfg.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
 
 	// rspec test in Test Analytics is stored with leading "./"
@@ -56,7 +56,7 @@ func (r Rspec) GetFiles() ([]string, error) {
 	}
 
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no files found with pattern %q and exclude pattern %q", r.TestFilePattern, r.TestFileExcludePattern)
+		return nil, fmt.Errorf("no files found with pattern %q and exclude pattern %q", r.cfg.TestFilePattern, r.cfg.TestFileExcludePattern)
 	}
 
 	return files, nil

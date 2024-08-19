@@ -23,7 +23,7 @@ type TestRunner interface {
 }
 
 func DetectRunner(runner string, cfg RunnerConfig) (TestRunner, error) {
-	switch cfg.TestRunner {
+	switch runner {
 	case "rspec":
 		return NewRspec(cfg), nil
 	default:
