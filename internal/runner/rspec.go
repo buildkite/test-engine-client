@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
+	"github.com/kballard/go-shellquote"
 )
 
 // In future, Rspec will implement an interface that defines
@@ -84,7 +86,7 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 		command = r.TestCommand
 	}
 
-	commandName, commandArgs, err := commandNameAndArgs(command, testCases)
+	commandName, commandArgs, err := r.commandNameAndArgs(command, testCases)
 	if err != nil {
 		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 	}
@@ -172,6 +174,22 @@ func (r Rspec) ParseReport(path string) (RspecReport, error) {
 	return report, nil
 }
 
+// commandNameAndArgs replaces the "{{testExamples}}" placeholder in the test command with the test cases.
+// It returns the command name and arguments to run the tests.
+func (r Rspec) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+	words, err := shellquote.Split(cmd)
+	if err != nil {
+		return "", []string{}, err
+	}
+	idx := slices.Index(words, "{{testExamples}}")
+	if idx < 0 {
+		words = append(words, testCases...)
+		return words[0], words[1:], nil
+	}
+	words = slices.Replace(words, idx, idx+1, testCases...)
+	return words[0], words[1:], nil
+}
+
 // GetExamples returns an array of test examples within the given files.
 func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	// Create a temporary file to store the JSON output of the rspec dry run.
@@ -184,7 +202,7 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	defer f.Close()
 	defer os.Remove(f.Name())
 
-	cmdName, cmdArgs, err := commandNameAndArgs(r.TestCommand, files)
+	cmdName, cmdArgs, err := r.commandNameAndArgs(r.TestCommand, files)
 	if err != nil {
 		return nil, err
 	}

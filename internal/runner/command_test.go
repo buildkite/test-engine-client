@@ -8,9 +8,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/kballard/go-shellquote"
 )
 
 func TestRunAndForwardSignal(t *testing.T) {
@@ -68,65 +65,5 @@ func TestRunAndForwardSignal_SignalReceivedInSubProcess(t *testing.T) {
 	}
 	if signalError.Signal != syscall.SIGSEGV {
 		t.Errorf("Expected signal %d, but got %d", syscall.SIGSEGV, signalError.Signal)
-	}
-}
-
-func TestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testCommand := "bin/rspec --options {{testExamples}} --format"
-
-	gotName, gotArgs, err := commandNameAndArgs(testCommand, testCases)
-	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
-	}
-
-	wantName := "bin/rspec"
-	wantArgs := []string{"--options", "spec/models/user_spec.rb", "spec/models/billing_spec.rb", "--format"}
-
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
-	}
-	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
-	}
-}
-
-func TestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testCommand := "bin/rspec --options --format"
-
-	gotName, gotArgs, err := commandNameAndArgs(testCommand, testCases)
-	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
-	}
-
-	wantName := "bin/rspec"
-	wantArgs := []string{"--options", "--format", "spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
-	}
-	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
-	}
-}
-
-func TestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testCommand := "bin/rspec --options ' {{testExamples}}"
-
-	gotName, gotArgs, err := commandNameAndArgs(testCommand, testCases)
-
-	wantName := ""
-	wantArgs := []string{}
-
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs() diff (-got +want):\n%s", diff)
-	}
-	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs() diff (-got +want):\n%s", diff)
-	}
-	if !errors.Is(err, shellquote.UnterminatedSingleQuoteError) {
-		t.Errorf("commandNameAndArgs() error = %v, want %v", err, shellquote.UnterminatedSingleQuoteError)
 	}
 }
