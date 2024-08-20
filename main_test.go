@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -18,37 +20,139 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestRetryFailedTests(t *testing.T) {
+func TestRunTestsWithRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		TestCommand: "true",
+		TestCommand: "rspec",
 	}
 	maxRetries := 3
+	testCases := []string{"test/spec/fruits/apple_spec.rb"}
 	timeline := []api.Timeline{}
-	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
-	want := 0
-	if exitCode != want {
-		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	if err != nil {
+		t.Errorf("runTestsWithRetry(...) error = %v", err)
+	}
+
+	if testResult.Status != runner.RunStatusPassed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
 	}
 
 	if len(timeline) != 2 {
-		t.Errorf("retryFailedTests(%v, %v) timeline length = %v, want %d", testRunner, maxRetries, len(timeline), 2)
+		t.Errorf("timeline length = %v, want %d", len(timeline), 2)
+	}
+
+	events := []string{}
+	for _, event := range timeline {
+		events = append(events, event.Event)
+	}
+	if diff := cmp.Diff(events, []string{"test_start", "test_end"}); diff != "" {
+		t.Errorf("timeline events diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestRetryFailedTests_Failure(t *testing.T) {
+func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		TestCommand: "false",
+		TestCommand: "rspec",
+		// Simulate test passing on the second retry
+		RetryTestCommand: "true",
 	}
-	maxRetries := 3
+	maxRetries := 2
+	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
 	timeline := []api.Timeline{}
-	exitCode := retryFailedTests(testRunner, maxRetries, &timeline)
-	want := 1
-	if exitCode != want {
-		t.Errorf("retryFailedTests(%v, %v) = %v, want %v", testRunner, maxRetries, exitCode, want)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	if err != nil {
+		t.Errorf("runTestsWithRetry(...) error = %v", err)
+	}
+
+	if testResult.Status != runner.RunStatusPassed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
+	}
+
+	if diff := cmp.Diff(testCases, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+		t.Errorf("testCases diff (-got +want):\n%s", diff)
+	}
+
+	if len(timeline) != 4 {
+		t.Errorf("timeline length = %v, want %d", len(timeline), 4)
+	}
+
+	events := []string{}
+	for _, event := range timeline {
+		events = append(events, event.Event)
+	}
+	if diff := cmp.Diff(events, []string{"test_start", "test_end", "retry_1_start", "retry_1_end"}); diff != "" {
+		t.Errorf("timeline events diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
+	testRunner := runner.Rspec{
+		TestCommand:      "rspec",
+		RetryTestCommand: "rspec",
+	}
+	maxRetries := 2
+	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
+	timeline := []api.Timeline{}
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	if err != nil {
+		t.Errorf("runTestsWithRetry(...) error = %v", err)
+	}
+
+	if testResult.Status != runner.RunStatusFailed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusFailed)
+	}
+
+	if diff := cmp.Diff(testResult.FailedTests, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+		t.Errorf("runTestsWithRetry(...) testResult.FailedTests diff (-got +want):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(testCases, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+		t.Errorf("testCases diff (-got +want):\n%s", diff)
 	}
 
 	if len(timeline) != 6 {
-		t.Errorf("retryFailedTests(%v, %v) timeline length = %v, want %d", testRunner, maxRetries, len(timeline), 6)
+		t.Errorf("timeline length = %v, want %d", len(timeline), 6)
+	}
+
+	events := []string{}
+	for _, event := range timeline {
+		events = append(events, event.Event)
+	}
+	if diff := cmp.Diff(events, []string{"test_start", "test_end", "retry_1_start", "retry_1_end", "retry_2_start", "retry_2_end"}); diff != "" {
+		t.Errorf("timeline events diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestRunTestsWithRetry_Error(t *testing.T) {
+	testRunner := runner.Rspec{
+		TestCommand: "rspec --invalid-option",
+	}
+	maxRetries := 2
+	testCases := []string{"test/spec/fruits/fig_spec.rb"}
+	timeline := []api.Timeline{}
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	exitError := new(exec.ExitError)
+	if !errors.As(err, &exitError) {
+		t.Errorf("runTestsWithRetry(...) error type = %T (%v), want *exec.ExitError", err, err)
+	}
+
+	if testResult.Status != runner.RunStatusError {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusError)
+	}
+
+	if len(timeline) != 2 {
+		t.Errorf("timeline length = %v, want %d", len(timeline), 2)
+	}
+
+	events := []string{}
+	for _, event := range timeline {
+		events = append(events, event.Event)
+	}
+	if diff := cmp.Diff(events, []string{"test_start", "test_end"}); diff != "" {
+		t.Errorf("timeline events diff (-got +want):\n%s", diff)
 	}
 }
 

@@ -2,10 +2,12 @@ package runner
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
 
 	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
@@ -25,11 +27,15 @@ type Rspec struct {
 
 func NewRspec(r Rspec) *Rspec {
 	if r.TestCommand == "" {
-		r.TestCommand = "bundle exec rspec {{testExamples}}"
+		r.TestCommand = "bundle exec rspec --format progress {{testExamples}}"
 	}
 
 	if r.TestFilePattern == "" {
 		r.TestFilePattern = "spec/**/*_spec.rb"
+	}
+
+	if r.RetryTestCommand == "" {
+		r.RetryTestCommand = r.TestCommand
 	}
 
 	return &r
@@ -63,64 +69,70 @@ func (r Rspec) GetFiles() ([]string, error) {
 	return files, nil
 }
 
-func (r Rspec) RetryCommand() (*exec.Cmd, error) {
-	words := []string{}
+// Run executes the test command with the given test cases.
+// If retry is true, it will run the command using the retry test command,
+// otherwise it will use the test command.
+//
+// Error is returned if the command fails to run, exits prematurely, or if the
+// output cannot be parsed.
+//
+// Test failure is not considered an error, and is instead returned as a RunResult.
+func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
+	command := r.TestCommand
 
-	if r.RetryTestCommand == "" {
-		// use test command to build retry command if retry command is not provided
-		// remove all occurrences of "{{testExamples}}" from the test command and append "--only-failures"
-		splits, err := shellquote.Split(r.TestCommand)
-		if err != nil {
-			return nil, err
-		}
-		splits = slices.DeleteFunc(splits, func(n string) bool {
-			return n == "{{testExamples}}"
-		})
-		splits = slices.Insert(splits, len(splits), "--only-failures")
-		words = append(words, splits...)
-	} else {
-		splits, err := shellquote.Split(r.RetryTestCommand)
-		if err != nil {
-			return nil, err
-		}
-		words = append(words, splits...)
+	if retry {
+		command = r.RetryTestCommand
 	}
 
-	fmt.Println(shellquote.Join(words...))
-
-	cmd := exec.Command(words[0], words[1:]...)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	return cmd, nil
-}
-
-// Command returns an exec.Cmd that will run the rspec command
-func (r Rspec) Command(testCases []string) (*exec.Cmd, error) {
-	commandName, commandArgs, err := r.commandNameAndArgs(testCases)
+	commandName, commandArgs, err := r.commandNameAndArgs(command, testCases)
 	if err != nil {
-		return nil, err
+		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 	}
-	fmt.Println(shellquote.Join(append([]string{commandName}, commandArgs...)...))
 
+	// Create a temporary file to store the JSON output of the rspec run.
+	// This is a temporary solution, until we have an option to specify the output file.
+	f, err := os.CreateTemp("", "rspec-*.json")
+	if err != nil {
+		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to create temporary file for rspec output: %v", err)
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+
+	fmt.Printf("%s %s\n", commandName, strings.Join(commandArgs, " "))
+	commandArgs = append(commandArgs, "--format", "json", "--out", f.Name())
 	cmd := exec.Command(commandName, commandArgs...)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	return cmd, nil
-}
 
-// commandNameAndArgs returns the command name and arguments to run the Rspec tests
-func (r Rspec) commandNameAndArgs(testCases []string) (string, []string, error) {
-	words, err := shellquote.Split(r.TestCommand)
-	if err != nil {
-		return "", []string{}, err
+	err = runAndForwardSignal(cmd)
+
+	if err == nil { // note: returning success early
+		return RunResult{Status: RunStatusPassed}, nil
 	}
-	idx := slices.Index(words, "{{testExamples}}")
-	if idx < 0 {
-		words = append(words, testCases...)
-		return words[0], words[1:], nil
+
+	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
+		return RunResult{Status: RunStatusError}, err
 	}
-	words = slices.Replace(words, idx, idx+1, testCases...)
-	return words[0], words[1:], nil
+
+	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
+		report, parseErr := r.ParseReport(f.Name())
+		if parseErr != nil {
+			// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
+			// therefore we need to bubble up the error.
+			fmt.Println("Buildkite Test Splitter: Failed to read Rspec output, tests will not be retried.")
+			return RunResult{Status: RunStatusError}, err
+		}
+
+		if report.Summary.FailureCount > 0 {
+			var failedTests []string
+			for _, example := range report.Examples {
+				if example.Status == "failed" {
+					failedTests = append(failedTests, example.Id)
+				}
+			}
+			return RunResult{Status: RunStatusFailed, FailedTests: failedTests}, nil
+		}
+	}
+
+	return RunResult{Status: RunStatusError}, err
 }
 
 // RspecExample represents a single test example in an Rspec report.
@@ -139,6 +151,41 @@ type RspecReport struct {
 	Version  string         `json:"version"`
 	Seed     int            `json:"seed"`
 	Examples []RspecExample `json:"examples"`
+	Summary  struct {
+		ExampleCount int `json:"example_count"`
+		FailureCount int `json:"failure_count"`
+		PendingCount int `json:"pending_count"`
+	}
+}
+
+func (r Rspec) ParseReport(path string) (RspecReport, error) {
+	var report RspecReport
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return RspecReport{}, fmt.Errorf("failed to read rspec output: %v", err)
+	}
+
+	if err := json.Unmarshal(data, &report); err != nil {
+		return RspecReport{}, fmt.Errorf("failed to parse rspec output: %s", err)
+	}
+
+	return report, nil
+}
+
+// commandNameAndArgs replaces the "{{testExamples}}" placeholder in the test command with the test cases.
+// It returns the command name and arguments to run the tests.
+func (r Rspec) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+	words, err := shellquote.Split(cmd)
+	if err != nil {
+		return "", []string{}, err
+	}
+	idx := slices.Index(words, "{{testExamples}}")
+	if idx < 0 {
+		words = append(words, testCases...)
+		return words[0], words[1:], nil
+	}
+	words = slices.Replace(words, idx, idx+1, testCases...)
+	return words[0], words[1:], nil
 }
 
 // GetExamples returns an array of test examples within the given files.
@@ -150,10 +197,13 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	if err != nil {
 		return []plan.TestCase{}, fmt.Errorf("failed to create temporary file for rspec dry run: %v", err)
 	}
-	defer f.Close()
-	defer os.Remove(f.Name())
 
-	cmdName, cmdArgs, err := r.commandNameAndArgs(files)
+	defer func() {
+		f.Close()
+		os.Remove(f.Name())
+	}()
+
+	cmdName, cmdArgs, err := r.commandNameAndArgs(r.TestCommand, files)
 	if err != nil {
 		return nil, err
 	}
@@ -172,14 +222,9 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %s", output)
 	}
 
-	var report RspecReport
-	data, err := os.ReadFile(f.Name())
+	report, err := r.ParseReport(f.Name())
 	if err != nil {
-		return []plan.TestCase{}, fmt.Errorf("failed to read rspec dry run output: %v", err)
-	}
-
-	if err := json.Unmarshal(data, &report); err != nil {
-		return []plan.TestCase{}, fmt.Errorf("failed to parse rspec dry run output: %s", output)
+		return []plan.TestCase{}, err
 	}
 
 	var testCases []plan.TestCase
