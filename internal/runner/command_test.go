@@ -2,7 +2,6 @@ package runner
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
@@ -24,8 +23,11 @@ func TestRunAndForwardSignal_CommandExitsWithNonZero(t *testing.T) {
 
 	err := runAndForwardSignal(cmd)
 	exitError := new(exec.ExitError)
-	if errors.As(err, &exitError) && exitError.ExitCode() != 1 {
-		t.Errorf("Expected exit code 1, but got %d", exitError.ExitCode())
+	if !errors.As(err, &exitError) {
+		t.Fatalf("runAndForwardSignal(cmd) error type = %T (%v), want  *exec.ExitError", err, err)
+	}
+	if exitError.ExitCode() != 1 {
+		t.Errorf("exitError.ExitCode() = %d, want 1", exitError.ExitCode())
 	}
 }
 
@@ -37,7 +39,7 @@ func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
 		pid := os.Getpid()
 		process, err := os.FindProcess(pid)
 		if err != nil {
-			fmt.Println(err)
+			t.Errorf("os.FindProcess(%d) error = %v", pid, err)
 		}
 		time.Sleep(300 * time.Millisecond)
 		process.Signal(syscall.SIGTERM)
@@ -47,10 +49,10 @@ func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Expected ErrProcessSignaled, but got %v", err)
+		t.Errorf("runAndForwardSignal(cmd) error type = %T (%v), want *ErrProcessSignaled", err, err)
 	}
 	if signalError.Signal != syscall.SIGTERM {
-		t.Errorf("Expected signal %d, but got %d", syscall.SIGTERM, signalError.Signal)
+		t.Errorf("runAndForwardSignal(cmd) signal = %d, want  %d", syscall.SIGTERM, signalError.Signal)
 	}
 }
 
@@ -61,9 +63,9 @@ func TestRunAndForwardSignal_SignalReceivedInSubProcess(t *testing.T) {
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Expected ErrProcessSignaled, but got %v", err)
+		t.Errorf("runAndForwardSignal(cmd) error type = %T (%v), want *ErrProcessSignaled", err, err)
 	}
 	if signalError.Signal != syscall.SIGSEGV {
-		t.Errorf("Expected signal %d, but got %d", syscall.SIGSEGV, signalError.Signal)
+		t.Errorf("runAndForwardSignal(cmd) signal = %d, want  %d", syscall.SIGSEGV, signalError.Signal)
 	}
 }

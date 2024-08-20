@@ -136,7 +136,7 @@ func TestRunTestsWithRetry_Error(t *testing.T) {
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
-		t.Errorf("Expected exec.ExitError, but got %v", err)
+		t.Errorf("runTestsWithRetry(...) error type = %T (%v), want *exec.ExitError", err, err)
 	}
 
 	if testResult.Status != runner.RunStatusError {

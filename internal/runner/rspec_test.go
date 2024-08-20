@@ -143,7 +143,7 @@ func TestRspecRun_CommandFailed(t *testing.T) {
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
-		t.Errorf("Expected exec.ExitError, but got %v", err)
+		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", files, err, err)
 	}
 }
 
@@ -165,10 +165,10 @@ func TestRspecRun_SignaledError(t *testing.T) {
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Expected ErrProcessSignaled, but got %v", err)
+		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *ErrProcessSignaled", files, err, err)
 	}
 	if signalError.Signal != syscall.SIGSEGV {
-		t.Errorf("Expected signal %d, but got %d", syscall.SIGSEGV, signalError.Signal)
+		t.Errorf("Rspec.Run(%q) signal = %d, want %d", files, syscall.SIGSEGV, signalError.Signal)
 	}
 }
 

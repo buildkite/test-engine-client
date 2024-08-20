@@ -78,12 +78,10 @@ func (r Rspec) GetFiles() ([]string, error) {
 //
 // Test failure is not considered an error, and is instead returned as a RunResult.
 func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
-	var command string
+	command := r.TestCommand
 
 	if retry {
 		command = r.RetryTestCommand
-	} else {
-		command = r.TestCommand
 	}
 
 	commandName, commandArgs, err := r.commandNameAndArgs(command, testCases)
@@ -106,7 +104,7 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 
 	err = runAndForwardSignal(cmd)
 
-	if err == nil {
+	if err == nil { // note: returning success early
 		return RunResult{Status: RunStatusPassed}, nil
 	}
 
@@ -199,8 +197,11 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	if err != nil {
 		return []plan.TestCase{}, fmt.Errorf("failed to create temporary file for rspec dry run: %v", err)
 	}
-	defer f.Close()
-	defer os.Remove(f.Name())
+
+	defer func() {
+		f.Close()
+		os.Remove(f.Name())
+	}()
 
 	cmdName, cmdArgs, err := r.commandNameAndArgs(r.TestCommand, files)
 	if err != nil {
