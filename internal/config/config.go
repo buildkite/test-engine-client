@@ -18,6 +18,8 @@ type Config struct {
 	OrganizationSlug string
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int
+	// The path to the result file.
+	ResultPath string
 	// ServerBaseUrl is the base URL of the test splitter server.
 	ServerBaseUrl string
 	// SlowFileThreshold is the threshold to consider a file as slow. Value is a number in milliseconds.
