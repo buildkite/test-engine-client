@@ -97,8 +97,7 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 	if r.ResultPath != "" {
 		resultPath = strings.ReplaceAll(r.ResultPath, "*", strconv.FormatInt(time.Now().Unix(), 10))
 	} else {
-		// Create a temporary file to store the JSON output of the rspec run.
-		// This is a temporary solution, until we have an option to specify the output file.
+		// Create a temporary file if no result path is provided.
 		f, err := os.CreateTemp("", "rspec-*.json")
 		if err != nil {
 			return RunResult{Status: RunStatusError}, fmt.Errorf("failed to create temporary file for rspec output: %v", err)
