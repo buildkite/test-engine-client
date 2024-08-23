@@ -62,11 +62,13 @@ docker_manifests:
     image_templates:
       - "buildkite/test-splitter:v{{ .Version }}-amd64"
       - "buildkite/test-splitter:v{{ .Version }}-arm64"
+    # skip pushing latest tag to Dockerhub if it's a prerelease
+    skip_push: auto
   - name_template: "buildkite/test-splitter:latest"
     image_templates:
       - "buildkite/test-splitter:v{{ .Version }}-amd64"
       - "buildkite/test-splitter:v{{ .Version }}-arm64"
-    # skip pushing latest tag to Dockerhub if it's a prerelease  
+    # skip pushing latest tag to Dockerhub if it's a prerelease
     skip_push: auto
 
 nfpms:
