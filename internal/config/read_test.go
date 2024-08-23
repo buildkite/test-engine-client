@@ -23,6 +23,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_STEP_ID", "456")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN", "spec/unit/**/*_spec.rb")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN", "spec/feature/**/*_spec.rb")
+	os.Setenv("BUILDKITE_SPLITTER_RESULT_PATH", "result.json")
 	defer os.Clearenv()
 
 	c := Config{}
@@ -43,6 +44,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		TestFilePattern:        "spec/unit/**/*_spec.rb",
 		TestFileExcludePattern: "spec/feature/**/*_spec.rb",
 		TestRunner:             "rspec",
+		ResultPath:             "result.json",
 	}
 
 	if err != nil {

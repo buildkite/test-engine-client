@@ -14,6 +14,7 @@ func DetectRunner(cfg config.Config) (*Rspec, error) {
 			TestFilePattern:        cfg.TestFilePattern,
 			TestFileExcludePattern: cfg.TestFileExcludePattern,
 			RetryTestCommand:       cfg.RetryCommand,
+			ResultPath:             cfg.ResultPath,
 		}), nil
 	default:
 		return nil, errors.New("Runner value is invalid, possible values are 'rspec'")

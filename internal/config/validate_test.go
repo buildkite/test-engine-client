@@ -16,6 +16,7 @@ func createConfig() Config {
 		SuiteSlug:        "my_suite",
 		AccessToken:      "my_token",
 		MaxRetries:       3,
+		ResultPath:       "tmp/result-*.json",
 	}
 }
 
