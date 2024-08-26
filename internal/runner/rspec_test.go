@@ -14,13 +14,13 @@ import (
 
 func TestNewRspec(t *testing.T) {
 	cases := []struct {
-		input Rspec
-		want  Rspec
+		input RunnerConfig
+		want  RunnerConfig
 	}{
 		//default
 		{
-			input: Rspec{},
-			want: Rspec{
+			input: RunnerConfig{},
+			want: RunnerConfig{
 				TestCommand:            "bundle exec rspec --format progress {{testExamples}}",
 				TestFilePattern:        "spec/**/*_spec.rb",
 				TestFileExcludePattern: "",
@@ -29,13 +29,13 @@ func TestNewRspec(t *testing.T) {
 		},
 		// custom
 		{
-			input: Rspec{
+			input: RunnerConfig{
 				TestCommand:            "bin/rspec --format documentation {{testExamples}}",
 				TestFilePattern:        "spec/models/**/*_spec.rb",
 				TestFileExcludePattern: "spec/features/**/*_spec.rb",
 				RetryTestCommand:       "bin/rspec --fail-fast {{testExamples}}",
 			},
-			want: Rspec{
+			want: RunnerConfig{
 				TestCommand:            "bin/rspec --format documentation {{testExamples}}",
 				TestFilePattern:        "spec/models/**/*_spec.rb",
 				TestFileExcludePattern: "spec/features/**/*_spec.rb",
@@ -44,10 +44,10 @@ func TestNewRspec(t *testing.T) {
 		},
 		// RetryTestCommand fallback to TestCommand
 		{
-			input: Rspec{
+			input: RunnerConfig{
 				TestCommand: "bundle exec --format json --out out.json {{testExamples}}",
 			},
-			want: Rspec{
+			want: RunnerConfig{
 				TestCommand:            "bundle exec --format json --out out.json {{testExamples}}",
 				TestFilePattern:        "spec/**/*_spec.rb",
 				TestFileExcludePattern: "",
@@ -58,17 +58,17 @@ func TestNewRspec(t *testing.T) {
 
 	for _, c := range cases {
 		got := NewRspec(c.input)
-		if diff := cmp.Diff(got, &c.want); diff != "" {
+		if diff := cmp.Diff(got.RunnerConfig, c.want); diff != "" {
 			t.Errorf("NewRspec(%v) diff (-got +want):\n%s", c.input, diff)
 		}
 	}
 }
 
 func TestRspecRun(t *testing.T) {
-	rspec := NewRspec(Rspec{
+	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec",
 	})
-	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
+	files := []string{"./fixtures/rspec/spec/spells/expelliarmus_spec.rb"}
 	got, err := rspec.Run(files, false)
 
 	want := RunResult{
@@ -86,8 +86,10 @@ func TestRspecRun(t *testing.T) {
 
 func TestRspecRun_Retry(t *testing.T) {
 	rspec := Rspec{
-		TestCommand:      "rspec --invalid-option",
-		RetryTestCommand: "rspec",
+		RunnerConfig{
+			TestCommand:      "rspec --invalid-option",
+			RetryTestCommand: "rspec",
+		},
 	}
 	files := []string{}
 	got, err := rspec.Run(files, true)
@@ -106,15 +108,15 @@ func TestRspecRun_Retry(t *testing.T) {
 }
 
 func TestRspecRun_TestFailed(t *testing.T) {
-	rspec := NewRspec(Rspec{
+	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec",
 	})
-	files := []string{"./fixtures/spec/failure_spec.rb"}
+	files := []string{"./fixtures/rspec/spec/failure_spec.rb"}
 	got, err := rspec.Run(files, false)
 
 	want := RunResult{
 		Status:      RunStatusFailed,
-		FailedTests: []string{"./fixtures/spec/failure_spec.rb[1:1]"},
+		FailedTests: []string{"./fixtures/rspec/spec/failure_spec.rb[1:1]"},
 	}
 
 	if err != nil {
@@ -128,7 +130,9 @@ func TestRspecRun_TestFailed(t *testing.T) {
 
 func TestRspecRun_CommandFailed(t *testing.T) {
 	rspec := Rspec{
-		TestCommand: "rspec --invalid-option",
+		RunnerConfig{
+			TestCommand: "rspec --invalid-option",
+		},
 	}
 	files := []string{}
 	got, err := rspec.Run(files, false)
@@ -148,10 +152,10 @@ func TestRspecRun_CommandFailed(t *testing.T) {
 }
 
 func TestRspecRun_SignaledError(t *testing.T) {
-	rspec := NewRspec(Rspec{
+	rspec := NewRspec(RunnerConfig{
 		TestCommand: "../../test/support/segv.sh",
 	})
-	files := []string{"./fixtures/spec/failure_spec.rb"}
+	files := []string{"./fixtures/rspec/spec/failure_spec.rb"}
 
 	got, err := rspec.Run(files, false)
 
@@ -177,7 +181,9 @@ func TestRspecCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCommand := "bin/rspec --options {{testExamples}} --format"
 
 	rspec := Rspec{
-		TestCommand: testCommand,
+		RunnerConfig{
+			TestCommand: testCommand,
+		},
 	}
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
@@ -201,7 +207,9 @@ func TestRspecCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	testCommand := "bin/rspec --options --format"
 
 	rspec := Rspec{
-		TestCommand: testCommand,
+		RunnerConfig{
+			TestCommand: testCommand,
+		},
 	}
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
@@ -225,7 +233,9 @@ func TestRspecCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	testCommand := "bin/rspec --options ' {{testExamples}}"
 
 	rspec := Rspec{
-		TestCommand: testCommand,
+		RunnerConfig{
+			TestCommand: testCommand,
+		},
 	}
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
@@ -245,23 +255,23 @@ func TestRspecCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 }
 
 func TestRspecGetExamples(t *testing.T) {
-	rspec := NewRspec(Rspec{
+	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec",
 	})
-	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
+	files := []string{"./fixtures/rspec/spec/spells/expelliarmus_spec.rb"}
 	got, err := rspec.GetExamples(files)
 
 	want := []plan.TestCase{
 		{
-			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:1]",
+			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
-			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:2",
+			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb:2",
 			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
-			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:2]",
+			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
-			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:6",
+			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb:6",
 			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
 		},
 	}
@@ -276,18 +286,18 @@ func TestRspecGetExamples(t *testing.T) {
 }
 
 func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
-	files := []string{"./fixtures/spec/spells/expelliarmus_spec.rb"}
+	files := []string{"./fixtures/rspec/spec/spells/expelliarmus_spec.rb"}
 	want := []plan.TestCase{
 		{
-			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:1]",
+			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
-			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:2",
+			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb:2",
 			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
-			Identifier: "./fixtures/spec/spells/expelliarmus_spec.rb[1:2]",
+			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
-			Path:       "./fixtures/spec/spells/expelliarmus_spec.rb:6",
+			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb:6",
 			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
 		},
 	}
@@ -305,7 +315,7 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 
 	commands := []string{"rspec --format documentation", "rspec --format html", withOtherJson}
 	for _, command := range commands {
-		rspec := NewRspec(Rspec{
+		rspec := NewRspec(RunnerConfig{
 			TestCommand: command,
 		})
 		got, err := rspec.GetExamples(files)

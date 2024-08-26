@@ -22,7 +22,9 @@ import (
 
 func TestRunTestsWithRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		TestCommand: "rspec",
+		runner.RunnerConfig{
+			TestCommand: "rspec",
+		},
 	}
 	maxRetries := 3
 	testCases := []string{"test/spec/fruits/apple_spec.rb"}
@@ -52,9 +54,11 @@ func TestRunTestsWithRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		TestCommand: "rspec",
-		// Simulate test passing on the second retry
-		RetryTestCommand: "true",
+		runner.RunnerConfig{
+			TestCommand: "rspec",
+			// Simulate test passing on the second retry
+			RetryTestCommand: "true",
+		},
 	}
 	maxRetries := 2
 	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
@@ -88,8 +92,10 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		TestCommand:      "rspec",
-		RetryTestCommand: "rspec",
+		runner.RunnerConfig{
+			TestCommand:      "rspec",
+			RetryTestCommand: "rspec",
+		},
 	}
 	maxRetries := 2
 	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
@@ -127,7 +133,9 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_Error(t *testing.T) {
 	testRunner := runner.Rspec{
-		TestCommand: "rspec --invalid-option",
+		runner.RunnerConfig{
+			TestCommand: "rspec --invalid-option",
+		},
 	}
 	maxRetries := 2
 	testCases := []string{"test/spec/fruits/fig_spec.rb"}
@@ -468,7 +476,9 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
-		TestCommand: "rspec",
+		runner.RunnerConfig{
+			TestCommand: "rspec",
+		},
 	})
 
 	if err != nil {
@@ -590,7 +600,9 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
-		TestCommand: "rspec",
+		runner.RunnerConfig{
+			TestCommand: "rspec",
+		},
 	})
 
 	if err != nil {
@@ -671,7 +683,9 @@ func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
-		TestCommand: "rspec",
+		runner.RunnerConfig{
+			TestCommand: "rspec",
+		},
 	})
 
 	if err != nil {
