@@ -63,7 +63,7 @@ func (c *Config) readFromEnv() error {
 	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_SPLITTER_RETRY_COUNT", 0)
 	c.MaxRetries = MaxRetries
 	if err != nil {
-		errs.appendFieldError("MaxRetries", "was %q, must be a number", os.Getenv("BUILDKITE_SPLITTER_RETRY_COUNT"))
+		errs.appendFieldError("BUILDKITE_SPLITTER_RETRY_COUNT", "was %q, must be a number", os.Getenv("BUILDKITE_SPLITTER_RETRY_COUNT"))
 	}
 	c.RetryCommand = os.Getenv("BUILDKITE_SPLITTER_RETRY_CMD")
 
@@ -71,14 +71,14 @@ func (c *Config) readFromEnv() error {
 	parallelismInt, err := strconv.Atoi(parallelism)
 	c.Parallelism = parallelismInt
 	if err != nil {
-		errs.appendFieldError("Parallelism", "was %q, must be a number", parallelism)
+		errs.appendFieldError("BUILDKITE_PARALLEL_JOB_COUNT", "was %q, must be a number", parallelism)
 	}
 
 	nodeIndex := os.Getenv("BUILDKITE_PARALLEL_JOB")
 	nodeIndexInt, err := strconv.Atoi(nodeIndex)
 	c.NodeIndex = nodeIndexInt
 	if err != nil {
-		errs.appendFieldError("NodeIndex", "was %q, must be a number", nodeIndex)
+		errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %q, must be a number", nodeIndex)
 	}
 
 	if len(errs) > 0 {

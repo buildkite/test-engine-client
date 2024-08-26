@@ -45,7 +45,7 @@ func main() {
 	// get config
 	cfg, err := config.New()
 	if err != nil {
-		logErrorAndExit(16, "Invalid configuration: %v", err)
+		logErrorAndExit(16, "Invalid configuration...\n%v", err)
 	}
 
 	testRunner, err := runner.DetectRunner(cfg)

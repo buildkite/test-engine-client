@@ -15,7 +15,7 @@ func (i InvalidConfigError) Error() string {
 		errs = append(errs, err.Error())
 	}
 	sort.Strings(errs)
-	return strings.Join(errs, ";\n")
+	return strings.Join(errs, "\n")
 }
 
 func (i InvalidConfigError) Unwrap() []error {
