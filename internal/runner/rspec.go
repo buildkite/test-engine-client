@@ -16,19 +16,13 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
-// In future, Rspec will implement an interface that defines
-// behaviour common to all test runners.
-// For now, Rspec provides rspec specific behaviour to execute
-// and report on tests in the Rspec framework.
+var _ = TestRunner(Rspec{})
+
 type Rspec struct {
-	TestCommand            string
-	TestFileExcludePattern string
-	TestFilePattern        string
-	RetryTestCommand       string
-	ResultPath             string
+	RunnerConfig
 }
 
-func NewRspec(r Rspec) *Rspec {
+func NewRspec(r RunnerConfig) Rspec {
 	if r.TestCommand == "" {
 		r.TestCommand = "bundle exec rspec --format progress {{testExamples}}"
 	}
@@ -41,7 +35,7 @@ func NewRspec(r Rspec) *Rspec {
 		r.RetryTestCommand = r.TestCommand
 	}
 
-	return &r
+	return Rspec{r}
 }
 
 func (r Rspec) Name() string {

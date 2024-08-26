@@ -55,7 +55,7 @@ func main() {
 
 	files, err := testRunner.GetFiles()
 	if err != nil {
-		logErrorAndExit(16, "Couldn't get files: %v", err)
+		logErrorAndExit(16, "couldn't get files: %v", err)
 	}
 
 	// get plan
@@ -69,7 +69,7 @@ func main() {
 
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
-		logErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
+		logErrorAndExit(16, "couldn't fetch or create test plan: %v", err)
 	}
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
@@ -96,7 +96,7 @@ func main() {
 			logErrorAndExit(exitError.ExitCode(), "%s exited with error: %v", testRunner.Name(), err)
 		}
 
-		logErrorAndExit(16, "Couldn't run tests: %v", err)
+		logErrorAndExit(16, "couldn't run tests: %v", err)
 	}
 
 	if testResult.Status == runner.RunStatusFailed {
