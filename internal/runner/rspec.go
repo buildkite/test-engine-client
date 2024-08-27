@@ -22,7 +22,7 @@ type Rspec struct {
 
 func NewRspec(r RunnerConfig) Rspec {
 	if r.TestCommand == "" {
-		r.TestCommand = "bundle exec rspec --format progress {{testExamples}}"
+		r.TestCommand = "bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}"
 	}
 
 	if r.TestFilePattern == "" {
@@ -86,6 +86,8 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 
 	fmt.Printf("%s %s\n", commandName, strings.Join(commandArgs, " "))
 	cmd := exec.Command(commandName, commandArgs...)
+
+	defer os.Remove(r.ResultPath)
 
 	err = runAndForwardSignal(cmd)
 
@@ -164,12 +166,19 @@ func (r Rspec) commandNameAndArgs(cmd string, testCases []string) (string, []str
 	if err != nil {
 		return "", []string{}, err
 	}
+
 	idx := slices.Index(words, "{{testExamples}}")
 	if idx < 0 {
 		words = append(words, testCases...)
-		return words[0], words[1:], nil
+	} else {
+		words = slices.Replace(words, idx, idx+1, testCases...)
 	}
-	words = slices.Replace(words, idx, idx+1, testCases...)
+
+	idx = slices.Index(words, "{{resultPath}}")
+	if idx >= 0 {
+		words = slices.Replace(words, idx, idx+1, r.ResultPath)
+	}
+
 	return words[0], words[1:], nil
 }
 

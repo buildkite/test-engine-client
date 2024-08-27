@@ -22,8 +22,9 @@ import (
 
 func TestRunTestsWithRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		runner.RunnerConfig{
-			TestCommand: "rspec",
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand: "rspec --format json --out {{resultPath}}",
+			ResultPath:  "tmp/rspec.json",
 		},
 	}
 	maxRetries := 3
@@ -54,10 +55,11 @@ func TestRunTestsWithRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		runner.RunnerConfig{
-			TestCommand: "rspec",
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand: "rspec --format json --out {{resultPath}}",
 			// Simulate test passing on the second retry
 			RetryTestCommand: "true",
+			ResultPath:       "tmp/rspec.json",
 		},
 	}
 	maxRetries := 2
@@ -92,9 +94,10 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		runner.RunnerConfig{
-			TestCommand:      "rspec",
-			RetryTestCommand: "rspec",
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand:      "rspec --format json --out {{resultPath}}",
+			RetryTestCommand: "rspec --format json --out {{resultPath}}",
+			ResultPath:       "tmp/rspec.json",
 		},
 	}
 	maxRetries := 2
@@ -133,7 +136,7 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_Error(t *testing.T) {
 	testRunner := runner.Rspec{
-		runner.RunnerConfig{
+		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "rspec --invalid-option",
 		},
 	}
@@ -476,7 +479,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
-		runner.RunnerConfig{
+		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "rspec",
 		},
 	})
