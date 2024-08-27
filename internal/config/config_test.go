@@ -21,6 +21,8 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD", "200")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
 	os.Setenv("BUILDKITE_STEP_ID", "456")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_RUNNER", "rspec")
+	os.Setenv("BUILDKITE_SPLITTER_RESULT_PATH", "tmp/rspec.json")
 }
 
 func TestNewConfig(t *testing.T) {
@@ -40,6 +42,7 @@ func TestNewConfig(t *testing.T) {
 		TestCommand:       "bin/rspec {{testExamples}}",
 		AccessToken:       "my_token",
 		OrganizationSlug:  "my_org",
+		ResultPath:        "tmp/rspec.json",
 		SuiteSlug:         "my_suite",
 		SlowFileThreshold: 200 * time.Millisecond,
 		TestRunner:        "rspec",
@@ -62,6 +65,7 @@ func TestNewConfig_EmptyConfig(t *testing.T) {
 
 func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	setEnv(t)
+	os.Unsetenv("BUILDKITE_SPLITTER_TEST_RUNNER")
 	os.Unsetenv("BUILDKITE_SPLITTER_MODE")
 	os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
 	os.Unsetenv("BUILDKITE_SPLITTER_TEST_CMD")
@@ -83,6 +87,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		SuiteSlug:         "my_suite",
 		SlowFileThreshold: 3 * time.Minute,
 		TestRunner:        "rspec",
+		ResultPath:        "tmp/rspec.json",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {

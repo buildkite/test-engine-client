@@ -36,7 +36,9 @@ func DetectRunner(cfg config.Config) (TestRunner, error) {
 	switch cfg.TestRunner {
 	case "rspec":
 		return NewRspec(runnerConfig), nil
+	case "jest":
+		return NewJest(runnerConfig), nil
 	default:
-		return nil, errors.New("runner value is invalid, possible values are 'rspec'")
+		return nil, errors.New("runner value is invalid, possible values are 'rspec', 'jest'")
 	}
 }
