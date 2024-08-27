@@ -37,18 +37,30 @@ brews:
 dockers:
   - image_templates:
       - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-amd64"
-      - "buildkite/test-splitter:v{{ .Version }}-amd64"
     dockerfile: "packaging/Dockerfile"
     build_flag_templates:
       - "--platform=linux/amd64"
   - image_templates:
       - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-arm64"
-      - "buildkite/test-splitter:v{{ .Version }}-arm64"
     goarch: arm64
     dockerfile: "packaging/Dockerfile"
     build_flag_templates:
       - "--platform=linux/arm64"
-
+  - image_templates:
+      - "buildkite/test-splitter:v{{ .Version }}-amd64"
+    # skip pushing image to Dockerhub if it's a prerelease
+    skip_push: auto
+    dockerfile: "packaging/Dockerfile"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+  - image_templates:
+      - "buildkite/test-splitter:v{{ .Version }}-arm64"
+    # skip pushing image to Dockerhub if it's a prerelease
+    skip_push: auto
+    goarch: arm64
+    dockerfile: "packaging/Dockerfile"
+    build_flag_templates:
+      - "--platform=linux/arm64"
 docker_manifests:
   - name_template: "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}"
     image_templates:
@@ -62,13 +74,13 @@ docker_manifests:
     image_templates:
       - "buildkite/test-splitter:v{{ .Version }}-amd64"
       - "buildkite/test-splitter:v{{ .Version }}-arm64"
-    # skip pushing latest tag to Dockerhub if it's a prerelease
+    # skip pushing manifest to Dockerhub if it's a prerelease
     skip_push: auto
   - name_template: "buildkite/test-splitter:latest"
     image_templates:
       - "buildkite/test-splitter:v{{ .Version }}-amd64"
       - "buildkite/test-splitter:v{{ .Version }}-arm64"
-    # skip pushing latest tag to Dockerhub if it's a prerelease
+    # skip pushing manifest to Dockerhub if it's a prerelease
     skip_push: auto
 
 nfpms:
