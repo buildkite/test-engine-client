@@ -20,25 +20,25 @@ func TestNewJest(t *testing.T) {
 		{
 			input: RunnerConfig{},
 			want: RunnerConfig{
-				TestCommand:            "yarn test {{testExamples}} --json --testLocationInResults --outputFile {{outputFile}}",
+				TestCommand:            "yarn test {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}",
 				TestFilePattern:        "**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}",
 				TestFileExcludePattern: "node_modules",
-				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{outputFile}}",
+				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
 			},
 		},
 		// custom
 		{
 			input: RunnerConfig{
-				TestCommand:            "npx jest --json --outputFile {{outputFile}}",
+				TestCommand:            "npx jest --json --outputFile {{resultPath}}",
 				TestFilePattern:        "spec/models/**/*.spec.js",
 				TestFileExcludePattern: "spec/features/**/*.spec.js",
-				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{outputFile}}",
+				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
 			},
 			want: RunnerConfig{
-				TestCommand:            "npx jest --json --outputFile {{outputFile}}",
+				TestCommand:            "npx jest --json --outputFile {{resultPath}}",
 				TestFilePattern:        "spec/models/**/*.spec.js",
 				TestFileExcludePattern: "spec/features/**/*.spec.js",
-				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{outputFile}}",
+				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
 			},
 		},
 	}
@@ -53,7 +53,7 @@ func TestNewJest(t *testing.T) {
 
 func TestJestRun(t *testing.T) {
 	jest := NewJest(RunnerConfig{
-		TestCommand: "jest --json --outputFile {{outputFile}}",
+		TestCommand: "jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
 	})
 	files := []string{"./fixtures/jest/spells/expelliarmus.spec.js"}
@@ -75,8 +75,8 @@ func TestJestRun(t *testing.T) {
 func TestJestRun_Retry(t *testing.T) {
 	jest := Jest{
 		RunnerConfig{
-			TestCommand:      "jest --invalid-option --json --outputFile {{outputFile}}",
-			RetryTestCommand: "jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{outputFile}}",
+			TestCommand:      "jest --invalid-option --json --outputFile {{resultPath}}",
+			RetryTestCommand: "jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}}",
 		},
 	}
 	files := []string{"fixtures/jest/spells/expelliarmus.spec.js"}
@@ -97,7 +97,7 @@ func TestJestRun_Retry(t *testing.T) {
 
 func TestJestRun_TestFailed(t *testing.T) {
 	jest := NewJest(RunnerConfig{
-		TestCommand: "jest --json --outputFile {{outputFile}}",
+		TestCommand: "jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
 	})
 	files := []string{"./fixtures/jest/failure.spec.js"}
@@ -120,7 +120,7 @@ func TestJestRun_TestFailed(t *testing.T) {
 func TestJestRun_CommandFailed(t *testing.T) {
 	jest := Jest{
 		RunnerConfig{
-			TestCommand: "jest --invalid-option --outputFile {{outputFile}}",
+			TestCommand: "jest --invalid-option --outputFile {{resultPath}}",
 		},
 	}
 	files := []string{}
@@ -142,7 +142,7 @@ func TestJestRun_CommandFailed(t *testing.T) {
 
 func TestJestRun_SignaledError(t *testing.T) {
 	jest := NewJest(RunnerConfig{
-		TestCommand: "../../test/support/segv.sh --outputFile {{outputFile}}",
+		TestCommand: "../../test/support/segv.sh --outputFile {{resultPath}}",
 	})
 	files := []string{"./doesnt-matter.spec.js"}
 
@@ -167,7 +167,7 @@ func TestJestRun_SignaledError(t *testing.T) {
 
 func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"spec/user.spec.js", "spec/billing.spec.js"}
-	testCommand := "jest {{testExamples}} --outputFile {{outputFile}}"
+	testCommand := "jest {{testExamples}} --outputFile {{resultPath}}"
 
 	jest := Jest{
 		RunnerConfig{
@@ -194,7 +194,7 @@ func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 
 func TestJestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"spec/user.spec.js", "spec/billing.spec.js"}
-	testCommand := "jest --json --outputFile {{outputFile}}"
+	testCommand := "jest --json --outputFile {{resultPath}}"
 
 	jest := Jest{
 		RunnerConfig{
@@ -247,7 +247,7 @@ func TestJestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 
 func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 	testCases := []string{"this will fail", "this other one will fail"}
-	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{outputFile}}"
+	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 
 	jest := Jest{
 		RunnerConfig{
@@ -274,7 +274,7 @@ func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 
 func TestJestRetryCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"this will fail", "this other one will fail"}
-	retryTestCommand := "jest --json --outputFile {{outputFile}}"
+	retryTestCommand := "jest --json --outputFile {{resultPath}}"
 
 	jest := Jest{
 		RunnerConfig{
