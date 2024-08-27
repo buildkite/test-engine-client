@@ -113,6 +113,10 @@ func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 		ResultPath:  "tmp/rspec.json",
 	})
 
+	t.Cleanup(func() {
+		os.Remove(rspec.ResultPath)
+	})
+
 	files := []string{"./fixtures/rspec/spec/failure_spec.rb"}
 	got, err := rspec.Run(files, false)
 

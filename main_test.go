@@ -32,6 +32,10 @@ func TestRunTestsWithRetry(t *testing.T) {
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
+	t.Cleanup(func() {
+		os.Remove(testRunner.ResultPath)
+	})
+
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
 	}
@@ -66,6 +70,10 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	t.Cleanup(func() {
+		os.Remove(testRunner.ResultPath)
+	})
 
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
@@ -104,6 +112,10 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	t.Cleanup(func() {
+		os.Remove(testRunner.ResultPath)
+	})
 
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)

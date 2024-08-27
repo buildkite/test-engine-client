@@ -87,8 +87,6 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 	fmt.Printf("%s %s\n", commandName, strings.Join(commandArgs, " "))
 	cmd := exec.Command(commandName, commandArgs...)
 
-	defer os.Remove(r.ResultPath)
-
 	err = runAndForwardSignal(cmd)
 
 	if err == nil { // note: returning success early
