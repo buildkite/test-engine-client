@@ -81,8 +81,12 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_NotInteger(t *testing.T) {
+	os.Setenv("BUILDKITE_BUILD_ID", "abc")
+	os.Setenv("BUILDKITE_STEP_ID", "123")
 	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "foo")
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "bar")
+	defer os.Unsetenv("BUILDKITE_BUILD_ID")
+	defer os.Unsetenv("BUILDKITE_STEP_ID")
 	defer os.Unsetenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	defer os.Unsetenv("BUILDKITE_PARALLEL_JOB")
 
@@ -95,6 +99,7 @@ func TestConfigReadFromEnv_NotInteger(t *testing.T) {
 	}
 
 	if len(invConfigError) != 2 {
+		t.Errorf("%v", invConfigError)
 		t.Errorf("config.readFromEnv() error length = %d, want 2", len(invConfigError))
 	}
 }
