@@ -116,6 +116,10 @@ func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
 	err := c.readFromEnv()
 
 	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.readFromEnv() error = %v, want InvalidConfigError", err)
+	}
+
 	want := "BUILDKITE_BUILD_ID must not be blank"
 
 	if errors.As(err, &invConfigError) {
@@ -137,6 +141,10 @@ func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
 	err := c.readFromEnv()
 
 	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.readFromEnv() error = %v, want InvalidConfigError", err)
+	}
+
 	want := "BUILDKITE_STEP_ID must not be blank"
 
 	if errors.As(err, &invConfigError) {
