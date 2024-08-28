@@ -200,10 +200,7 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 		return nil, err
 	}
 
-	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name())
-	if debug.Enabled {
-		cmdArgs = append(cmdArgs, "--format", "progress")
-	}
+	cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name(), "--format", "progress")
 
 	debug.Println("Running `rspec --dry-run`")
 
