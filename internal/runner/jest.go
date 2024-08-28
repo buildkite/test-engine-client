@@ -22,7 +22,7 @@ type Jest struct {
 
 func NewJest(j RunnerConfig) Jest {
 	if j.TestCommand == "" {
-		j.TestCommand = "yarn test {{testExamples}} --json --testLocationInResults --outputFile {{outputFile}}"
+		j.TestCommand = "yarn test {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}"
 	}
 
 	if j.TestFilePattern == "" {
@@ -34,7 +34,7 @@ func NewJest(j RunnerConfig) Jest {
 	}
 
 	if j.RetryTestCommand == "" {
-		j.RetryTestCommand = "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{outputFile}}"
+		j.RetryTestCommand = "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 	}
 
 	return Jest{j}
@@ -155,9 +155,9 @@ func (j Jest) commandNameAndArgs(cmd string, testCases []string) (string, []stri
 		words = slices.Replace(words, idx, idx+1, testCases...)
 	}
 
-	outputIdx := slices.Index(words, "{{outputFile}}")
+	outputIdx := slices.Index(words, "{{resultPath}}")
 	if outputIdx < 0 {
-		err := fmt.Errorf("couldn't find '{{outputFile}}' sentinel in command, exiting.")
+		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in command, exiting.")
 		return "", []string{}, err
 	}
 	slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
@@ -181,9 +181,9 @@ func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string) (string, [
 
 	words = slices.Replace(words, idx, idx+1, testNamePattern)
 
-	outputIdx := slices.Index(words, "{{outputFile}}")
+	outputIdx := slices.Index(words, "{{resultPath}}")
 	if outputIdx < 0 {
-		err := fmt.Errorf("couldn't find '{{outputFile}}' sentinel in retry command, exiting.")
+		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in retry command, exiting.")
 		return "", []string{}, err
 	}
 	slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
