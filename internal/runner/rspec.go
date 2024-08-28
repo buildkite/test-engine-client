@@ -7,9 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/buildkite/test-splitter/internal/debug"
 	"github.com/buildkite/test-splitter/internal/plan"
@@ -24,7 +22,7 @@ type Rspec struct {
 
 func NewRspec(r RunnerConfig) Rspec {
 	if r.TestCommand == "" {
-		r.TestCommand = "bundle exec rspec --format progress {{testExamples}}"
+		r.TestCommand = "bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}"
 	}
 
 	if r.TestFilePattern == "" {
@@ -86,27 +84,7 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 	}
 
-	var resultPath string
-
-	if r.ResultPath != "" {
-		resultPath = strings.ReplaceAll(r.ResultPath, "*", strconv.FormatInt(time.Now().Unix(), 10))
-	} else {
-		// Create a temporary file if no result path is provided.
-		f, err := os.CreateTemp("", "rspec-*.json")
-		if err != nil {
-			return RunResult{Status: RunStatusError}, fmt.Errorf("failed to create temporary file for rspec output: %v", err)
-		}
-
-		defer func() {
-			f.Close()
-			os.Remove(f.Name())
-		}()
-
-		resultPath = f.Name()
-	}
-
 	fmt.Printf("%s %s\n", commandName, strings.Join(commandArgs, " "))
-	commandArgs = append(commandArgs, "--format", "json", "--out", resultPath)
 	cmd := exec.Command(commandName, commandArgs...)
 
 	err = runAndForwardSignal(cmd)
@@ -120,7 +98,7 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 	}
 
 	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-		report, parseErr := r.ParseReport(resultPath)
+		report, parseErr := r.ParseReport(r.ResultPath)
 		if parseErr != nil {
 			// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
 			// therefore we need to bubble up the error.
@@ -186,12 +164,19 @@ func (r Rspec) commandNameAndArgs(cmd string, testCases []string) (string, []str
 	if err != nil {
 		return "", []string{}, err
 	}
+
 	idx := slices.Index(words, "{{testExamples}}")
 	if idx < 0 {
 		words = append(words, testCases...)
-		return words[0], words[1:], nil
+	} else {
+		words = slices.Replace(words, idx, idx+1, testCases...)
 	}
-	words = slices.Replace(words, idx, idx+1, testCases...)
+
+	idx = slices.Index(words, "{{resultPath}}")
+	if idx >= 0 {
+		words = slices.Replace(words, idx, idx+1, r.ResultPath)
+	}
+
 	return words[0], words[1:], nil
 }
 

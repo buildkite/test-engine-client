@@ -21,22 +21,22 @@ func TestNewRspec(t *testing.T) {
 		{
 			input: RunnerConfig{},
 			want: RunnerConfig{
-				TestCommand:            "bundle exec rspec --format progress {{testExamples}}",
+				TestCommand:            "bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}",
 				TestFilePattern:        "spec/**/*_spec.rb",
 				TestFileExcludePattern: "",
-				RetryTestCommand:       "bundle exec rspec --format progress {{testExamples}}",
+				RetryTestCommand:       "bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}",
 			},
 		},
 		// custom
 		{
 			input: RunnerConfig{
-				TestCommand:            "bin/rspec --format documentation {{testExamples}}",
+				TestCommand:            "bin/rspec --format documentation {{testExamples}} --format json --out {{resultPath}}",
 				TestFilePattern:        "spec/models/**/*_spec.rb",
 				TestFileExcludePattern: "spec/features/**/*_spec.rb",
 				RetryTestCommand:       "bin/rspec --fail-fast {{testExamples}}",
 			},
 			want: RunnerConfig{
-				TestCommand:            "bin/rspec --format documentation {{testExamples}}",
+				TestCommand:            "bin/rspec --format documentation {{testExamples}} --format json --out {{resultPath}}",
 				TestFilePattern:        "spec/models/**/*_spec.rb",
 				TestFileExcludePattern: "spec/features/**/*_spec.rb",
 				RetryTestCommand:       "bin/rspec --fail-fast {{testExamples}}",
@@ -84,7 +84,7 @@ func TestRspecRun(t *testing.T) {
 	}
 }
 
-func TestRspecRun_Retry(t *testing.T) {
+func TestRspecRun_RetryCommand(t *testing.T) {
 	rspec := Rspec{
 		RunnerConfig{
 			TestCommand:      "rspec --invalid-option",
@@ -107,10 +107,16 @@ func TestRspecRun_Retry(t *testing.T) {
 	}
 }
 
-func TestRspecRun_TestFailed(t *testing.T) {
+func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
-		TestCommand: "rspec",
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:  "tmp/rspec.json",
 	})
+
+	t.Cleanup(func() {
+		os.Remove(rspec.ResultPath)
+	})
+
 	files := []string{"./fixtures/rspec/spec/failure_spec.rb"}
 	got, err := rspec.Run(files, false)
 
@@ -125,6 +131,32 @@ func TestRspecRun_TestFailed(t *testing.T) {
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", files, diff)
+	}
+}
+
+func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: "rspec",
+	})
+
+	t.Cleanup(func() {
+		os.Remove(rspec.ResultPath)
+	})
+
+	files := []string{"./fixtures/rspec/spec/failure_spec.rb"}
+	got, err := rspec.Run(files, false)
+
+	want := RunResult{
+		Status: RunStatusError,
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", files, diff)
+	}
+
+	exitError := new(exec.ExitError)
+	if !errors.As(err, &exitError) {
+		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", files, err, err)
 	}
 }
 
@@ -176,13 +208,14 @@ func TestRspecRun_SignaledError(t *testing.T) {
 	}
 }
 
-func TestRspecCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
+func TestRspecCommandNameAndArgs_WithPlaceholder(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
-	testCommand := "bin/rspec --options {{testExamples}} --format"
+	testCommand := "bin/rspec --options {{testExamples}} --out {{resultPath}}"
 
 	rspec := Rspec{
 		RunnerConfig{
 			TestCommand: testCommand,
+			ResultPath:  "tmp/rspec.json",
 		},
 	}
 
@@ -192,7 +225,7 @@ func TestRspecCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	}
 
 	wantName := "bin/rspec"
-	wantArgs := []string{"--options", "spec/models/user_spec.rb", "spec/models/billing_spec.rb", "--format"}
+	wantArgs := []string{"--options", "spec/models/user_spec.rb", "spec/models/billing_spec.rb", "--out", rspec.ResultPath}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
@@ -202,7 +235,7 @@ func TestRspecCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	}
 }
 
-func TestRspecCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
+func TestRspecCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options --format"
 

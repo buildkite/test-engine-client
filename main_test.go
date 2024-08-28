@@ -22,14 +22,19 @@ import (
 
 func TestRunTestsWithRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		runner.RunnerConfig{
-			TestCommand: "rspec",
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand: "rspec --format json --out {{resultPath}}",
+			ResultPath:  "tmp/rspec.json",
 		},
 	}
 	maxRetries := 3
 	testCases := []string{"test/spec/fruits/apple_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	t.Cleanup(func() {
+		os.Remove(testRunner.ResultPath)
+	})
 
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
@@ -54,16 +59,21 @@ func TestRunTestsWithRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		runner.RunnerConfig{
-			TestCommand: "rspec",
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand: "rspec --format json --out {{resultPath}}",
 			// Simulate test passing on the second retry
 			RetryTestCommand: "true",
+			ResultPath:       "tmp/rspec.json",
 		},
 	}
 	maxRetries := 2
 	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	t.Cleanup(func() {
+		os.Remove(testRunner.ResultPath)
+	})
 
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
@@ -92,15 +102,20 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 	testRunner := runner.Rspec{
-		runner.RunnerConfig{
-			TestCommand:      "rspec",
-			RetryTestCommand: "rspec",
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand:      "rspec --format json --out {{resultPath}}",
+			RetryTestCommand: "rspec --format json --out {{resultPath}}",
+			ResultPath:       "tmp/rspec.json",
 		},
 	}
 	maxRetries := 2
 	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+
+	t.Cleanup(func() {
+		os.Remove(testRunner.ResultPath)
+	})
 
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
@@ -133,7 +148,7 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 
 func TestRunTestsWithRetry_Error(t *testing.T) {
 	testRunner := runner.Rspec{
-		runner.RunnerConfig{
+		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "rspec --invalid-option",
 		},
 	}
@@ -476,7 +491,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
-		runner.RunnerConfig{
+		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "rspec",
 		},
 	})
