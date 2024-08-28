@@ -37,7 +37,18 @@ func (c *Config) readFromEnv() error {
 	c.OrganizationSlug = os.Getenv("BUILDKITE_ORGANIZATION_SLUG")
 	c.SuiteSlug = os.Getenv("BUILDKITE_SPLITTER_SUITE_SLUG")
 
-	c.Identifier = fmt.Sprintf("%s/%s", os.Getenv("BUILDKITE_BUILD_ID"), os.Getenv("BUILDKITE_STEP_ID"))
+	buildId := os.Getenv("BUILDKITE_BUILD_ID")
+	if buildId == "" {
+		errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
+	}
+
+	stepId := os.Getenv("BUILDKITE_STEP_ID")
+	if stepId == "" {
+		errs.appendFieldError("BUILDKITE_STEP_ID", "must not be blank")
+	}
+
+	c.Identifier = fmt.Sprintf("%s/%s", buildId, stepId)
+
 	c.ServerBaseUrl = getEnvWithDefault("BUILDKITE_SPLITTER_BASE_URL", "https://api.buildkite.com")
 	c.TestCommand = os.Getenv("BUILDKITE_SPLITTER_TEST_CMD")
 	c.TestFilePattern = os.Getenv("BUILDKITE_SPLITTER_TEST_FILE_PATTERN")
