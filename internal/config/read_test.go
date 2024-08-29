@@ -122,10 +122,8 @@ func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
 
 	want := "BUILDKITE_BUILD_ID must not be blank"
 
-	if errors.As(err, &invConfigError) {
-		if got := invConfigError[0].Error(); got != want {
-			t.Errorf("config.readFromEnv() got = %v, want = %v", got, want)
-		}
+	if got := invConfigError[0].Error(); got != want {
+		t.Errorf("config.readFromEnv() got = %v, want = %v", got, want)
 	}
 }
 
