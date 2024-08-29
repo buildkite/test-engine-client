@@ -81,8 +81,12 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_NotInteger(t *testing.T) {
+	os.Setenv("BUILDKITE_BUILD_ID", "abc")
+	os.Setenv("BUILDKITE_STEP_ID", "123")
 	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "foo")
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "bar")
+	defer os.Unsetenv("BUILDKITE_BUILD_ID")
+	defer os.Unsetenv("BUILDKITE_STEP_ID")
 	defer os.Unsetenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	defer os.Unsetenv("BUILDKITE_PARALLEL_JOB")
 
@@ -95,6 +99,55 @@ func TestConfigReadFromEnv_NotInteger(t *testing.T) {
 	}
 
 	if len(invConfigError) != 2 {
+		t.Errorf("%v", invConfigError)
 		t.Errorf("config.readFromEnv() error length = %d, want 2", len(invConfigError))
+	}
+}
+
+func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
+	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "")
+	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
+	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
+	os.Setenv("BUILDKITE_STEP_ID", "123")
+	defer os.Clearenv()
+
+	c := Config{}
+	err := c.readFromEnv()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.readFromEnv() error = %v, want InvalidConfigError", err)
+	}
+
+	want := "BUILDKITE_BUILD_ID must not be blank"
+
+	if got := invConfigError[0].Error(); got != want {
+		t.Errorf("config.readFromEnv() got = %v, want = %v", got, want)
+	}
+}
+
+func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
+	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "")
+	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
+	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
+	os.Setenv("BUILDKITE_BUILD_ID", "123")
+	defer os.Clearenv()
+
+	c := Config{}
+	err := c.readFromEnv()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.readFromEnv() error = %v, want InvalidConfigError", err)
+	}
+
+	want := "BUILDKITE_STEP_ID must not be blank"
+
+	if errors.As(err, &invConfigError) {
+		if got := invConfigError[0].Error(); got != want {
+			t.Errorf("config.readFromEnv() got = %v, want = %v", got, want)
+		}
 	}
 }
