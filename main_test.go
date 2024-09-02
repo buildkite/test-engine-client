@@ -465,13 +465,12 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       7,
-		Branch:            "",
-		SplitByExample:    true,
-		SlowFileThreshold: 3 * time.Minute,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      7,
+		Branch:           "",
+		SplitByExample:   true,
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -585,13 +584,12 @@ func TestCreateRequestParams_SplitByExample_NoFilteredFiles(t *testing.T) {
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       7,
-		Branch:            "",
-		SplitByExample:    true,
-		SlowFileThreshold: 3 * time.Minute,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      7,
+		Branch:           "",
+		SplitByExample:   true,
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -608,7 +606,7 @@ func TestCreateRequestParams_SplitByExample_NoFilteredFiles(t *testing.T) {
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
-		runner.RunnerConfig{
+		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "rspec",
 		},
 	})
@@ -701,7 +699,6 @@ func TestSendMetadata(t *testing.T) {
 				"BUILDKITE_SPLITTER_TEST_CMD":    "bundle exec rspec",
 				"BUILDKITE_STEP_ID":              "pqr",
 				// ensure that empty env vars is included in the request
-				"BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD":       "",
 				"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":          "",
 				"BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN": "",
 				"BUILDKITE_SPLITTER_TEST_FILE_PATTERN":         "",

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -18,7 +17,6 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
 	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
-	os.Setenv("BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD", "200")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
 	os.Setenv("BUILDKITE_STEP_ID", "456")
 	os.Setenv("BUILDKITE_SPLITTER_TEST_RUNNER", "rspec")
@@ -35,17 +33,16 @@ func TestNewConfig(t *testing.T) {
 	}
 
 	want := Config{
-		Parallelism:       60,
-		NodeIndex:         7,
-		ServerBaseUrl:     "https://build.kite",
-		Identifier:        "123/456",
-		TestCommand:       "bin/rspec {{testExamples}}",
-		AccessToken:       "my_token",
-		OrganizationSlug:  "my_org",
-		ResultPath:        "tmp/rspec.json",
-		SuiteSlug:         "my_suite",
-		SlowFileThreshold: 200 * time.Millisecond,
-		TestRunner:        "rspec",
+		Parallelism:      60,
+		NodeIndex:        7,
+		ServerBaseUrl:    "https://build.kite",
+		Identifier:       "123/456",
+		TestCommand:      "bin/rspec {{testExamples}}",
+		AccessToken:      "my_token",
+		OrganizationSlug: "my_org",
+		ResultPath:       "tmp/rspec.json",
+		SuiteSlug:        "my_suite",
+		TestRunner:       "rspec",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {
@@ -69,7 +66,6 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	os.Unsetenv("BUILDKITE_SPLITTER_MODE")
 	os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
 	os.Unsetenv("BUILDKITE_SPLITTER_TEST_CMD")
-	os.Unsetenv("BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD")
 	defer os.Clearenv()
 
 	c, err := New()
@@ -78,16 +74,15 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	}
 
 	want := Config{
-		Parallelism:       60,
-		NodeIndex:         7,
-		ServerBaseUrl:     "https://api.buildkite.com",
-		Identifier:        "123/456",
-		AccessToken:       "my_token",
-		OrganizationSlug:  "my_org",
-		SuiteSlug:         "my_suite",
-		SlowFileThreshold: 3 * time.Minute,
-		TestRunner:        "rspec",
-		ResultPath:        "tmp/rspec.json",
+		Parallelism:      60,
+		NodeIndex:        7,
+		ServerBaseUrl:    "https://api.buildkite.com",
+		Identifier:       "123/456",
+		AccessToken:      "my_token",
+		OrganizationSlug: "my_org",
+		SuiteSlug:        "my_suite",
+		TestRunner:       "rspec",
+		ResultPath:       "tmp/rspec.json",
 	}
 
 	if diff := cmp.Diff(c, want); diff != "" {
