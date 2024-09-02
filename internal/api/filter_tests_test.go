@@ -2,8 +2,12 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/buildkite/test-splitter/internal/plan"
 	"github.com/google/go-cmp/cmp"
@@ -83,52 +87,28 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 	}
 }
 
-// func TestFetchFilesTiming_BadRequest(t *testing.T) {
-// 	requestCount := 0
-// 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		requestCount++
-// 		http.Error(w, `{"message": "bad request"}`, http.StatusBadRequest)
-// 	}))
-// 	defer svr.Close()
+func TestFilterTests_InternalServerError(t *testing.T) {
+	originalTimeout := retryTimeout
+	retryTimeout = 1 * time.Millisecond
+	t.Cleanup(func() {
+		retryTimeout = originalTimeout
+	})
 
-// 	c := NewClient(ClientConfig{
-// 		OrganizationSlug: "my-org",
-// 		ServerBaseUrl:    svr.URL,
-// 	})
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"message": "something went wrong"}`, http.StatusInternalServerError)
+	}))
+	defer svr.Close()
 
-// 	files := []string{"apple_spec.rb", "banana_spec.rb"}
-// 	_, err := c.FetchFilesTiming(context.Background(), "my-suite", files)
+	c := NewClient(ClientConfig{
+		OrganizationSlug: "msy-org",
+		ServerBaseUrl:    svr.URL,
+	})
 
-// 	if requestCount > 1 {
-// 		t.Errorf("http request count = %v, want  %d", requestCount, 1)
-// 	}
+	_, err := c.FilterTests(context.Background(), "my-suite", FilterTestsParams{
+		Files: []plan.TestCase{},
+	})
 
-// 	if err.Error() != "bad request" {
-// 		t.Errorf("FetchFilesTiming() error = %v, want %v", err, ErrRetryTimeout)
-// 	}
-// }
-
-// func TestFetchFilesTiming_InternalServerError(t *testing.T) {
-// 	originalTimeout := retryTimeout
-// 	retryTimeout = 1 * time.Millisecond
-// 	t.Cleanup(func() {
-// 		retryTimeout = originalTimeout
-// 	})
-
-// 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		http.Error(w, `{"message": "something went wrong"}`, http.StatusInternalServerError)
-// 	}))
-// 	defer svr.Close()
-
-// 	c := NewClient(ClientConfig{
-// 		OrganizationSlug: "my-org",
-// 		ServerBaseUrl:    svr.URL,
-// 	})
-
-// 	files := []string{"apple_spec.rb", "banana_spec.rb"}
-// 	_, err := c.FetchFilesTiming(context.Background(), "my-suite", files)
-
-// 	if !errors.Is(err, ErrRetryTimeout) {
-// 		t.Errorf("FetchFilesTiming() error = %v, want %v", err, ErrRetryTimeout)
-// 	}
-// }
+	if !errors.Is(err, ErrRetryTimeout) {
+		t.Errorf("FilterTests() error = %v, want %v", err, ErrRetryTimeout)
+	}
+}
