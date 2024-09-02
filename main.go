@@ -257,11 +257,6 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 	return testPlan, nil
 }
 
-type fileTiming struct {
-	Path     string
-	Duration time.Duration
-}
-
 // createRequestParam creates the request parameters for the test plan with the given configuration and files.
 // The files should have been filtered by include/exclude patterns before passing to this function.
 // If SplitByExample is disabled (default), it will return the default params that contain all the files.
@@ -269,90 +264,83 @@ type fileTiming struct {
 //
 // Error is returned if there is a failure to fetch test file timings or to get the test examples from test files when SplitByExample is enabled.
 func createRequestParam(ctx context.Context, cfg config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
+	testFiles := []plan.TestCase{}
+	for _, file := range files {
+		testFiles = append(testFiles, plan.TestCase{
+			Path: file,
+		})
+	}
+
 	if !cfg.SplitByExample {
 		debug.Println("Splitting by file")
-		testCases := []plan.TestCase{}
-		for _, file := range files {
-			testCases = append(testCases, plan.TestCase{
-				Path: file,
-			})
-		}
-
 		return api.TestPlanParams{
 			Identifier:  cfg.Identifier,
 			Parallelism: cfg.Parallelism,
 			Branch:      cfg.Branch,
 			Tests: api.TestPlanParamsTest{
-				Files: testCases,
+				Files: testFiles,
 			},
 		}, nil
 	}
 
 	debug.Println("Splitting by example")
 
-	debug.Printf("Fetching timings for %d files", len(files))
-	// Fetch the timings for all files.
-	timings, err := client.FetchFilesTiming(ctx, cfg.SuiteSlug, files)
+	debug.Printf("Filtering %d files", len(files))
+	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
+		Files: testFiles,
+		Env:   cfg.DumpEnv(),
+	})
+
 	if err != nil {
-		return api.TestPlanParams{}, fmt.Errorf("failed to fetch file timings: %w", err)
-	}
-	debug.Printf("Got timings for %d files", len(timings))
-
-	// The server only returns timings for the files that has been run before.
-	// Therefore, we need to merge the response with the requested files.
-	// The files that are not in the response will have a duration of 0.
-	allFilesTiming := []fileTiming{}
-	for _, file := range files {
-		allFilesTiming = append(allFilesTiming, fileTiming{
-			Path:     file,
-			Duration: timings[file],
-		})
+		return api.TestPlanParams{}, fmt.Errorf("failed to filter tests: %w", err)
 	}
 
-	// Get files that has duration greater or equal to the slow file threshold.
-	// Currently, the slow file threshold is set to 3 minutes which is roughly 70% of optimal 4 minutes node duration.
-	slowFiles := []string{}
-	restOfFiles := []plan.TestCase{}
-
-	for _, timing := range allFilesTiming {
-		if timing.Duration >= cfg.SlowFileThreshold {
-			slowFiles = append(slowFiles, timing.Path)
-		} else {
-			restOfFiles = append(restOfFiles, plan.TestCase{
-				Path: timing.Path,
-			})
-		}
-	}
-
-	if len(slowFiles) == 0 {
-		debug.Println("No slow files found")
+	if len(filteredFiles) == 0 {
+		debug.Println("No filtered files found")
 		return api.TestPlanParams{
 			Identifier:  cfg.Identifier,
 			Parallelism: cfg.Parallelism,
 			Branch:      cfg.Branch,
 			Tests: api.TestPlanParamsTest{
-				Files: restOfFiles,
+				Files: testFiles,
 			},
 		}, nil
 	}
 
-	debug.Printf("Getting examples for %d slow files", len(slowFiles))
+	debug.Printf("Filtered %d files", len(filteredFiles))
 
-	// Get the examples for the slow files.
-	slowFilesExamples, err := runner.GetExamples(slowFiles)
-	if err != nil {
-		return api.TestPlanParams{}, fmt.Errorf("failed to get examples for slow files: %w", err)
+	debug.Printf("Getting examples for %d filtered files", len(filteredFiles))
+
+	filteredFilesMap := map[string]bool{}
+	filteredFilesPath := []string{}
+	for _, file := range filteredFiles {
+		filteredFilesMap[file.Path] = true
+		filteredFilesPath = append(filteredFilesPath, file.Path)
 	}
 
-	debug.Printf("Got %d examples within the slow files", len(slowFilesExamples))
+	examples, err := runner.GetExamples(filteredFilesPath)
+	if err != nil {
+		return api.TestPlanParams{}, fmt.Errorf("failed to get examples for filtered files: %w", err)
+	}
+
+	debug.Printf("Got %d examples within the filtered files", len(examples))
+
+	unfilteredTestFiles := []plan.TestCase{}
+	for _, file := range files {
+		if _, ok := filteredFilesMap[file]; !ok {
+			unfilteredTestFiles = append(unfilteredTestFiles, plan.TestCase{
+				Path: file,
+			})
+		}
+	}
 
 	return api.TestPlanParams{
 		Identifier:  cfg.Identifier,
 		Parallelism: cfg.Parallelism,
 		Branch:      cfg.Branch,
 		Tests: api.TestPlanParamsTest{
-			Examples: slowFilesExamples,
-			Files:    restOfFiles,
+			Examples: examples,
+			Files:    unfilteredTestFiles,
 		},
 	}, nil
 }

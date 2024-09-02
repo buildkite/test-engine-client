@@ -1,7 +1,5 @@
 package config
 
-import "time"
-
 // Config is the internal representation of the complete test splitter client configuration.
 type Config struct {
 	// AccessToken is the access token for the API.
@@ -22,8 +20,6 @@ type Config struct {
 	ResultPath string
 	// ServerBaseUrl is the base URL of the test splitter server.
 	ServerBaseUrl string
-	// SlowFileThreshold is the threshold to consider a file as slow. Value is a number in milliseconds.
-	SlowFileThreshold time.Duration
 	// SplitByExample is the flag to enable split the test by example.
 	SplitByExample bool
 	// SuiteSlug is the slug of the suite.

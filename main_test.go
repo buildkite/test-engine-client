@@ -456,25 +456,21 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 {
-	"test/spec/fruits/apple_spec.rb": 100000,
-	"test/spec/fruits/banana_spec.rb": 180000,
-	"test/spec/fruits/cherry_spec.rb": 120000,
-	"test/spec/fruits/dragonfruit_spec.rb": 50000,
-	"test/spec/fruits/elderberry_spec.rb": 40000,
-	"test/spec/fruits/fig_spec.rb": 200000,
-	"test/spec/fruits/grape_spec.rb": 30000
+	"tests": [
+		{ "path": "test/spec/fruits/banana_spec.rb", "reason": "slow file" },
+		{ "path": "test/spec/fruits/fig_spec.rb", "reason": "slow file" }
+	]
 }`)
 	}))
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       7,
-		Branch:            "",
-		SplitByExample:    true,
-		SlowFileThreshold: 3 * time.Minute,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      7,
+		Branch:           "",
+		SplitByExample:   true,
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -500,7 +496,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 		t.Errorf("createRequestParam() error = %v", err)
 	}
 
-	// slow files (more than or equal to 3minutes): banana_spec.rb, fig_spec.rb
+	// filtered files: banana_spec.rb, fig_spec.rb
 	// the rest: apple_spec.rb, cherry_spec.rb, dragonfruit_spec.rb, elderberry_spec.rb, grape_spec.rb
 	want := api.TestPlanParams{
 		Identifier:  "identifier",
@@ -542,9 +538,9 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_SplitByExample_NoFileTiming(t *testing.T) {
+func TestCreateRequestParams_SplitByExample_FilterTestsError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
+		http.Error(w, `{ "message": "forbidden" }`, http.StatusForbidden)
 	}))
 
 	defer svr.Close()
@@ -573,32 +569,27 @@ func TestCreateRequestParams_SplitByExample_NoFileTiming(t *testing.T) {
 
 	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{})
 
-	if err == nil {
-		t.Errorf("createRequestParam() want error, got nil")
+	if err.Error() != "failed to filter tests: forbidden" {
+		t.Errorf("createRequestParam() error = %v, want forbidden error", err)
 	}
 }
 
-func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
+func TestCreateRequestParams_SplitByExample_NoFilteredFiles(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 {
-	"test/spec/fruits/apple_spec.rb": 100000,
-	"test/spec/fruits/banana_spec.rb": 200000,
-	"test/spec/fruits/cherry_spec.rb": 120000,
-	"test/spec/fruits/dragonfruit_spec.rb": 50000,
-	"test/spec/fruits/elderberry_spec.rb": 40000
+	"files": []
 }`)
 	}))
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       7,
-		Branch:            "",
-		SplitByExample:    true,
-		SlowFileThreshold: 3 * time.Minute,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      7,
+		Branch:           "",
+		SplitByExample:   true,
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -615,90 +606,7 @@ func TestCreateRequestParams_SplitByExample_MissingSomeOfTiming(t *testing.T) {
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
-		runner.RunnerConfig{
-			TestCommand: "rspec",
-		},
-	})
-
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	// slow files (more than or equal to 3minutes): banana_spec.rb, fig_spec.rb
-	// the rest: apple_spec.rb, cherry_spec.rb, dragonfruit_spec.rb, elderberry_spec.rb, grape_spec.rb
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 7,
-		Branch:      "",
-		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
-				{Path: "test/spec/fruits/apple_spec.rb"},
-				{Path: "test/spec/fruits/cherry_spec.rb"},
-				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
-				{Path: "test/spec/fruits/elderberry_spec.rb"},
-				{Path: "test/spec/fruits/fig_spec.rb"},
-				{Path: "test/spec/fruits/grape_spec.rb"},
-			},
-			Examples: []plan.TestCase{
-				{
-					Identifier: "./test/spec/fruits/banana_spec.rb[1:1]",
-					Name:       "is yellow",
-					Path:       "./test/spec/fruits/banana_spec.rb:2",
-					Scope:      "Banana is yellow",
-				},
-				{
-					Identifier: "./test/spec/fruits/banana_spec.rb[1:2:1]",
-					Name:       "is green",
-					Path:       "./test/spec/fruits/banana_spec.rb:7",
-					Scope:      "Banana when not ripe is green",
-				},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCreateRequestParams_SplitByExample_NoSlowFiles(t *testing.T) {
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `
-{
-	"test/spec/fruits/apple_spec.rb": 100000,
-	"test/spec/fruits/banana_spec.rb": 100000,
-	"test/spec/fruits/cherry_spec.rb": 120000,
-	"test/spec/fruits/dragonfruit_spec.rb": 50000,
-	"test/spec/fruits/elderberry_spec.rb": 40000
-}`)
-	}))
-	defer svr.Close()
-
-	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       7,
-		Branch:            "",
-		SplitByExample:    true,
-		SlowFileThreshold: 3 * time.Minute,
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
-	})
-	files := []string{
-		"test/spec/fruits/apple_spec.rb",
-		"test/spec/fruits/banana_spec.rb",
-		"test/spec/fruits/cherry_spec.rb",
-		"test/spec/fruits/dragonfruit_spec.rb",
-		"test/spec/fruits/elderberry_spec.rb",
-		"test/spec/fruits/fig_spec.rb",
-		"test/spec/fruits/grape_spec.rb",
-	}
-
-	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
-		runner.RunnerConfig{
+		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "rspec",
 		},
 	})
@@ -791,7 +699,6 @@ func TestSendMetadata(t *testing.T) {
 				"BUILDKITE_SPLITTER_TEST_CMD":    "bundle exec rspec",
 				"BUILDKITE_STEP_ID":              "pqr",
 				// ensure that empty env vars is included in the request
-				"BUILDKITE_SPLITTER_SLOW_FILE_THRESHOLD":       "",
 				"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":          "",
 				"BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN": "",
 				"BUILDKITE_SPLITTER_TEST_FILE_PATTERN":         "",

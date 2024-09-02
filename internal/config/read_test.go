@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -40,7 +39,6 @@ func TestConfigReadFromEnv(t *testing.T) {
 		SuiteSlug:              "my_suite",
 		MaxRetries:             3,
 		SplitByExample:         true,
-		SlowFileThreshold:      3 * time.Minute,
 		TestFilePattern:        "spec/unit/**/*_spec.rb",
 		TestFileExcludePattern: "spec/feature/**/*_spec.rb",
 		TestRunner:             "rspec",
