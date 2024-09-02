@@ -37,8 +37,10 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 				Path: "./turtle_spec.rb",
 			},
 		},
-		Parallelism:    3,
-		SplitByExample: true,
+		Env: map[string]string{
+			"BUILDKITE_PARALLEL_JOB_COUNT":        "3",
+			"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE": "true",
+		},
 	}
 
 	err = mockProvider.

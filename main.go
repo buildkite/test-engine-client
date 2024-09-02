@@ -287,9 +287,8 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 
 	debug.Printf("Filtering %d files", len(files))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
-		Files:          testFiles,
-		Parallelism:    cfg.Parallelism,
-		SplitByExample: true,
+		Files: testFiles,
+		Env:   cfg.DumpEnv(),
 	})
 
 	if err != nil {

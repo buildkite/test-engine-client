@@ -9,9 +9,8 @@ import (
 )
 
 type FilterTestsParams struct {
-	Files          []plan.TestCase `json:"files"`
-	Parallelism    int             `json:"parallelism"`
-	SplitByExample bool            `json:"split_by_example"`
+	Files []plan.TestCase   `json:"files"`
+	Env   map[string]string `json:"env"`
 }
 
 type FilteredTest struct {
