@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0 - 2024-09-03
+- ⚠️ **BREAKING** Add the `BUILDKITE_SPLITTER_RESULT_PATH` required environment variable. See [Migrating to 0.9.0](https://github.com/buildkite/test-splitter/tree/db4cab8cd6c82392553cd80481cf75e3888c2f4c?tab=readme-ov-file#migrating-to-090).
+- Experimental support for Jest by setting `BUILDKITE_SPLITTER_TEST_RUNNER` to `jest`.
+- Update the retry behavior to only retry failed tests.
+- Update split-by-example behavior to perform more work server-side.
+- Fix issue printing dry-run errors.
+- Fix issue with `BUILDKITE_STEP_ID` presence validation.
+
 ## 0.8.1 - 2024-08-06
 - Add BUILDKITE_BRANCH env var for test plan experiments
 - Fix to zzglob library issue where files not matching the include pattern are in the test plan
