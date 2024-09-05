@@ -94,7 +94,7 @@ func (j Jest) Run(testCases []string, retry bool) (RunResult, error) {
 	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 		report, parseErr := j.ParseReport(j.ResultPath)
 		if parseErr != nil {
-			fmt.Println("Buildkite Test Splitter: Failed to read Jest output, tests will not be retried.")
+			fmt.Println("Buildkite Test Engine Client: Failed to read Jest output, tests will not be retried.")
 			return RunResult{Status: RunStatusError}, err
 		}
 

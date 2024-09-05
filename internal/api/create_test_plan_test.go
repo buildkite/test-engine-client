@@ -17,8 +17,8 @@ import (
 
 func TestCreateTestPlan(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestSplitterClient",
-		Provider: "TestSplitterServer",
+		Consumer: "TestEngineClient",
+		Provider: "TestPlanServer",
 	})
 
 	if err != nil {
@@ -27,7 +27,7 @@ func TestCreateTestPlan(t *testing.T) {
 
 	params := TestPlanParams{
 		Runner:      Rspec,
-		Branch:      "tat-123-add-branch-name",
+		Branch:      "tet-123-add-branch-name",
 		Identifier:  "abc123",
 		Parallelism: 3,
 		Tests: TestPlanParamsTest{
@@ -121,8 +121,8 @@ func TestCreateTestPlan(t *testing.T) {
 
 func TestCreateTestPlan_SplitByExample(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestSplitterClient",
-		Provider: "TestSplitterServer",
+		Consumer: "TestEngineClient",
+		Provider: "TestPlanServer",
 	})
 
 	if err != nil {

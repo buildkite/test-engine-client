@@ -617,18 +617,18 @@ func TestSendMetadata(t *testing.T) {
 	}
 
 	env := map[string]string{
-		"BUILDKITE_BUILD_ID":               "xyz",
-		"BUILDKITE_JOB_ID":                 "abc",
-		"BUILDKITE_STEP_ID":                "pqr",
-		"BUILDKITE_ORGANIZATION_SLUG":      "buildkite",
-		"BUILDKITE_PARALLEL_JOB_COUNT":     "10",
-		"BUILDKITE_PARALLEL_JOB":           "5",
-		"BUILDKITE_SPLITTER_DEBUG_ENABLED": "true",
-		"BUILDKITE_SPLITTER_RETRY_COUNT":   "2",
-		"BUILDKITE_SPLITTER_RETRY_CMD":     "bundle exec rspec --only-failures",
-		"BUILDKITE_SPLITTER_SUITE_SLUG":    "rspec",
-		"BUILDKITE_SPLITTER_TEST_CMD":      "bundle exec rspec",
-		"BUILDKITE_SPLITTER_TEST_RUNNER":   "rspec",
+		"BUILDKITE_BUILD_ID":                  "xyz",
+		"BUILDKITE_JOB_ID":                    "abc",
+		"BUILDKITE_STEP_ID":                   "pqr",
+		"BUILDKITE_ORGANIZATION_SLUG":         "buildkite",
+		"BUILDKITE_PARALLEL_JOB_COUNT":        "10",
+		"BUILDKITE_PARALLEL_JOB":              "5",
+		"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": "true",
+		"BUILDKITE_TEST_ENGINE_RETRY_COUNT":   "2",
+		"BUILDKITE_TEST_ENGINE_RETRY_CMD":     "bundle exec rspec --only-failures",
+		"BUILDKITE_TEST_ENGINE_SUITE_SLUG":    "rspec",
+		"BUILDKITE_TEST_ENGINE_TEST_CMD":      "bundle exec rspec",
+		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":   "rspec",
 	}
 	for k, v := range env {
 		_ = os.Setenv(k, v)
@@ -651,26 +651,26 @@ func TestSendMetadata(t *testing.T) {
 		want := api.TestPlanMetadataParams{
 			Version:  "0.1.0",
 			Timeline: timeline,
-			SplitterEnv: map[string]string{
-				"BUILDKITE_BUILD_ID":               "xyz",
-				"BUILDKITE_JOB_ID":                 "abc",
-				"BUILDKITE_ORGANIZATION_SLUG":      "buildkite",
-				"BUILDKITE_PARALLEL_JOB_COUNT":     "10",
-				"BUILDKITE_PARALLEL_JOB":           "5",
-				"BUILDKITE_SPLITTER_DEBUG_ENABLED": "true",
+			BktecEnv: map[string]string{
+				"BUILDKITE_BUILD_ID":                  "xyz",
+				"BUILDKITE_JOB_ID":                    "abc",
+				"BUILDKITE_ORGANIZATION_SLUG":         "buildkite",
+				"BUILDKITE_PARALLEL_JOB_COUNT":        "10",
+				"BUILDKITE_PARALLEL_JOB":              "5",
+				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": "true",
 				// ensure that the identifier is included in the request
-				"BUILDKITE_SPLITTER_IDENTIFIER":  "fruitsabc",
-				"BUILDKITE_SPLITTER_RETRY_COUNT": "2",
-				"BUILDKITE_SPLITTER_RETRY_CMD":   "bundle exec rspec --only-failures",
-				"BUILDKITE_SPLITTER_SUITE_SLUG":  "rspec",
-				"BUILDKITE_SPLITTER_TEST_CMD":    "bundle exec rspec",
-				"BUILDKITE_STEP_ID":              "pqr",
+				"BUILDKITE_TEST_ENGINE_IDENTIFIER":  "fruitsabc",
+				"BUILDKITE_TEST_ENGINE_RETRY_COUNT": "2",
+				"BUILDKITE_TEST_ENGINE_RETRY_CMD":   "bundle exec rspec --only-failures",
+				"BUILDKITE_TEST_ENGINE_SUITE_SLUG":  "rspec",
+				"BUILDKITE_TEST_ENGINE_TEST_CMD":    "bundle exec rspec",
+				"BUILDKITE_STEP_ID":                 "pqr",
 				// ensure that empty env vars is included in the request
-				"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":          "",
-				"BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN": "",
-				"BUILDKITE_SPLITTER_TEST_FILE_PATTERN":         "",
-				"BUILDKITE_SPLITTER_TEST_RUNNER":               "rspec",
-				"BUILDKITE_BRANCH":                             "",
+				"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":          "",
+				"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN": "",
+				"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN":         "",
+				"BUILDKITE_TEST_ENGINE_TEST_RUNNER":               "rspec",
+				"BUILDKITE_BRANCH":                                "",
 			},
 		}
 

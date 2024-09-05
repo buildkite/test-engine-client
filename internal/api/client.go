@@ -16,7 +16,7 @@ import (
 	"github.com/buildkite/test-splitter/internal/debug"
 )
 
-// client is a client for the test splitter API.
+// client is a client for the test plan API.
 // It contains the organization slug, server base URL, and an HTTP client.
 type Client struct {
 	OrganizationSlug string
@@ -24,7 +24,7 @@ type Client struct {
 	httpClient       *http.Client
 }
 
-// ClientConfig is the configuration for the test splitter API client.
+// ClientConfig is the configuration for the test plan API client.
 type ClientConfig struct {
 	AccessToken      string
 	OrganizationSlug string
@@ -41,11 +41,11 @@ type authTransport struct {
 // RoundTrip adds the Authorization header to all requests made by the HTTP client.
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+t.accessToken)
-	req.Header.Set("User-Agent", fmt.Sprintf("Buildkite Test Splitter/%s (%s/%s)", t.version, runtime.GOOS, runtime.GOARCH))
+	req.Header.Set("User-Agent", fmt.Sprintf("Buildkite Test Engine Client/%s (%s/%s)", t.version, runtime.GOOS, runtime.GOARCH))
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-// NewClient creates a new client for the test splitter API with the given configuration.
+// NewClient creates a new client for the test plan API with the given configuration.
 // It also creates an HTTP client with an authTransport middleware.
 func NewClient(cfg ClientConfig) *Client {
 	httpClient := &http.Client{

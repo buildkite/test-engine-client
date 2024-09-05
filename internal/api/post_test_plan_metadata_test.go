@@ -11,8 +11,8 @@ import (
 
 func TestPostTestPlanMetadata(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestSplitterClient",
-		Provider: "TestSplitterServer",
+		Consumer: "TestEngineClient",
+		Provider: "TestPlanServer",
 	})
 
 	if err != nil {
@@ -21,13 +21,13 @@ func TestPostTestPlanMetadata(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		SplitterEnv: map[string]string{
-			"BUILDKITE_PARALLEL_JOB_COUNT":            "3",
-			"BUILDKITE_PARALLEL_JOB":                  "1",
-			"BUILDKITE_SPLITTER_SUITE_SLUG":           "my_slug",
-			"BUILDKITE_SPLITTER_TEST_EXCLUDE_PATTERN": "",
-			"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":     "false",
-			"BUILDKITE_SPLITTER_IDENTIFIER":           "abc123",
+		BktecEnv: map[string]string{
+			"BUILDKITE_PARALLEL_JOB_COUNT":               "3",
+			"BUILDKITE_PARALLEL_JOB":                     "1",
+			"BUILDKITE_TEST_ENGINE_SUITE_SLUG":           "my_slug",
+			"BUILDKITE_TEST_ENGINE_TEST_EXCLUDE_PATTERN": "",
+			"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":     "false",
+			"BUILDKITE_TEST_ENGINE_IDENTIFIER":           "abc123",
 		},
 		Timeline: []Timeline{
 			{
@@ -84,8 +84,8 @@ func TestPostTestPlanMetadata(t *testing.T) {
 
 func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestSplitterClient",
-		Provider: "TestSplitterServer",
+		Consumer: "TestEngineClient",
+		Provider: "TestPlanServer",
 	})
 
 	if err != nil {
@@ -94,13 +94,13 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		SplitterEnv: map[string]string{
-			"BUILDKITE_PARALLEL_JOB_COUNT":            "3",
-			"BUILDKITE_PARALLEL_JOB":                  "1",
-			"BUILDKITE_SPLITTER_SUITE_SLUG":           "my_slug",
-			"BUILDKITE_SPLITTER_TEST_EXCLUDE_PATTERN": "",
-			"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE":     "false",
-			"BUILDKITE_SPLITTER_IDENTIFIER":           "abc123",
+		BktecEnv: map[string]string{
+			"BUILDKITE_PARALLEL_JOB_COUNT":               "3",
+			"BUILDKITE_PARALLEL_JOB":                     "1",
+			"BUILDKITE_TEST_ENGINE_SUITE_SLUG":           "my_slug",
+			"BUILDKITE_TEST_ENGINE_TEST_EXCLUDE_PATTERN": "",
+			"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":     "false",
+			"BUILDKITE_TEST_ENGINE_IDENTIFIER":           "abc123",
 		},
 		Timeline: []Timeline{
 			{

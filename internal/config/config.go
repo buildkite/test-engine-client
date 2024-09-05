@@ -1,7 +1,6 @@
 package config
 
-// Config is the internal representation of the complete test splitter client configuration.
-
+// Config is the internal representation of the complete test engine client configuration.
 type Config struct {
 	// AccessToken is the access token for the API.
 	AccessToken string
@@ -19,7 +18,7 @@ type Config struct {
 	Parallelism int
 	// The path to the result file.
 	ResultPath string
-	// ServerBaseUrl is the base URL of the test splitter server.
+	// ServerBaseUrl is the base URL of the test plan server.
 	ServerBaseUrl string
 	// SplitByExample is the flag to enable split the test by example.
 	SplitByExample bool

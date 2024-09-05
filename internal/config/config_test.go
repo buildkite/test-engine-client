@@ -13,15 +13,15 @@ func setEnv(t *testing.T) {
 	t.Helper()
 	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "60")
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "7")
-	os.Setenv("BUILDKITE_SPLITTER_API_ACCESS_TOKEN", "my_token")
-	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "https://build.kite")
-	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "bin/rspec {{testExamples}}")
+	os.Setenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "my_token")
+	os.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", "https://build.kite")
+	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "bin/rspec {{testExamples}}")
 	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
-	os.Setenv("BUILDKITE_SPLITTER_SUITE_SLUG", "my_suite")
+	os.Setenv("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "my_suite")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
 	os.Setenv("BUILDKITE_STEP_ID", "456")
-	os.Setenv("BUILDKITE_SPLITTER_TEST_RUNNER", "rspec")
-	os.Setenv("BUILDKITE_SPLITTER_RESULT_PATH", "tmp/rspec.json")
+	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "rspec")
+	os.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "tmp/rspec.json")
 }
 
 func TestNewConfig(t *testing.T) {
@@ -64,10 +64,10 @@ func TestNewConfig_EmptyConfig(t *testing.T) {
 
 func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	setEnv(t)
-	os.Unsetenv("BUILDKITE_SPLITTER_TEST_RUNNER")
-	os.Unsetenv("BUILDKITE_SPLITTER_MODE")
-	os.Unsetenv("BUILDKITE_SPLITTER_BASE_URL")
-	os.Unsetenv("BUILDKITE_SPLITTER_TEST_CMD")
+	os.Unsetenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER")
+	os.Unsetenv("BUILDKITE_TEST_ENGINE_MODE")
+	os.Unsetenv("BUILDKITE_TEST_ENGINE_BASE_URL")
+	os.Unsetenv("BUILDKITE_TEST_ENGINE_TEST_CMD")
 	defer os.Clearenv()
 
 	c, err := New()
@@ -94,8 +94,8 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 
 func TestNewConfig_InvalidConfig(t *testing.T) {
 	setEnv(t)
-	os.Setenv("BUILDKITE_SPLITTER_MODE", "dynamic")
-	os.Unsetenv("BUILDKITE_SPLITTER_API_ACCESS_TOKEN")
+	os.Setenv("BUILDKITE_TEST_ENGINE_MODE", "dynamic")
+	os.Unsetenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN")
 	defer os.Clearenv()
 
 	_, err := New()
