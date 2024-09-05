@@ -3,6 +3,7 @@ package runner
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"syscall"
 	"testing"
@@ -56,6 +57,11 @@ func TestJestRun(t *testing.T) {
 		TestCommand: "jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
 	})
+
+	t.Cleanup(func() {
+		os.Remove(jest.ResultPath)
+	})
+
 	files := []string{"./fixtures/jest/spells/expelliarmus.spec.js"}
 	got, err := jest.Run(files, false)
 
@@ -79,6 +85,11 @@ func TestJestRun_Retry(t *testing.T) {
 			RetryTestCommand: "jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}}",
 		},
 	}
+
+	t.Cleanup(func() {
+		os.Remove(jest.ResultPath)
+	})
+
 	files := []string{"fixtures/jest/spells/expelliarmus.spec.js"}
 	got, err := jest.Run(files, true)
 
@@ -100,6 +111,11 @@ func TestJestRun_TestFailed(t *testing.T) {
 		TestCommand: "jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
 	})
+
+	t.Cleanup(func() {
+		os.Remove(jest.ResultPath)
+	})
+
 	files := []string{"./fixtures/jest/failure.spec.js"}
 	got, err := jest.Run(files, false)
 
@@ -123,6 +139,11 @@ func TestJestRun_CommandFailed(t *testing.T) {
 			TestCommand: "jest --invalid-option --outputFile {{resultPath}}",
 		},
 	}
+
+	t.Cleanup(func() {
+		os.Remove(jest.ResultPath)
+	})
+
 	files := []string{}
 	got, err := jest.Run(files, false)
 
