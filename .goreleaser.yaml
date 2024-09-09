@@ -19,6 +19,7 @@ builds:
     goos: [linux, darwin]
     goarch: [amd64, arm64]
     ldflags: "-X 'main.Version=v{{ .Version }}'"
+    binary: bktec
 
 brews:
   - name: test-splitter
