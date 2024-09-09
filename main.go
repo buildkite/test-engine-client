@@ -271,20 +271,6 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		})
 	}
 
-	if !cfg.SplitByExample {
-		debug.Println("Splitting by file")
-		return api.TestPlanParams{
-			Identifier:  cfg.Identifier,
-			Parallelism: cfg.Parallelism,
-			Branch:      cfg.Branch,
-			Tests: api.TestPlanParamsTest{
-				Files: testFiles,
-			},
-		}, nil
-	}
-
-	debug.Println("Splitting by example")
-
 	debug.Printf("Filtering %d files", len(files))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
 		Files: testFiles,

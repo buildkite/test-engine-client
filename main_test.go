@@ -420,39 +420,7 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_SplitByFile(t *testing.T) {
-	cfg := config.Config{
-		OrganizationSlug: "my-org",
-		SuiteSlug:        "my-suite",
-		Identifier:       "identifier",
-		Parallelism:      7,
-		Branch:           "",
-	}
-
-	client := api.NewClient(api.ClientConfig{})
-	got, err := createRequestParam(context.Background(), cfg, []string{"apple", "banana"}, *client, runner.Rspec{})
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 7,
-		Branch:      "",
-		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
-				{Path: "apple"},
-				{Path: "banana"},
-			},
-		},
-	}
-
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCreateRequestParams_SplitByExample(t *testing.T) {
+func TestCreateRequestParams(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 {
@@ -470,7 +438,6 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 		Identifier:       "identifier",
 		Parallelism:      7,
 		Branch:           "",
-		SplitByExample:   true,
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -538,7 +505,7 @@ func TestCreateRequestParams_SplitByExample(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_SplitByExample_FilterTestsError(t *testing.T) {
+func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{ "message": "forbidden" }`, http.StatusForbidden)
 	}))
@@ -574,7 +541,7 @@ func TestCreateRequestParams_SplitByExample_FilterTestsError(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_SplitByExample_NoFilteredFiles(t *testing.T) {
+func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 {
