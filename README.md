@@ -36,8 +36,7 @@ In addition to the above variables, you must set the following environment varia
 | -------------------- | ----------- |
 | `BUILDKITE_SPLITTER_API_ACCESS_TOKEN ` | Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can create an access token from [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite |
 | `BUILDKITE_SPLITTER_SUITE_SLUG` | The slug of your Buildkite Test Analytics test suite. You can find the suite slug in the url for your suite. For example, the slug for the url: https://buildkite.com/organizations/my-organization/analytics/suites/my-suite is `my-suite` |
-
-| `BUILDKITE_SPLITTER_RESULT_PATH` | Test Splitter uses the result path environment variable to tell the runner where to store test result summaries, for use in retries and verification. For RSpec, this would usually be set to `tmp/rspec.json`, while for Jest, this would usually be set to `tmp/jest.json`. |
+| `BUILDKITE_SPLITTER_RESULT_PATH` | Test Splitter uses this environment variable to tell the runner where to store the test result. Test Splitter reads the test result after each test run for retries and verification. For RSpec, the result is generated using the `--format json` and `--out` CLI options, while for Jest, it is generated using the `--json` and `--outputFile` options. We have included these options in the default test command for RSpec and Jest. If you need to customize your test command, make sure to append the CLI options to save the result to a file. Please refer to the `BUILDKITE_SPLITTER_TEST_CMD` environment variable for more details. <br> *Note: Test Splitter will not delete the file after running the test, however it will be deleted by Buildkite Agent as part of build lifecycle. *|
 
 
 <br>

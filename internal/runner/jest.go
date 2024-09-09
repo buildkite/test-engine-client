@@ -65,8 +65,6 @@ func (j Jest) Run(testCases []string, retry bool) (RunResult, error) {
 	var cmd *exec.Cmd
 	var err error
 
-	defer os.Remove(j.ResultPath)
-
 	if !retry {
 		commandName, commandArgs, err := j.commandNameAndArgs(j.TestCommand, testCases)
 		if err != nil {
