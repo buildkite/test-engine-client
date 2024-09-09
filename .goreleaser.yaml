@@ -1,7 +1,7 @@
 version: 2
 
 release:
-  name_template: Test Splitter v{{.Version}}
+  name_template: Test Engine Client v{{.Version}}
   draft: false
   prerelease: auto
   make_latest: false
@@ -22,7 +22,7 @@ builds:
 
 brews:
   - name: test-splitter
-    description: "Buildkite test splitting client"
+    description: "Buildkite test engine client"
     homepage: "https://github.com/buildkite/test-splitter"
     skip_upload: auto
     directory: .
@@ -92,7 +92,7 @@ nfpms:
     id: linux-pkg
     homepage: https://github.com/buildkite/test-splitter
     maintainer: Buildkite <support@buildkite.com>
-    description: Buildkite test splitting client
+    description: Buildkite test engine client
     license: MIT
     formats:
       - deb
