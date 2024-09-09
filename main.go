@@ -271,6 +271,10 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		})
 	}
 
+	if cfg.SplitByExample {
+		debug.Println("Splitting by example")
+	}
+
 	debug.Printf("Filtering %d files", len(files))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
 		Files: testFiles,
