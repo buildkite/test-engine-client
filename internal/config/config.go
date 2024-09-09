@@ -11,11 +11,11 @@ type Config struct {
 	// RetryCommand is the command to run the retry tests.
 	RetryCommand string
 	// Node index is index of the current node.
-	NodeIndex int
+	NodeIndex *int
 	// OrganizationSlug is the slug of the organization.
 	OrganizationSlug string
 	// Parallelism is the number of parallel tasks to run.
-	Parallelism int
+	Parallelism *int
 	// The path to the result file.
 	ResultPath string
 	// ServerBaseUrl is the base URL of the test splitter server.

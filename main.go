@@ -75,7 +75,7 @@ func main() {
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
 
 	// get plan for this node
-	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
+	thisNodeTask := testPlan.Tasks[strconv.Itoa(*cfg.NodeIndex)]
 
 	// execute tests
 	runnableTests := []string{}
@@ -209,7 +209,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 	handleError := func(err error) (plan.TestPlan, error) {
 		if errors.Is(err, api.ErrRetryTimeout) {
 			fmt.Println("Could not fetch or create plan from server, using fallback mode. Your build may take longer than usual.")
-			p := plan.CreateFallbackPlan(files, cfg.Parallelism)
+			p := plan.CreateFallbackPlan(files, *cfg.Parallelism)
 			return p, nil
 		}
 		return plan.TestPlan{}, err
@@ -224,7 +224,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 		// In this case, we should create a fallback plan.
 		if len(cachedPlan.Tasks) == 0 {
 			fmt.Println("Error plan received, using fallback mode. Your build may take longer than usual.")
-			testPlan := plan.CreateFallbackPlan(files, cfg.Parallelism)
+			testPlan := plan.CreateFallbackPlan(files, *cfg.Parallelism)
 			return testPlan, nil
 		}
 
@@ -250,7 +250,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		fmt.Println("Error plan received, using fallback mode. Your build may take longer than usual.")
-		testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
+		testPlan = plan.CreateFallbackPlan(files, *cfg.Parallelism)
 	}
 
 	debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)
@@ -275,7 +275,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		debug.Println("Splitting by file")
 		return api.TestPlanParams{
 			Identifier:  cfg.Identifier,
-			Parallelism: cfg.Parallelism,
+			Parallelism: *cfg.Parallelism,
 			Branch:      cfg.Branch,
 			Tests: api.TestPlanParamsTest{
 				Files: testFiles,
@@ -299,7 +299,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		debug.Println("No filtered files found")
 		return api.TestPlanParams{
 			Identifier:  cfg.Identifier,
-			Parallelism: cfg.Parallelism,
+			Parallelism: *cfg.Parallelism,
 			Branch:      cfg.Branch,
 			Tests: api.TestPlanParamsTest{
 				Files: testFiles,
@@ -336,7 +336,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 
 	return api.TestPlanParams{
 		Identifier:  cfg.Identifier,
-		Parallelism: cfg.Parallelism,
+		Parallelism: *cfg.Parallelism,
 		Branch:      cfg.Branch,
 		Tests: api.TestPlanParamsTest{
 			Examples: examples,

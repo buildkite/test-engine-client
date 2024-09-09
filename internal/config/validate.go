@@ -12,20 +12,23 @@ func (c *Config) validate() error {
 		errs.appendFieldError("BUILDKITE_SPLITTER_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)
 	}
 
-	if got, min := c.Parallelism, 1; got < min {
+	if c.Parallelism == nil {
+		errs.appendFieldError("BUILDKITE_PARALLEL_JOB_COUNT", "not set in environment")
+	} else if got, min := *c.Parallelism, 1; got < min {
 		errs.appendFieldError("BUILDKITE_PARALLEL_JOB_COUNT", "was %d, must be greater than or equal to %d", got, min)
 	}
 
-	if got, max := c.Parallelism, 1000; got > max {
-		errs.appendFieldError("BUILDKITE_PARALLEL_JOB_COUNT", "was %d, must not be greater than %d", got, max)
-	}
-
-	if got, min := c.NodeIndex, 0; got < 0 {
-		errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %d, must be greater than or equal to %d", got, min)
-	}
-
-	if got, max := c.NodeIndex, c.Parallelism-1; got > max {
-		errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %d, must not be greater than %d", got, max)
+	if c.NodeIndex == nil {
+		errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "not set in environment")
+	} else {
+		if got, min := *c.NodeIndex, 0; got < 0 {
+			errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %d, must be greater than or equal to %d", got, min)
+		}
+		if c.Parallelism != nil {
+			if got, max := *c.NodeIndex, *c.Parallelism-1; got > max {
+				errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %d, must not be greater than %d", got, max)
+			}
+		}
 	}
 
 	if c.ServerBaseUrl != "" {
