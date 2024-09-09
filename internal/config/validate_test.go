@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"strings"
 	"testing"
 )
 
@@ -42,49 +41,39 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		field string
 		value any
 	}{
+		// Base URL is bunk
 		{
-			name:  "ServerBaseUrl is not a valid url",
-			field: "ServerBaseUrl",
+			name:  "BUILDKITE_SPLITTER_BASE_URL",
 			value: "foo",
 		},
+		// Node index < 0
 		{
-			name:  "Identifier is missing",
-			field: "Identifier",
-			value: "",
-		},
-		{
-			name:  "Identifier is greater 1024 characters",
-			field: "Identifier",
-			value: strings.Repeat("a", 1025),
-		},
-		{
-			name:  "NodeIndex is less than 0",
-			field: "NodeIndex",
+			name:  "BUILDKITE_PARALLEL_JOB",
 			value: -1,
 		},
+		// Node index > parallelism
 		{
-			name:  "NodeIndex is greater than Parallelism",
-			field: "NodeIndex",
+			name:  "BUILDKITE_PARALLEL_JOB",
 			value: 15,
 		},
+		// Parallelism > 1000
 		{
-			name:  "Parallelism is greater than 1000",
-			field: "Parallelism",
+			name:  "BUILDKITE_PARALLEL_JOB_COUNT",
 			value: 1341,
 		},
+		// Organization slug is missing
 		{
-			name:  "OrganizationSlug is missing",
-			field: "OrganizationSlug",
+			name:  "BUILDKITE_ORGANIZATION_SLUG",
 			value: "",
 		},
+		// Suite slug is missing
 		{
-			name:  "SuiteSlug is missing",
-			field: "SuiteSlug",
+			name:  "BUILDKITE_SPLITTER_SUITE_SLUG",
 			value: "",
 		},
+		// API access token is blank
 		{
-			name:  "AccessToken is missing",
-			field: "AccessToken",
+			name:  "BUILDKITE_SPLITTER_API_ACCESS_TOKEN",
 			value: "",
 		},
 	}
@@ -92,20 +81,18 @@ func TestConfigValidate_Invalid(t *testing.T) {
 	for _, s := range scenario {
 		t.Run(s.name, func(t *testing.T) {
 			c := createConfig()
-			switch s.field {
-			case "ServerBaseUrl":
+			switch s.name {
+			case "BUILDKITE_SPLITTER_BASE_URL":
 				c.ServerBaseUrl = s.value.(string)
-			case "Identifier":
-				c.Identifier = s.value.(string)
-			case "NodeIndex":
+			case "BUILDKITE_PARALLEL_JOB":
 				c.NodeIndex = s.value.(int)
-			case "Parallelism":
+			case "BUILDKITE_PARALLEL_JOB_COUNT":
 				c.Parallelism = s.value.(int)
-			case "OrganizationSlug":
+			case "BUILDKITE_ORGANIZATION_SLUG":
 				c.OrganizationSlug = s.value.(string)
-			case "SuiteSlug":
+			case "BUILDKITE_SPLITTER_SUITE_SLUG":
 				c.SuiteSlug = s.value.(string)
-			case "AccessToken":
+			case "BUILDKITE_SPLITTER_API_ACCESS_TOKEN":
 				c.AccessToken = s.value.(string)
 			}
 
@@ -120,8 +107,8 @@ func TestConfigValidate_Invalid(t *testing.T) {
 				t.Errorf("config.validate() error length = %d, want 1", len(invConfigError))
 			}
 
-			if invConfigError[0].name != s.field {
-				t.Errorf("config.validate() error name = %s, want %s", invConfigError[0].name, s.field)
+			if invConfigError[0].name != s.name {
+				t.Errorf("config.validate() error name = %s, want %s", invConfigError[0].name, s.name)
 			}
 		})
 	}
