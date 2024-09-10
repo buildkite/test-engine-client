@@ -55,8 +55,7 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 			b.Header("Content-Type", matchers.Like("application/json; charset=utf-8"))
 			b.JSONBody(matchers.MapMatcher{
 				"tests": matchers.EachLike(matchers.MapMatcher{
-					"path":   matchers.Like("./turtle_spec.rb"),
-					"reason": matchers.Like("slow_files"),
+					"path": matchers.Like("./turtle_spec.rb"),
 				}, 1),
 			})
 		}).
@@ -73,8 +72,7 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 			}
 			want := []FilteredTest{
 				{
-					Path:   "./turtle_spec.rb",
-					Reason: "slow_files",
+					Path: "./turtle_spec.rb",
 				},
 			}
 
