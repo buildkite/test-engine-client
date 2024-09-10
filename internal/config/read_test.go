@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestConfigReadFromEnv(t *testing.T) {
@@ -49,7 +50,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		t.Errorf("config.readFromEnv() error = %v", err)
 	}
 
-	if diff := cmp.Diff(c, want); diff != "" {
+	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {
 		t.Errorf("config.readFromEnv() diff (-got +want):\n%s", diff)
 	}
 }
@@ -63,7 +64,7 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 	os.Setenv("BUILDKITE_STEP_ID", "456")
 	defer os.Clearenv()
 
-	c := Config{}
+	c := Config{errs: InvalidConfigError{}}
 	c.readFromEnv()
 	if c.ServerBaseUrl != "https://api.buildkite.com" {
 		t.Errorf("ServerBaseUrl = %v, want %v", c.ServerBaseUrl, "https://api.buildkite.com")
@@ -88,7 +89,7 @@ func TestConfigReadFromEnv_NotInteger(t *testing.T) {
 	defer os.Unsetenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	defer os.Unsetenv("BUILDKITE_PARALLEL_JOB")
 
-	c := Config{}
+	c := Config{errs: InvalidConfigError{}}
 	err := c.readFromEnv()
 
 	var invConfigError InvalidConfigError
@@ -108,9 +109,11 @@ func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
 	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
 	os.Setenv("BUILDKITE_STEP_ID", "123")
+	os.Setenv("BUILDKITE_PARALLEL_JOB", "1")
+	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
 	defer os.Clearenv()
 
-	c := Config{}
+	c := Config{errs: InvalidConfigError{}}
 	err := c.readFromEnv()
 
 	var invConfigError InvalidConfigError
@@ -120,7 +123,7 @@ func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
 
 	want := "BUILDKITE_BUILD_ID must not be blank"
 
-	if got := invConfigError[0].Error(); got != want {
+	if got := invConfigError.Error(); got != want {
 		t.Errorf("config.readFromEnv() got = %v, want = %v", got, want)
 	}
 }
@@ -131,9 +134,11 @@ func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
 	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
 	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
+	os.Setenv("BUILDKITE_PARALLEL_JOB", "1")
+	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
 	defer os.Clearenv()
 
-	c := Config{}
+	c := Config{errs: InvalidConfigError{}}
 	err := c.readFromEnv()
 
 	var invConfigError InvalidConfigError
@@ -144,8 +149,60 @@ func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
 	want := "BUILDKITE_STEP_ID must not be blank"
 
 	if errors.As(err, &invConfigError) {
-		if got := invConfigError[0].Error(); got != want {
+		if got := invConfigError.Error(); got != want {
 			t.Errorf("config.readFromEnv() got = %v, want = %v", got, want)
 		}
+	}
+}
+
+func TestConfigReadFromEnv_InvalidParallelJob(t *testing.T) {
+	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "")
+	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
+	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
+	os.Setenv("BUILDKITE_BUILD_ID", "123")
+	os.Setenv("BUILDKITE_STEP_ID", "456")
+	os.Setenv("BUILDKITE_PARALLEL_JOB", "")
+	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
+	defer os.Clearenv()
+
+	c := Config{errs: InvalidConfigError{}}
+	err := c.readFromEnv()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.readFromEnv() error = %v, want InvalidConfigError", err)
+	}
+
+	want := `BUILDKITE_PARALLEL_JOB was "", must be a number`
+
+	if got := invConfigError.Error(); got != want {
+		t.Errorf("config.readFromEnv() got = %v, want = %v", got, want)
+	}
+}
+
+func TestConfigReadFromEnv_InvalidParallelJobCount(t *testing.T) {
+	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "")
+	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
+	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
+	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
+	os.Setenv("BUILDKITE_BUILD_ID", "123")
+	os.Setenv("BUILDKITE_STEP_ID", "456")
+	os.Setenv("BUILDKITE_PARALLEL_JOB", "10")
+	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "")
+	defer os.Clearenv()
+
+	c := Config{errs: InvalidConfigError{}}
+	err := c.readFromEnv()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.readFromEnv() error = %v, want InvalidConfigError", err)
+	}
+
+	want := `BUILDKITE_PARALLEL_JOB_COUNT was "", must be a number`
+
+	if got := invConfigError.Error(); got != want {
+		t.Errorf("config.readFromEnv() got = %v, want = %v", got, want)
 	}
 }
