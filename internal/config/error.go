@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// InvalidConfigError is an error that contains a list of all invalid fields in the config.
+// InvalidConfigError is an error that contains a map of all validation errors on each field of the configuration.
 type InvalidConfigError map[string][]error
 
 func (i InvalidConfigError) Error() string {
@@ -18,16 +18,6 @@ func (i InvalidConfigError) Error() string {
 	}
 	sort.Strings(errs)
 	return strings.Join(errs, "\n")
-}
-
-func (i InvalidConfigError) Unwrap() []error {
-	errs := make([]error, 0, len(i))
-	for field, value := range i {
-		for _, v := range value {
-			errs = append(errs, fmt.Errorf("%s %s", field, v))
-		}
-	}
-	return errs
 }
 
 func (e InvalidConfigError) appendFieldError(field, format string, v ...any) {
