@@ -21,13 +21,15 @@ func (c *Config) validate() error {
 		}
 	}
 
-	if c.errs["BUILDKITE_PARALLEL_JOB"] == nil && c.errs["BUILDKITE_PARALLEL_JOB_COUNT"] == nil {
+	if c.errs["BUILDKITE_PARALLEL_JOB"] == nil {
 		if got, min := c.NodeIndex, 0; got < 0 {
 			c.errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %d, must be greater than or equal to %d", got, min)
 		}
 
-		if got, max := c.NodeIndex, c.Parallelism-1; got > max {
-			c.errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %d, must not be greater than %d", got, max)
+		if c.errs["BUILDKITE_PARALLEL_JOB_COUNT"] == nil {
+			if got, max := c.NodeIndex, c.Parallelism-1; got > max {
+				c.errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %d, must not be greater than %d", got, max)
+			}
 		}
 	}
 
