@@ -30,7 +30,6 @@ import (
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
 func (c *Config) readFromEnv() error {
-	var errs InvalidConfigError
 
 	c.AccessToken = os.Getenv("BUILDKITE_SPLITTER_API_ACCESS_TOKEN")
 	c.OrganizationSlug = os.Getenv("BUILDKITE_ORGANIZATION_SLUG")
@@ -38,12 +37,12 @@ func (c *Config) readFromEnv() error {
 
 	buildId := os.Getenv("BUILDKITE_BUILD_ID")
 	if buildId == "" {
-		errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
+		c.errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
 	}
 
 	stepId := os.Getenv("BUILDKITE_STEP_ID")
 	if stepId == "" {
-		errs.appendFieldError("BUILDKITE_STEP_ID", "must not be blank")
+		c.errs.appendFieldError("BUILDKITE_STEP_ID", "must not be blank")
 	}
 
 	c.Identifier = fmt.Sprintf("%s/%s", buildId, stepId)
@@ -63,24 +62,26 @@ func (c *Config) readFromEnv() error {
 	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_SPLITTER_RETRY_COUNT", 0)
 	c.MaxRetries = MaxRetries
 	if err != nil {
-		errs.appendFieldError("BUILDKITE_SPLITTER_RETRY_COUNT", "was %q, must be a number", os.Getenv("BUILDKITE_SPLITTER_RETRY_COUNT"))
+		c.errs.appendFieldError("BUILDKITE_SPLITTER_RETRY_COUNT", "was %q, must be a number", os.Getenv("BUILDKITE_SPLITTER_RETRY_COUNT"))
 	}
 	c.RetryCommand = os.Getenv("BUILDKITE_SPLITTER_RETRY_CMD")
 
 	parallelism := os.Getenv("BUILDKITE_PARALLEL_JOB_COUNT")
 	parallelismInt, err := strconv.Atoi(parallelism)
-	if err == nil {
-		c.Parallelism = &parallelismInt
+	if err != nil {
+		c.errs.appendFieldError("BUILDKITE_PARALLEL_JOB_COUNT", "was %q, must be a number", parallelism)
 	}
+	c.Parallelism = parallelismInt
 
 	nodeIndex := os.Getenv("BUILDKITE_PARALLEL_JOB")
 	nodeIndexInt, err := strconv.Atoi(nodeIndex)
-	if err == nil {
-		c.NodeIndex = &nodeIndexInt
+	if err != nil {
+		c.errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %q, must be a number", nodeIndex)
 	}
+	c.NodeIndex = nodeIndexInt
 
-	if len(errs) > 0 {
-		return errs
+	if len(c.errs) > 0 {
+		return c.errs
 	}
 	return nil
 }
