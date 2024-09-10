@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func setEnv(t *testing.T) {
@@ -43,9 +44,10 @@ func TestNewConfig(t *testing.T) {
 		ResultPath:       "tmp/rspec.json",
 		SuiteSlug:        "my_suite",
 		TestRunner:       "rspec",
+		errs:             InvalidConfigError{},
 	}
 
-	if diff := cmp.Diff(c, want); diff != "" {
+	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {
 		t.Errorf("config.New() diff (-got +want):\n%s", diff)
 	}
 }
@@ -85,7 +87,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		ResultPath:       "tmp/rspec.json",
 	}
 
-	if diff := cmp.Diff(c, want); diff != "" {
+	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {
 		t.Errorf("config.New() diff (-got +want):\n%s", diff)
 	}
 }

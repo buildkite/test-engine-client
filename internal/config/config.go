@@ -35,7 +35,7 @@ type Config struct {
 	TestRunner string
 	// Branch is the string value of the git branch name, used by Buildkite only.
 	Branch string
-
+	// errs is a map of environment variables name and the validation errors associated with them.
 	errs InvalidConfigError
 }
 
