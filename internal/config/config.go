@@ -1,6 +1,7 @@
 package config
 
 // Config is the internal representation of the complete test splitter client configuration.
+
 type Config struct {
 	// AccessToken is the access token for the API.
 	AccessToken string
@@ -34,25 +35,19 @@ type Config struct {
 	TestRunner string
 	// Branch is the string value of the git branch name, used by Buildkite only.
 	Branch string
+	// errs is a map of environment variables name and the validation errors associated with them.
+	errs InvalidConfigError
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.
 // It returns Config struct and an InvalidConfigError if there is an invalid configuration.
 func New() (Config, error) {
-	var errs InvalidConfigError
+	c := Config{errs: InvalidConfigError{}}
+	c.readFromEnv()
+	c.validate()
 
-	c := Config{}
-
-	if err := c.readFromEnv(); err != nil {
-		errs = append(errs, err.(InvalidConfigError)...)
-	}
-
-	if err := c.validate(); err != nil {
-		errs = append(errs, err.(InvalidConfigError)...)
-	}
-
-	if len(errs) > 0 {
-		return Config{}, errs
+	if len(c.errs) > 0 {
+		return Config{}, c.errs
 	}
 
 	return c, nil

@@ -16,6 +16,7 @@ func createConfig() Config {
 		AccessToken:      "my_token",
 		MaxRetries:       3,
 		ResultPath:       "tmp/result-*.json",
+		errs:             InvalidConfigError{},
 	}
 }
 
@@ -27,7 +28,7 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestConfigValidate_Empty(t *testing.T) {
-	c := Config{}
+	c := Config{errs: InvalidConfigError{}}
 	err := c.validate()
 
 	if !errors.As(err, new(InvalidConfigError)) {
@@ -107,8 +108,8 @@ func TestConfigValidate_Invalid(t *testing.T) {
 				t.Errorf("config.validate() error length = %d, want 1", len(invConfigError))
 			}
 
-			if invConfigError[0].name != s.name {
-				t.Errorf("config.validate() error name = %s, want %s", invConfigError[0].name, s.name)
+			if len(invConfigError[s.name]) != 1 {
+				t.Errorf("config.validate() error for %s length = %d, want 1", s.name, len(invConfigError[s.name]))
 			}
 		})
 	}
