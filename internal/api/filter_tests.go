@@ -14,8 +14,7 @@ type FilterTestsParams struct {
 }
 
 type FilteredTest struct {
-	Path   string `json:"path"`
-	Reason string `json:"reason"`
+	Path string `json:"path"`
 }
 
 type filteredTestResponse struct {
