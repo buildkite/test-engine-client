@@ -156,10 +156,6 @@ func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_InvalidParallelJob(t *testing.T) {
-	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "")
-	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
-	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
-	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
 	os.Setenv("BUILDKITE_STEP_ID", "456")
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "")
@@ -182,10 +178,6 @@ func TestConfigReadFromEnv_InvalidParallelJob(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_InvalidParallelJobCount(t *testing.T) {
-	os.Setenv("BUILDKITE_SPLITTER_BASE_URL", "")
-	os.Setenv("BUILDKITE_SPLITTER_MODE", "")
-	os.Setenv("BUILDKITE_SPLITTER_TEST_CMD", "")
-	os.Setenv("BUILDKITE_SPLITTER_RETRY_COUNT", "")
 	os.Setenv("BUILDKITE_BUILD_ID", "123")
 	os.Setenv("BUILDKITE_STEP_ID", "456")
 	os.Setenv("BUILDKITE_PARALLEL_JOB", "10")

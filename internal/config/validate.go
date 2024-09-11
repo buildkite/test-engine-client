@@ -11,6 +11,15 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("BUILDKITE_SPLITTER_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)
 	}
 
+	// We validate BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT in two steps.
+	// 1. Validate the type and presence of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT when reading them from the environment.
+	// 2. Validate the range of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT
+	//
+	// This is the second step. We don't validate the range of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT if the first validation step fails.
+	//
+	// The order of the range validation matters.
+	// The range validation of BUILDKITE_PARALLEL_JOB depends on the result of BUILDKITE_PARALLEL_JOB_COUNT validation at the first step.
+	// We need to validate the range of BUILDKITE_PARALLEL_JOB first before we add the range validation error to BUILDKITE_PARALLEL_JOB_COUNT.
 	if c.errs["BUILDKITE_PARALLEL_JOB"] == nil {
 		if got, min := c.NodeIndex, 0; got < 0 {
 			c.errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %d, must be greater than or equal to %d", got, min)
