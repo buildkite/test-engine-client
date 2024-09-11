@@ -34,6 +34,10 @@ brews:
       name: homebrew-buildkite
       branch: master
 
+git:
+  ignore_tags:
+    - '{{ envOrDefault "GORELEASER_IGNORE_TAG" ""}}'
+
 dockers:
   - image_templates:
       - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-amd64"
