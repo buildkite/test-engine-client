@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-splitter/internal/plan"
+	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pact-foundation/pact-go/v2/consumer"
 	"github.com/pact-foundation/pact-go/v2/matchers"

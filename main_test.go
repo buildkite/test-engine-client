@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-splitter/internal/api"
-	"github.com/buildkite/test-splitter/internal/config"
-	"github.com/buildkite/test-splitter/internal/plan"
-	"github.com/buildkite/test-splitter/internal/runner"
+	"github.com/buildkite/test-engine-client/internal/api"
+	"github.com/buildkite/test-engine-client/internal/config"
+	"github.com/buildkite/test-engine-client/internal/plan"
+	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/google/go-cmp/cmp"
 )
 

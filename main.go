@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/test-splitter/internal/api"
-	"github.com/buildkite/test-splitter/internal/config"
-	"github.com/buildkite/test-splitter/internal/debug"
-	"github.com/buildkite/test-splitter/internal/plan"
-	"github.com/buildkite/test-splitter/internal/runner"
+	"github.com/buildkite/test-engine-client/internal/api"
+	"github.com/buildkite/test-engine-client/internal/config"
+	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/internal/plan"
+	"github.com/buildkite/test-engine-client/internal/runner"
 	"golang.org/x/sys/unix"
 )
 

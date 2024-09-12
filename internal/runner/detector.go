@@ -3,8 +3,8 @@ package runner
 import (
 	"errors"
 
-	"github.com/buildkite/test-splitter/internal/config"
-	"github.com/buildkite/test-splitter/internal/plan"
+	"github.com/buildkite/test-engine-client/internal/config"
+	"github.com/buildkite/test-engine-client/internal/plan"
 )
 
 type RunnerConfig struct {

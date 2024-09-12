@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/buildkite/test-splitter/internal/debug"
-	"github.com/buildkite/test-splitter/internal/plan"
+	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
 
