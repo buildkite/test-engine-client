@@ -651,7 +651,7 @@ func TestSendMetadata(t *testing.T) {
 		want := api.TestPlanMetadataParams{
 			Version:  "0.1.0",
 			Timeline: timeline,
-			BktecEnv: map[string]string{
+			Env: map[string]string{
 				"BUILDKITE_BUILD_ID":                  "xyz",
 				"BUILDKITE_JOB_ID":                    "abc",
 				"BUILDKITE_ORGANIZATION_SLUG":         "buildkite",

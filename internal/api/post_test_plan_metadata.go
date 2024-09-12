@@ -13,7 +13,7 @@ type Timeline struct {
 
 type TestPlanMetadataParams struct {
 	Version  string            `json:"version"`
-	BktecEnv map[string]string `json:"bktec_env"`
+	Env      map[string]string `json:"env"`
 	Timeline []Timeline        `json:"timeline"`
 }
 

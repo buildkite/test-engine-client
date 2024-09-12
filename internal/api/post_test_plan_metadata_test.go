@@ -21,7 +21,7 @@ func TestPostTestPlanMetadata(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		BktecEnv: map[string]string{
+		Env: map[string]string{
 			"BUILDKITE_PARALLEL_JOB_COUNT":               "3",
 			"BUILDKITE_PARALLEL_JOB":                     "1",
 			"BUILDKITE_TEST_ENGINE_SUITE_SLUG":           "my_slug",
@@ -94,7 +94,7 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		BktecEnv: map[string]string{
+		Env: map[string]string{
 			"BUILDKITE_PARALLEL_JOB_COUNT":               "3",
 			"BUILDKITE_PARALLEL_JOB":                     "1",
 			"BUILDKITE_TEST_ENGINE_SUITE_SLUG":           "my_slug",

@@ -117,7 +117,7 @@ func createTimestamp() string {
 func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline) {
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
 		Timeline: timeline,
-		BktecEnv: cfg.DumpEnv(),
+		Env:      cfg.DumpEnv(),
 		Version:  Version,
 	})
 
