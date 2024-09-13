@@ -44,7 +44,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 	}{
 		// Base URL is bunk
 		{
-			name:  "BUILDKITE_SPLITTER_BASE_URL",
+			name:  "BUILDKITE_TEST_ENGINE_BASE_URL",
 			value: "foo",
 		},
 		// Node index < 0
@@ -69,12 +69,12 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		},
 		// Suite slug is missing
 		{
-			name:  "BUILDKITE_SPLITTER_SUITE_SLUG",
+			name:  "BUILDKITE_TEST_ENGINE_SUITE_SLUG",
 			value: "",
 		},
 		// API access token is blank
 		{
-			name:  "BUILDKITE_SPLITTER_API_ACCESS_TOKEN",
+			name:  "BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN",
 			value: "",
 		},
 	}
@@ -83,7 +83,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		t.Run(s.name, func(t *testing.T) {
 			c := createConfig()
 			switch s.name {
-			case "BUILDKITE_SPLITTER_BASE_URL":
+			case "BUILDKITE_TEST_ENGINE_BASE_URL":
 				c.ServerBaseUrl = s.value.(string)
 			case "BUILDKITE_PARALLEL_JOB":
 				c.NodeIndex = s.value.(int)
@@ -91,9 +91,9 @@ func TestConfigValidate_Invalid(t *testing.T) {
 				c.Parallelism = s.value.(int)
 			case "BUILDKITE_ORGANIZATION_SLUG":
 				c.OrganizationSlug = s.value.(string)
-			case "BUILDKITE_SPLITTER_SUITE_SLUG":
+			case "BUILDKITE_TEST_ENGINE_SUITE_SLUG":
 				c.SuiteSlug = s.value.(string)
-			case "BUILDKITE_SPLITTER_API_ACCESS_TOKEN":
+			case "BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN":
 				c.AccessToken = s.value.(string)
 			}
 

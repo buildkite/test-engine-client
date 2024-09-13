@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-splitter/internal/plan"
+	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pact-foundation/pact-go/v2/consumer"
 	"github.com/pact-foundation/pact-go/v2/matchers"
@@ -17,8 +17,8 @@ import (
 
 func TestFilterTests_SlowFiles(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestSplitterClient",
-		Provider: "TestSplitterServer",
+		Consumer: "TestEngineClient",
+		Provider: "TestPlanServer",
 	})
 
 	if err != nil {
@@ -38,8 +38,8 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 			},
 		},
 		Env: map[string]string{
-			"BUILDKITE_PARALLEL_JOB_COUNT":        "3",
-			"BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE": "true",
+			"BUILDKITE_PARALLEL_JOB_COUNT":           "3",
+			"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE": "true",
 		},
 	}
 

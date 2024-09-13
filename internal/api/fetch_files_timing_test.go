@@ -16,8 +16,8 @@ import (
 
 func TestFetchFilesTiming(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestSplitterClient",
-		Provider: "TestSplitterServer",
+		Consumer: "TestEngineClient",
+		Provider: "TestPlanServer",
 	})
 
 	if err != nil {

@@ -1,2 +1,2 @@
-// Package api provides an API client for the Test Splitting API.
+// Package api provides an API client for the Test Plan API.
 package api

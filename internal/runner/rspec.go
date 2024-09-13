@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/buildkite/test-splitter/internal/debug"
-	"github.com/buildkite/test-splitter/internal/plan"
+	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
 
@@ -46,9 +46,9 @@ func (r Rspec) GetFiles() ([]string, error) {
 	files, err := discoverTestFiles(r.TestFilePattern, r.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
 
-	// rspec test in Test Analytics is stored with leading "./"
+	// rspec test in Test Engine is stored with leading "./"
 	// therefore, we need to add "./" to the file path
-	// to match the test path in Test Analytics
+	// to match the test path in Test Engine
 	for i, file := range files {
 		files[i] = "./" + file
 	}
@@ -102,7 +102,7 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 		if parseErr != nil {
 			// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
 			// therefore we need to bubble up the error.
-			fmt.Println("Buildkite Test Splitter: Failed to read Rspec output, tests will not be retried.")
+			fmt.Println("Buildkite Test Engine Client: Failed to read Rspec output, tests will not be retried.")
 			return RunResult{Status: RunStatusError}, err
 		}
 

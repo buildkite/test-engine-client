@@ -1,4 +1,4 @@
-module github.com/buildkite/test-splitter
+module github.com/buildkite/test-engine-client
 
 go 1.21
 

@@ -77,8 +77,8 @@ func TestHttpClient_AttachUserAgentToRequest(t *testing.T) {
 	c := NewClient(cfg)
 	resp, _ := c.httpClient.Get(svr.URL)
 
-	if !strings.Contains(resp.Request.Header.Get("User-Agent"), "Buildkite Test Splitter/0.5.1") {
-		t.Errorf("User-agent header = %v, want %v", resp.Request.Header.Get("User-Agent"), "Buildkite Test Splitter/0.5.1 ...")
+	if !strings.Contains(resp.Request.Header.Get("User-Agent"), "Buildkite Test Engine Client/0.5.1") {
+		t.Errorf("User-agent header = %v, want %v", resp.Request.Header.Get("User-Agent"), "Buildkite Test Engine Client/0.5.1 ...")
 	}
 }
 

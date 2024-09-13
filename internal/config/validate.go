@@ -8,7 +8,7 @@ import (
 func (c *Config) validate() error {
 
 	if c.MaxRetries < 0 {
-		c.errs.appendFieldError("BUILDKITE_SPLITTER_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)
 	}
 
 	// We validate BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT in two steps.
@@ -44,12 +44,12 @@ func (c *Config) validate() error {
 
 	if c.ServerBaseUrl != "" {
 		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
-			c.errs.appendFieldError("BUILDKITE_SPLITTER_BASE_URL", "must be a valid URL")
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
 		}
 	}
 
 	if c.AccessToken == "" {
-		c.errs.appendFieldError("BUILDKITE_SPLITTER_API_ACCESS_TOKEN", "must not be blank")
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "must not be blank")
 	}
 
 	if c.OrganizationSlug == "" {
@@ -57,11 +57,11 @@ func (c *Config) validate() error {
 	}
 
 	if c.SuiteSlug == "" {
-		c.errs.appendFieldError("BUILDKITE_SPLITTER_SUITE_SLUG", "must not be blank")
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
 	if c.ResultPath == "" {
-		c.errs.appendFieldError("ResultPath", "must not be blank")
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 
 	if len(c.errs) > 0 {
