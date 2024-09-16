@@ -1,5 +1,5 @@
 FROM alpine
 
-COPY test-splitter /usr/local/bin/test-splitter
+COPY test-engine-client /usr/local/bin/test-engine-client
 
-ENTRYPOINT ["/usr/local/bin/test-splitter"]
+ENTRYPOINT ["/usr/local/bin/test-engine-client"]
