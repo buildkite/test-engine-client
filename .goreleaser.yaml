@@ -2,7 +2,7 @@ version: 2
 project_name: test-engine-client
 
 release:
-  name_template: Buildkite Test Engine Client v{{.Version}}
+  name_template: Test Engine Client v{{.Version}}
   draft: false
   prerelease: auto
   make_latest: false
