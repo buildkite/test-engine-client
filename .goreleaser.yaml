@@ -1,4 +1,5 @@
 version: 2
+project_name: test-engine-client
 
 release:
   name_template: Buildkite Test Engine Client v{{.Version}}
