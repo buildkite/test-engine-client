@@ -370,15 +370,15 @@ func TestRspecGetExamples_WithSharedExamples(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec",
 	})
-	files := []string{"./fixtures/rspec/spec/shared_examples_spec.rb"}
+	files := []string{"./fixtures/rspec/spec/specs_with_shared_examples_spec.rb"}
 	got, err := rspec.GetExamples(files)
 
 	want := []plan.TestCase{
 		{
-			Identifier: "./fixtures/rspec/spec/shared_examples_spec.rb[1:1:1]",
+			Identifier: "./fixtures/rspec/spec/specs_with_shared_examples_spec.rb[1:1:1]",
 			Name:       "behaves like a shared example",
-			Path:       "./fixtures/rspec/spec/shared_examples_spec.rb[1:1:1]",
-			Scope:      "Shared examples behaves like shared behaves like a shared example",
+			Path:       "./fixtures/rspec/spec/specs_with_shared_examples_spec.rb[1:1:1]",
+			Scope:      "Specs with shared examples behaves like shared behaves like a shared example",
 		},
 	}
 
