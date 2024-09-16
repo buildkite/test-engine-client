@@ -298,13 +298,13 @@ func TestRspecGetExamples(t *testing.T) {
 		{
 			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
-			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb:2",
+			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
 			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
-			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb:6",
+			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
 		},
 	}
@@ -324,13 +324,13 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 		{
 			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
-			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb:2",
+			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
 			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
-			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb:6",
+			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
 		},
 	}
@@ -363,5 +363,30 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 				t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
 			}
 		})
+	}
+}
+
+func TestRspecGetExamples_WithSharedExamples(t *testing.T) {
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: "rspec",
+	})
+	files := []string{"./fixtures/rspec/spec/shared_examples_spec.rb"}
+	got, err := rspec.GetExamples(files)
+
+	want := []plan.TestCase{
+		{
+			Identifier: "./fixtures/rspec/spec/shared_examples_spec.rb[1:1:1]",
+			Name:       "behaves like a shared example",
+			Path:       "./fixtures/rspec/spec/shared_examples_spec.rb[1:1:1]",
+			Scope:      "Shared examples behaves like shared behaves like a shared example",
+		},
+	}
+
+	if err != nil {
+		t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
 	}
 }
