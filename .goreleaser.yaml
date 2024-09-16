@@ -19,15 +19,16 @@ builds:
     goos: [linux, darwin]
     goarch: [amd64, arm64]
     ldflags: "-X 'main.Version=v{{ .Version }}'"
+    binary: bktec
 
 brews:
-  - name: test-engine-client
+  - name: bktec
     description: "Buildkite Test Engine Client"
     homepage: "https://github.com/buildkite/test-engine-client"
     skip_upload: auto
     directory: .
     test: |
-      version_output = shell_output("test-engine-client --version")
+      version_output = shell_output("bktec --version")
       assert_match "v#{version}\n", version_output
     repository:
       owner: buildkite
@@ -98,7 +99,7 @@ nfpms:
       - deb
       - rpm
     provides:
-      - test-engine-client
+      - bktec
 
 publishers:
   - name: buildkite-packages

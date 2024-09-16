@@ -2,7 +2,7 @@
 
 file=${1}
 extension="${file##*.}"
-registry="test-splitter-${extension}"
+registry="test-engine-client-${extension}"
 audience="https://packages.buildkite.com/buildkite/${registry}"
 
 echo "--- :key: :buildkite: Fetching OIDC token for ${audience}"
