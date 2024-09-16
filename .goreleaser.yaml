@@ -1,7 +1,8 @@
 version: 2
+project_name: test-engine-client
 
 release:
-  name_template: Test Splitter v{{.Version}}
+  name_template: Test Engine Client v{{.Version}}
   draft: false
   prerelease: auto
   make_latest: false
@@ -19,15 +20,16 @@ builds:
     goos: [linux, darwin]
     goarch: [amd64, arm64]
     ldflags: "-X 'main.Version=v{{ .Version }}'"
+    binary: bktec
 
 brews:
-  - name: test-splitter
-    description: "Buildkite test splitting client"
-    homepage: "https://github.com/buildkite/test-splitter"
+  - name: bktec
+    description: "Buildkite Test Engine Client"
+    homepage: "https://github.com/buildkite/test-engine-client"
     skip_upload: auto
     directory: .
     test: |
-      version_output = shell_output("test-splitter --version")
+      version_output = shell_output("bktec --version")
       assert_match "v#{version}\n", version_output
     repository:
       owner: buildkite
@@ -40,25 +42,25 @@ git:
 
 dockers:
   - image_templates:
-      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-amd64"
+      - "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:v{{ .Version }}-amd64"
     dockerfile: "packaging/Dockerfile"
     build_flag_templates:
       - "--platform=linux/amd64"
   - image_templates:
-      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-arm64"
+      - "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:v{{ .Version }}-arm64"
     goarch: arm64
     dockerfile: "packaging/Dockerfile"
     build_flag_templates:
       - "--platform=linux/arm64"
   - image_templates:
-      - "buildkite/test-splitter:v{{ .Version }}-amd64"
+      - "buildkite/test-engine-client:v{{ .Version }}-amd64"
     # skip pushing image to Dockerhub if it's a prerelease
     skip_push: auto
     dockerfile: "packaging/Dockerfile"
     build_flag_templates:
       - "--platform=linux/amd64"
   - image_templates:
-      - "buildkite/test-splitter:v{{ .Version }}-arm64"
+      - "buildkite/test-engine-client:v{{ .Version }}-arm64"
     # skip pushing image to Dockerhub if it's a prerelease
     skip_push: auto
     goarch: arm64
@@ -66,39 +68,39 @@ dockers:
     build_flag_templates:
       - "--platform=linux/arm64"
 docker_manifests:
-  - name_template: "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}"
+  - name_template: "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:v{{ .Version }}"
     image_templates:
-      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-amd64"
-      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-arm64" 
-  - name_template: "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:latest"
+      - "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:v{{ .Version }}-amd64"
+      - "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:v{{ .Version }}-arm64" 
+  - name_template: "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:latest"
     image_templates:
-      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-amd64"
-      - "packages.buildkite.com/buildkite/test-splitter-docker/test-splitter:v{{ .Version }}-arm64"
-  - name_template: "buildkite/test-splitter:v{{ .Version }}"
+      - "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:v{{ .Version }}-amd64"
+      - "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:v{{ .Version }}-arm64"
+  - name_template: "buildkite/test-engine-client:v{{ .Version }}"
     image_templates:
-      - "buildkite/test-splitter:v{{ .Version }}-amd64"
-      - "buildkite/test-splitter:v{{ .Version }}-arm64"
+      - "buildkite/test-engine-client:v{{ .Version }}-amd64"
+      - "buildkite/test-engine-client:v{{ .Version }}-arm64"
     # skip pushing manifest to Dockerhub if it's a prerelease
     skip_push: auto
-  - name_template: "buildkite/test-splitter:latest"
+  - name_template: "buildkite/test-engine-client:latest"
     image_templates:
-      - "buildkite/test-splitter:v{{ .Version }}-amd64"
-      - "buildkite/test-splitter:v{{ .Version }}-arm64"
+      - "buildkite/test-engine-client:v{{ .Version }}-amd64"
+      - "buildkite/test-engine-client:v{{ .Version }}-arm64"
     # skip pushing manifest to Dockerhub if it's a prerelease
     skip_push: auto
 
 nfpms:
   - vendor: Buildkite
     id: linux-pkg
-    homepage: https://github.com/buildkite/test-splitter
+    homepage: https://github.com/buildkite/test-engine-client
     maintainer: Buildkite <support@buildkite.com>
-    description: Buildkite test splitting client
+    description: Buildkite Test Engine Client
     license: MIT
     formats:
       - deb
       - rpm
     provides:
-      - test-splitter
+      - bktec
 
 publishers:
   - name: buildkite-packages

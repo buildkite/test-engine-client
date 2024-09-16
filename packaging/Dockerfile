@@ -1,5 +1,5 @@
 FROM alpine
 
-COPY test-splitter /usr/local/bin/test-splitter
+COPY bktec /usr/local/bin/bktec
 
-ENTRYPOINT ["/usr/local/bin/test-splitter"]
+ENTRYPOINT ["/usr/local/bin/bktec"]
