@@ -16,10 +16,10 @@ The latest version of bktec can be downloaded from https://github.com/buildkite/
 ARM and AMD architecture for linux and darwin
 
 The available Go binaries
-- test-splitter-darwin-amd64
-- test-splitter-darwin-arm64
-- test-splitter-linux-amd64
-- test-splitter-linux-arm64
+- bktec-darwin-amd64
+- bktec-darwin-arm64
+- bktec-linux-amd64
+- bktec-linux-arm64
 
 ## Using bktec
 
@@ -50,16 +50,16 @@ The following environment variables can be used optionally to configure bktec.
 | Environment Variable | Default Value | Description |
 | ---- | ---- | ----------- |
 | `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` | `false` | Flag to enable more verbose logging. |
-| `BUILDKITE_TEST_ENGINE_RETRY_CMD` | `BUILDKITE_TEST_ENGINE_TEST_CMD` | The command to retry the failed tests. bktec will fill in the `{{testExamples}}` placeholder with the failed tests. If not set, bktec will use the same command defined in `BUILDKITE_TEST_ENGINE_TEST_CMD`. |
+| `BUILDKITE_TEST_ENGINE_RETRY_CMD` | For RSpec:<br> The retry command by default is the same as the value defined in `BUILDKITE_TEST_ENGINE_TEST_CMD`<br> For Jest:<br> `yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}`| The command to retry the failed tests. <br> For Rspec bktec will fill in the `{{testExamples}}` placeholder with the failed tests. If not set, bktec will use the same command defined in `BUILDKITE_TEST_ENGINE_TEST_CMD`.<br> For Jest, bktec will fill in `{{testNamePattern}}` with a regex of the failed tests. |
 | `BUILDKITE_TEST_ENGINE_RETRY_COUNT` | `0` | The number of retries. bktec runs the test command defined in `BUILDKITE_TEST_ENGINE_TEST_CMD` and retries only the failed tests up to `BUILDKITE_TEST_ENGINE_RETRY_COUNT` times, using the retry command defined in `BUILDKITE_TEST_ENGINE_RETRY_CMD`. |
-| `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` | `false` | Flag to enable split by example. When this option is `true`, bktec will split the execution of slow test files over multiple partitions. |
-| `BUILDKITE_TEST_ENGINE_TEST_CMD` | `bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}` | Test command to run your tests. bktec will replace the `{{testExamples}}` placeholder with the test plan, and replace `{{resultPath}}` with the value set in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. It is necessary to configure your Rspec with `--format json --out {{resultPath}}` when customizing the test command, because bktec needs to read the result after each test run. |
-| `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` | - | Glob pattern to exclude certain test files or directories. The exclusion will be applied after discovering the test files using a pattern configured with `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN`. </br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
-| `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` | `spec/**/*_spec.rb` | Glob pattern to discover test files. You can exclude certain test files or directories from the discovered test files using a pattern that can be configured with `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN`.</br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
-| `BUILDKITE_TEST_ENGINE_TEST_RUNNER` | `rspec` | Test runner to use for running tests. Currently only `rspec` is supported.
+| `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` | `false` | Flag to enable split by example. When this option is `true`, bktec will split the execution of slow test files over multiple partitions. Split by example is currently only available for Rspec. |
+| `BUILDKITE_TEST_ENGINE_TEST_CMD` | For RSpec:<br/> `bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}`<br/> For Jest:<br/> `yarn test {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}` | Test command to run your tests. bktec will replace the `{{testExamples}}` placeholder with the test plan, and replace `{{resultPath}}` with the value set in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. It is necessary to configure your Rspec with `--format json --out {{resultPath}}` when customizing the test command, because bktec needs to read the result after each test run. |
+| `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` | For RSpec:<br> -<br> For Jest:<br> `node_modules` | Glob pattern to exclude certain test files or directories. The exclusion will be applied after discovering the test files using a pattern configured with `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN`. </br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
+| `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` | For Rspec:</br> `spec/**/*_spec.rb`</br>  For Jest:</br> `**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}` | Glob pattern to discover test files. You can exclude certain test files or directories from the discovered test files using a pattern that can be configured with `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN`.</br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
+| `BUILDKITE_TEST_ENGINE_TEST_RUNNER` | `rspec` | Test runner to use for running tests. Currently `rspec` and `jest` are supported.
 
 
-### Runnig bktec
+### Runnnig bktec
 Please download the executable and make it available in your testing environment.
 To parallelize your tests in your Buildkite build, you can amend your pipeline step configuration to:
 ```
