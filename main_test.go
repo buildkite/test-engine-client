@@ -481,19 +481,19 @@ func TestCreateRequestParams(t *testing.T) {
 				{
 					Identifier: "./test/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",
-					Path:       "./test/spec/fruits/banana_spec.rb:2",
+					Path:       "./test/spec/fruits/banana_spec.rb[1:1]",
 					Scope:      "Banana is yellow",
 				},
 				{
 					Identifier: "./test/spec/fruits/banana_spec.rb[1:2:1]",
 					Name:       "is green",
-					Path:       "./test/spec/fruits/banana_spec.rb:7",
+					Path:       "./test/spec/fruits/banana_spec.rb[1:2:1]",
 					Scope:      "Banana when not ripe is green",
 				},
 				{
 					Identifier: "./test/spec/fruits/fig_spec.rb[1:1]",
 					Name:       "is purple",
-					Path:       "./test/spec/fruits/fig_spec.rb:2",
+					Path:       "./test/spec/fruits/fig_spec.rb[1:1]",
 					Scope:      "Fig is purple",
 				},
 			},
