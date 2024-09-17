@@ -208,14 +208,14 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 
 	handleError := func(err error) (plan.TestPlan, error) {
 		if errors.Is(err, api.ErrRetryTimeout) {
-			fmt.Println("\033[33mCould not fetch or create plan from server, falling back to non-intelligent splitting. Your build may take longer than usual.\033[0m")
+			fmt.Println("⚠️ Could not fetch or create plan from server, falling back to non-intelligent splitting. Your build may take longer than usual.")
 			p := plan.CreateFallbackPlan(files, cfg.Parallelism)
 			return p, nil
 		}
 
 		if billingError := new(api.BillingError); errors.As(err, &billingError) {
-			fmt.Println("\033[33m" + billingError.Message)
-			fmt.Println("Falling back to non-intelligent splitting. Your build may take longer than usual.\033[0m")
+			fmt.Println(billingError.Message)
+			fmt.Println("⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual.")
 			p := plan.CreateFallbackPlan(files, cfg.Parallelism)
 			return p, nil
 		}
@@ -231,7 +231,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 		// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 		// In this case, we should create a fallback plan.
 		if len(cachedPlan.Tasks) == 0 {
-			fmt.Println("\033[33mError plan received, falling back to non-intelligent splitting. Your build may take longer than usual.\033[0m")
+			fmt.Println("⚠️ Error plan received, falling back to non-intelligent splitting. Your build may take longer than usual.")
 			testPlan := plan.CreateFallbackPlan(files, cfg.Parallelism)
 			return testPlan, nil
 		}
@@ -257,7 +257,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
-		fmt.Println("\033[33mError plan received, falling back to non-intelligent splitting. Your build may take longer than usual.\033[0m")
+		fmt.Println("⚠️ Error plan received, falling back to non-intelligent splitting. Your build may take longer than usual.")
 		testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
 	}
 
