@@ -22,6 +22,9 @@ builds:
     ldflags: "-X 'main.Version=v{{ .Version }}'"
     binary: bktec
 
+checksum:
+  name_template: "bktec_{{ .Version }}_checksums.txt"
+
 brews:
   - name: bktec
     description: "Buildkite Test Engine Client"
