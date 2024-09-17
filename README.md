@@ -4,6 +4,23 @@ Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your 
 
 bktec supports RSpec and Jest.
 
+## Migrating to 1.0.0
+v1.0.0 introduces name changes to environment variables. To migrate to v1.0.0, You will need to update the following environment variables in your Pipeline:
+
+| Old variable | New variable |
+| ------------ | ------------ |
+| `BUILDKITE_SPLITTER_API_ACCESS_TOKEN`| `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` |
+| `BUILDKITE_SPLITTER_SUITE_SLUG`| `BUILDKITE_TEST_ENGINE_SUITE_SLUG` |
+| `BUILDKITE_SPLITTER_RESULT_PATH`| `BUILDKITE_TEST_ENGINE_RESULT_PATH` |
+| `BUILDKITE_SPLITTER_DEBUG_ENABLED` | `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` |
+| `BUILDKITE_SPLITTER_RETRY_CMD` | `BUILDKITE_TEST_ENGINE_RETRY_CMD` |
+| `BUILDKITE_SPLITTER_RETRY_COUNT` | `BUILDKITE_TEST_ENGINE_RETRY_COUNT`|
+| `BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE` | `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` |
+| `BUILDKITE_SPLITTER_TEST_CMD` | `BUILDKITE_TEST_ENGINE_TEST_CMD` |
+| `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` |
+| `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` |
+| `BUILDKITE_SPLITTER_TEST_RUNNER` | `BUILDKITE_TEST_ENGINE_TEST_RUNNER` |
+
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
 
