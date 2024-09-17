@@ -6,6 +6,8 @@ release:
   prerelease: auto
   make_latest: false
   mode: replace
+  github:
+    name: test-engine-client
 
 changelog:
   use: github-native
