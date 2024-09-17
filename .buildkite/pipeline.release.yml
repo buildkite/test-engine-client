@@ -13,12 +13,12 @@ steps:
     artifact_paths: "dist/**/*"
     plugins:
       - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-splitter-client-release
+          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-engine-client-release
       - aws-ssm#v1.0.0:
           parameters:
-            GITHUB_TOKEN: /pipelines/buildkite/test-splitter-client-release/GH_TOKEN
-            DOCKERHUB_USER: /pipelines/buildkite/test-splitter-client-release/dockerhub-user
-            DOCKERHUB_PASSWORD: /pipelines/buildkite/test-splitter-client-release/dockerhub-password
+            GITHUB_TOKEN: /pipelines/buildkite/test-engine-client-release/GH_TOKEN
+            DOCKERHUB_USER: /pipelines/buildkite/test-engine-client-release/dockerhub-user
+            DOCKERHUB_PASSWORD: /pipelines/buildkite/test-engine-client-release/dockerhub-password
       - docker#v5.11.0:
           image: goreleaser/goreleaser:v2.1.0
           entrypoint: ""
