@@ -1,4 +1,5 @@
 version: 2
+project_name: test-splitter
 
 release:
   name_template: Test Splitter v{{.Version}}
