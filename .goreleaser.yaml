@@ -92,6 +92,7 @@ docker_manifests:
 nfpms:
   - vendor: Buildkite
     id: linux-pkg
+    package_name: bktec
     homepage: https://github.com/buildkite/test-engine-client
     maintainer: Buildkite <support@buildkite.com>
     description: Buildkite Test Engine Client
