@@ -22,9 +22,9 @@ fi
 
 echo "--- :key: :buildkite: Login to Buildkite Packages"
  buildkite-agent oidc request-token \
-   --audience "https://packages.buildkite.com/buildkite/test-splitter-docker" \
+   --audience "https://packages.buildkite.com/buildkite/test-engine-client-docker" \
    --lifetime 300 \
-   | docker login packages.buildkite.com/buildkite/test-splitter-docker --username=buildkite --password-stdin
+   | docker login packages.buildkite.com/buildkite/test-engine-client-docker --username=buildkite --password-stdin
 
 echo "--- :key: :docker: Login to Docker"
 echo "${DOCKERHUB_PASSWORD}" | docker login --username "${DOCKERHUB_USER}" --password-stdin
