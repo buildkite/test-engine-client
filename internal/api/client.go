@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"runtime"
 	"strconv"
 	"time"
@@ -68,6 +69,14 @@ var (
 )
 
 var ErrRetryTimeout = errors.New("request retry timeout")
+
+type BillingError struct {
+	Message string
+}
+
+func (e *BillingError) Error() string {
+	return e.Message
+}
 
 type errorResponse struct {
 	Message string `json:"message"`
@@ -165,6 +174,11 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 			if err != nil {
 				return resp, fmt.Errorf("parsing response: %w", err)
 			}
+
+			if matched := regexp.MustCompile(`^Billing Error`).MatchString(errorResp.Message); matched && resp.StatusCode == 403 {
+				return resp, &BillingError{Message: errorResp.Message}
+			}
+
 			return resp, fmt.Errorf(errorResp.Message)
 		}
 

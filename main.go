@@ -212,6 +212,14 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 			p := plan.CreateFallbackPlan(files, cfg.Parallelism)
 			return p, nil
 		}
+
+		if billingError := new(api.BillingError); errors.As(err, &billingError) {
+			fmt.Println(billingError.Message)
+			fmt.Println("Using fallback mode. Your build may take longer than usual.")
+			p := plan.CreateFallbackPlan(files, cfg.Parallelism)
+			return p, nil
+		}
+
 		return plan.TestPlan{}, err
 	}
 

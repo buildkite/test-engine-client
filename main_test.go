@@ -420,6 +420,41 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	}
 }
 
+func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
+	files := []string{"apple", "banana"}
+	testRunner := runner.Rspec{}
+
+	// mock server to return 403 with a billing error
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"message": "Billing Error: please update your plan"}`, http.StatusForbidden)
+	}))
+	defer svr.Close()
+
+	ctx := context.Background()
+
+	cfg := config.Config{
+		NodeIndex:     0,
+		Parallelism:   2,
+		Identifier:    "identifier",
+		Branch:        "",
+		ServerBaseUrl: svr.URL,
+	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
+
+	// we want the function to return a fallback plan
+	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
+
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
+	if err != nil {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
+	}
+}
+
 func TestCreateRequestParams(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `

@@ -306,3 +306,39 @@ func TestDoWithRetry_403(t *testing.T) {
 		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusForbidden)
 	}
 }
+
+func TestDoWithRetry_BillingError(t *testing.T) {
+	requestCount := 0
+	message := "Billing Error: Test Splitting is not enabled in your plan"
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, fmt.Sprintf(`{"message": "%s"}`, message), http.StatusForbidden)
+	}))
+	defer svr.Close()
+
+	cfg := ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "my-org",
+		ServerBaseUrl:    svr.URL,
+	}
+
+	c := NewClient(cfg)
+	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+		Method: http.MethodGet,
+		URL:    svr.URL,
+	}, nil)
+
+	// it returns immediately with BillingError and the 403 status code.
+	if requestCount > 1 {
+		t.Errorf("http request count = %v, want %d", requestCount, 1)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusForbidden)
+	}
+
+	if billingError := new(BillingError); !errors.As(err, &billingError) {
+		t.Errorf("DoWithRetry() error type = %T, want %T", err, BillingError{})
+	}
+}
