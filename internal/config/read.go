@@ -51,7 +51,7 @@ func (c *Config) readFromEnv() error {
 	c.TestCommand = os.Getenv("BUILDKITE_TEST_ENGINE_TEST_CMD")
 	c.TestFilePattern = os.Getenv("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN")
 	c.TestFileExcludePattern = os.Getenv("BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN")
-	c.TestRunner = getEnvWithDefault("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "rspec")
+	c.TestRunner = os.Getenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER")
 	c.ResultPath = os.Getenv("BUILDKITE_TEST_ENGINE_RESULT_PATH")
 
 	c.SplitByExample = strings.ToLower(os.Getenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE")) == "true"

@@ -64,6 +64,10 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 
+	if c.TestRunner == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "must not be blank")
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}

@@ -17,6 +17,7 @@ func createConfig() Config {
 		MaxRetries:       3,
 		ResultPath:       "tmp/result-*.json",
 		errs:             InvalidConfigError{},
+		TestRunner:       "rspec",
 	}
 }
 
