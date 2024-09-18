@@ -27,4 +27,5 @@ type Task struct {
 type TestPlan struct {
 	Experiment string           `json:"experiment"`
 	Tasks      map[string]*Task `json:"tasks"`
+	Fallback   bool
 }

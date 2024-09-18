@@ -32,6 +32,7 @@ func CreateFallbackPlan(files []string, parallelism int) TestPlan {
 	}
 
 	return TestPlan{
-		Tasks: tasks,
+		Tasks:    tasks,
+		Fallback: true,
 	}
 }

@@ -92,7 +92,9 @@ func main() {
 		}
 
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-			sendMetadata(ctx, apiClient, cfg, timeline)
+			if !testPlan.Fallback {
+				sendMetadata(ctx, apiClient, cfg, timeline)
+			}
 			logErrorAndExit(exitError.ExitCode(), "%s exited with error: %v", testRunner.Name(), err)
 		}
 
@@ -100,14 +102,19 @@ func main() {
 	}
 
 	if testResult.Status == runner.RunStatusFailed {
-		sendMetadata(ctx, apiClient, cfg, timeline)
+		if !testPlan.Fallback {
+			sendMetadata(ctx, apiClient, cfg, timeline)
+		}
+
 		if failedCount := len(testResult.FailedTests); failedCount > 1 {
 			logErrorAndExit(1, "%s exited with %d failures", testRunner.Name(), failedCount)
 		}
 		logErrorAndExit(1, "%s exited with 1 failure", testRunner.Name())
 	}
 
-	sendMetadata(ctx, apiClient, cfg, timeline)
+	if !testPlan.Fallback {
+		sendMetadata(ctx, apiClient, cfg, timeline)
+	}
 }
 
 func createTimestamp() string {
@@ -259,6 +266,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 	if len(testPlan.Tasks) == 0 {
 		fmt.Println("⚠️ Error plan received, falling back to non-intelligent splitting. Your build may take longer than usual.")
 		testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
+		return testPlan, nil
 	}
 
 	debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)

@@ -62,6 +62,10 @@ func TestCreateFallbackPlan(t *testing.T) {
 			got[task.NodeNumber] = task.Tests
 		}
 
+		if !plan.Fallback {
+			t.Errorf("CreateFallbackPlan(%v, %v) Fallback is %v, want %v", s.files, s.parallelism, plan.Fallback, true)
+		}
+
 		if diff := cmp.Diff(got, s.want); diff != "" {
 			t.Errorf("CreateFallbackPlan(%v, %v) diff (-got +want):\n%s", s.files, s.parallelism, diff)
 		}
