@@ -71,7 +71,7 @@ The following environment variables can be used optionally to configure bktec.
 | `BUILDKITE_TEST_ENGINE_TEST_RUNNER` | `rspec` | Test runner to use for running tests. Currently `rspec` and `jest` are supported.
 
 
-### Runnnig bktec
+### Running bktec
 Please download the executable and make it available in your testing environment.
 To parallelize your tests in your Buildkite build, you can amend your pipeline step configuration to:
 ```
