@@ -4,6 +4,11 @@ Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your 
 
 bktec supports RSpec and Jest.
 
+## Migrating to 0.9.0
+Version 0.9.0 introduces a new feature that requires bktec to read test results from the runner for retries and verification purposes. To enable this feature, it is necessary to configure the `BUILDKITE_SPLITTER_RESULT_PATH` environment variable. This variable specifies the location of where the runner should store test results.
+
+Furthermore, we have updated the default test command for RSpec to `bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}`. Test Splitter will automatically replace `{{resultPath}}` with the value specified in `BUILDKITE_SPLITTER_RESULT_PATH`. If you want to customize the RSpec command, make sure to include `--format json --out {{resultPath}}` in the command. 
+
 ## Migrating to 1.0.0
 v1.0.0 introduces name changes to environment variables. To migrate to v1.0.0, You will need to update the following environment variables in your Pipeline:
 
