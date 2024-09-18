@@ -1,6 +1,6 @@
 # Changelog
 ## 0.9.1 - 2024-09-16
-- Fix issue with split by exmaple when shared examples are involved in RSpec
+- Fix issue with split by example when shared examples are involved in RSpec
 
 ## 0.9.0 - 2024-09-11
 - ⚠️ **BREAKING** Add the `BUILDKITE_SPLITTER_RESULT_PATH` required environment variable. See [Migrating to 0.9.0](https://github.com/buildkite/test-splitter/tree/db4cab8cd6c82392553cd80481cf75e3888c2f4c?tab=readme-ov-file#migrating-to-090).
