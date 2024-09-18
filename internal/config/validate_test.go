@@ -78,6 +78,11 @@ func TestConfigValidate_Invalid(t *testing.T) {
 			name:  "BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN",
 			value: "",
 		},
+		// Test runner is blank
+		{
+			name:  "BUILDKITE_TEST_ENGINE_TEST_RUNNER",
+			value: "",
+		},
 	}
 
 	for _, s := range scenario {
@@ -96,6 +101,8 @@ func TestConfigValidate_Invalid(t *testing.T) {
 				c.SuiteSlug = s.value.(string)
 			case "BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN":
 				c.AccessToken = s.value.(string)
+			case "BUILDKITE_TEST_ENGINE_TEST_RUNNER":
+				c.TestRunner = s.value.(string)
 			}
 
 			err := c.validate()

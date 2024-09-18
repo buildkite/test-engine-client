@@ -50,7 +50,7 @@ func main() {
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
-		logErrorAndExit(16, "Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER")
+		logErrorAndExit(16, `Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER %q: %v`, cfg.TestRunner, err)
 	}
 
 	files, err := testRunner.GetFiles()
