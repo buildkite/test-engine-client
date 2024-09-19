@@ -64,7 +64,6 @@ func TestNewConfig_EmptyConfig(t *testing.T) {
 
 func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	setEnv(t)
-	os.Unsetenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER")
 	os.Unsetenv("BUILDKITE_TEST_ENGINE_MODE")
 	os.Unsetenv("BUILDKITE_TEST_ENGINE_BASE_URL")
 	os.Unsetenv("BUILDKITE_TEST_ENGINE_TEST_CMD")

@@ -24,6 +24,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN", "spec/unit/**/*_spec.rb")
 	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN", "spec/feature/**/*_spec.rb")
 	os.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "result.json")
+	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "rspec")
 	defer os.Clearenv()
 
 	c := Config{}
