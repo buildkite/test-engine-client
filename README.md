@@ -7,12 +7,13 @@ bktec supports RSpec and Jest.
 ## Migrating to 1.0.0
 
 The following environment variables are now required
-- `BUILDKITE_TEST_ENGINE_RUNNER`
+- `BUILDKITE_TEST_ENGINE_RUNNER`  
   The test runner to use for running tests. You will need to ensure that `BUILDKITE_TEST_ENGINE_TEST_RUNNER` presents in the environment. Currently `rspec` and `jest` are supported.
-- `BUILDKITE_TEST_ENGINE_RESULT_PATH`
-  The location of where the runner should store test results. We introcuded a new feature that requires bktec to read test results from the runner for retries and verification purposes. To enable this feature, it is necessary to configure the `BUILDKITE_TEST_ENGINE_RESULT_PATH` environment variable.
 
-In addition, we have updated the default test command for RSpec to `bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}`. Test Splitter will automatically replace `{{resultPath}}` with the value specified in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. If you want to customize the RSpec command, make sure to include `--format json --out {{resultPath}}` in the command. 
+- `BUILDKITE_TEST_ENGINE_RESULT_PATH`  
+  The location of where the runner should store test results. We introduced a new feature that requires bktec to read test results from the runner for retries and verification purposes. To enable this feature, it is necessary to configure the `BUILDKITE_TEST_ENGINE_RESULT_PATH` environment variable.
+
+  In addition, we have updated the default test command for RSpec to `bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}`. Test Splitter will automatically replace `{{resultPath}}` with the value specified in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. If you want to customize the RSpec command, make sure to include `--format json --out {{resultPath}}` in the command. 
 
 Furthermore, version 1.0.0 introduces name changes to environment variables. To migrate to v1.0.0, You will need to update the following environment variables in your Pipeline:
 
