@@ -26,6 +26,8 @@ v1.0.0 introduces name changes to environment variables. To migrate to v1.0.0, Y
 | `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` |
 | `BUILDKITE_SPLITTER_TEST_RUNNER` | `BUILDKITE_TEST_ENGINE_TEST_RUNNER` |
 
+In addition, `BUILDKITE_TEST_ENGINE_TEST_RUNNER` is mandatory from v1.0.0 onwards. You will need to ensure that `BUILDKITE_TEST_ENGINE_TEST_RUNNER` presents in the environment. Currently `rspec` and `jest` are supported.
+
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
 
@@ -60,6 +62,7 @@ In addition to the above variables, you must set the following environment varia
 | `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN ` | Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can create an access token from [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite |
 | `BUILDKITE_TEST_ENGINE_SUITE_SLUG` | The slug of your Buildkite Test Engine test suite. You can find the suite slug in the url for your suite. For example, the slug for the url: https://buildkite.com/organizations/my-organization/analytics/suites/my-suite is `my-suite` |
 | `BUILDKITE_TEST_ENGINE_RESULT_PATH` | bktec uses this environment variable to tell the runner where to store the test result. Test Splitter reads the test result after each test run for retries and verification. For RSpec, the result is generated using the `--format json` and `--out` CLI options, while for Jest, it is generated using the `--json` and `--outputFile` options. We have included these options in the default test command for RSpec and Jest. If you need to customize your test command, make sure to append the CLI options to save the result to a file. Please refer to the `BUILDKITE_SPLITTER_TEST_CMD` environment variable for more details. <br> *Note: Test Splitter will not delete the file after running the test, however it will be deleted by Buildkite Agent as part of build lifecycle. *|
+| `BUILDKITE_TEST_ENGINE_TEST_RUNNER` | The test runner to use for running tests. Currently `rspec` and `jest` are supported.
 
 <br>
 The following environment variables can be used optionally to configure bktec.
@@ -73,7 +76,6 @@ The following environment variables can be used optionally to configure bktec.
 | `BUILDKITE_TEST_ENGINE_TEST_CMD` | For RSpec:<br/> `bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}`<br/> For Jest:<br/> `yarn test {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}` | Test command to run your tests. bktec will replace the `{{testExamples}}` placeholder with the test plan, and replace `{{resultPath}}` with the value set in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. It is necessary to configure your Rspec with `--format json --out {{resultPath}}` when customizing the test command, because bktec needs to read the result after each test run. |
 | `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` | For RSpec:<br> -<br> For Jest:<br> `node_modules` | Glob pattern to exclude certain test files or directories. The exclusion will be applied after discovering the test files using a pattern configured with `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN`. </br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
 | `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` | For Rspec:</br> `spec/**/*_spec.rb`</br>  For Jest:</br> `**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}` | Glob pattern to discover test files. You can exclude certain test files or directories from the discovered test files using a pattern that can be configured with `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN`.</br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
-| `BUILDKITE_TEST_ENGINE_TEST_RUNNER` | `rspec` | Test runner to use for running tests. Currently `rspec` and `jest` are supported.
 
 
 ### Running bktec
