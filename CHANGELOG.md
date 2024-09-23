@@ -1,7 +1,7 @@
 # Changelog
 ## 1.0.0 - 2024-09-23
-- ⚠️ **BREAKING** Rename the environment variables from `BUILDKITE_SPLITTER_*` to `BUILDKITE_TEST_ENGINE_CLIENT`. See [Migrating to 1.0.0](https://github.com/buildkite/test-splitter/tree/90b699918b11500336f8a0fce306da917fba7408?tab=readme-ov-file#migrating-to-100)
-- ⚠️ **BREAKING** Add required environment variable `BUILDKITE_TEST_ENGINE_TEST_RUNNER`.
+- ⚠️ **BREAKING** Rename all environment variables from `BUILDKITE_SPLITTER_*` to `BUILDKITE_TEST_ENGINE_*`. See [Migrating to 1.0.0](https://github.com/buildkite/test-splitter/tree/90b699918b11500336f8a0fce306da917fba7408?tab=readme-ov-file#migrating-to-100)
+- ⚠️ **BREAKING** Add the `BUILDKITE_TEST_ENGINE_TEST_RUNNER` as required environment variable.
 
 ## 0.9.1 - 2024-09-16
 - Fix issue with split by example when shared examples are used in RSpec
