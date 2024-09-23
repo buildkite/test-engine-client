@@ -158,7 +158,7 @@ func (j Jest) commandNameAndArgs(cmd string, testCases []string) (string, []stri
 		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in command, exiting.")
 		return "", []string{}, err
 	}
-	slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
+	words = slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
 
 	return words[0], words[1:], nil
 }
@@ -184,7 +184,7 @@ func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string) (string, [
 		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in retry command, exiting.")
 		return "", []string{}, err
 	}
-	slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
+	words = slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
 
 	return words[0], words[1:], err
 }

@@ -82,6 +82,10 @@ type errorResponse struct {
 	Message string `json:"message"`
 }
 
+func (e *errorResponse) Error() string {
+	return e.Message
+}
+
 type httpRequest struct {
 	Method string
 	URL    string
@@ -179,7 +183,7 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 				return resp, &BillingError{Message: errorResp.Message}
 			}
 
-			return resp, fmt.Errorf(errorResp.Message)
+			return resp, &errorResp
 		}
 
 		// parse response

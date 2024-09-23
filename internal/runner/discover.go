@@ -22,7 +22,7 @@ func discoverTestFiles(pattern string, excludePattern string) ([]string, error) 
 
 	// Use the Glob function to traverse the directory recursively
 	// and append the matched file paths to the discoveredFiles slice
-	parsedPattern.Glob(func(path string, d fs.DirEntry, err error) error {
+	err = parsedPattern.Glob(func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			fmt.Printf("Error walking at path %q: %v\n", path, err)
 			return nil
@@ -45,6 +45,10 @@ func discoverTestFiles(pattern string, excludePattern string) ([]string, error) 
 		discoveredFiles = append(discoveredFiles, path)
 		return nil
 	}, zzglob.WalkIntermediateDirs(true))
+
+	if err != nil {
+		return nil, fmt.Errorf("error walking directory: %v", err)
+	}
 
 	return discoveredFiles, nil
 }

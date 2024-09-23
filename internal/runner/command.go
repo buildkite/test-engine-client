@@ -39,7 +39,8 @@ func runAndForwardSignal(cmd *exec.Cmd) error {
 				if sig == syscall.SIGCHLD {
 					continue
 				}
-				cmd.Process.Signal(sig)
+				// Ignore the error when sending the signal to the command.
+				_ = cmd.Process.Signal(sig)
 			case <-finishCh:
 				// When the the command finishes, we stop listening for signals and return.
 				signal.Stop(sigCh)
