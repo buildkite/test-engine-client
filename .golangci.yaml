@@ -1,0 +1,5 @@
+linters:
+  enable:
+  - gosec
+issues:
+  exclude-use-default: false
