@@ -1,4 +1,8 @@
 # Changelog
+## 1.0.0 - 2024-09-23
+- ⚠️ **BREAKING** Rename all environment variables from `BUILDKITE_SPLITTER_*` to `BUILDKITE_TEST_ENGINE_*`. See [Migrating to 1.0.0](https://github.com/buildkite/test-splitter/tree/90b699918b11500336f8a0fce306da917fba7408?tab=readme-ov-file#migrating-to-100)
+- ⚠️ **BREAKING** Add the `BUILDKITE_TEST_ENGINE_TEST_RUNNER` as required environment variable.
+
 ## 0.9.1 - 2024-09-16
 - Fix issue with split by example when shared examples are used in RSpec
 
@@ -12,7 +16,7 @@
 - Fix issue with `BUILDKITE_STEP_ID` presence validation.
 
 ## 0.8.1 - 2024-08-06
-- Add BUILDKITE_BRANCH env var for test plan experiments
+- Add `BUILDKITE_BRANCH` env var for test plan experiments
 - Fix to zzglob library issue where files not matching the include pattern are in the test plan
 
 ## 0.8.0 - 2024-07-26
