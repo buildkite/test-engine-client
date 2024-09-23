@@ -7,7 +7,7 @@ bktec supports RSpec and Jest.
 ## Migrating to 1.0.0
 
 The following environment variables are now required
-- `BUILDKITE_TEST_ENGINE_RUNNER`
+- `BUILDKITE_TEST_ENGINE_TEST_RUNNER`
 
   The test runner to use for running tests. You will need to ensure that `BUILDKITE_TEST_ENGINE_TEST_RUNNER` presents in the environment. Currently `rspec` and `jest` are supported.
 
