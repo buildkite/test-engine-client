@@ -1,6 +1,6 @@
 steps:
-  - name: ":go::robot_face: Check Code Committed"
-    command: .buildkite/steps/check-code-committed.sh
+  - name: ":go: Go generate"
+    command: .buildkite/steps/check-go-generate.sh
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
