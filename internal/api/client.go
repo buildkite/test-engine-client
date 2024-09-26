@@ -78,8 +78,12 @@ func (e *BillingError) Error() string {
 	return e.Message
 }
 
-type errorResponse struct {
+type responseError struct {
 	Message string `json:"message"`
+}
+
+func (e *responseError) Error() string {
+	return e.Message
 }
 
 type httpRequest struct {
@@ -169,17 +173,17 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			var errorResp errorResponse
-			err = json.Unmarshal(responseBody, &errorResp)
+			var respError responseError
+			err = json.Unmarshal(responseBody, &respError)
 			if err != nil {
 				return resp, fmt.Errorf("parsing response: %w", err)
 			}
 
-			if matched := regexp.MustCompile(`^Billing Error`).MatchString(errorResp.Message); matched && resp.StatusCode == 403 {
-				return resp, &BillingError{Message: errorResp.Message}
+			if matched := regexp.MustCompile(`^Billing Error`).MatchString(respError.Message); matched && resp.StatusCode == 403 {
+				return resp, &BillingError{Message: respError.Message}
 			}
 
-			return resp, fmt.Errorf(errorResp.Message)
+			return resp, &respError
 		}
 
 		// parse response

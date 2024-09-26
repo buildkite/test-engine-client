@@ -42,8 +42,10 @@ type Config struct {
 // It returns Config struct and an InvalidConfigError if there is an invalid configuration.
 func New() (Config, error) {
 	c := Config{errs: InvalidConfigError{}}
-	c.readFromEnv()
-	c.validate()
+
+	// TODO: remove error from readFromEnv and validate functions
+	_ = c.readFromEnv()
+	_ = c.validate()
 
 	if len(c.errs) > 0 {
 		return Config{}, c.errs

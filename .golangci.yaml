@@ -1,0 +1,10 @@
+linters:
+  enable:
+    - gosec
+
+issues:
+  exclude-rules:
+    - path: _test.go
+      linters:
+        - errcheck
+        - gosec
