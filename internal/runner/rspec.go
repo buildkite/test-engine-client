@@ -217,6 +217,9 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 
 	var testCases []plan.TestCase
 	for _, example := range report.Examples {
+		if example.Status == "pending" {
+			continue
+		}
 		testCases = append(testCases, plan.TestCase{
 			Identifier: example.Id,
 			Name:       example.Description,

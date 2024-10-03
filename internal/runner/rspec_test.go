@@ -390,3 +390,28 @@ func TestRspecGetExamples_WithSharedExamples(t *testing.T) {
 		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
 	}
 }
+
+func TestRspecGetExamples_WithSkippedExamples(t *testing.T) {
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: "rspec",
+	})
+	files := []string{"./fixtures/rspec/spec/with_skipped_examples_spec.rb"}
+	got, err := rspec.GetExamples(files)
+
+	want := []plan.TestCase{
+		{
+			Identifier: "./fixtures/rspec/spec/with_skipped_examples_spec.rb[1:1]",
+			Name:       "not skipped",
+			Path:       "./fixtures/rspec/spec/with_skipped_examples_spec.rb[1:1]",
+			Scope:      "Spec with skipped examples not skipped",
+		},
+	}
+
+	if err != nil {
+		t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
+	}
+}
