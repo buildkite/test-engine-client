@@ -405,6 +405,12 @@ func TestRspecGetExamples_WithSkippedExamples(t *testing.T) {
 			Path:       "./fixtures/rspec/spec/with_skipped_examples_spec.rb[1:1]",
 			Scope:      "Spec with skipped examples not skipped",
 		},
+		{
+			Identifier: "./fixtures/rspec/spec/with_skipped_examples_spec.rb[1:4]",
+			Name:       "pending example",
+			Path:       "./fixtures/rspec/spec/with_skipped_examples_spec.rb[1:4]",
+			Scope:      "Spec with skipped examples pending example",
+		},
 	}
 
 	if err != nil {

@@ -11,7 +11,7 @@ RSpec.describe("Spec with skipped examples") do
     fail
   end
 
-  it("skipped using pending option", pending: "skipped") do
+  it("pending example", pending: "not implemented") do
     fail
   end
 end
