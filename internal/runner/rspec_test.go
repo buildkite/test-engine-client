@@ -68,7 +68,7 @@ func TestRspecRun(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec",
 	})
-	files := []string{"./fixtures/rspec/spec/spells/expelliarmus_spec.rb"}
+	files := []string{"./testdata/rspec/spec/spells/expelliarmus_spec.rb"}
 	got, err := rspec.Run(files, false)
 
 	want := RunResult{
@@ -117,12 +117,12 @@ func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 		os.Remove(rspec.ResultPath)
 	})
 
-	files := []string{"./fixtures/rspec/spec/failure_spec.rb"}
+	files := []string{"./testdata/rspec/spec/failure_spec.rb"}
 	got, err := rspec.Run(files, false)
 
 	want := RunResult{
 		Status:      RunStatusFailed,
-		FailedTests: []string{"./fixtures/rspec/spec/failure_spec.rb[1:1]"},
+		FailedTests: []string{"./testdata/rspec/spec/failure_spec.rb[1:1]"},
 	}
 
 	if err != nil {
@@ -143,7 +143,7 @@ func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
 		os.Remove(rspec.ResultPath)
 	})
 
-	files := []string{"./fixtures/rspec/spec/failure_spec.rb"}
+	files := []string{"./testdata/rspec/spec/failure_spec.rb"}
 	got, err := rspec.Run(files, false)
 
 	want := RunResult{
@@ -185,9 +185,9 @@ func TestRspecRun_CommandFailed(t *testing.T) {
 
 func TestRspecRun_SignaledError(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
-		TestCommand: "../../test/support/segv.sh",
+		TestCommand: "./testdata/segv.sh",
 	})
-	files := []string{"./fixtures/rspec/spec/failure_spec.rb"}
+	files := []string{"./testdata/rspec/spec/failure_spec.rb"}
 
 	got, err := rspec.Run(files, false)
 
@@ -291,20 +291,20 @@ func TestRspecGetExamples(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec",
 	})
-	files := []string{"./fixtures/rspec/spec/spells/expelliarmus_spec.rb"}
+	files := []string{"./testdata/rspec/spec/spells/expelliarmus_spec.rb"}
 	got, err := rspec.GetExamples(files)
 
 	want := []plan.TestCase{
 		{
-			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
+			Identifier: "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
-			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
+			Path:       "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
-			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
+			Identifier: "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
-			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
+			Path:       "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
 		},
 	}
@@ -319,18 +319,18 @@ func TestRspecGetExamples(t *testing.T) {
 }
 
 func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
-	files := []string{"./fixtures/rspec/spec/spells/expelliarmus_spec.rb"}
+	files := []string{"./testdata/rspec/spec/spells/expelliarmus_spec.rb"}
 	want := []plan.TestCase{
 		{
-			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
+			Identifier: "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
-			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
+			Path:       "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Scope:      "Expelliarmus disarms the opponent",
 		},
 		{
-			Identifier: "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
+			Identifier: "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
-			Path:       "./fixtures/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
+			Path:       "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
 		},
 	}
@@ -370,14 +370,14 @@ func TestRspecGetExamples_WithSharedExamples(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec",
 	})
-	files := []string{"./fixtures/rspec/spec/specs_with_shared_examples_spec.rb"}
+	files := []string{"./testdata/rspec/spec/specs_with_shared_examples_spec.rb"}
 	got, err := rspec.GetExamples(files)
 
 	want := []plan.TestCase{
 		{
-			Identifier: "./fixtures/rspec/spec/specs_with_shared_examples_spec.rb[1:1:1]",
+			Identifier: "./testdata/rspec/spec/specs_with_shared_examples_spec.rb[1:1:1]",
 			Name:       "behaves like a shared example",
-			Path:       "./fixtures/rspec/spec/specs_with_shared_examples_spec.rb[1:1:1]",
+			Path:       "./testdata/rspec/spec/specs_with_shared_examples_spec.rb[1:1:1]",
 			Scope:      "Specs with shared examples behaves like shared behaves like a shared example",
 		},
 	}

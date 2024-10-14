@@ -28,7 +28,7 @@ func TestRunTestsWithRetry(t *testing.T) {
 		},
 	}
 	maxRetries := 3
-	testCases := []string{"test/spec/fruits/apple_spec.rb"}
+	testCases := []string{"testdata/rspec/spec/fruits/apple_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
@@ -67,7 +67,7 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 		},
 	}
 	maxRetries := 2
-	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
+	testCases := []string{"testdata/rspec/spec/fruits/apple_spec.rb", "testdata/rspec/spec/fruits/tomato_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
@@ -83,7 +83,7 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
 	}
 
-	if diff := cmp.Diff(testCases, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+	if diff := cmp.Diff(testCases, []string{"./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
 		t.Errorf("testCases diff (-got +want):\n%s", diff)
 	}
 
@@ -109,7 +109,7 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		},
 	}
 	maxRetries := 2
-	testCases := []string{"test/spec/fruits/apple_spec.rb", "test/spec/fruits/tomato_spec.rb"}
+	testCases := []string{"testdata/rspec/spec/fruits/apple_spec.rb", "testdata/rspec/spec/fruits/tomato_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
@@ -125,11 +125,11 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusFailed)
 	}
 
-	if diff := cmp.Diff(testResult.FailedTests, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+	if diff := cmp.Diff(testResult.FailedTests, []string{"./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
 		t.Errorf("runTestsWithRetry(...) testResult.FailedTests diff (-got +want):\n%s", diff)
 	}
 
-	if diff := cmp.Diff(testCases, []string{"./test/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+	if diff := cmp.Diff(testCases, []string{"./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
 		t.Errorf("testCases diff (-got +want):\n%s", diff)
 	}
 
@@ -153,7 +153,7 @@ func TestRunTestsWithRetry_Error(t *testing.T) {
 		},
 	}
 	maxRetries := 2
-	testCases := []string{"test/spec/fruits/fig_spec.rb"}
+	testCases := []string{"testdata/rspec/spec/fruits/fig_spec.rb"}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
@@ -460,8 +460,8 @@ func TestCreateRequestParams(t *testing.T) {
 		fmt.Fprint(w, `
 {
 	"tests": [
-		{ "path": "test/spec/fruits/banana_spec.rb", "reason": "slow file" },
-		{ "path": "test/spec/fruits/fig_spec.rb", "reason": "slow file" }
+		{ "path": "testdata/rspec/spec/fruits/banana_spec.rb", "reason": "slow file" },
+		{ "path": "testdata/rspec/spec/fruits/fig_spec.rb", "reason": "slow file" }
 	]
 }`)
 	}))
@@ -479,13 +479,13 @@ func TestCreateRequestParams(t *testing.T) {
 		ServerBaseUrl: svr.URL,
 	})
 	files := []string{
-		"test/spec/fruits/apple_spec.rb",
-		"test/spec/fruits/banana_spec.rb",
-		"test/spec/fruits/cherry_spec.rb",
-		"test/spec/fruits/dragonfruit_spec.rb",
-		"test/spec/fruits/elderberry_spec.rb",
-		"test/spec/fruits/fig_spec.rb",
-		"test/spec/fruits/grape_spec.rb",
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+		"testdata/rspec/spec/fruits/cherry_spec.rb",
+		"testdata/rspec/spec/fruits/dragonfruit_spec.rb",
+		"testdata/rspec/spec/fruits/elderberry_spec.rb",
+		"testdata/rspec/spec/fruits/fig_spec.rb",
+		"testdata/rspec/spec/fruits/grape_spec.rb",
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
@@ -506,29 +506,29 @@ func TestCreateRequestParams(t *testing.T) {
 		Branch:      "",
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
-				{Path: "test/spec/fruits/apple_spec.rb"},
-				{Path: "test/spec/fruits/cherry_spec.rb"},
-				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
-				{Path: "test/spec/fruits/elderberry_spec.rb"},
-				{Path: "test/spec/fruits/grape_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/cherry_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/dragonfruit_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/elderberry_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/grape_spec.rb"},
 			},
 			Examples: []plan.TestCase{
 				{
-					Identifier: "./test/spec/fruits/banana_spec.rb[1:1]",
+					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",
-					Path:       "./test/spec/fruits/banana_spec.rb[1:1]",
+					Path:       "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Scope:      "Banana is yellow",
 				},
 				{
-					Identifier: "./test/spec/fruits/banana_spec.rb[1:2:1]",
+					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:2:1]",
 					Name:       "is green",
-					Path:       "./test/spec/fruits/banana_spec.rb[1:2:1]",
+					Path:       "./testdata/rspec/spec/fruits/banana_spec.rb[1:2:1]",
 					Scope:      "Banana when not ripe is green",
 				},
 				{
-					Identifier: "./test/spec/fruits/fig_spec.rb[1:1]",
+					Identifier: "./testdata/rspec/spec/fruits/fig_spec.rb[1:1]",
 					Name:       "is purple",
-					Path:       "./test/spec/fruits/fig_spec.rb[1:1]",
+					Path:       "./testdata/rspec/spec/fruits/fig_spec.rb[1:1]",
 					Scope:      "Fig is purple",
 				},
 			},
@@ -598,13 +598,13 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 		ServerBaseUrl: svr.URL,
 	})
 	files := []string{
-		"test/spec/fruits/apple_spec.rb",
-		"test/spec/fruits/banana_spec.rb",
-		"test/spec/fruits/cherry_spec.rb",
-		"test/spec/fruits/dragonfruit_spec.rb",
-		"test/spec/fruits/elderberry_spec.rb",
-		"test/spec/fruits/fig_spec.rb",
-		"test/spec/fruits/grape_spec.rb",
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+		"testdata/rspec/spec/fruits/cherry_spec.rb",
+		"testdata/rspec/spec/fruits/dragonfruit_spec.rb",
+		"testdata/rspec/spec/fruits/elderberry_spec.rb",
+		"testdata/rspec/spec/fruits/fig_spec.rb",
+		"testdata/rspec/spec/fruits/grape_spec.rb",
 	}
 
 	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
@@ -623,13 +623,13 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 		Branch:      "",
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
-				{Path: "test/spec/fruits/apple_spec.rb"},
-				{Path: "test/spec/fruits/banana_spec.rb"},
-				{Path: "test/spec/fruits/cherry_spec.rb"},
-				{Path: "test/spec/fruits/dragonfruit_spec.rb"},
-				{Path: "test/spec/fruits/elderberry_spec.rb"},
-				{Path: "test/spec/fruits/fig_spec.rb"},
-				{Path: "test/spec/fruits/grape_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/cherry_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/dragonfruit_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/elderberry_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/fig_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/grape_spec.rb"},
 			},
 		},
 	}

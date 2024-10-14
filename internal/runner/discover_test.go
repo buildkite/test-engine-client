@@ -7,7 +7,7 @@ import (
 )
 
 func TestDiscoverTestFiles(t *testing.T) {
-	pattern := "fixtures/**/*_test"
+	pattern := "testdata/files/**/*_test"
 	got, err := discoverTestFiles(pattern, "")
 
 	if err != nil {
@@ -15,11 +15,11 @@ func TestDiscoverTestFiles(t *testing.T) {
 	}
 
 	want := []string{
-		"fixtures/animals/ant_test",
-		"fixtures/animals/bee_test",
-		"fixtures/fruits/apple_test",
-		"fixtures/fruits/banana_test",
-		"fixtures/vegetable_test",
+		"testdata/files/animals/ant_test",
+		"testdata/files/animals/bee_test",
+		"testdata/files/fruits/apple_test",
+		"testdata/files/fruits/banana_test",
+		"testdata/files/vegetable_test",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -28,8 +28,8 @@ func TestDiscoverTestFiles(t *testing.T) {
 }
 
 func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
-	pattern := "fixtures/**/*_test"
-	excludePattern := "fixtures/animals/*"
+	pattern := "testdata/files/**/*_test"
+	excludePattern := "testdata/files/**/animals/*"
 	got, err := discoverTestFiles(pattern, excludePattern)
 
 	if err != nil {
@@ -37,9 +37,9 @@ func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
 	}
 
 	want := []string{
-		"fixtures/fruits/apple_test",
-		"fixtures/fruits/banana_test",
-		"fixtures/vegetable_test",
+		"testdata/files/fruits/apple_test",
+		"testdata/files/fruits/banana_test",
+		"testdata/files/vegetable_test",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -48,8 +48,8 @@ func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
 }
 
 func TestDiscoverTestFiles_WithExcludeDirectory(t *testing.T) {
-	pattern := "fixtures/**/*_test"
-	excludePattern := "fixtures/animals"
+	pattern := "testdata/files/**/*_test"
+	excludePattern := "testdata/files/**/animals"
 	got, err := discoverTestFiles(pattern, excludePattern)
 
 	if err != nil {
@@ -57,9 +57,9 @@ func TestDiscoverTestFiles_WithExcludeDirectory(t *testing.T) {
 	}
 
 	want := []string{
-		"fixtures/fruits/apple_test",
-		"fixtures/fruits/banana_test",
-		"fixtures/vegetable_test",
+		"testdata/files/fruits/apple_test",
+		"testdata/files/fruits/banana_test",
+		"testdata/files/vegetable_test",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
