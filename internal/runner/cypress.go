@@ -52,7 +52,7 @@ func (c Cypress) Run(testCases []string, retry bool) (RunResult, error) {
 		return RunResult{Status: RunStatusPassed}, nil
 	}
 
-	return RunResult{}, nil
+	return RunResult{Status: RunStatusError}, err
 }
 
 func (c Cypress) GetFiles() ([]string, error) {
