@@ -72,7 +72,7 @@ func (c Cypress) GetFiles() ([]string, error) {
 }
 
 func (c Cypress) GetExamples(files []string) ([]plan.TestCase, error) {
-	return nil, nil
+	return nil, fmt.Errorf("not supported in Cypress")
 }
 
 func (c Cypress) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
