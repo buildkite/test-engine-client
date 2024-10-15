@@ -53,6 +53,8 @@ func TestNewJest(t *testing.T) {
 }
 
 func TestJestRun(t *testing.T) {
+	mockCwd(t, "./testdata/jest")
+
 	jest := NewJest(RunnerConfig{
 		TestCommand: "jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
@@ -62,7 +64,7 @@ func TestJestRun(t *testing.T) {
 		os.Remove(jest.ResultPath)
 	})
 
-	files := []string{"./fixtures/jest/spells/expelliarmus.spec.js"}
+	files := []string{"./testdata/jest/spells/expelliarmus.spec.js"}
 	got, err := jest.Run(files, false)
 
 	want := RunResult{
@@ -79,6 +81,8 @@ func TestJestRun(t *testing.T) {
 }
 
 func TestJestRun_Retry(t *testing.T) {
+	mockCwd(t, "./testdata/jest")
+
 	jest := Jest{
 		RunnerConfig{
 			TestCommand:      "jest --invalid-option --json --outputFile {{resultPath}}",
@@ -90,7 +94,7 @@ func TestJestRun_Retry(t *testing.T) {
 		os.Remove(jest.ResultPath)
 	})
 
-	files := []string{"fixtures/jest/spells/expelliarmus.spec.js"}
+	files := []string{"testdata/jest/spells/expelliarmus.spec.js"}
 	got, err := jest.Run(files, true)
 
 	want := RunResult{
@@ -107,6 +111,8 @@ func TestJestRun_Retry(t *testing.T) {
 }
 
 func TestJestRun_TestFailed(t *testing.T) {
+	mockCwd(t, "./testdata/jest")
+
 	jest := NewJest(RunnerConfig{
 		TestCommand: "jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
@@ -116,7 +122,7 @@ func TestJestRun_TestFailed(t *testing.T) {
 		os.Remove(jest.ResultPath)
 	})
 
-	files := []string{"./fixtures/jest/failure.spec.js"}
+	files := []string{"./testdata/jest/failure.spec.js"}
 	got, err := jest.Run(files, false)
 
 	want := RunResult{
@@ -163,7 +169,7 @@ func TestJestRun_CommandFailed(t *testing.T) {
 
 func TestJestRun_SignaledError(t *testing.T) {
 	jest := NewJest(RunnerConfig{
-		TestCommand: "../../test/support/segv.sh --outputFile {{resultPath}}",
+		TestCommand: "./testdata/segv.sh --outputFile {{resultPath}}",
 	})
 	files := []string{"./doesnt-matter.spec.js"}
 

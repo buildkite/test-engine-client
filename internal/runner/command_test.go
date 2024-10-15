@@ -57,7 +57,7 @@ func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
 }
 
 func TestRunAndForwardSignal_SignalReceivedInSubProcess(t *testing.T) {
-	cmd := exec.Command("../../test/support/segv.sh")
+	cmd := exec.Command("./testdata/segv.sh")
 
 	err := runAndForwardSignal(cmd)
 
