@@ -38,7 +38,9 @@ func DetectRunner(cfg config.Config) (TestRunner, error) {
 		return NewRspec(runnerConfig), nil
 	case "jest":
 		return NewJest(runnerConfig), nil
+	case "cypress":
+		return NewCypress(runnerConfig), nil
 	default:
-		return nil, errors.New("runner value is invalid, possible values are 'rspec', 'jest'")
+		return nil, errors.New("runner value is invalid, possible values are 'rspec', 'jest', 'cypress'")
 	}
 }
