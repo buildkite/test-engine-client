@@ -1,8 +1,6 @@
 package runner
 
 import (
-	"errors"
-	"os/exec"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -13,6 +11,7 @@ func TestPlaywrightRun(t *testing.T) {
 
 	playwright := NewPlaywright(RunnerConfig{
 		TestCommand: "yarn run playwright test",
+		ResultPath:  "playwright.json",
 	})
 
 	files := []string{"./testdata/playwright/tests/example.spec.js"}
@@ -34,22 +33,24 @@ func TestPlaywrightRun(t *testing.T) {
 func TestPlaywrightRun_TestFailed(t *testing.T) {
 	mockCwd(t, "./testdata/playwright")
 
-	playwright := NewPlaywright(RunnerConfig{})
+	playwright := NewPlaywright(RunnerConfig{
+		ResultPath: "test-results/results.json",
+	})
 
 	files := []string{"./tests/failed.spec.js"}
 	got, err := playwright.Run(files, false)
 
 	want := RunResult{
-		Status: RunStatusError,
+		Status:      RunStatusFailed,
+		FailedTests: []string{"failed.spec.js:3"},
+	}
+
+	if err != nil {
+		t.Errorf("Playwright.Run(%q) error = %v", files, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("Playwright.Run(%q) diff (-got +want):\n%s", files, diff)
-	}
-
-	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Playwright.Run(%q) error type = %T (%v), want *exec.ExitError", files, err, err)
 	}
 }
 

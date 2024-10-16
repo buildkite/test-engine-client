@@ -5,3 +5,7 @@ test('says good bye', async ({ page }) => {
 
   await expect(page).toHaveText('good bye');
 });
+
+test('it passes', () => {
+  expect(true).toBeTruthy();
+});

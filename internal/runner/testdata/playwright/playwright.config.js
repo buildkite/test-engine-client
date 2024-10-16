@@ -5,7 +5,10 @@ const { defineConfig, devices } = require('@playwright/test');
  */
 module.exports = defineConfig({
   testDir: './tests',
-  reporter: [['line']],
+  reporter: [
+    ['line'],
+    ['json', { outputFile: './test-results/results.json' }]
+  ],
   webServer: {
     command: 'yarn start',
     url: 'http://127.0.0.1:8080',
