@@ -53,7 +53,7 @@ func TestNewJest(t *testing.T) {
 }
 
 func TestJestRun(t *testing.T) {
-	mockCwd(t, "./testdata/jest")
+	changeCwd(t, "./testdata/jest")
 
 	jest := NewJest(RunnerConfig{
 		TestCommand: "jest --json --outputFile {{resultPath}}",
@@ -81,7 +81,7 @@ func TestJestRun(t *testing.T) {
 }
 
 func TestJestRun_Retry(t *testing.T) {
-	mockCwd(t, "./testdata/jest")
+	changeCwd(t, "./testdata/jest")
 
 	jest := Jest{
 		RunnerConfig{
@@ -111,7 +111,7 @@ func TestJestRun_Retry(t *testing.T) {
 }
 
 func TestJestRun_TestFailed(t *testing.T) {
-	mockCwd(t, "./testdata/jest")
+	changeCwd(t, "./testdata/jest")
 
 	jest := NewJest(RunnerConfig{
 		TestCommand: "jest --json --outputFile {{resultPath}}",

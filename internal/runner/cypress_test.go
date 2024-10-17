@@ -11,7 +11,7 @@ import (
 )
 
 func TestCypressRun(t *testing.T) {
-	mockCwd(t, "./testdata/cypress")
+	changeCwd(t, "./testdata/cypress")
 
 	cypress := NewCypress(RunnerConfig{
 		TestCommand: "yarn cypress run --spec {{testExamples}}",
@@ -34,7 +34,7 @@ func TestCypressRun(t *testing.T) {
 }
 
 func TestCypressRun_TestFailed(t *testing.T) {
-	mockCwd(t, "./testdata/cypress")
+	changeCwd(t, "./testdata/cypress")
 
 	cypress := NewCypress(RunnerConfig{
 		TestCommand: "yarn cypress run --spec {{testExamples}}",
