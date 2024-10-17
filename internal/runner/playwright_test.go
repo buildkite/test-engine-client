@@ -7,7 +7,7 @@ import (
 )
 
 func TestPlaywrightRun(t *testing.T) {
-	mockCwd(t, "./testdata/playwright")
+	changeCwd(t, "./testdata/playwright")
 
 	playwright := NewPlaywright(RunnerConfig{
 		TestCommand: "yarn run playwright test",
@@ -31,7 +31,7 @@ func TestPlaywrightRun(t *testing.T) {
 }
 
 func TestPlaywrightRun_TestFailed(t *testing.T) {
-	mockCwd(t, "./testdata/playwright")
+	changeCwd(t, "./testdata/playwright")
 
 	playwright := NewPlaywright(RunnerConfig{
 		ResultPath: "test-results/results.json",
@@ -106,8 +106,8 @@ func TestPlaywrightCommandNameAndArgs_WithoutPlaceholder(t *testing.T) {
 	}
 }
 
-func TestCypressGetFiles(t *testing.T) {
-	mockCwd(t, "./testdata/playwright")
+func TestPlaywrightGetFiles(t *testing.T) {
+	changeCwd(t, "./testdata/playwright")
 	playwright := NewPlaywright(RunnerConfig{})
 
 	got, err := playwright.GetFiles()
