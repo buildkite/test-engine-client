@@ -48,11 +48,11 @@ func (c Cypress) Run(testCases []string, retry bool) (RunResult, error) {
 	fmt.Printf("%s %s\n", cmdName, strings.Join(cmdArgs, " "))
 	err = runAndForwardSignal(cmd)
 
-	if err == nil { // note: returning success early
-		return RunResult{Status: RunStatusPassed}, nil
+	if err != nil {
+		return RunResult{Status: RunStatusError}, err
 	}
 
-	return RunResult{Status: RunStatusError}, err
+	return RunResult{Status: RunStatusPassed}, nil
 }
 
 func (c Cypress) GetFiles() ([]string, error) {
