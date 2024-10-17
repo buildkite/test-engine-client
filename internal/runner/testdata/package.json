@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "cypress",
-    "jest"
+    "jest",
+    "playwright"
   ]
 }

@@ -9,6 +9,7 @@ const (
 	Rspec Runner = iota
 	Jest
 	Cypress
+	Playwright
 )
 
 func (r Runner) MarshalText() ([]byte, error) {
