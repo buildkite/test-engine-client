@@ -10,6 +10,11 @@ go install gotest.tools/gotestsum@v1.8.0
 go install github.com/pact-foundation/pact-go/v2@latest
 pact-go -l DEBUG install
 
+# Install node dependencies for js runner tests
+cd internal/runner/testdata
+yarn install
+cd ../../..
+
 echo '+++ Running tests'
 gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- -count=1 -coverprofile=cover.out -failfast "$@" ./...
 

@@ -8,6 +8,7 @@ type Runner int
 const (
 	Rspec Runner = iota
 	Jest
+	Cypress
 )
 
 func (r Runner) MarshalText() ([]byte, error) {

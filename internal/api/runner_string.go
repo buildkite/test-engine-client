@@ -10,11 +10,12 @@ func _() {
 	var x [1]struct{}
 	_ = x[Rspec-0]
 	_ = x[Jest-1]
+	_ = x[Cypress-2]
 }
 
-const _Runner_name = "RspecJest"
+const _Runner_name = "RspecJestCypress"
 
-var _Runner_index = [...]uint8{0, 5, 9}
+var _Runner_index = [...]uint8{0, 5, 9, 16}
 
 func (i Runner) String() string {
 	if i < 0 || i >= Runner(len(_Runner_index)-1) {

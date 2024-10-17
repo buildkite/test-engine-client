@@ -60,7 +60,7 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
-	if c.ResultPath == "" {
+	if c.ResultPath == "" && c.TestRunner != "cypress" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 

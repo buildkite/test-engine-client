@@ -1,0 +1,8 @@
+{
+  "name": "javascript-runners",
+  "private": true,
+  "workspaces": [
+    "cypress",
+    "jest"
+  ]
+}
