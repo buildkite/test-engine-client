@@ -156,3 +156,14 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		}
 	})
 }
+
+func TestConfigValidate_ResultPathOptionalWithCypress(t *testing.T) {
+	c := createConfig()
+	c.ResultPath = ""
+	c.TestRunner = "cypress"
+	err := c.validate()
+
+	if err != nil {
+		t.Errorf("config.validate() error = %v", err)
+	}
+}

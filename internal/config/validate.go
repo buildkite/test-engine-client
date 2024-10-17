@@ -2,7 +2,6 @@ package config
 
 import (
 	"net/url"
-	"slices"
 )
 
 // validate checks if the Config struct is valid and returns InvalidConfigError if it's invalid.
@@ -61,7 +60,7 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
-	if c.ResultPath == "" && slices.Contains([]string{"jest", "rspec"}, c.TestRunner) {
+	if c.ResultPath == "" && c.TestRunner != "cypress" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 
