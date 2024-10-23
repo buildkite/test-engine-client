@@ -11,8 +11,6 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
-var _ = TestRunner(Cypress{})
-
 type Cypress struct {
 	RunnerConfig
 }
