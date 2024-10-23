@@ -11,11 +11,12 @@ func _() {
 	_ = x[Rspec-0]
 	_ = x[Jest-1]
 	_ = x[Cypress-2]
+	_ = x[Playwright-3]
 }
 
-const _Runner_name = "RspecJestCypress"
+const _Runner_name = "RspecJestCypressPlaywright"
 
-var _Runner_index = [...]uint8{0, 5, 9, 16}
+var _Runner_index = [...]uint8{0, 5, 9, 16, 26}
 
 func (i Runner) String() string {
 	if i < 0 || i >= Runner(len(_Runner_index)-1) {
