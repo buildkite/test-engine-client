@@ -33,10 +33,6 @@ func NewPlaywright(p RunnerConfig) Playwright {
 		p.TestFilePattern = "**/{*.spec,*.test}.{ts,js}"
 	}
 
-	if p.TestFileExcludePattern == "" {
-		p.TestFileExcludePattern = "**/node_modules"
-	}
-
 	return Playwright{p}
 }
 

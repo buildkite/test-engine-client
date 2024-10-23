@@ -36,6 +36,12 @@ func discoverTestFiles(pattern string, excludePattern string) ([]string, error) 
 			}
 			return nil
 		}
+
+		// Skip the node_modules directory
+		if d.Name() == "node_modules" {
+			return fs.SkipDir
+		}
+
 		// Skip directories that happen to match the include pattern - we're
 		// only interested in files.
 		if d.IsDir() {

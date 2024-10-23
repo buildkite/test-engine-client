@@ -23,7 +23,7 @@ func TestNewJest(t *testing.T) {
 			want: RunnerConfig{
 				TestCommand:            "npx jest {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}",
 				TestFilePattern:        "**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}",
-				TestFileExcludePattern: "node_modules",
+				TestFileExcludePattern: "",
 				RetryTestCommand:       "npx jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
 			},
 		},
@@ -326,5 +326,24 @@ func TestJestRetryCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.
 	desiredString := "couldn't find '{{testNamePattern}}' sentinel in retry command"
 	if err.Error() != desiredString {
 		t.Errorf("retryCommandNameAndArgs() error = %v, want %v", err, desiredString)
+	}
+}
+
+func TestJestGetFiles(t *testing.T) {
+	changeCwd(t, "./testdata/jest")
+	jest := NewJest(RunnerConfig{})
+
+	got, err := jest.GetFiles()
+	if err != nil {
+		t.Errorf("Jest.GetFiles() error = %v", err)
+	}
+
+	want := []string{
+		"failure.spec.js",
+		"spells/expelliarmus.spec.js",
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Jest.GetFiles() diff (-got +want):\n%s", diff)
 	}
 }

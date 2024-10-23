@@ -26,10 +26,6 @@ func NewCypress(c RunnerConfig) Cypress {
 		c.TestCommand = "npx cypress run --spec {{testExamples}}"
 	}
 
-	if c.TestFileExcludePattern == "" {
-		c.TestFileExcludePattern = "**/node_modules"
-	}
-
 	if c.TestFilePattern == "" {
 		c.TestFilePattern = "**/*.cy.{js,jsx,ts,tsx}"
 	}
