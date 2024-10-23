@@ -21,22 +21,22 @@ func TestNewJest(t *testing.T) {
 		{
 			input: RunnerConfig{},
 			want: RunnerConfig{
-				TestCommand:            "yarn test {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}",
+				TestCommand:            "npx jest {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}",
 				TestFilePattern:        "**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}",
 				TestFileExcludePattern: "node_modules",
-				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
+				RetryTestCommand:       "npx jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
 			},
 		},
 		// custom
 		{
 			input: RunnerConfig{
-				TestCommand:            "npx jest --json --outputFile {{resultPath}}",
+				TestCommand:            "yarn test --json --outputFile {{resultPath}}",
 				TestFilePattern:        "spec/models/**/*.spec.js",
 				TestFileExcludePattern: "spec/features/**/*.spec.js",
 				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
 			},
 			want: RunnerConfig{
-				TestCommand:            "npx jest --json --outputFile {{resultPath}}",
+				TestCommand:            "yarn test --json --outputFile {{resultPath}}",
 				TestFilePattern:        "spec/models/**/*.spec.js",
 				TestFileExcludePattern: "spec/features/**/*.spec.js",
 				RetryTestCommand:       "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
