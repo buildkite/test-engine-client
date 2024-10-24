@@ -12,32 +12,7 @@ bktec supports multiple test runners and offers various features to enhance your
 
 ## Migrating to 1.0.0
 
-The following environment variables are now required
-- `BUILDKITE_TEST_ENGINE_TEST_RUNNER`
-
-  The test runner to use for running tests. You will need to ensure that `BUILDKITE_TEST_ENGINE_TEST_RUNNER` presents in the environment. Currently `rspec` and `jest` are supported.
-
-- `BUILDKITE_TEST_ENGINE_RESULT_PATH`
-
-  The location of where the runner should store test results. We introduced a new feature that requires bktec to read test results from the runner for retries and verification purposes. To enable this feature, it is necessary to configure the `BUILDKITE_TEST_ENGINE_RESULT_PATH` environment variable.
-
-  In addition, we have updated the default test command for RSpec to `bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}`. Test Splitter will automatically replace `{{resultPath}}` with the value specified in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. If you want to customize the RSpec command, make sure to include `--format json --out {{resultPath}}` in the command. 
-
-Furthermore, version 1.0.0 introduces name changes to environment variables. To migrate to v1.0.0, You will need to update the following environment variables in your Pipeline:
-
-| Old variable | New variable |
-| ------------ | ------------ |
-| `BUILDKITE_SPLITTER_API_ACCESS_TOKEN`| `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` |
-| `BUILDKITE_SPLITTER_SUITE_SLUG`| `BUILDKITE_TEST_ENGINE_SUITE_SLUG` |
-| `BUILDKITE_SPLITTER_RESULT_PATH`| `BUILDKITE_TEST_ENGINE_RESULT_PATH` |
-| `BUILDKITE_SPLITTER_DEBUG_ENABLED` | `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` |
-| `BUILDKITE_SPLITTER_RETRY_CMD` | `BUILDKITE_TEST_ENGINE_RETRY_CMD` |
-| `BUILDKITE_SPLITTER_RETRY_COUNT` | `BUILDKITE_TEST_ENGINE_RETRY_COUNT`|
-| `BUILDKITE_SPLITTER_SPLIT_BY_EXAMPLE` | `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` |
-| `BUILDKITE_SPLITTER_TEST_CMD` | `BUILDKITE_TEST_ENGINE_TEST_CMD` |
-| `BUILDKITE_SPLITTER_TEST_FILE_EXCLUDE_PATTERN` | `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` |
-| `BUILDKITE_SPLITTER_TEST_FILE_PATTERN` | `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` |
-| `BUILDKITE_SPLITTER_TEST_RUNNER` | `BUILDKITE_TEST_ENGINE_TEST_RUNNER` |
+Follow this [guide](https://github.com/buildkite/test-splitter/tree/90b699918b11500336f8a0fce306da917fba7408?tab=readme-ov-file#migrating-to-100) to migrate to v1.0.0
 
 
 ## Installation
