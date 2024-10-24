@@ -2,7 +2,7 @@
 
 Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your test suites. It uses your Buildkite Test Engine suite data to intelligently partition and parallelise your tests.
 
-bktec supports RSpec and Jest.
+bktec supports RSpec, Jest, Playwright, and Cypress.
 
 ## Migrating to 1.0.0
 
@@ -48,9 +48,8 @@ The available Go binaries
 
 ## Using bktec
 
-### ENV variables
-bktec uses the following Buildkite provided environment variables.
-Please make sure that the following environment variables are available in your testing environment, particularly if you use Docker or some other type of containerization to run your tests.
+### Buildkite Pipeline environment variables
+bktec uses the following Buildkite Pipeline provided environment variables.
 | Environment Variable | Description|
 | -------------------- | ----------- |
 | `BUILDKITE_BUILD_ID` | The UUID of the Buildkite build. bktec uses this UUID along with `BUILDKITE_STEP_ID` to uniquely identify the test plan. |
@@ -60,28 +59,29 @@ Please make sure that the following environment variables are available in your 
 | `BUILDKITE_PARALLEL_JOB_COUNT` | The total number of parallel jobs created from a Buildkite parallel build step. <br>Make sure you configure `parallelism` in your pipeline definition.  You can read more about Buildkite parallel build step on this [page](https://buildkite.com/docs/pipelines/controlling-concurrency#concurrency-and-parallelism). |
 | `BUILDKITE_STEP_ID` | The UUID of the step group in Buildkite build. bktec uses this UUID along with `BUILDKITE_BUILD_ID` to uniquely identify the test plan.
 
-<br>
-In addition to the above variables, you must set the following environment variables.
+> [!IMPORTANT]
+> Please make sure that the above environment variables are available in your testing environment, particularly if you use Docker or some other type of containerization to run your tests.
 
-| Environment Variable | Description |
-| -------------------- | ----------- |
-| `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN ` | Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can create an access token from [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite |
-| `BUILDKITE_TEST_ENGINE_SUITE_SLUG` | The slug of your Buildkite Test Engine test suite. You can find the suite slug in the url for your suite. For example, the slug for the url: https://buildkite.com/organizations/my-organization/analytics/suites/my-suite is `my-suite` |
-| `BUILDKITE_TEST_ENGINE_RESULT_PATH` | bktec uses this environment variable to tell the runner where to store the test result. Test Splitter reads the test result after each test run for retries and verification. For RSpec, the result is generated using the `--format json` and `--out` CLI options, while for Jest, it is generated using the `--json` and `--outputFile` options. We have included these options in the default test command for RSpec and Jest. If you need to customize your test command, make sure to append the CLI options to save the result to a file. Please refer to the `BUILDKITE_SPLITTER_TEST_CMD` environment variable for more details. <br> *Note: Test Splitter will not delete the file after running the test, however it will be deleted by Buildkite Agent as part of build lifecycle. *|
-| `BUILDKITE_TEST_ENGINE_TEST_RUNNER` | The test runner to use for running tests. Currently `rspec` and `jest` are supported.
+### Create API access token
+To use bktec, you need a Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can generate this token from your [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite. After creating the token, set the `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` environment variable with the token value.
 
-<br>
-The following environment variables can be used optionally to configure bktec.
+```sh
+export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN=token
+```
 
-| Environment Variable | Default Value | Description |
-| ---- | ---- | ----------- |
-| `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` | `false` | Flag to enable more verbose logging. |
-| `BUILDKITE_TEST_ENGINE_RETRY_CMD` | For RSpec:<br> The retry command by default is the same as the value defined in `BUILDKITE_TEST_ENGINE_TEST_CMD`<br> For Jest:<br> `yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}`| The command to retry the failed tests. <br> For Rspec bktec will fill in the `{{testExamples}}` placeholder with the failed tests. If not set, bktec will use the same command defined in `BUILDKITE_TEST_ENGINE_TEST_CMD`.<br> For Jest, bktec will fill in `{{testNamePattern}}` with a regex of the failed tests. |
-| `BUILDKITE_TEST_ENGINE_RETRY_COUNT` | `0` | The number of retries. bktec runs the test command defined in `BUILDKITE_TEST_ENGINE_TEST_CMD` and retries only the failed tests up to `BUILDKITE_TEST_ENGINE_RETRY_COUNT` times, using the retry command defined in `BUILDKITE_TEST_ENGINE_RETRY_CMD`. |
-| `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` | `false` | Flag to enable split by example. When this option is `true`, bktec will split the execution of slow test files over multiple partitions. Split by example is currently only available for Rspec. |
-| `BUILDKITE_TEST_ENGINE_TEST_CMD` | For RSpec:<br/> `bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}`<br/> For Jest:<br/> `yarn test {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}` | Test command to run your tests. bktec will replace the `{{testExamples}}` placeholder with the test plan, and replace `{{resultPath}}` with the value set in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. It is necessary to configure your Rspec with `--format json --out {{resultPath}}` when customizing the test command, because bktec needs to read the result after each test run. |
-| `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` | For RSpec:<br> -<br> For Jest:<br> `node_modules` | Glob pattern to exclude certain test files or directories. The exclusion will be applied after discovering the test files using a pattern configured with `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN`. </br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
-| `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` | For Rspec:</br> `spec/**/*_spec.rb`</br>  For Jest:</br> `**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}` | Glob pattern to discover test files. You can exclude certain test files or directories from the discovered test files using a pattern that can be configured with `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN`.</br> *This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.* |
+### Configure Test Engine suite slug
+To use bktec, you need to configure the `BUILDKITE_TEST_ENGINE_SUITE_SLUG` environment variable with your Test Engine suite slug. You can find the suite slug in the URL of your suite. For example, in the URL `https://buildkite.com/organizations/my-organization/analytics/suites/my-suite`, the slug is `my-suite`.
+
+```sh
+export BUILDKITE_TEST_ENGINE_SUITE_SLUG=my-slug
+```
+
+### Configure the test runner
+To configure the test runner for bktec, please refer to the detailed guides provided for each supported test runner. You can find the guides at the following links:
+- [RSpec](./docs/rspec.md)
+- [Jest](./docs/jest.md)
+- [Playwright](./docs/playwright.md)
+- [Cypress](./docs/cypress.md)
 
 
 ### Running bktec
@@ -95,6 +95,8 @@ steps:
     env:
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
       BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: your-secret-token
+      BUILDKITE_TEST_ENGINE_TEST_RUNNER: rspec
+      BUILDKITE_TEST_ENGINE_RESULT_PATH: tmp/result.json
 ```
 
 ### Possible exit statuses
