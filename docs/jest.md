@@ -23,18 +23,25 @@ export BUILDKITE_TEST_ENGINE_TEST_CMD="yarn test {{testExamples}} --json --testL
 > [!IMPORTANT]
 > Make sure to append `--json --testLocationInResults --outputFile {{resultPath}}` in your custom test command, as bktec requires this to read the test results for retries and verification purposes.
 
-## Discover and filter test files
-bktec discovers the test files using a glob pattern. By default, it identifies the files matching the `**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}` pattern. This means it will recursively find all JavaScript or TypeScript files with a `.test` or `.spec` suffix, or files nested under `__tests__` directory, such as `/__tests__/component/button.tsx` or `/src/component/button.test.tsx`. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable.
+## Filter test files
+By default, bktec runs test files that match the `**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}` pattern. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable. For instance, to configure bktec to only run Jest test files inside the `src/components` directory, use:
 
-Additionally, you can exclude files that match a specific pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable.
-
-To customize the discovery pattern and exclude certain files, set the following environment variable:
 ```sh
-export BUILDKITE_TEST_ENGINE_TEST_PATTERN=**/*.test.{ts,tsx}
-export BUILDKITE_TEST_ENGINE_TEST_EXCLUDE_PATTERN=spec/e2e
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=src/components/**/*.test.{ts,tsx}
 ```
 
-With the above configurations, bktec will discover all files matching the `**/*.test.{ts,tsx}` pattern and exclude any files inside the `spec/e2e` directory.
+Additionally, you can exclude specific files or directories that match a certain pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable. For example, to exclude test files inside the `src/utilities` directory, use:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=src/utilities
+```
+
+You can also use both `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` and `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` simultaneously. For example, to run all Jest test files with `spec.ts`, except those in the `src/components` directory, use:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=**/*.spec.ts
+export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=src/components
+```
 
 > [!TIP]
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.

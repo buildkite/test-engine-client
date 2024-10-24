@@ -19,18 +19,24 @@ To customize the test command, set the following environment variable:
 export BUILDKITE_TEST_ENGINE_TEST_CMD="yarn cypress:run --spec {{testExamples}}"
 ```
 
-## Discover and filter test files
-bktec discovers the test files using a glob pattern. By default, it identifies the files matching the `**/*.cy.{js,jsx,ts,tsx}` pattern. This means it will recursively find all JavaScript or TypeScript files with a `.cy` suffix, such as `/cypress/e2e/login.cy.ts`. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable.
-
-Additionally, you can exclude certain files or directories that match a specific pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable.
-
-To customize the discovery pattern and exclude certain files, set the following environment variable:
+## Filter test files
+By default, bktec runs test files that match the `**/*.cy.{js,jsx,ts,tsx}` pattern. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable. For instance, to configure bktec to only run Cypress test files inside a `cypress/e2e` directory, use:
 ```sh
-export BUILDKITE_TEST_ENGINE_TEST_PATTERN=**/*.cy.{ts,tsx}
-export BUILDKITE_TEST_ENGINE_TEST_EXCLUDE_PATTERN=cypress/component
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=cypress/e2e/**/*.cy.js
 ```
 
-With the above configurations, bktec will discover all files matching the `**/*.cy.{ts,tsx}` pattern and exclude any files inside the `cypress/component` directory.
+Additionally, you can exclude specific files or directories that match a certain pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable. For example, to exclude test files inside the `cypress/component` directory, use:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=cypress/component
+```
+
+You can also use both `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` and `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` simultaneously. For example, to run all Cypress test files with `cy.js`, except those in the `cypress/e2e` directory, use:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=**/*.cy.js
+export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=cypress/e2e
+```
 
 > [!TIP]
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.

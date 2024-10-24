@@ -41,18 +41,25 @@ Then, in your RSpec configuration file:
 --out tmp/rspec-result.json
 ```
 
-## Discover and filter test files
-bktec discovers the test files using a glob pattern. By default, it identifies the files matching the `spec/**/*_spec.rb` pattern. This means it will recursively find all Ruby files with a `_spec` suffix within the `spec` directory, such as `/spec/mode/user_spec.rb`. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable.
+## Filter test files
+By default, bktec runs test files that match the `spec/**/*_spec.rb` pattern. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable. For instance, to configure bktec to only run test files inside the `spec/features` directory, use:
 
-Additionally, you can exclude certain files or directories that match a specific pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable.
-
-To customize the discovery pattern and exclude certain files, set the following environment variable:
 ```sh
-export BUILDKITE_TEST_ENGINE_TEST_PATTERN=spec/**/*_spec.rb
-export BUILDKITE_TEST_ENGINE_TEST_EXCLUDE_PATTERN=spec/features
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=spec/features/**/*_spec.rb
 ```
 
-With the above configurations, bktec will discover all files matching the `spec/**/*_spec.rb` pattern and exclude any files inside the `spec/features` directory.
+Additionally, you can exclude specific files or directories that match a certain pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable. For example, to exclude test files inside the `spec/features` directory, use:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=spec/features
+```
+
+You can also use both `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` and `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` simultaneously. For example, to run all test files inside the `spec/models` directory, except those inside `spec/models/user`, use:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=spec/models/**/*_spec.rb
+export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=spec/models/user
+```
 
 > [!TIP]
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.

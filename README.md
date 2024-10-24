@@ -6,7 +6,7 @@ bktec supports multiple test runners and offers various features to enhance your
 
 | Feature                                            | Rspec | Jest | Playwright | Cypress |
 | -------------------------------------------------- | :---: | :--: | :--------: | :-----: |
-| Discover and filter test files using glob pattern  |   ✅  |   ✅  |    ✅      |    ✅   |
+| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |
 | Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |
 | Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |
 

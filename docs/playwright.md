@@ -33,18 +33,25 @@ To customize the test command, set the following environment variable:
 export BUILDKITE_TEST_ENGINE_TEST_CMD="yarn test {{testExamples}}"
 ```
 
-## Discover and filter test files
-bktec discovers the test files using a glob pattern. By default, it identifies the files matching the `**/{*.spec,*.test}.{ts,js}` pattern. This means it will recursively find all JavaScript or TypeScript files with a `.test` or `.spec` suffix, such as `/src/e2e/login.spec.ts`. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable.
+## Filter test files
+By default, bktec runs test files that match the `**/{*.spec,*.test}.{ts,js}` pattern. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable. For instance, to configure bktec to only run Playwright test files inside the `tests` directory, use:
 
-Additionally, you can exclude certain files or directories that match a specific pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable.
-
-To customize the discovery pattern and exclude certain files, set the following environment variable:
 ```sh
-export BUILDKITE_TEST_ENGINE_TEST_PATTERN=**/*.test.ts
-export BUILDKITE_TEST_ENGINE_TEST_EXCLUDE_PATTERN=**/component
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=tests/**/*.test.ts
 ```
 
-With the above configurations, bktec will discover all files matching the `**/*.test.ts` pattern and exclude any files inside a `component` directory.
+Additionally, you can exclude specific files or directories that match a certain pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable. For example, to exclude test files inside the `src/components` directory, use:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=src/components
+```
+
+You can also use both `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` and `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` simultaneously. For example, to run all Playwright test files with `.spec.ts` extension, except those in the `src/components` directory, use:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=**/*.spec.ts
+export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=src/components
+```
 
 > [!TIP]
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.
