@@ -5,7 +5,7 @@ To integrate bktec with Cypress, set the `BUILDKITE_TEST_ENGINE_TEST_RUNNER` env
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=cypress
 ```
 
-## Test Command
+## Configure test command
 By default, bktec runs Cypress with the following command:
 
 ```sh
@@ -19,7 +19,7 @@ To customize the test command, set the following environment variable:
 export BUILDKITE_TEST_ENGINE_TEST_CMD="yarn cypress:run --spec {{testExamples}}"
 ```
 
-## Test Discovery and Filtering
+## Discover and filter test files
 bktec discovers the test files using a glob pattern. By default, it identifies the files matching the `**/*.cy.{js,jsx,ts,tsx}` pattern. This means it will recursively find all JavaScript or TypeScript files with a `.cy` suffix, such as `/cypress/e2e/login.cy.ts`. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable.
 
 Additionally, you can exclude certain files or directories that match a specific pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable.

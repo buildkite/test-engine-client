@@ -6,7 +6,7 @@ export BUILDKITE_TEST_ENGINE_TEST_RUNNER=jest
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/jest-result.json
 ```
 
-## Test Command
+## Configure test command
 By default, bktec runs Jest with the following command:
 
 ```sh
@@ -23,7 +23,7 @@ export BUILDKITE_TEST_ENGINE_TEST_CMD="yarn test {{testExamples}} --json --testL
 > [!IMPORTANT]
 > Make sure to append `--json --testLocationInResults --outputFile {{resultPath}}` in your custom test command, as bktec requires this to read the test results for retries and verification purposes.
 
-## Test Discovery and Filtering
+## Discover and filter test files
 bktec discovers the test files using a glob pattern. By default, it identifies the files matching the `**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}` pattern. This means it will recursively find all JavaScript or TypeScript files with a `.test` or `.spec` suffix, or files nested under `__tests__` directory, such as `/__tests__/component/button.tsx` or `/src/component/button.test.tsx`. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable.
 
 Additionally, you can exclude files that match a specific pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable.
@@ -39,7 +39,7 @@ With the above configurations, bktec will discover all files matching the `**/*.
 > [!TIP]
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.
 
-## Retry Failed Tests
+## Automatically retry failed tests
 You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using the following command:
 
 ```sh

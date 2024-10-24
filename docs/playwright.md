@@ -19,7 +19,7 @@ export BUILDKITE_TEST_ENGINE_TEST_RUNNER=playwright
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=./tmp/test-results.json
 ```
 
-## Test Command
+## Configure test command
 By default, bktec runs Playwright with the following command:
 
 ```sh
@@ -33,7 +33,7 @@ To customize the test command, set the following environment variable:
 export BUILDKITE_TEST_ENGINE_TEST_CMD="yarn test {{testExamples}}"
 ```
 
-## Test Discovery and Filtering
+## Discover and filter test files
 bktec discovers the test files using a glob pattern. By default, it identifies the files matching the `**/{*.spec,*.test}.{ts,js}` pattern. This means it will recursively find all JavaScript or TypeScript files with a `.test` or `.spec` suffix, such as `/src/e2e/login.spec.ts`. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable.
 
 Additionally, you can exclude certain files or directories that match a specific pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable.
@@ -49,7 +49,7 @@ With the above configurations, bktec will discover all files matching the `**/*.
 > [!TIP]
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.
 
-## Retry Failed Tests
+## Automatically retry failed tests
 You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using either the default test command or the command specified in `BUILDKITE_TEST_ENGINE_TEST_CMD`.
 
 To enable automatic retry, set the following environment variable:

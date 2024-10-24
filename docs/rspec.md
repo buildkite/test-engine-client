@@ -6,7 +6,7 @@ export BUILDKITE_TEST_ENGINE_TEST_RUNNER=rspec
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/result.json
 ```
 
-## Test Command
+## Configure test command
 By default, bktec runs RSpec with the following command:
 
 ```sh
@@ -41,7 +41,7 @@ Then, in your RSpec configuration file:
 --out tmp/rspec-result.json
 ```
 
-## Test Discovery and Filtering
+## Discover and filter test files
 bktec discovers the test files using a glob pattern. By default, it identifies the files matching the `spec/**/*_spec.rb` pattern. This means it will recursively find all Ruby files with a `_spec` suffix within the `spec` directory, such as `/spec/mode/user_spec.rb`. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable.
 
 Additionally, you can exclude certain files or directories that match a specific pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN` environment variable.
@@ -57,7 +57,7 @@ With the above configurations, bktec will discover all files matching the `spec/
 > [!TIP]
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.
 
-## Retry Failed Tests
+## Automatically retry failed tests
 You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using the command set in `BUILDKITE_TEST_ENGINE_RETRY_CMD` environment variable. If this variable is not set, bktec will use either the default test command or the command specified in `BUILDKITE_TEST_ENGINE_TEST_CMD` to retry the tests.
 
 To enable automatic retry, set the following environment variable:
@@ -65,7 +65,7 @@ To enable automatic retry, set the following environment variable:
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
 
-## Split tests by test example
+## Split slow files by individual test example
 By default, bktec splits your tests by test file. To further optimize test execution, you can set the `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` environment variable to `true`. This setting enables bktec to dynamically split slow test files across multiple partitions based on their duration and the number of parallelism.
 
 To enable split by example, set the following environment variable:
