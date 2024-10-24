@@ -29,10 +29,6 @@ func NewJest(j RunnerConfig) Jest {
 		j.TestFilePattern = "**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}"
 	}
 
-	if j.TestFileExcludePattern == "" {
-		j.TestFileExcludePattern = "node_modules"
-	}
-
 	if j.RetryTestCommand == "" {
 		j.RetryTestCommand = "npx jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 	}
