@@ -23,7 +23,7 @@ func (c Cypress) Name() string {
 
 func NewCypress(c RunnerConfig) Cypress {
 	if c.TestCommand == "" {
-		c.TestCommand = "cypress run --spec {{testExamples}}"
+		c.TestCommand = "npx cypress run --spec {{testExamples}}"
 	}
 
 	if c.TestFileExcludePattern == "" {

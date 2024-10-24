@@ -22,7 +22,7 @@ type Jest struct {
 
 func NewJest(j RunnerConfig) Jest {
 	if j.TestCommand == "" {
-		j.TestCommand = "yarn test {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}"
+		j.TestCommand = "npx jest {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}"
 	}
 
 	if j.TestFilePattern == "" {
@@ -34,7 +34,7 @@ func NewJest(j RunnerConfig) Jest {
 	}
 
 	if j.RetryTestCommand == "" {
-		j.RetryTestCommand = "yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
+		j.RetryTestCommand = "npx jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 	}
 
 	return Jest{j}
