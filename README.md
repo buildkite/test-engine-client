@@ -80,6 +80,9 @@ steps:
       BUILDKITE_TEST_ENGINE_RESULT_PATH: tmp/result.json
 ```
 
+### Debugging
+To enable debug mode, set the `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` environment variable to `true`. This will print detailed output to assist in debugging bktec.
+
 ### Possible exit statuses
 
 bktec may exit with a variety of exit statuses, outlined below:
