@@ -14,8 +14,6 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
-var _ = TestRunner(Rspec{})
-
 type Rspec struct {
 	RunnerConfig
 }

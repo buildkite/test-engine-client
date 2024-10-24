@@ -14,8 +14,6 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
-var _ = TestRunner(Jest{})
-
 type Jest struct {
 	RunnerConfig
 }
