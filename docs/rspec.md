@@ -66,7 +66,7 @@ export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
 
 ## Split slow files by individual test example
-By default, bktec splits your tests by test file. To further optimize test execution, you can set the `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` environment variable to `true`. This setting enables bktec to dynamically split slow test files across multiple partitions based on their duration and the number of parallelism.
+By default, bktec splits your test suite into batches of test files. In some scenarios, e.g. if your test suite has a few test files that take a very long time to run, you may want to split slow test files into individual test examples for execution. To enable this, you can set the `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` environment variable to `true`. This setting enables bktec to dynamically split slow test files across multiple partitions based on their duration and the number of parallelism.
 
 To enable split by example, set the following environment variable:
 ```sh

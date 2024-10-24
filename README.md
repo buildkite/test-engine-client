@@ -10,11 +10,6 @@ bktec supports multiple test runners and offers various features to enhance your
 | Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |
 | Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |
 
-## Migrating to 1.0.0
-
-Follow this [guide](https://github.com/buildkite/test-splitter/tree/90b699918b11500336f8a0fce306da917fba7408?tab=readme-ov-file#migrating-to-100) to migrate to v1.0.0
-
-
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
 
