@@ -1,8 +1,14 @@
 # Buildkite Test Engine Client
 
-Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your test suites. It uses your Buildkite Test Engine suite data to intelligently partition and parallelise your tests.
+Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your test suites. It uses your Buildkite Test Engine suite data to intelligently partition and parallelize your tests.
 
-bktec supports RSpec, Jest, Playwright, and Cypress.
+bktec supports multiple test runners and offers various features to enhance your testing workflow. Below is a comparison of the features supported by each test runner:
+
+| Feature                                            | Rspec | Jest | Playwright | Cypress |
+| -------------------------------------------------- | :---: | :--: | :--------: | :-----: |
+| Discover and filter test files using glob pattern  |   ✅  |   ✅  |    ✅      |    ✅   |
+| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |
+| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |
 
 ## Migrating to 1.0.0
 
