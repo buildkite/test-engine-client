@@ -34,7 +34,7 @@ export BUILDKITE_TEST_ENGINE_TEST_CMD="bundle exec rspec {{testExamples}}"
 Then, in your RSpec configuration file:
 
 ```sh
-#.rspec.ci
+#.rspec
 --format junit
 --out rspec.xml
 --format json
