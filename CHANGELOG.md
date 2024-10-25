@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.1
+## 1.1.0
 - Experimental support for Cypress. See [Cypress usage guide](./docs/cypress.md).
 - Experimental support for Playwright. See [Playwright usage guide](./docs/playwright.md).
 - Update `BUILDKITE_TEST_ENGINE_TEST_CMD` and `BUILDKITE_TEST_ENGINE_RETRY_CMD` for Jest. See [Jest usage guide](./docs/jest.md).
