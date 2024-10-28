@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/DrJosh9000/zzglob"
+	"drjosh.dev/zzglob"
 )
 
 func discoverTestFiles(pattern string, excludePattern string) ([]string, error) {
