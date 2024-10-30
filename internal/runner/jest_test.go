@@ -299,6 +299,33 @@ func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 	}
 }
 
+func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
+	testCases := []string{"this will fail", "test with special characters .+*?()|[]{}^$"}
+	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
+
+	jest := Jest{
+		RunnerConfig{
+			RetryTestCommand: retryTestCommand,
+			ResultPath:       "jest.json",
+		},
+	}
+
+	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases)
+	if err != nil {
+		t.Errorf("retryCommandNameAndArgs(%q, %q) error = %v", testCases, retryTestCommand, err)
+	}
+
+	wantName := "jest"
+	wantArgs := []string{"--testNamePattern", `(this will fail|test with special characters \.\+\*\?\(\)\|\[\]\{\}\^\$)`, "--json", "--testLocationInResults", "--outputFile", "jest.json"}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("retryCommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("retryCommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+	}
+}
+
 func TestJestRetryCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"this will fail", "this other one will fail"}
 	retryTestCommand := "jest --json --outputFile {{resultPath}}"

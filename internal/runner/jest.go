@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -169,7 +170,12 @@ func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string) (string, [
 		return "", []string{}, err
 	}
 
-	testNamePattern := fmt.Sprintf("(%s)", strings.Join(testCases, "|"))
+	escapedTestCases := make([]string, len(testCases))
+	for i, testCase := range testCases {
+		escapedTestCases[i] = regexp.QuoteMeta(testCase)
+	}
+
+	testNamePattern := fmt.Sprintf("(%s)", strings.Join(escapedTestCases, "|"))
 
 	words = slices.Replace(words, idx, idx+1, testNamePattern)
 
