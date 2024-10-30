@@ -1,9 +1,11 @@
 package runner
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -15,6 +17,9 @@ func runAndForwardSignal(cmd *exec.Cmd) error {
 	// Create a channel that will be closed when the command finishes.
 	finishCh := make(chan struct{})
 	defer close(finishCh)
+
+	fmt.Println(strings.Join(cmd.Args, " "))
+	fmt.Println("")
 
 	if err := cmd.Start(); err != nil {
 		return err
