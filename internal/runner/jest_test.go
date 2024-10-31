@@ -300,7 +300,7 @@ func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 }
 
 func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
-	testCases := []string{"this will fail", "test with special characters .+*?()|[]{}^$"}
+	testCases := []string{"test with special characters .+*?()|[]{}^$", "another test"}
 	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 
 	jest := Jest{
@@ -316,7 +316,7 @@ func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
 	}
 
 	wantName := "jest"
-	wantArgs := []string{"--testNamePattern", `(this will fail|test with special characters \.\+\*\?\(\)\|\[\]\{\}\^\$)`, "--json", "--testLocationInResults", "--outputFile", "jest.json"}
+	wantArgs := []string{"--testNamePattern", `(test with special characters \.\+\*\?\(\)\|\[\]\{\}\^\$|another test)`, "--json", "--testLocationInResults", "--outputFile", "jest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("retryCommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
