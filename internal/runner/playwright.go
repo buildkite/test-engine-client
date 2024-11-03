@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"slices"
-	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -42,8 +41,6 @@ func (p Playwright) Run(testCases []string, retry bool) (RunResult, error) {
 
 	cmd := exec.Command(cmdName, cmdArgs...)
 
-	// double new line is required because Playwright output removes the last line
-	fmt.Printf("%s %s\n\n", cmdName, strings.Join(cmdArgs, " "))
 	err = runAndForwardSignal(cmd)
 
 	if err == nil { // note: returning success early

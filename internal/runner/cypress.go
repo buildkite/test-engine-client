@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os/exec"
 	"slices"
-	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -39,7 +38,6 @@ func (c Cypress) Run(testCases []string, retry bool) (RunResult, error) {
 
 	cmd := exec.Command(cmdName, cmdArgs...)
 
-	fmt.Printf("%s %s\n", cmdName, strings.Join(cmdArgs, " "))
 	err = runAndForwardSignal(cmd)
 
 	if err != nil {

@@ -82,7 +82,6 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 	}
 
-	fmt.Printf("%s %s\n", commandName, strings.Join(commandArgs, " "))
 	cmd := exec.Command(commandName, commandArgs...)
 
 	err = runAndForwardSignal(cmd)
