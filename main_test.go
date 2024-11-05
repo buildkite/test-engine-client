@@ -28,7 +28,11 @@ func TestRunTestsWithRetry(t *testing.T) {
 		},
 	}
 	maxRetries := 3
-	testCases := []string{"testdata/rspec/spec/fruits/apple_spec.rb"}
+	testCases := []plan.TestCase{
+		{
+			Path: "./testdata/rspec/spec/fruits/apple_spec.rb",
+		},
+	}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
@@ -67,7 +71,14 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 		},
 	}
 	maxRetries := 2
-	testCases := []string{"testdata/rspec/spec/fruits/apple_spec.rb", "testdata/rspec/spec/fruits/tomato_spec.rb"}
+	testCases := []plan.TestCase{
+		{
+			Path: "./testdata/rspec/spec/fruits/apple_spec.rb",
+		},
+		{
+			Path: "./testdata/rspec/spec/fruits/tomato_spec.rb",
+		},
+	}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
@@ -83,7 +94,16 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
 	}
 
-	if diff := cmp.Diff(testCases, []string{"./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+	retriedTestCases := []plan.TestCase{
+		{
+			Scope:      "Tomato",
+			Name:       "is vegetable",
+			Path:       "./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]",
+			Identifier: "./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]",
+		},
+	}
+
+	if diff := cmp.Diff(testCases, retriedTestCases); diff != "" {
 		t.Errorf("testCases diff (-got +want):\n%s", diff)
 	}
 
@@ -109,7 +129,14 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		},
 	}
 	maxRetries := 2
-	testCases := []string{"testdata/rspec/spec/fruits/apple_spec.rb", "testdata/rspec/spec/fruits/tomato_spec.rb"}
+	testCases := []plan.TestCase{
+		{
+			Path: "testdata/rspec/spec/fruits/apple_spec.rb",
+		},
+		{
+			Path: "testdata/rspec/spec/fruits/tomato_spec.rb",
+		},
+	}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
@@ -125,11 +152,20 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusFailed)
 	}
 
-	if diff := cmp.Diff(testResult.FailedTests, []string{"./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+	wantFailedTests := []plan.TestCase{
+		{
+			Scope:      "Tomato",
+			Name:       "is vegetable",
+			Path:       "./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]",
+			Identifier: "./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]",
+		},
+	}
+
+	if diff := cmp.Diff(testResult.FailedTests, wantFailedTests); diff != "" {
 		t.Errorf("runTestsWithRetry(...) testResult.FailedTests diff (-got +want):\n%s", diff)
 	}
 
-	if diff := cmp.Diff(testCases, []string{"./testdata/rspec/spec/fruits/tomato_spec.rb[1:2]"}); diff != "" {
+	if diff := cmp.Diff(testCases, wantFailedTests); diff != "" {
 		t.Errorf("testCases diff (-got +want):\n%s", diff)
 	}
 
@@ -153,7 +189,9 @@ func TestRunTestsWithRetry_Error(t *testing.T) {
 		},
 	}
 	maxRetries := 2
-	testCases := []string{"testdata/rspec/spec/fruits/fig_spec.rb"}
+	testCases := []plan.TestCase{
+		{Path: "testdata/rspec/spec/fruits/fig_spec.rb"},
+	}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
 
@@ -519,19 +557,19 @@ func TestCreateRequestParams(t *testing.T) {
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",
 					Path:       "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
-					Scope:      "Banana is yellow",
+					Scope:      "Banana",
 				},
 				{
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:2:1]",
 					Name:       "is green",
 					Path:       "./testdata/rspec/spec/fruits/banana_spec.rb[1:2:1]",
-					Scope:      "Banana when not ripe is green",
+					Scope:      "Banana when not ripe",
 				},
 				{
 					Identifier: "./testdata/rspec/spec/fruits/fig_spec.rb[1:1]",
 					Name:       "is purple",
 					Path:       "./testdata/rspec/spec/fruits/fig_spec.rb[1:1]",
-					Scope:      "Fig is purple",
+					Scope:      "Fig",
 				},
 			},
 		},

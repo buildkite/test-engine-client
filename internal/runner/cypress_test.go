@@ -6,6 +6,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
 )
@@ -17,19 +18,21 @@ func TestCypressRun(t *testing.T) {
 		TestCommand: "yarn cypress run --spec {{testExamples}}",
 	})
 
-	files := []string{"./cypress/e2e/passing_spec.cy.js"}
-	got, err := cypress.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./cypress/e2e/passing_spec.cy.js"},
+	}
+	got, err := cypress.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusPassed,
 	}
 
 	if err != nil {
-		t.Errorf("Cypress.Run(%q) error = %v", files, err)
+		t.Errorf("Cypress.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -40,20 +43,23 @@ func TestCypressRun_TestFailed(t *testing.T) {
 		TestCommand: "yarn cypress run --spec {{testExamples}}",
 	})
 
-	files := []string{"./cypress/e2e/failing_spec.cy.js", "./cypress/e2e/passing_spec.cy.js"}
-	got, err := cypress.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./cypress/e2e/failing_spec.cy.js"},
+        {Path: "./cypress/e2e/passing_spec.cy.js"},
+	}
+	got, err := cypress.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusError,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
-		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *exec.ExitError", files, err, err)
+		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
 	}
 }
 
@@ -64,20 +70,20 @@ func TestCypressRun_CommandFailed(t *testing.T) {
 		},
 	}
 
-	files := []string{}
-	got, err := cypress.Run(files, false)
+	testCases := []plan.TestCase{}
+	got, err := cypress.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusError,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
-		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *exec.ExitError", files, err, err)
+		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
 	}
 }
 
@@ -85,24 +91,26 @@ func TestCypressRun_SignaledError(t *testing.T) {
 	cypress := NewCypress(RunnerConfig{
 		TestCommand: "./testdata/segv.sh",
 	})
-	files := []string{"./doesnt-matter.cy.js"}
+	testCases := []plan.TestCase{
+		{Path: "./doesnt-matter.cy.js"},
+	}
 
-	got, err := cypress.Run(files, false)
+	got, err := cypress.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusError,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *ErrProcessSignaled", files, err, err)
+		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
 	}
 	if signalError.Signal != syscall.SIGSEGV {
-		t.Errorf("Cypress.Run(%q) signal = %d, want %d", files, syscall.SIGSEGV, signalError.Signal)
+		t.Errorf("Cypress.Run(%q) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
 	}
 }
 

@@ -56,19 +56,27 @@ func (j Jest) GetFiles() ([]string, error) {
 	return files, nil
 }
 
-func (j Jest) Run(testCases []string, retry bool) (RunResult, error) {
+func (j Jest) Run(testCases []plan.TestCase, retry bool) (RunResult, error) {
 	var cmd *exec.Cmd
 	var err error
 
 	if !retry {
-		commandName, commandArgs, err := j.commandNameAndArgs(j.TestCommand, testCases)
+		testPaths := make([]string, len(testCases))
+		for i, testCase := range testCases {
+			testPaths[i] = testCase.Path
+		}
+		commandName, commandArgs, err := j.commandNameAndArgs(j.TestCommand, testPaths)
 		if err != nil {
 			return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 		}
 
 		cmd = exec.Command(commandName, commandArgs...)
 	} else {
-		commandName, commandArgs, err := j.retryCommandNameAndArgs(j.RetryTestCommand, testCases)
+		testNames := make([]string, len(testCases))
+		for i, testCase := range testCases {
+			testNames[i] = testCase.Name
+		}
+		commandName, commandArgs, err := j.retryCommandNameAndArgs(j.RetryTestCommand, testNames)
 		if err != nil {
 			return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 		}
@@ -94,11 +102,11 @@ func (j Jest) Run(testCases []string, retry bool) (RunResult, error) {
 		}
 
 		if report.NumFailedTests > 0 {
-			var failedTests []string
+			var failedTests []plan.TestCase
 			for _, testResult := range report.TestResults {
 				for _, example := range testResult.AssertionResults {
 					if example.Status == "failed" {
-						failedTests = append(failedTests, example.Name)
+						failedTests = append(failedTests, plan.TestCase{Name: example.Name})
 					}
 				}
 			}

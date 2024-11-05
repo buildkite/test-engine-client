@@ -24,7 +24,7 @@ import (
 var Version = ""
 
 type TestRunner interface {
-	Run(testCases []string, retry bool) (runner.RunResult, error)
+	Run(testCases []plan.TestCase, retry bool) (runner.RunResult, error)
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string
@@ -78,13 +78,8 @@ func main() {
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
 
 	// execute tests
-	runnableTests := []string{}
-	for _, testCase := range thisNodeTask.Tests {
-		runnableTests = append(runnableTests, testCase.Path)
-	}
-
 	var timeline []api.Timeline
-	testResult, err := runTestsWithRetry(testRunner, &runnableTests, cfg.MaxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, &timeline)
 
 	if err != nil {
 		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
@@ -134,7 +129,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func runTestsWithRetry(testRunner TestRunner, testsCases *[]string, maxRetries int, timeline *[]api.Timeline) (runner.RunResult, error) {
+func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, timeline *[]api.Timeline) (runner.RunResult, error) {
 	attemptCount := 0
 
 	var testResult runner.RunResult

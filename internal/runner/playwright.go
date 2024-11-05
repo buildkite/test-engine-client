@@ -33,8 +33,13 @@ func NewPlaywright(p RunnerConfig) Playwright {
 	return Playwright{p}
 }
 
-func (p Playwright) Run(testCases []string, retry bool) (RunResult, error) {
-	cmdName, cmdArgs, err := p.commandNameAndArgs(p.TestCommand, testCases)
+func (p Playwright) Run(testCases []plan.TestCase, retry bool) (RunResult, error) {
+	testPaths := make([]string, len(testCases))
+	for i, tc := range testCases {
+		testPaths[i] = tc.Path
+	}
+
+	cmdName, cmdArgs, err := p.commandNameAndArgs(p.TestCommand, testPaths)
 	if err != nil {
 		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 	}
@@ -59,11 +64,11 @@ func (p Playwright) Run(testCases []string, retry bool) (RunResult, error) {
 		}
 
 		if report.Stats.Unexpected > 0 {
-			var failedTests []string
+			var failedTests []plan.TestCase
 			for _, suite := range report.Suites {
 				for _, spec := range suite.Specs {
 					if !spec.Ok {
-						failedTests = append(failedTests, fmt.Sprintf("%s:%d", spec.File, spec.Line))
+						failedTests = append(failedTests, plan.TestCase{Path: fmt.Sprintf("%s:%d", spec.File, spec.Line)})
 					}
 				}
 			}

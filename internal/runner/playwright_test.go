@@ -3,6 +3,7 @@ package runner
 import (
 	"testing"
 
+	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -14,19 +15,21 @@ func TestPlaywrightRun(t *testing.T) {
 		ResultPath:  "playwright.json",
 	})
 
-	files := []string{"./testdata/playwright/tests/example.spec.js"}
-	got, err := playwright.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./testdata/playwright/tests/example.spec.js"},
+	}
+	got, err := playwright.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusPassed,
 	}
 
 	if err != nil {
-		t.Errorf("Playwright.Run(%q) error = %v", files, err)
+		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Playwright.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Playwright.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -37,20 +40,24 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 		ResultPath: "test-results/results.json",
 	})
 
-	files := []string{"./tests/failed.spec.js"}
-	got, err := playwright.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./tests/failed.spec.js"},
+	}
+	got, err := playwright.Run(testCases, false)
 
 	want := RunResult{
-		Status:      RunStatusFailed,
-		FailedTests: []string{"failed.spec.js:3"},
+		Status: RunStatusFailed,
+		FailedTests: []plan.TestCase{
+			{Path: "failed.spec.js:3"},
+		},
 	}
 
 	if err != nil {
-		t.Errorf("Playwright.Run(%q) error = %v", files, err)
+		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Playwright.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Playwright.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 

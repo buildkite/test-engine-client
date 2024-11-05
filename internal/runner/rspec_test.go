@@ -68,19 +68,21 @@ func TestRspecRun(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec",
 	})
-	files := []string{"./testdata/rspec/spec/spells/expelliarmus_spec.rb"}
-	got, err := rspec.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/spells/expelliarmus_spec.rb"},
+	}
+	got, err := rspec.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusPassed,
 	}
 
 	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", files, err)
+		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -91,19 +93,20 @@ func TestRspecRun_RetryCommand(t *testing.T) {
 			RetryTestCommand: "rspec",
 		},
 	}
-	files := []string{}
-	got, err := rspec.Run(files, true)
+
+	testCases := []plan.TestCase{}
+	got, err := rspec.Run(testCases, true)
 
 	want := RunResult{
 		Status: RunStatusPassed,
 	}
 
 	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", files, err)
+		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -117,20 +120,29 @@ func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 		os.Remove(rspec.ResultPath)
 	})
 
-	files := []string{"./testdata/rspec/spec/failure_spec.rb"}
-	got, err := rspec.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/failure_spec.rb"},
+	}
+	got, err := rspec.Run(testCases, false)
 
 	want := RunResult{
-		Status:      RunStatusFailed,
-		FailedTests: []string{"./testdata/rspec/spec/failure_spec.rb[1:1]"},
+		Status: RunStatusFailed,
+		FailedTests: []plan.TestCase{
+			{
+				Name:       "fails",
+				Scope:      "Failure",
+				Identifier: "./testdata/rspec/spec/failure_spec.rb[1:1]",
+				Path:       "./testdata/rspec/spec/failure_spec.rb[1:1]",
+			},
+		},
 	}
 
 	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", files, err)
+		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -143,20 +155,22 @@ func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
 		os.Remove(rspec.ResultPath)
 	})
 
-	files := []string{"./testdata/rspec/spec/failure_spec.rb"}
-	got, err := rspec.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/failure_spec.rb"},
+	}
+	got, err := rspec.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusError,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
-		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", files, err, err)
+		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
 	}
 }
 
@@ -166,20 +180,20 @@ func TestRspecRun_CommandFailed(t *testing.T) {
 			TestCommand: "rspec --invalid-option",
 		},
 	}
-	files := []string{}
-	got, err := rspec.Run(files, false)
+	testCases := []plan.TestCase{}
+	got, err := rspec.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusError,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
-		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", files, err, err)
+		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
 	}
 }
 
@@ -187,24 +201,26 @@ func TestRspecRun_SignaledError(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "./testdata/segv.sh",
 	})
-	files := []string{"./testdata/rspec/spec/failure_spec.rb"}
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/failure_spec.rb"},
+	}
 
-	got, err := rspec.Run(files, false)
+	got, err := rspec.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusError,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *ErrProcessSignaled", files, err, err)
+		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
 	}
 	if signalError.Signal != syscall.SIGSEGV {
-		t.Errorf("Rspec.Run(%q) signal = %d, want %d", files, syscall.SIGSEGV, signalError.Signal)
+		t.Errorf("Rspec.Run(%q) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
 	}
 }
 
@@ -299,13 +315,13 @@ func TestRspecGetExamples(t *testing.T) {
 			Identifier: "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
 			Path:       "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
-			Scope:      "Expelliarmus disarms the opponent",
+			Scope:      "Expelliarmus",
 		},
 		{
 			Identifier: "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
 			Path:       "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
-			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
+			Scope:      "Expelliarmus",
 		},
 	}
 
@@ -325,13 +341,13 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 			Identifier: "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
 			Name:       "disarms the opponent",
 			Path:       "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
-			Scope:      "Expelliarmus disarms the opponent",
+			Scope:      "Expelliarmus",
 		},
 		{
 			Identifier: "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
 			Name:       "knocks the wand out of the opponents hand",
 			Path:       "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
-			Scope:      "Expelliarmus knocks the wand out of the opponents hand",
+			Scope:      "Expelliarmus",
 		},
 	}
 
@@ -378,7 +394,7 @@ func TestRspecGetExamples_WithSharedExamples(t *testing.T) {
 			Identifier: "./testdata/rspec/spec/specs_with_shared_examples_spec.rb[1:1:1]",
 			Name:       "behaves like a shared example",
 			Path:       "./testdata/rspec/spec/specs_with_shared_examples_spec.rb[1:1:1]",
-			Scope:      "Specs with shared examples behaves like shared behaves like a shared example",
+			Scope:      "Specs with shared examples behaves like shared",
 		},
 	}
 

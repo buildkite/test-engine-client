@@ -70,14 +70,19 @@ func (r Rspec) GetFiles() ([]string, error) {
 // output cannot be parsed.
 //
 // Test failure is not considered an error, and is instead returned as a RunResult.
-func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
+func (r Rspec) Run(testCases []plan.TestCase, retry bool) (RunResult, error) {
 	command := r.TestCommand
 
 	if retry {
 		command = r.RetryTestCommand
 	}
 
-	commandName, commandArgs, err := r.commandNameAndArgs(command, testCases)
+	testPaths := make([]string, len(testCases))
+	for i, tc := range testCases {
+		testPaths[i] = tc.Path
+	}
+
+	commandName, commandArgs, err := r.commandNameAndArgs(command, testPaths)
 	if err != nil {
 		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 	}
@@ -104,10 +109,10 @@ func (r Rspec) Run(testCases []string, retry bool) (RunResult, error) {
 		}
 
 		if report.Summary.FailureCount > 0 {
-			var failedTests []string
+			var failedTests []plan.TestCase
 			for _, example := range report.Examples {
 				if example.Status == "failed" {
-					failedTests = append(failedTests, example.Id)
+					failedTests = append(failedTests, mapExampleToTestCase(example))
 				}
 			}
 			return RunResult{Status: RunStatusFailed, FailedTests: failedTests}, nil
@@ -214,13 +219,18 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 
 	var testCases []plan.TestCase
 	for _, example := range report.Examples {
-		testCases = append(testCases, plan.TestCase{
-			Identifier: example.Id,
-			Name:       example.Description,
-			Path:       example.Id,
-			Scope:      example.FullDescription,
-		})
+		testCases = append(testCases, mapExampleToTestCase(example))
 	}
 
 	return testCases, nil
+}
+
+func mapExampleToTestCase(example RspecExample) plan.TestCase {
+	scope := strings.TrimSuffix(example.FullDescription, " "+example.Description)
+	return plan.TestCase{
+		Identifier: example.Id,
+		Name:       example.Description,
+		Path:       example.Id,
+		Scope:      scope,
+	}
 }
