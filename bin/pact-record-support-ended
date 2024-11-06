@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# Use this when there are no longer any customers using a particular version of
+# bktec. This will stop bk/bk from verifying against the pact of the unused
+# version. You'll need to have an environment variable called PACT_BROKER_TOKEN
+# with a write-access token for pact flow to do the business.
+#
+# Run it like: bin/pact-record-support-ended v0.6.0
+
+set -euo pipefail
+
+VERSION=$1
+
+ENVIRONMENT=production
+BROKER_BASE_URL=https://buildkite.pactflow.io
+PACTICIPANT=TestSplitterClient
+
+docker run \
+  --rm \
+  -it \
+  -e PACT_BROKER_TOKEN \
+  pactfoundation/pact-cli \
+  pact-broker \
+  record-support-ended \
+  --environment=${ENVIRONMENT} \
+  --pacticipant=${PACTICIPANT} \
+  --broker-base-url=${BROKER_BASE_URL} \
+  --version=${VERSION}
