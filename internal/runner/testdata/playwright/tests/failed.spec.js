@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
 
-test('says good bye', async ({ page }) => {
-  await page.goto('/');
 
-  await expect(page).toHaveText('good bye');
+test.describe('test group', () => {
+  test('failed', () => {
+    expect(1).toBe(2);
+  })
 });
 
 test('it passes', () => {

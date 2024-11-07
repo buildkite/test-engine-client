@@ -79,7 +79,7 @@ func main() {
 
 	// execute tests
 	var timeline []api.Timeline
-	testResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline)
 
 	if err != nil {
 		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
@@ -129,7 +129,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, timeline *[]api.Timeline) (runner.RunResult, error) {
+func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTest []plan.TestCase, timeline *[]api.Timeline) (runner.RunResult, error) {
 	attemptCount := 0
 
 	var testResult runner.RunResult
@@ -151,6 +151,40 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 		}
 
 		testResult, err = testRunner.Run(*testsCases, attemptCount > 0)
+
+		// Filter out muted tests from the failed tests.
+		if len(mutedTest) > 0 && testResult.Status == runner.RunStatusFailed {
+			mutedTestMap := make(map[string]bool)
+			for _, test := range mutedTest {
+				scopeName := test.Scope + "/" + test.Name
+				mutedTestMap[scopeName] = true
+			}
+
+			mutedTestForRun := []plan.TestCase{}
+
+			var failedTests []plan.TestCase
+			for _, test := range testResult.FailedTests {
+				scopeName := test.Scope + "/" + test.Name
+				if _, ok := mutedTestMap[scopeName]; !ok {
+					failedTests = append(failedTests, test)
+				} else {
+					mutedTestForRun = append(mutedTestForRun, test)
+				}
+			}
+
+			if len(mutedTestForRun) > 0 {
+				fmt.Println("⚠️ Following tests are muted and will not be retried or fail the run:")
+				for _, test := range mutedTestForRun {
+					fmt.Printf("%s - %s %s\n", test.Path, test.Scope, test.Name)
+				}
+			}
+
+			testResult.FailedTests = failedTests
+
+			if len(failedTests) == 0 {
+				testResult.Status = runner.RunStatusPassed
+			}
+		}
 
 		if attemptCount == 0 {
 			*timeline = append(*timeline, api.Timeline{

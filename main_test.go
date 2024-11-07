@@ -34,7 +34,7 @@ func TestRunTestsWithRetry(t *testing.T) {
 		},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -80,7 +80,7 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 		},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -138,7 +138,7 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -182,6 +182,55 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 	}
 }
 
+func TestRunTestsWithRetry_MutedTest(t *testing.T) {
+	testRunner := runner.Rspec{
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand:      "rspec --format json --out {{resultPath}}  --format documentation",
+			ResultPath:       "tmp/rspec.json",
+			RetryTestCommand: "rspec --format json --out {{resultPath}}",
+		},
+	}
+	maxRetries := 1
+	testCases := []plan.TestCase{
+		{
+			Path: "./testdata/rspec/spec/fruits/apple_spec.rb",
+		},
+		{
+			// File with failed tests that are muted
+			Path: "./testdata/rspec/spec/fruits/tomato_spec.rb",
+		},
+	}
+	mutedTests := []plan.TestCase{
+		{Scope: "Tomato", Name: "is vegetable"},
+	}
+	timeline := []api.Timeline{}
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, mutedTests, &timeline)
+
+	t.Cleanup(func() {
+		os.Remove(testRunner.ResultPath)
+	})
+
+	if err != nil {
+		t.Errorf("runTestsWithRetry(...) error = %v", err)
+	}
+
+	if testResult.Status != runner.RunStatusPassed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
+	}
+
+	if len(timeline) != 2 {
+		t.Errorf("timeline length = %v, want %d", len(timeline), 2)
+	}
+
+	events := []string{}
+	for _, event := range timeline {
+		events = append(events, event.Event)
+	}
+	if diff := cmp.Diff(events, []string{"test_start", "test_end"}); diff != "" {
+		t.Errorf("timeline events diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestRunTestsWithRetry_Error(t *testing.T) {
 	testRunner := runner.Rspec{
 		RunnerConfig: runner.RunnerConfig{
@@ -193,7 +242,7 @@ func TestRunTestsWithRetry_Error(t *testing.T) {
 		{Path: "testdata/rspec/spec/fruits/fig_spec.rb"},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline)
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {

@@ -18,7 +18,7 @@ import (
 func TestFetchTestPlan(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
 		Consumer: "TestEngineClient",
-		Provider: "TestPlanServer",
+		Provider: "TestEngineServer",
 	})
 
 	if err != nil {
@@ -99,7 +99,7 @@ func TestFetchTestPlan(t *testing.T) {
 func TestFetchTestPlan_NotFound(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
 		Consumer: "TestEngineClient",
-		Provider: "TestPlanServer",
+		Provider: "TestEngineServer",
 	})
 
 	if err != nil {

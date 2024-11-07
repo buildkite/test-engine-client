@@ -135,7 +135,7 @@ func TestJestRun_TestFailed(t *testing.T) {
 	want := RunResult{
 		Status: RunStatusFailed,
 		FailedTests: []plan.TestCase{
-			{Name: "this will fail for sure"},
+			{Scope: "this will fail", Name: "for sure"},
 		},
 	}
 

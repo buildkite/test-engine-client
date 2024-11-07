@@ -12,7 +12,7 @@ import (
 func TestPostTestPlanMetadata(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
 		Consumer: "TestEngineClient",
-		Provider: "TestPlanServer",
+		Provider: "TestEngineServer",
 	})
 
 	if err != nil {
@@ -85,7 +85,7 @@ func TestPostTestPlanMetadata(t *testing.T) {
 func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
 		Consumer: "TestEngineClient",
-		Provider: "TestPlanServer",
+		Provider: "TestEngineServer",
 	})
 
 	if err != nil {

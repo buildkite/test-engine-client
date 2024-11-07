@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"os"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -40,6 +41,10 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 		ResultPath: "test-results/results.json",
 	})
 
+	t.Cleanup(func() {
+		os.Remove(playwright.ResultPath)
+	})
+
 	testCases := []plan.TestCase{
 		{Path: "./tests/failed.spec.js"},
 	}
@@ -48,7 +53,16 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 	want := RunResult{
 		Status: RunStatusFailed,
 		FailedTests: []plan.TestCase{
-			{Path: "failed.spec.js:3"},
+			{
+				Scope: " chromium failed.spec.js test group failed",
+				Path:  "failed.spec.js:5",
+				Name:  "failed",
+			},
+			{
+				Scope: " firefox failed.spec.js test group failed",
+				Path:  "failed.spec.js:5",
+				Name:  "failed",
+			},
 		},
 	}
 

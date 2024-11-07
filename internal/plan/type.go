@@ -28,4 +28,5 @@ type TestPlan struct {
 	Experiment string           `json:"experiment"`
 	Tasks      map[string]*Task `json:"tasks"`
 	Fallback   bool
+	MutedTests []TestCase `json:"muted_tests,omitempty"`
 }
