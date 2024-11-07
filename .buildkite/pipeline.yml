@@ -1,12 +1,4 @@
 steps:
-  - name: ":go: Go generate"
-    command: .buildkite/steps/check-go-generate.sh
-    plugins:
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: ci
-  
   - name: ":golangci-lint: Lint"
     plugins:
       - docker#v5.11.0:

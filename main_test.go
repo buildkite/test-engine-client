@@ -473,6 +473,7 @@ func TestCreateRequestParams(t *testing.T) {
 		Identifier:       "identifier",
 		Parallelism:      7,
 		Branch:           "",
+		TestRunner:       "rspec",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -504,6 +505,7 @@ func TestCreateRequestParams(t *testing.T) {
 		Identifier:  "identifier",
 		Parallelism: 7,
 		Branch:      "",
+		Runner:      "rspec",
 		Tests: api.TestPlanParamsTest{
 			Files: []plan.TestCase{
 				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
