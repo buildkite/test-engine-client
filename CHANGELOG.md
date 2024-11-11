@@ -1,4 +1,12 @@
 # Changelog
+
+## 1.1.0 - 2024-11-11
+- Experimental support for Cypress. See [Cypress usage guide](./docs/cypress.md).
+- Experimental support for Playwright. See [Playwright usage guide](./docs/playwright.md).
+- Update `BUILDKITE_TEST_ENGINE_TEST_CMD` and `BUILDKITE_TEST_ENGINE_RETRY_CMD` for Jest. See [Jest usage guide](./docs/jest.md).
+- Fix issue when retrying Jest tests with special characters
+- Remove `**/node_modules` from default value of `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN`. Files inside `node_modules` will be ignore regardless the value of this environment variable.
+
 ## 1.0.0 - 2024-09-23
 - ⚠️ **BREAKING** Rename all environment variables from `BUILDKITE_SPLITTER_*` to `BUILDKITE_TEST_ENGINE_*`. See [Migrating to 1.0.0](https://github.com/buildkite/test-splitter/tree/90b699918b11500336f8a0fce306da917fba7408?tab=readme-ov-file#migrating-to-100)
 - ⚠️ **BREAKING** Add the `BUILDKITE_TEST_ENGINE_TEST_RUNNER` as required environment variable.
