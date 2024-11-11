@@ -75,6 +75,10 @@ steps:
       BUILDKITE_TEST_ENGINE_RESULT_PATH: tmp/result.json
 ```
 
+> [!TIP]
+> You can find example configurations and usage instructions for each test runner in our [examples repository](https://github.com/buildkite/test-engine-client-examples).
+
+
 ### Debugging
 To enable debug mode, set the `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` environment variable to `true`. This will print detailed output to assist in debugging bktec.
 
