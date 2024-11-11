@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"slices"
+	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -73,11 +74,11 @@ func (c Cypress) commandNameAndArgs(cmd string, testCases []string) (string, []s
 		return "", []string{}, err
 	}
 	idx := slices.Index(words, "{{testExamples}}")
+	specs := strings.Join(testCases, ",")
 	if idx < 0 {
-		words = append(words, "--spec")
-		words = append(words, testCases...)
+		words = append(words, "--spec", specs)
 	} else {
-		words = slices.Replace(words, idx, idx+1, testCases...)
+		words[idx] = specs
 	}
 
 	return words[0], words[1:], nil
