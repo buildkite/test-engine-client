@@ -201,7 +201,8 @@ func TestRunTestsWithRetry_MutedTest(t *testing.T) {
 		},
 	}
 	mutedTests := []plan.TestCase{
-		{Scope: "Tomato", Name: "is vegetable"},
+		{Path: "apple_spec.rb:6", Scope: "Apple", Name: "is red"},
+		{Path: "tomato_spec.rb:6", Scope: "Tomato", Name: "is vegetable"},
 	}
 	timeline := []api.Timeline{}
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, mutedTests, &timeline)
