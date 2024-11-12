@@ -40,7 +40,7 @@ func TestCypressRun_TestFailed(t *testing.T) {
 		TestCommand: "yarn cypress run --spec {{testExamples}}",
 	})
 
-	files := []string{"./cypress/e2e/failing_spec.cy.js"}
+	files := []string{"./cypress/e2e/failing_spec.cy.js", "./cypress/e2e/passing_spec.cy.js"}
 	got, err := cypress.Run(files, false)
 
 	want := RunResult{
@@ -142,7 +142,7 @@ func TestCypressCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	}
 
 	wantName := "cypress"
-	wantArgs := []string{"run", "--spec", "cypress/e2e/passing_spec.cy.js", "cypress/e2e/flaky_spec.cy.js"}
+	wantArgs := []string{"run", "--spec", "cypress/e2e/passing_spec.cy.js,cypress/e2e/flaky_spec.cy.js"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
@@ -168,7 +168,7 @@ func TestCypressCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) 
 	}
 
 	wantName := "cypress"
-	wantArgs := []string{"run", "--spec", "cypress/e2e/passing_spec.cy.js", "cypress/e2e/flaky_spec.cy.js"}
+	wantArgs := []string{"run", "--spec", "cypress/e2e/passing_spec.cy.js,cypress/e2e/flaky_spec.cy.js"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
