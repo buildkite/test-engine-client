@@ -31,8 +31,12 @@ func NewCypress(c RunnerConfig) Cypress {
 	return Cypress{c}
 }
 
-func (c Cypress) Run(testCases []string, retry bool) (RunResult, error) {
-	cmdName, cmdArgs, err := c.commandNameAndArgs(c.TestCommand, testCases)
+func (c Cypress) Run(testCases []plan.TestCase, retry bool) (RunResult, error) {
+	testPaths := make([]string, len(testCases))
+	for i, tc := range testCases {
+		testPaths[i] = tc.Path
+	}
+	cmdName, cmdArgs, err := c.commandNameAndArgs(c.TestCommand, testPaths)
 	if err != nil {
 		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
 	}

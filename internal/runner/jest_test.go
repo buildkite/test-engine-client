@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
 )
@@ -64,19 +65,21 @@ func TestJestRun(t *testing.T) {
 		os.Remove(jest.ResultPath)
 	})
 
-	files := []string{"./testdata/jest/spells/expelliarmus.spec.js"}
-	got, err := jest.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./testdata/jest/spells/expelliarmus.spec.js"},
+	}
+	got, err := jest.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusPassed,
 	}
 
 	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", files, err)
+		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -94,19 +97,21 @@ func TestJestRun_Retry(t *testing.T) {
 		os.Remove(jest.ResultPath)
 	})
 
-	files := []string{"testdata/jest/spells/expelliarmus.spec.js"}
-	got, err := jest.Run(files, true)
+	testCases := []plan.TestCase{
+		{Name: "disarms the opponent"},
+	}
+	got, err := jest.Run(testCases, true)
 
 	want := RunResult{
 		Status: RunStatusPassed,
 	}
 
 	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", files, err)
+		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -122,20 +127,24 @@ func TestJestRun_TestFailed(t *testing.T) {
 		os.Remove(jest.ResultPath)
 	})
 
-	files := []string{"./testdata/jest/failure.spec.js"}
-	got, err := jest.Run(files, false)
+	testCases := []plan.TestCase{
+		{Path: "./testdata/jest/failure.spec.js"},
+	}
+	got, err := jest.Run(testCases, false)
 
 	want := RunResult{
-		Status:      RunStatusFailed,
-		FailedTests: []string{"this will fail for sure"},
+		Status: RunStatusFailed,
+		FailedTests: []plan.TestCase{
+			{Scope: "this will fail", Name: "for sure"},
+		},
 	}
 
 	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", files, err)
+		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -150,20 +159,20 @@ func TestJestRun_CommandFailed(t *testing.T) {
 		os.Remove(jest.ResultPath)
 	})
 
-	files := []string{}
-	got, err := jest.Run(files, false)
+	testCases := []plan.TestCase{}
+	got, err := jest.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusError,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
-		t.Errorf("Jest.Run(%q) error type = %T (%v), want *exec.ExitError", files, err, err)
+		t.Errorf("Jest.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
 	}
 }
 
@@ -171,24 +180,26 @@ func TestJestRun_SignaledError(t *testing.T) {
 	jest := NewJest(RunnerConfig{
 		TestCommand: "./testdata/segv.sh --outputFile {{resultPath}}",
 	})
-	files := []string{"./doesnt-matter.spec.js"}
+	testCases := []plan.TestCase{
+		{Path: "./doesnt-matter.spec.js"},
+	}
 
-	got, err := jest.Run(files, false)
+	got, err := jest.Run(testCases, false)
 
 	want := RunResult{
 		Status: RunStatusError,
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", files, diff)
+		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
 	}
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Jest.Run(%q) error type = %T (%v), want *ErrProcessSignaled", files, err, err)
+		t.Errorf("Jest.Run(%q) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
 	}
 	if signalError.Signal != syscall.SIGSEGV {
-		t.Errorf("Jest.Run(%q) signal = %d, want %d", files, syscall.SIGSEGV, signalError.Signal)
+		t.Errorf("Jest.Run(%q) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
 	}
 }
 

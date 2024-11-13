@@ -24,7 +24,7 @@ import (
 var Version = ""
 
 type TestRunner interface {
-	Run(testCases []string, retry bool) (runner.RunResult, error)
+	Run(testCases []plan.TestCase, retry bool) (runner.RunResult, error)
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string
@@ -78,13 +78,8 @@ func main() {
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
 
 	// execute tests
-	runnableTests := []string{}
-	for _, testCase := range thisNodeTask.Tests {
-		runnableTests = append(runnableTests, testCase.Path)
-	}
-
 	var timeline []api.Timeline
-	testResult, err := runTestsWithRetry(testRunner, &runnableTests, cfg.MaxRetries, &timeline)
+	testResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline)
 
 	if err != nil {
 		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
@@ -134,7 +129,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func runTestsWithRetry(testRunner TestRunner, testsCases *[]string, maxRetries int, timeline *[]api.Timeline) (runner.RunResult, error) {
+func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTest []plan.TestCase, timeline *[]api.Timeline) (runner.RunResult, error) {
 	attemptCount := 0
 
 	var testResult runner.RunResult
@@ -156,6 +151,34 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]string, maxRetries i
 		}
 
 		testResult, err = testRunner.Run(*testsCases, attemptCount > 0)
+
+		// Filter out muted tests from the failed tests.
+		if len(mutedTest) > 0 && testResult.Status == runner.RunStatusFailed {
+			fmt.Println("⚠️ The following tests are muted and will not be retried or affect the test run result:")
+			for _, test := range mutedTest {
+				fmt.Printf("%s - %s %s\n", test.Path, test.Scope, test.Name)
+			}
+
+			mutedTestMap := make(map[string]bool)
+			for _, test := range mutedTest {
+				scopeName := test.Scope + "/" + test.Name
+				mutedTestMap[scopeName] = true
+			}
+
+			var failedTests []plan.TestCase
+			for _, test := range testResult.FailedTests {
+				scopeName := test.Scope + "/" + test.Name
+				if _, ok := mutedTestMap[scopeName]; !ok {
+					failedTests = append(failedTests, test)
+				}
+			}
+
+			testResult.FailedTests = failedTests
+
+			if len(failedTests) == 0 {
+				testResult.Status = runner.RunStatusPassed
+			}
+		}
 
 		if attemptCount == 0 {
 			*timeline = append(*timeline, api.Timeline{

@@ -17,7 +17,7 @@ type RunnerConfig struct {
 }
 
 type TestRunner interface {
-	Run(testCases []string, retry bool) (RunResult, error)
+	Run(testCases []plan.TestCase, retry bool) (RunResult, error)
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string

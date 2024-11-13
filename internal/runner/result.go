@@ -1,5 +1,7 @@
 package runner
 
+import "github.com/buildkite/test-engine-client/internal/plan"
+
 type RunStatus string
 
 const (
@@ -10,5 +12,5 @@ const (
 
 type RunResult struct {
 	Status      RunStatus
-	FailedTests []string
+	FailedTests []plan.TestCase
 }
