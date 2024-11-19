@@ -23,6 +23,21 @@ import (
 
 var Version = ""
 
+const Logo = `
+______ ______ _____
+___  /____  /___  /____________
+__  __ \_  //_/  __/  _ \  ___/
+_  /_/ /  ,<  / /_ /  __/ /__
+/_.___//_/|_| \__/ \___/\___/
+`
+
+func printStartUpMessage() {
+	const green = "\033[32m"
+	const reset = "\033[0m"
+	fmt.Println(green + Logo + reset)
+	fmt.Println("Buildkite Test Engine Client: bktec " + Version + "\n")
+}
+
 type TestRunner interface {
 	Run(testCases []plan.TestCase, retry bool) (runner.RunResult, error)
 	GetExamples(files []string) ([]plan.TestCase, error)
@@ -41,6 +56,8 @@ func main() {
 		fmt.Println(Version)
 		os.Exit(0)
 	}
+
+	printStartUpMessage()
 
 	// get config
 	cfg, err := config.New()
