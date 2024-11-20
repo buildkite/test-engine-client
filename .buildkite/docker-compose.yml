@@ -11,6 +11,8 @@ services:
       - ~/gomodcache:/gomodcache
     working_dir: /work
     environment:
+      - BUILDKITE_BRANCH
+      - BUILDKITE_COMMIT
       - BUILDKITE_JOB_ID
       - GOCACHE=/gocache
       - GOMODCACHE=/gomodcache
