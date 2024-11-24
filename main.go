@@ -34,8 +34,8 @@ _  /_/ /  ,<  / /_ /  __/ /__
 func printStartUpMessage() {
 	const green = "\033[32m"
 	const reset = "\033[0m"
+	fmt.Println("+++ Buildkite Test Engine Client: bktec " + Version + "\n")
 	fmt.Println(green + Logo + reset)
-	fmt.Println("Buildkite Test Engine Client: bktec " + Version + "\n")
 }
 
 type TestRunner interface {
