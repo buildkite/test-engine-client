@@ -12,12 +12,14 @@ require (
 require (
 	drjosh.dev/zzglob v0.4.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pact-foundation/pact-go/v2 v2.0.8
 	golang.org/x/sys v0.27.0
 )
 
 require (
 	github.com/hashicorp/logutils v1.0.0 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/text v0.17.0 // indirect

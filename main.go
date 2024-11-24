@@ -18,6 +18,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
+	"github.com/olekukonko/tablewriter"
 	"golang.org/x/sys/unix"
 )
 
@@ -39,7 +40,7 @@ func printStartUpMessage() {
 }
 
 type TestRunner interface {
-	Run(testCases []plan.TestCase, retry bool) (runner.RunResult, error)
+	Run(result *runner.RunResult, testCases []plan.TestCase, retry bool) error
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string
@@ -96,7 +97,7 @@ func main() {
 
 	// execute tests
 	var timeline []api.Timeline
-	testResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline)
+	runResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline)
 
 	if err != nil {
 		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
@@ -113,20 +114,61 @@ func main() {
 		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
-	if testResult.Status == runner.RunStatusFailed {
+	printReport(runResult)
+
+	if runResult.Status() == runner.RunStatusFailed {
 		if !testPlan.Fallback {
 			sendMetadata(ctx, apiClient, cfg, timeline)
 		}
 
-		if failedCount := len(testResult.FailedTests); failedCount > 1 {
-			logErrorAndExit(1, "%s exited with %d failures", testRunner.Name(), failedCount)
-		}
-		logErrorAndExit(1, "%s exited with 1 failure", testRunner.Name())
+		os.Exit(1)
 	}
 
 	if !testPlan.Fallback {
 		sendMetadata(ctx, apiClient, cfg, timeline)
 	}
+}
+
+func printReport(runResult runner.RunResult) {
+	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
+
+	// Print statistics
+	statistics := runResult.Statistics()
+	data := [][]string{
+		{"Passed", "first run", strconv.Itoa(statistics.PassedOnFirstRun)},
+		{"Passed", "on retry", strconv.Itoa(statistics.PassedOnRetry)},
+		{"Muted", "passed", strconv.Itoa(statistics.MutedPassed)},
+		{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
+		{"Failed", "", strconv.Itoa(statistics.Failed)},
+	}
+	table := tablewriter.NewWriter(os.Stdout)
+	table.AppendBulk(data)
+	table.SetFooter([]string{"", "Total", strconv.Itoa(statistics.Total)})
+	table.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
+	table.SetAutoMergeCellsByColumnIndex([]int{0, 1})
+	table.SetRowLine(true)
+	table.Render()
+
+	// Print muted and failed tests
+	mutedTests := runResult.MutedTests()
+	if len(mutedTests) > 0 {
+		fmt.Println("")
+		fmt.Println("+++ Muted Tests:")
+		for _, mutedTest := range runResult.MutedTests() {
+			fmt.Printf("- %s %s (%s)\n", mutedTest.Scope, mutedTest.Name, mutedTest.Status)
+		}
+	}
+
+	failedTests := runResult.FailedTests()
+	if len(failedTests) > 0 {
+		fmt.Println("")
+		fmt.Println("+++ Failed Tests:")
+		for _, failedTests := range runResult.FailedTests() {
+			fmt.Printf("- %s %s\n", failedTests.Scope, failedTests.Name)
+		}
+	}
+
+	fmt.Println("===================================================")
 }
 
 func createTimestamp() string {
@@ -146,11 +188,11 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTest []plan.TestCase, timeline *[]api.Timeline) (runner.RunResult, error) {
+func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline) (runner.RunResult, error) {
 	attemptCount := 0
 
-	var testResult runner.RunResult
-	var err error
+	// Create a new run result with muted tests to keep track of the results.
+	runResult := runner.NewRunResult(mutedTests)
 
 	for attemptCount <= maxRetries {
 		if attemptCount == 0 {
@@ -167,35 +209,7 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 			})
 		}
 
-		testResult, err = testRunner.Run(*testsCases, attemptCount > 0)
-
-		// Filter out muted tests from the failed tests.
-		if len(mutedTest) > 0 && testResult.Status == runner.RunStatusFailed {
-			fmt.Println("⚠️ The following tests are muted and will not be retried or affect the test run result:")
-			for _, test := range mutedTest {
-				fmt.Printf("%s - %s %s\n", test.Path, test.Scope, test.Name)
-			}
-
-			mutedTestMap := make(map[string]bool)
-			for _, test := range mutedTest {
-				scopeName := test.Scope + "/" + test.Name
-				mutedTestMap[scopeName] = true
-			}
-
-			var failedTests []plan.TestCase
-			for _, test := range testResult.FailedTests {
-				scopeName := test.Scope + "/" + test.Name
-				if _, ok := mutedTestMap[scopeName]; !ok {
-					failedTests = append(failedTests, test)
-				}
-			}
-
-			testResult.FailedTests = failedTests
-
-			if len(failedTests) == 0 {
-				testResult.Status = runner.RunStatusPassed
-			}
-		}
+		err := testRunner.Run(runResult, *testsCases, attemptCount > 0)
 
 		if attemptCount == 0 {
 			*timeline = append(*timeline, api.Timeline{
@@ -209,27 +223,27 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 			})
 		}
 
-		// Don't retry if we've reached max retries.
-		if attemptCount == maxRetries {
-			break
-		}
-
 		// Don't retry if there is an error that is not a test failure.
 		if err != nil {
-			break
+			return *runResult, err
+		}
+
+		// Don't retry if we've reached max retries.
+		if attemptCount == maxRetries {
+			return *runResult, nil
 		}
 
 		// Don't retry if tests are passed.
-		if testResult.Status == runner.RunStatusPassed {
-			break
+		if runResult.Status() == runner.RunStatusPassed {
+			return *runResult, nil
 		}
 
 		// Retry only the failed tests.
-		*testsCases = testResult.FailedTests
+		*testsCases = runResult.FailedTests()
 		attemptCount++
 	}
 
-	return testResult, err
+	return *runResult, nil
 }
 
 func logSignalAndExit(name string, signal syscall.Signal) {

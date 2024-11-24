@@ -4,6 +4,10 @@ RSpec.describe "Tomato" do
   end
 
   it "is vegetable" do
-    fail
+    if ENV["RETRY"] == "true"
+      expect(true).to eq(true)
+    else
+      expect(true).to eq(false)
+    end
   end
 end

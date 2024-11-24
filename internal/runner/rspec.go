@@ -31,7 +31,9 @@ func NewRspec(r RunnerConfig) Rspec {
 		r.RetryTestCommand = r.TestCommand
 	}
 
-	return Rspec{r}
+	return Rspec{
+		RunnerConfig: r,
+	}
 }
 
 func (r Rspec) Name() string {
@@ -70,7 +72,7 @@ func (r Rspec) GetFiles() ([]string, error) {
 // output cannot be parsed.
 //
 // Test failure is not considered an error, and is instead returned as a RunResult.
-func (r Rspec) Run(testCases []plan.TestCase, retry bool) (RunResult, error) {
+func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	command := r.TestCommand
 
 	if retry {
@@ -84,42 +86,41 @@ func (r Rspec) Run(testCases []plan.TestCase, retry bool) (RunResult, error) {
 
 	commandName, commandArgs, err := r.commandNameAndArgs(command, testPaths)
 	if err != nil {
-		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
+		result.err = err
+		return fmt.Errorf("failed to build command: %w", err)
 	}
 
 	cmd := exec.Command(commandName, commandArgs...)
 
 	err = runAndForwardSignal(cmd)
 
-	if err == nil { // note: returning success early
-		return RunResult{Status: RunStatusPassed}, nil
-	}
-
 	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		return RunResult{Status: RunStatusError}, err
+		result.err = err
+		return err
 	}
 
-	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-		report, parseErr := r.ParseReport(r.ResultPath)
-		if parseErr != nil {
-			// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
-			// therefore we need to bubble up the error.
-			fmt.Println("Buildkite Test Engine Client: Failed to read Rspec output, tests will not be retried.")
-			return RunResult{Status: RunStatusError}, err
-		}
-
-		if report.Summary.FailureCount > 0 {
-			var failedTests []plan.TestCase
-			for _, example := range report.Examples {
-				if example.Status == "failed" {
-					failedTests = append(failedTests, mapExampleToTestCase(example))
-				}
-			}
-			return RunResult{Status: RunStatusFailed, FailedTests: failedTests}, nil
-		}
+	report, parseErr := r.ParseReport(r.ResultPath)
+	if parseErr != nil {
+		// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
+		// therefore we need to bubble up the error.
+		fmt.Println("Buildkite Test Engine Client: Failed to read Rspec output, tests will not be retried.")
+		result.err = err
+		return err
 	}
 
-	return RunResult{Status: RunStatusError}, err
+	for _, example := range report.Examples {
+		var status TestStatus
+		switch example.Status {
+		case "failed":
+			status = TestStatusFailed
+		case "passed":
+			status = TestStatusPassed
+		}
+
+		result.RecordTestResult(mapExampleToTestCase(example), status)
+	}
+
+	return nil
 }
 
 // RspecExample represents a single test example in an Rspec report.

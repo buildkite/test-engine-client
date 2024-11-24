@@ -66,47 +66,49 @@ func TestNewRspec(t *testing.T) {
 
 func TestRspecRun(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
-		TestCommand: "rspec",
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:  "tmp/rspec.json",
 	})
+
+	t.Cleanup(func() {
+		os.Remove(rspec.ResultPath)
+	})
+
 	testCases := []plan.TestCase{
 		{Path: "./testdata/rspec/spec/spells/expelliarmus_spec.rb"},
 	}
-	got, err := rspec.Run(testCases, false)
-
-	want := RunResult{
-		Status: RunStatusPassed,
-	}
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, false)
 
 	if err != nil {
 		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if len(result.tests) != 2 {
+		t.Errorf("Rspec.Run(%q) len(RunResult.tests) = %d, want 2", testCases, len(result.tests))
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
 func TestRspecRun_RetryCommand(t *testing.T) {
-	rspec := Rspec{
-		RunnerConfig{
-			TestCommand:      "rspec --invalid-option",
-			RetryTestCommand: "rspec",
-		},
-	}
+	rspec := NewRspec(RunnerConfig{
+		TestCommand:      "rspec --invalid-option",
+		RetryTestCommand: "rspec",
+	})
 
 	testCases := []plan.TestCase{}
-	got, err := rspec.Run(testCases, true)
-
-	want := RunResult{
-		Status: RunStatusPassed,
-	}
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, true)
 
 	if err != nil {
 		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -123,17 +125,15 @@ func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 	testCases := []plan.TestCase{
 		{Path: "./testdata/rspec/spec/failure_spec.rb"},
 	}
-	got, err := rspec.Run(testCases, false)
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, false)
 
-	want := RunResult{
-		Status: RunStatusFailed,
-		FailedTests: []plan.TestCase{
-			{
-				Name:       "fails",
-				Scope:      "Failure",
-				Identifier: "./testdata/rspec/spec/failure_spec.rb[1:1]",
-				Path:       "./testdata/rspec/spec/failure_spec.rb[1:1]",
-			},
+	wantFailedTests := []plan.TestCase{
+		{
+			Name:       "fails",
+			Scope:      "Failure",
+			Identifier: "./testdata/rspec/spec/failure_spec.rb[1:1]",
+			Path:       "./testdata/rspec/spec/failure_spec.rb[1:1]",
 		},
 	}
 
@@ -141,8 +141,12 @@ func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+	}
+
+	if diff := cmp.Diff(result.FailedTests(), wantFailedTests); diff != "" {
+		t.Errorf("Rspec.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -158,14 +162,11 @@ func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
 	testCases := []plan.TestCase{
 		{Path: "./testdata/rspec/spec/failure_spec.rb"},
 	}
-	got, err := rspec.Run(testCases, false)
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, false)
 
-	want := RunResult{
-		Status: RunStatusError,
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusError {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	exitError := new(exec.ExitError)
@@ -175,20 +176,15 @@ func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
 }
 
 func TestRspecRun_CommandFailed(t *testing.T) {
-	rspec := Rspec{
-		RunnerConfig{
-			TestCommand: "rspec --invalid-option",
-		},
-	}
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: "rspec --invalid-option",
+	})
 	testCases := []plan.TestCase{}
-	got, err := rspec.Run(testCases, false)
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, false)
 
-	want := RunResult{
-		Status: RunStatusError,
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusError {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	exitError := new(exec.ExitError)
@@ -201,18 +197,15 @@ func TestRspecRun_SignaledError(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "./testdata/segv.sh",
 	})
+
 	testCases := []plan.TestCase{
 		{Path: "./testdata/rspec/spec/failure_spec.rb"},
 	}
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, false)
 
-	got, err := rspec.Run(testCases, false)
-
-	want := RunResult{
-		Status: RunStatusError,
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusError {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	signalError := new(ProcessSignaledError)
@@ -228,12 +221,10 @@ func TestRspecCommandNameAndArgs_WithPlaceholder(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options {{testExamples}} --out {{resultPath}}"
 
-	rspec := Rspec{
-		RunnerConfig{
-			TestCommand: testCommand,
-			ResultPath:  "tmp/rspec.json",
-		},
-	}
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "tmp/rspec.json",
+	})
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
 	if err != nil {
@@ -255,11 +246,9 @@ func TestRspecCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options --format"
 
-	rspec := Rspec{
-		RunnerConfig{
-			TestCommand: testCommand,
-		},
-	}
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: testCommand,
+	})
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
 	if err != nil {
@@ -281,11 +270,9 @@ func TestRspecCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 	testCommand := "bin/rspec --options ' {{testExamples}}"
 
-	rspec := Rspec{
-		RunnerConfig{
-			TestCommand: testCommand,
-		},
-	}
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: testCommand,
+	})
 
 	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
 

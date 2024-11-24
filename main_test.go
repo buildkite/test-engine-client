@@ -21,12 +21,10 @@ import (
 )
 
 func TestRunTestsWithRetry(t *testing.T) {
-	testRunner := runner.Rspec{
-		RunnerConfig: runner.RunnerConfig{
-			TestCommand: "rspec --format json --out {{resultPath}}",
-			ResultPath:  "tmp/rspec.json",
-		},
-	}
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:  "tmp/rspec.json",
+	})
 	maxRetries := 3
 	testCases := []plan.TestCase{
 		{
@@ -44,8 +42,8 @@ func TestRunTestsWithRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
 	}
 
-	if testResult.Status != runner.RunStatusPassed {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
+	if testResult.Status() != runner.RunStatusPassed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusPassed)
 	}
 
 	if len(timeline) != 2 {
@@ -62,14 +60,12 @@ func TestRunTestsWithRetry(t *testing.T) {
 }
 
 func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
-	testRunner := runner.Rspec{
-		RunnerConfig: runner.RunnerConfig{
-			TestCommand: "rspec --format json --out {{resultPath}}",
-			// Simulate test passing on the second retry
-			RetryTestCommand: "true",
-			ResultPath:       "tmp/rspec.json",
-		},
-	}
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		// Simulate test passing on the second retry
+		RetryTestCommand: "./testdata/retry.sh rspec --format json --out {{resultPath}}",
+		ResultPath:       "tmp/rspec.json",
+	})
 	maxRetries := 2
 	testCases := []plan.TestCase{
 		{
@@ -90,8 +86,8 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
 	}
 
-	if testResult.Status != runner.RunStatusPassed {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
+	if testResult.Status() != runner.RunStatusPassed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusPassed)
 	}
 
 	retriedTestCases := []plan.TestCase{
@@ -121,13 +117,11 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 }
 
 func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
-	testRunner := runner.Rspec{
-		RunnerConfig: runner.RunnerConfig{
-			TestCommand:      "rspec --format json --out {{resultPath}}",
-			RetryTestCommand: "rspec --format json --out {{resultPath}}",
-			ResultPath:       "tmp/rspec.json",
-		},
-	}
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand:      "rspec --format json --out {{resultPath}}",
+		RetryTestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:       "tmp/rspec.json",
+	})
 	maxRetries := 2
 	testCases := []plan.TestCase{
 		{
@@ -148,8 +142,8 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
 	}
 
-	if testResult.Status != runner.RunStatusFailed {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusFailed)
+	if testResult.Status() != runner.RunStatusFailed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusFailed)
 	}
 
 	wantFailedTests := []plan.TestCase{
@@ -161,7 +155,7 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(testResult.FailedTests, wantFailedTests); diff != "" {
+	if diff := cmp.Diff(testResult.FailedTests(), wantFailedTests); diff != "" {
 		t.Errorf("runTestsWithRetry(...) testResult.FailedTests diff (-got +want):\n%s", diff)
 	}
 
@@ -183,13 +177,11 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 }
 
 func TestRunTestsWithRetry_MutedTest(t *testing.T) {
-	testRunner := runner.Rspec{
-		RunnerConfig: runner.RunnerConfig{
-			TestCommand:      "rspec --format json --out {{resultPath}}  --format documentation",
-			ResultPath:       "tmp/rspec.json",
-			RetryTestCommand: "rspec --format json --out {{resultPath}}",
-		},
-	}
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand:      "rspec --format json --out {{resultPath}}  --format documentation",
+		ResultPath:       "tmp/rspec.json",
+		RetryTestCommand: "rspec --format json --out {{resultPath}}",
+	})
 	maxRetries := 1
 	testCases := []plan.TestCase{
 		{
@@ -215,8 +207,8 @@ func TestRunTestsWithRetry_MutedTest(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error = %v", err)
 	}
 
-	if testResult.Status != runner.RunStatusPassed {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusPassed)
+	if testResult.Status() != runner.RunStatusPassed {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusPassed)
 	}
 
 	if len(timeline) != 2 {
@@ -232,12 +224,28 @@ func TestRunTestsWithRetry_MutedTest(t *testing.T) {
 	}
 }
 
-func TestRunTestsWithRetry_Error(t *testing.T) {
-	testRunner := runner.Rspec{
-		RunnerConfig: runner.RunnerConfig{
-			TestCommand: "rspec --invalid-option",
-		},
+func TestRunTestsWithRetry_ExecError(t *testing.T) {
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand: "foobar",
+	})
+	testCases := []plan.TestCase{}
+	timeline := []api.Timeline{}
+	testResult, err := runTestsWithRetry(testRunner, &testCases, 0, []plan.TestCase{}, &timeline)
+
+	var execError *exec.Error
+	if !errors.As(err, &execError) {
+		t.Errorf("runTestsWithRetry(%q) error type = %T (%v), want *exec.Error", testCases, err, err)
 	}
+
+	if testResult.Status() != runner.RunStatusError {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusError)
+	}
+}
+
+func TestRunTestsWithRetry_Error(t *testing.T) {
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand: "rspec --invalid-option",
+	})
 	maxRetries := 2
 	testCases := []plan.TestCase{
 		{Path: "testdata/rspec/spec/fruits/fig_spec.rb"},
@@ -250,8 +258,8 @@ func TestRunTestsWithRetry_Error(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error type = %T (%v), want *exec.ExitError", err, err)
 	}
 
-	if testResult.Status != runner.RunStatusError {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status, runner.RunStatusError)
+	if testResult.Status() != runner.RunStatusError {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusError)
 	}
 
 	if len(timeline) != 2 {
