@@ -28,28 +28,28 @@ func NewCypress(c RunnerConfig) Cypress {
 		c.TestFilePattern = "**/*.cy.{js,jsx,ts,tsx}"
 	}
 
-	return Cypress{c}
+	return Cypress{
+		RunnerConfig: c,
+	}
 }
 
-func (c Cypress) Run(testCases []plan.TestCase, retry bool) (RunResult, error) {
+func (c Cypress) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	testPaths := make([]string, len(testCases))
 	for i, tc := range testCases {
 		testPaths[i] = tc.Path
 	}
 	cmdName, cmdArgs, err := c.commandNameAndArgs(c.TestCommand, testPaths)
 	if err != nil {
-		return RunResult{Status: RunStatusError}, fmt.Errorf("failed to build command: %w", err)
+		result.err = err
+		return fmt.Errorf("failed to build command: %w", err)
 	}
 
 	cmd := exec.Command(cmdName, cmdArgs...)
 
 	err = runAndForwardSignal(cmd)
 
-	if err != nil {
-		return RunResult{Status: RunStatusError}, err
-	}
-
-	return RunResult{Status: RunStatusPassed}, nil
+	result.err = err
+	return err
 }
 
 func (c Cypress) GetFiles() ([]string, error) {

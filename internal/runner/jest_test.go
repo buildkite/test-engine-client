@@ -68,30 +68,29 @@ func TestJestRun(t *testing.T) {
 	testCases := []plan.TestCase{
 		{Path: "./testdata/jest/spells/expelliarmus.spec.js"},
 	}
-	got, err := jest.Run(testCases, false)
-
-	want := RunResult{
-		Status: RunStatusPassed,
-	}
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, false)
 
 	if err != nil {
 		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if len(result.tests) != 1 {
+		t.Errorf("Rspec.Run(%q) len(RunResult.tests) = %d, want 1", testCases, len(result.tests))
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
 func TestJestRun_Retry(t *testing.T) {
 	changeCwd(t, "./testdata/jest")
 
-	jest := Jest{
-		RunnerConfig{
-			TestCommand:      "jest --invalid-option --json --outputFile {{resultPath}}",
-			RetryTestCommand: "jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}}",
-		},
-	}
+	jest := NewJest(RunnerConfig{
+		TestCommand:      "jest --invalid-option --json --outputFile {{resultPath}}",
+		RetryTestCommand: "jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}}",
+	})
 
 	t.Cleanup(func() {
 		os.Remove(jest.ResultPath)
@@ -100,18 +99,15 @@ func TestJestRun_Retry(t *testing.T) {
 	testCases := []plan.TestCase{
 		{Name: "disarms the opponent"},
 	}
-	got, err := jest.Run(testCases, true)
-
-	want := RunResult{
-		Status: RunStatusPassed,
-	}
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, true)
 
 	if err != nil {
 		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -130,12 +126,13 @@ func TestJestRun_TestFailed(t *testing.T) {
 	testCases := []plan.TestCase{
 		{Path: "./testdata/jest/failure.spec.js"},
 	}
-	got, err := jest.Run(testCases, false)
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, false)
 
-	want := RunResult{
-		Status: RunStatusFailed,
-		FailedTests: []plan.TestCase{
-			{Scope: "this will fail", Name: "for sure"},
+	wantFailedTests := []plan.TestCase{
+		{
+			Scope: "this will fail",
+			Name:  "for sure",
 		},
 	}
 
@@ -143,31 +140,30 @@ func TestJestRun_TestFailed(t *testing.T) {
 		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+	}
+
+	if diff := cmp.Diff(result.FailedTests(), wantFailedTests); diff != "" {
+		t.Errorf("Jest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
 func TestJestRun_CommandFailed(t *testing.T) {
-	jest := Jest{
-		RunnerConfig{
-			TestCommand: "jest --invalid-option --outputFile {{resultPath}}",
-		},
-	}
+	jest := NewJest(RunnerConfig{
+		TestCommand: "jest --invalid-option --outputFile {{resultPath}}",
+	})
 
 	t.Cleanup(func() {
 		os.Remove(jest.ResultPath)
 	})
 
 	testCases := []plan.TestCase{}
-	got, err := jest.Run(testCases, false)
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, false)
 
-	want := RunResult{
-		Status: RunStatusError,
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusError {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	exitError := new(exec.ExitError)
@@ -180,18 +176,15 @@ func TestJestRun_SignaledError(t *testing.T) {
 	jest := NewJest(RunnerConfig{
 		TestCommand: "./testdata/segv.sh --outputFile {{resultPath}}",
 	})
+
 	testCases := []plan.TestCase{
 		{Path: "./doesnt-matter.spec.js"},
 	}
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, false)
 
-	got, err := jest.Run(testCases, false)
-
-	want := RunResult{
-		Status: RunStatusError,
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusError {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	signalError := new(ProcessSignaledError)
@@ -207,12 +200,10 @@ func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"spec/user.spec.js", "spec/billing.spec.js"}
 	testCommand := "jest {{testExamples}} --outputFile {{resultPath}}"
 
-	jest := Jest{
-		RunnerConfig{
-			TestCommand: testCommand,
-			ResultPath:  "jest.json",
-		},
-	}
+	jest := NewJest(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "jest.json",
+	})
 
 	gotName, gotArgs, err := jest.commandNameAndArgs(testCommand, testCases)
 	if err != nil {
@@ -234,12 +225,10 @@ func TestJestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"spec/user.spec.js", "spec/billing.spec.js"}
 	testCommand := "jest --json --outputFile {{resultPath}}"
 
-	jest := Jest{
-		RunnerConfig{
-			TestCommand: testCommand,
-			ResultPath:  "jest.json",
-		},
-	}
+	jest := NewJest(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "jest.json",
+	})
 
 	gotName, gotArgs, err := jest.commandNameAndArgs(testCommand, testCases)
 	if err != nil {
@@ -261,11 +250,9 @@ func TestJestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	testCases := []string{"spec/user.spec.js", "spec/billing.spec.js"}
 	testCommand := "jest --options '{{testExamples}}"
 
-	jest := Jest{
-		RunnerConfig{
-			TestCommand: testCommand,
-		},
-	}
+	jest := NewJest(RunnerConfig{
+		TestCommand: testCommand,
+	})
 
 	gotName, gotArgs, err := jest.commandNameAndArgs(testCommand, testCases)
 
@@ -287,12 +274,10 @@ func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 	testCases := []string{"this will fail", "this other one will fail"}
 	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 
-	jest := Jest{
-		RunnerConfig{
-			RetryTestCommand: retryTestCommand,
-			ResultPath:       "jest.json",
-		},
-	}
+	jest := NewJest(RunnerConfig{
+		RetryTestCommand: retryTestCommand,
+		ResultPath:       "jest.json",
+	})
 
 	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases)
 	if err != nil {
@@ -314,12 +299,10 @@ func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
 	testCases := []string{"test with special characters .+*?()|[]{}^$", "another test"}
 	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 
-	jest := Jest{
-		RunnerConfig{
-			RetryTestCommand: retryTestCommand,
-			ResultPath:       "jest.json",
-		},
-	}
+	jest := NewJest(RunnerConfig{
+		RetryTestCommand: retryTestCommand,
+		ResultPath:       "jest.json",
+	})
 
 	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases)
 	if err != nil {
@@ -341,12 +324,10 @@ func TestJestRetryCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.
 	testCases := []string{"this will fail", "this other one will fail"}
 	retryTestCommand := "jest --json --outputFile {{resultPath}}"
 
-	jest := Jest{
-		RunnerConfig{
-			RetryTestCommand: retryTestCommand,
-			ResultPath:       "jest.json",
-		},
-	}
+	jest := NewJest(RunnerConfig{
+		RetryTestCommand: retryTestCommand,
+		ResultPath:       "jest.json",
+	})
 
 	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases)
 	fmt.Println(err)

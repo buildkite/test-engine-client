@@ -21,18 +21,15 @@ func TestCypressRun(t *testing.T) {
 	testCases := []plan.TestCase{
 		{Path: "./cypress/e2e/passing_spec.cy.js"},
 	}
-	got, err := cypress.Run(testCases, false)
-
-	want := RunResult{
-		Status: RunStatusPassed,
-	}
+	result := NewRunResult([]plan.TestCase{})
+	err := cypress.Run(result, testCases, false)
 
 	if err != nil {
 		t.Errorf("Cypress.Run(%q) error = %v", testCases, err)
 	}
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -45,16 +42,13 @@ func TestCypressRun_TestFailed(t *testing.T) {
 
 	testCases := []plan.TestCase{
 		{Path: "./cypress/e2e/failing_spec.cy.js"},
-        {Path: "./cypress/e2e/passing_spec.cy.js"},
+		{Path: "./cypress/e2e/passing_spec.cy.js"},
 	}
-	got, err := cypress.Run(testCases, false)
+	result := NewRunResult([]plan.TestCase{})
+	err := cypress.Run(result, testCases, false)
 
-	want := RunResult{
-		Status: RunStatusError,
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusError {
+		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	exitError := new(exec.ExitError)
@@ -64,21 +58,16 @@ func TestCypressRun_TestFailed(t *testing.T) {
 }
 
 func TestCypressRun_CommandFailed(t *testing.T) {
-	cypress := Cypress{
-		RunnerConfig{
-			TestCommand: "yarn cypress run --json",
-		},
-	}
+	cypress := NewCypress(RunnerConfig{
+		TestCommand: "yarn cypress run --json",
+	})
 
 	testCases := []plan.TestCase{}
-	got, err := cypress.Run(testCases, false)
+	result := NewRunResult([]plan.TestCase{})
+	err := cypress.Run(result, testCases, false)
 
-	want := RunResult{
-		Status: RunStatusError,
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusError {
+		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	exitError := new(exec.ExitError)
@@ -91,18 +80,15 @@ func TestCypressRun_SignaledError(t *testing.T) {
 	cypress := NewCypress(RunnerConfig{
 		TestCommand: "./testdata/segv.sh",
 	})
+
 	testCases := []plan.TestCase{
 		{Path: "./doesnt-matter.cy.js"},
 	}
+	result := NewRunResult([]plan.TestCase{})
+	err := cypress.Run(result, testCases, false)
 
-	got, err := cypress.Run(testCases, false)
-
-	want := RunResult{
-		Status: RunStatusError,
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.Run(%q) diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusError {
+		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	signalError := new(ProcessSignaledError)
@@ -137,12 +123,10 @@ func TestCypressCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"cypress/e2e/passing_spec.cy.js", "cypress/e2e/flaky_spec.cy.js"}
 	testCommand := "cypress run --spec {{testExamples}}"
 
-	cy := Cypress{
-		RunnerConfig{
-			TestCommand: testCommand,
-			ResultPath:  "cypress.json",
-		},
-	}
+	cy := NewCypress(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "cypress.json",
+	})
 
 	gotName, gotArgs, err := cy.commandNameAndArgs(testCommand, testCases)
 	if err != nil {
@@ -164,11 +148,9 @@ func TestCypressCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) 
 	testCases := []string{"cypress/e2e/passing_spec.cy.js", "cypress/e2e/flaky_spec.cy.js"}
 	testCommand := "cypress run"
 
-	cypress := Cypress{
-		RunnerConfig{
-			TestCommand: testCommand,
-		},
-	}
+	cypress := NewCypress(RunnerConfig{
+		TestCommand: testCommand,
+	})
 
 	gotName, gotArgs, err := cypress.commandNameAndArgs(testCommand, testCases)
 	if err != nil {
@@ -190,11 +172,9 @@ func TestCypressCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	testCases := []string{"cypress/e2e/passing_spec.cy.js", "cypress/e2e/flaky_spec.cy.js"}
 	testCommand := "cypress run --options '{{testExamples}}"
 
-	cypress := Cypress{
-		RunnerConfig{
-			TestCommand: testCommand,
-		},
-	}
+	cypress := NewCypress(RunnerConfig{
+		TestCommand: testCommand,
+	})
 
 	gotName, gotArgs, err := cypress.commandNameAndArgs(testCommand, testCases)
 
