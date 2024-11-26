@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0 - 2024-11-26
+- Add support for muting tests.
+- Fix issue with Cypress command by passing the list of test files separated by commas.
+
 ## 1.1.0 - 2024-11-11
 - Experimental support for Cypress. See [Cypress usage guide](./docs/cypress.md).
 - Experimental support for Playwright. See [Playwright usage guide](./docs/playwright.md).
