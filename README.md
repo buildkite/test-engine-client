@@ -58,7 +58,7 @@ To configure the test runner for bktec, please refer to the detailed guides prov
 - [Jest](./docs/jest.md)
 - [Playwright](./docs/playwright.md)
 - [Cypress](./docs/cypress.md)
-
+- [Go](./docs/go.md)
 
 ### Running bktec
 Please download the executable and make it available in your testing environment.
@@ -79,7 +79,18 @@ steps:
 > You can find example configurations and usage instructions for each test runner in our [examples repository](https://github.com/buildkite/test-engine-client-examples).
 
 
+### Development
+
+Testing bktec requires an environment with ruby, jest, playwright, cypress, and go installed. The easiest way to set up the environment is to use docker compose.
+
+```bash
+docker compose -f .buildkite/docker-compose.yml run ci ./.buildkite/steps/tests.sh
+```
+
+The images are built with the `linux/amd64` platform, so you'll need to run the tests on an AMD64 machine or use Rosetta 2 to run the tests on an Apple Silicon machine.
+
 ### Debugging
+
 To enable debug mode, set the `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` environment variable to `true`. This will print detailed output to assist in debugging bktec.
 
 ### Possible exit statuses
@@ -95,24 +106,3 @@ bktec may exit with a variety of exit statuses, outlined below:
   SIGABRT, the exit status returned will be equal to 128 plus the signal number.
   For example, if the runner raises a SIGSEGV, the exit status will be (128 +
   11) = 139.
-
-### Go
-To use bktec with Go tests:
-
-```yaml
-steps:
-  - name: "Go Tests"
-    command: ./bktec
-    parallelism: 10
-    env:
-      BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
-      BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: your-secret-token
-      BUILDKITE_TEST_ENGINE_TEST_RUNNER: go
-      BUILDKITE_TEST_ENGINE_RESULT_PATH: test-results.json
-```
-
-The Go runner supports:
-- Running individual test functions
-- Test retries
-- JSON output parsing
-- Test file filtering

@@ -1,7 +1,6 @@
-version: '3.5'
-
 services:
   ci:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile-compile
