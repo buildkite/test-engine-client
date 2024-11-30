@@ -4,11 +4,11 @@ Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your 
 
 bktec supports multiple test runners and offers various features to enhance your testing workflow. Below is a comparison of the features supported by each test runner:
 
-| Feature                                            | Rspec | Jest | Playwright | Cypress |
-| -------------------------------------------------- | :---: | :--: | :--------: | :-----: |
-| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |
-| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |
-| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |
+| Feature                                            | Rspec | Jest | Playwright | Cypress | Go |
+| -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :--: |
+| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |   ✅  |
+| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |   ✅  |
+| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |   ✅  |
 
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
@@ -95,3 +95,24 @@ bktec may exit with a variety of exit statuses, outlined below:
   SIGABRT, the exit status returned will be equal to 128 plus the signal number.
   For example, if the runner raises a SIGSEGV, the exit status will be (128 +
   11) = 139.
+
+### Go
+To use bktec with Go tests:
+
+```yaml
+steps:
+  - name: "Go Tests"
+    command: ./bktec
+    parallelism: 10
+    env:
+      BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
+      BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: your-secret-token
+      BUILDKITE_TEST_ENGINE_TEST_RUNNER: go
+      BUILDKITE_TEST_ENGINE_RESULT_PATH: test-results.json
+```
+
+The Go runner supports:
+- Running individual test functions
+- Test retries
+- JSON output parsing
+- Test file filtering

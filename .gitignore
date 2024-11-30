@@ -25,3 +25,6 @@ internal/api/pacts/
 
 dist/
 node_modules/
+
+# Hermit (lox)
+/bin/
