@@ -40,7 +40,6 @@ func (c Cypress) Run(result *RunResult, testCases []plan.TestCase, retry bool) e
 	}
 	cmdName, cmdArgs, err := c.commandNameAndArgs(c.TestCommand, testPaths)
 	if err != nil {
-		result.err = err
 		return fmt.Errorf("failed to build command: %w", err)
 	}
 
@@ -48,7 +47,6 @@ func (c Cypress) Run(result *RunResult, testCases []plan.TestCase, retry bool) e
 
 	err = runAndForwardSignal(cmd)
 
-	result.err = err
 	return err
 }
 

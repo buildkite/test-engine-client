@@ -89,7 +89,8 @@ func TestJestRun_Retry(t *testing.T) {
 
 	jest := NewJest(RunnerConfig{
 		TestCommand:      "jest --invalid-option --json --outputFile {{resultPath}}",
-		RetryTestCommand: "jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}}",
+		RetryTestCommand: "jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}} ./testdata/jest/spells/expelliarmus.spec.js ./testdata/jest/failure.spec.js",
+		ResultPath:       "jest.json",
 	})
 
 	t.Cleanup(func() {
@@ -97,7 +98,7 @@ func TestJestRun_Retry(t *testing.T) {
 	})
 
 	testCases := []plan.TestCase{
-		{Name: "disarms the opponent"},
+		{Scope: "expelliarmus", Name: "disarms the opponent"},
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, true)
@@ -149,6 +150,34 @@ func TestJestRun_TestFailed(t *testing.T) {
 	}
 }
 
+func TestJestRun_RuntimeError(t *testing.T) {
+	changeCwd(t, "./testdata/jest")
+
+	jest := NewJest(RunnerConfig{
+		TestCommand: "jest --json --outputFile {{resultPath}}",
+		ResultPath:  "jest.json",
+	})
+
+	t.Cleanup(func() {
+		os.Remove(jest.ResultPath)
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./testdata/jest/spells/expelliarmus.spec.js"},
+		{Path: "./testdata/jest/runtimeError.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusError {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	}
+}
+
 func TestJestRun_CommandFailed(t *testing.T) {
 	jest := NewJest(RunnerConfig{
 		TestCommand: "jest --invalid-option --outputFile {{resultPath}}",
@@ -162,8 +191,8 @@ func TestJestRun_CommandFailed(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, false)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -183,8 +212,8 @@ func TestJestRun_SignaledError(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, false)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	signalError := new(ProcessSignaledError)
@@ -359,6 +388,7 @@ func TestJestGetFiles(t *testing.T) {
 
 	want := []string{
 		"failure.spec.js",
+		"runtimeError.spec.js",
 		"spells/expelliarmus.spec.js",
 	}
 

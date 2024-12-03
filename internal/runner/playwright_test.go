@@ -1,9 +1,12 @@
 package runner
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -89,6 +92,74 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 	}
 }
 
+func TestPlaywrightRun_Error(t *testing.T) {
+	changeCwd(t, "./testdata/playwright")
+
+	playwright := NewPlaywright(RunnerConfig{
+		ResultPath: "test-results/results.json",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./tests/example.spec.js"},
+		{Path: "./tests/error.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusError {
+		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	}
+}
+
+func TestPlaywrightRun_CommandFailed(t *testing.T) {
+	playwright := NewPlaywright(RunnerConfig{
+		TestCommand: "npx playwright test --oops",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./doesnt-matter.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+	}
+
+	exitError := new(exec.ExitError)
+	if !errors.As(err, &exitError) {
+		t.Errorf("Playwright.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
+	}
+}
+
+func TestPlaywrightRun_SignaledError(t *testing.T) {
+	playwright := NewPlaywright(RunnerConfig{
+		TestCommand: "./testdata/segv.sh --outputFile {{resultPath}}",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./doesnt-matter.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+	}
+
+	signalError := new(ProcessSignaledError)
+	if !errors.As(err, &signalError) {
+		t.Errorf("Playwright.Run(%q) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
+	}
+	if signalError.Signal != syscall.SIGSEGV {
+		t.Errorf("Playwright.Run(%q) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
+	}
+}
+
 func TestPlaywrightCommandNameAndArgs_WithPlaceholder(t *testing.T) {
 	testCases := []string{"tests/example.spec.js", "tests/failed.spec.js"}
 	testCommand := "npx playwright test {{testExamples}}"
@@ -147,6 +218,7 @@ func TestPlaywrightGetFiles(t *testing.T) {
 	}
 
 	want := []string{
+		"tests/error.spec.js",
 		"tests/example.spec.js",
 		"tests/failed.spec.js",
 	}

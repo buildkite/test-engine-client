@@ -86,7 +86,6 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 
 	commandName, commandArgs, err := r.commandNameAndArgs(command, testPaths)
 	if err != nil {
-		result.err = err
 		return fmt.Errorf("failed to build command: %w", err)
 	}
 
@@ -95,7 +94,6 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 	err = runAndForwardSignal(cmd)
 
 	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		result.err = err
 		return err
 	}
 
@@ -104,7 +102,6 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 		// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
 		// therefore we need to bubble up the error.
 		fmt.Println("Buildkite Test Engine Client: Failed to read Rspec output, tests will not be retried.")
-		result.err = err
 		return err
 	}
 
@@ -118,6 +115,10 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 		}
 
 		result.RecordTestResult(mapExampleToTestCase(example), status)
+	}
+
+	for i := 0; i < report.Summary.ErrorsOutsideOfExamplesCount; i++ {
+		result.errors = append(result.errors, ErrOutsideOfTest)
 	}
 
 	return nil
@@ -140,9 +141,10 @@ type RspecReport struct {
 	Seed     int            `json:"seed"`
 	Examples []RspecExample `json:"examples"`
 	Summary  struct {
-		ExampleCount int `json:"example_count"`
-		FailureCount int `json:"failure_count"`
-		PendingCount int `json:"pending_count"`
+		ExampleCount                 int `json:"example_count"`
+		FailureCount                 int `json:"failure_count"`
+		PendingCount                 int `json:"pending_count"`
+		ErrorsOutsideOfExamplesCount int `json:"errors_outside_of_examples_count"`
 	}
 }
 
