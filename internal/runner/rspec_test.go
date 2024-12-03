@@ -96,10 +96,13 @@ func TestRspecRun(t *testing.T) {
 func TestRspecRun_RetryCommand(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand:      "rspec --invalid-option",
-		RetryTestCommand: "rspec",
+		RetryTestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:       "tmp/rspec.json",
 	})
 
-	testCases := []plan.TestCase{}
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/spells/expelliarmus_spec.rb"},
+	}
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, true)
 
@@ -165,13 +168,38 @@ func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, false)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
 		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
+	}
+}
+
+func TestRspecRun_ErrorOutsideOfExamples(t *testing.T) {
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}} --format documentation",
+		ResultPath:  "tmp/rspec.json",
+	})
+
+	t.Cleanup(func() {
+		os.Remove(rspec.ResultPath)
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/bad_syntax_spec.rb"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusError {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 }
 
@@ -183,8 +211,8 @@ func TestRspecRun_CommandFailed(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, false)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -204,8 +232,8 @@ func TestRspecRun_SignaledError(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, false)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	signalError := new(ProcessSignaledError)

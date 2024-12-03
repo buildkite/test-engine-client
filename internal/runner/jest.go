@@ -69,7 +69,6 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		}
 		commandName, commandArgs, err := j.commandNameAndArgs(j.TestCommand, testPaths)
 		if err != nil {
-			result.err = err
 			return fmt.Errorf("failed to build command: %w", err)
 		}
 
@@ -81,7 +80,6 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		}
 		commandName, commandArgs, err := j.retryCommandNameAndArgs(j.RetryTestCommand, testNames)
 		if err != nil {
-			result.err = err
 			return fmt.Errorf("failed to build command: %w", err)
 		}
 
@@ -91,14 +89,12 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 	err = runAndForwardSignal(cmd)
 
 	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		result.err = err
 		return err
 	}
 
 	report, parseErr := j.ParseReport(j.ResultPath)
 	if parseErr != nil {
 		fmt.Println("Buildkite Test Engine Client: Failed to read Jest output, tests will not be retried.")
-		result.err = err
 		return err
 	}
 
@@ -123,6 +119,10 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		}
 	}
 
+	for i := 0; i < report.NumRuntimeErrorTestSuites; i++ {
+		result.errors = append(result.errors, ErrOutsideOfTest)
+	}
+
 	return nil
 }
 
@@ -134,8 +134,9 @@ type JestExample struct {
 }
 
 type JestReport struct {
-	NumFailedTests int
-	TestResults    []struct {
+	NumFailedTests            int
+	NumRuntimeErrorTestSuites int
+	TestResults               []struct {
 		AssertionResults []JestExample
 	}
 }

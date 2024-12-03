@@ -192,16 +192,44 @@ func TestRunStatistics(t *testing.T) {
 	r.RecordTestResult(plan.TestCase{Scope: "banana", Name: "is yellow"}, TestStatusFailed)
 	r.RecordTestResult(plan.TestCase{Scope: "banana", Name: "is yellow"}, TestStatusFailed) // test failed twice
 
+	// error: 1
+	r.errors = append(r.errors, ErrOutsideOfTest)
+
 	stats := r.Statistics()
 
 	if diff := cmp.Diff(stats, RunStatistics{
-		Total:            6,
+		Total:            7,
 		PassedOnFirstRun: 2,
 		PassedOnRetry:    1,
 		MutedPassed:      1,
 		MutedFailed:      1,
 		Failed:           1,
+		Error:            1,
 	}); diff != "" {
 		t.Errorf("Statistics() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestRunStatus(t *testing.T) {
+	r := NewRunResult([]plan.TestCase{})
+	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusPassed)
+	if r.Status() != RunStatusPassed {
+		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusPassed)
+	}
+}
+
+func TestRunStatus_Failed(t *testing.T) {
+	r := NewRunResult([]plan.TestCase{})
+	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusFailed)
+	if r.Status() != RunStatusFailed {
+		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusFailed)
+	}
+}
+
+func TestRunStatus_Error(t *testing.T) {
+	r := NewRunResult([]plan.TestCase{})
+	r.errors = append(r.errors, ErrOutsideOfTest)
+	if r.Status() != RunStatusError {
+		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusError)
 	}
 }

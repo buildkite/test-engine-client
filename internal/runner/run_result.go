@@ -1,16 +1,26 @@
 package runner
 
 import (
+	"errors"
+
 	"github.com/buildkite/test-engine-client/internal/plan"
 )
 
 type RunStatus string
 
 const (
+	// RunStatusPassed indicates that the run was completed and all tests passed.
 	RunStatusPassed RunStatus = "passed"
+	// RunStatusFailed indicates that the run was completed, but one or more tests failed.
 	RunStatusFailed RunStatus = "failed"
-	RunStatusError  RunStatus = "error"
+	// RunStatusError indicates that the run was completed, but there was an error outside of the tests.
+	RunStatusError RunStatus = "error"
+	// RunStatusUnknown indicates that the run status is unknown.
+	// It could be that no tests were run, run was interrupted, or the report is not available.
+	RunStatusUnknown RunStatus = "unknown"
 )
+
+var ErrOutsideOfTest = errors.New("errors outside of tests")
 
 // RunResult is a struct to keep track the results of a test run.
 // It contains the logics to record test results, calculate the status of the run.
@@ -20,15 +30,7 @@ type RunResult struct {
 	// mutedTestLookup is a map containing the test identifiers of muted tests.
 	// This list might contain tests that are not part of the current run (i.e. belong to a different node).
 	mutedTestLookup map[string]bool
-	err             error
-}
-
-// LoadMutedTests loads a list of muted test cases into the mutedTestLookup.
-func (r *RunResult) LoadMutedTests(testCases []plan.TestCase) {
-	for _, testCase := range testCases {
-		identifier := testIdentifier(testCase)
-		r.mutedTestLookup[identifier] = true
-	}
+	errors          []error
 }
 
 func NewRunResult(mutedTests []plan.TestCase) *RunResult {
@@ -103,8 +105,12 @@ func (r *RunResult) MutedTests() []TestResult {
 // If there are failed tests, it returns RunStatusFailed.
 // Otherwise, it returns RunStatusPassed.
 func (r *RunResult) Status() RunStatus {
-	if r.err != nil {
+	if len(r.errors) > 0 {
 		return RunStatusError
+	}
+
+	if len(r.tests) == 0 {
+		return RunStatusUnknown
 	}
 
 	if len(r.FailedTests()) > 0 {
@@ -121,6 +127,7 @@ type RunStatistics struct {
 	MutedPassed      int
 	MutedFailed      int
 	Failed           int
+	Error            int
 }
 
 func (r *RunResult) Statistics() RunStatistics {
@@ -149,11 +156,12 @@ func (r *RunResult) Statistics() RunStatistics {
 	}
 
 	return RunStatistics{
-		Total:            len(r.tests),
+		Total:            len(r.tests) + len(r.errors),
 		PassedOnFirstRun: passedOnFirstRun,
 		PassedOnRetry:    passedOnRetry,
 		MutedPassed:      mutedPassed,
 		MutedFailed:      mutedFailed,
 		Failed:           failed,
+		Error:            len(r.errors),
 	}
 }

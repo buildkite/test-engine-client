@@ -237,12 +237,12 @@ func TestRunTestsWithRetry_ExecError(t *testing.T) {
 		t.Errorf("runTestsWithRetry(%q) error type = %T (%v), want *exec.Error", testCases, err, err)
 	}
 
-	if testResult.Status() != runner.RunStatusError {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusError)
+	if testResult.Status() != runner.RunStatusUnknown {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusUnknown)
 	}
 }
 
-func TestRunTestsWithRetry_Error(t *testing.T) {
+func TestRunTestsWithRetry_CommandError(t *testing.T) {
 	testRunner := runner.NewRspec(runner.RunnerConfig{
 		TestCommand: "rspec --invalid-option",
 	})
@@ -258,8 +258,8 @@ func TestRunTestsWithRetry_Error(t *testing.T) {
 		t.Errorf("runTestsWithRetry(...) error type = %T (%v), want *exec.ExitError", err, err)
 	}
 
-	if testResult.Status() != runner.RunStatusError {
-		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusError)
+	if testResult.Status() != runner.RunStatusUnknown {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusUnknown)
 	}
 
 	if len(timeline) != 2 {
