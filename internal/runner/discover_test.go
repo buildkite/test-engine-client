@@ -84,11 +84,13 @@ func TestDiscoverTestFiles_ExcludeNodeModules(t *testing.T) {
 		"testdata/jest/failure.spec.js",
 		"testdata/jest/jest.config.js",
 		"testdata/jest/runtimeError.spec.js",
+		"testdata/jest/skipped.spec.js",
 		"testdata/jest/spells/expelliarmus.spec.js",
 		"testdata/playwright/playwright.config.js",
 		"testdata/playwright/tests/error.spec.js",
 		"testdata/playwright/tests/example.spec.js",
 		"testdata/playwright/tests/failed.spec.js",
+		"testdata/playwright/tests/skipped.spec.js",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
