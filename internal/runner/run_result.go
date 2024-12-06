@@ -72,6 +72,12 @@ func (r *RunResult) RecordTestResult(testCase plan.TestCase, status TestStatus) 
 	}
 }
 
+func (r *RunResult) RecordSkipTest(testCase plan.TestCase, method SkipMethod) {
+	r.RecordTestResult(testCase, TestStatusSkipped)
+	test := r.getTest(testCase)
+	test.SkipMethod = method
+}
+
 // FailedTests returns a list of test cases that failed.
 func (r *RunResult) FailedTests() []plan.TestCase {
 	var failedTests []plan.TestCase
@@ -94,6 +100,27 @@ func (r *RunResult) MutedTests() []TestResult {
 	}
 
 	return mutedTests
+}
+
+type SkippedTests struct {
+	TestRunner []plan.TestCase
+	TestEngine []plan.TestCase
+}
+
+func (r *RunResult) SkippedTests() SkippedTests {
+	var testRunners []plan.TestCase
+	var testEngines []plan.TestCase
+
+	for _, test := range r.tests {
+		if test.Status == TestStatusSkipped {
+			if test.SkipMethod == SkipMethodRunner {
+				testRunners = append(testRunners, test.TestCase)
+			} else if test.SkipMethod == SkipMethodTestEngine {
+				testEngines = append(testEngines, test.TestCase)
+			}
+		}
+	}
+	return SkippedTests{TestRunner: testRunners, TestEngine: testEngines}
 }
 
 // Status returns the overall status of the test run.
@@ -127,39 +154,43 @@ type RunStatistics struct {
 	MutedPassed      int
 	MutedFailed      int
 	Failed           int
+	SkippedByTestRunner int
+	SkippedByTestEngine int
 }
 
 func (r *RunResult) Statistics() RunStatistics {
-	var passedOnFirstRun, passedOnRetry, mutedPassed, mutedFailed, failed int
+	stat := &RunStatistics{}
 
 	for _, testResult := range r.tests {
 		switch {
 		case testResult.Muted:
 			switch testResult.Status {
 			case TestStatusPassed:
-				mutedPassed++
+				stat.MutedPassed++
 			case TestStatusFailed:
-				mutedFailed++
+				stat.MutedFailed++
 			}
 
 		case testResult.Status == TestStatusPassed:
 			if testResult.ExecutionCount > 1 {
-				passedOnRetry++
+				stat.PassedOnRetry++
 			} else {
-				passedOnFirstRun++
+				stat.PassedOnFirstRun++
 			}
 
 		case testResult.Status == TestStatusFailed:
-			failed++
+			stat.Failed++
+		case testResult.Status == TestStatusSkipped:
+			switch testResult.SkipMethod {
+			case SkipMethodRunner:
+				stat.SkippedByTestRunner++
+			case SkipMethodTestEngine:
+				stat.SkippedByTestEngine++
+			}
 		}
 	}
 
-	return RunStatistics{
-		Total:            len(r.tests),
-		PassedOnFirstRun: passedOnFirstRun,
-		PassedOnRetry:    passedOnRetry,
-		MutedPassed:      mutedPassed,
-		MutedFailed:      mutedFailed,
-		Failed:           failed,
-	}
+	stat.Total = len(r.tests)
+
+	return *stat
 }

@@ -10,3 +10,8 @@ test.describe('test group', () => {
 test('it passes', () => {
   expect(true).toBeTruthy();
 });
+
+test('timed out', async () => {
+  test.setTimeout(100);
+  await new Promise(resolve => setTimeout(resolve, 10000));
+})

@@ -68,6 +68,16 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 			Path:  "failed.spec.js:5",
 			Name:  "failed",
 		},
+		{
+			Scope: " chromium failed.spec.js timed out",
+			Path:  "failed.spec.js:14",
+			Name:  "timed out",
+		},
+		{
+			Scope: " firefox failed.spec.js timed out",
+			Path:  "failed.spec.js:14",
+			Name:  "timed out",
+		},
 	}
 
 	if err != nil {
@@ -89,6 +99,38 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 
 	if diff := cmp.Diff(result.FailedTests(), wantFailedTests, sorter); diff != "" {
 		t.Errorf("Playwright.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+	}
+}
+
+func TestPlaywrightRun_TestSkipped(t *testing.T) {
+	changeCwd(t, "./testdata/playwright")
+
+	playwright := NewPlaywright(RunnerConfig{
+		TestCommand: "yarn run playwright test",
+		ResultPath:  "test-results/results.json",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./testdata/playwright/tests/skipped.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+
+	test := result.tests[" chromium skipped.spec.js it is skipped/it is skipped"]
+	if test.Status != TestStatusSkipped {
+		t.Errorf("Playwright.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
+	}
+
+	if test.SkipMethod != SkipMethodRunner {
+		t.Errorf("Rspec.Run(%q) test.SkipMethod = %v, want %v", testCases, test.SkipMethod, SkipMethodRunner)
 	}
 }
 
@@ -221,6 +263,7 @@ func TestPlaywrightGetFiles(t *testing.T) {
 		"tests/error.spec.js",
 		"tests/example.spec.js",
 		"tests/failed.spec.js",
+		"tests/skipped.spec.js",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
