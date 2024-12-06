@@ -99,47 +99,60 @@ func main() {
 	var timeline []api.Timeline
 	runResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline)
 
+	// handling error that prevents the runner from completing successfully
 	if err != nil {
+		// runner terminated by signal: exit with 128 + signal number
 		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
 			logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
 		}
 
+		// runner exited with error: exit with the exit code
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-			if !testPlan.Fallback {
-				sendMetadata(ctx, apiClient, cfg, timeline)
-			}
 			logErrorAndExit(exitError.ExitCode(), "%s exited with error: %v", testRunner.Name(), err)
 		}
 
+		// other errors: exit with 16
 		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
-	printReport(runResult)
-
-	if runResult.Status() == runner.RunStatusFailed {
-		if !testPlan.Fallback {
-			sendMetadata(ctx, apiClient, cfg, timeline)
-		}
-
-		os.Exit(1)
-	}
-
+	// from this point, the runner is expected, to have completed successfully
 	if !testPlan.Fallback {
 		sendMetadata(ctx, apiClient, cfg, timeline)
 	}
+
+	// Tests skipped by Test Engine will not be passed to the runner
+	// and will not be in the runner result.
+	// Therefore, we need to record them here.
+	for _, testCase := range testPlan.SkippedTests {
+		runResult.RecordSkipTest(testCase, runner.SkipMethodTestEngine)
+	}
+
+	printReport(runResult, testRunner.Name())
+
+	if runResult.Status() == runner.RunStatusFailed || runResult.Status() == runner.RunStatusError {
+		os.Exit(1)
+	}
 }
 
-func printReport(runResult runner.RunResult) {
-	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
+func printReport(runResult runner.RunResult, runnerName string) {
+	statistics := runResult.Statistics()
+
+	if statistics.Total == 0 {
+		return
+	}
 
 	// Print statistics
-	statistics := runResult.Statistics()
+	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
+
 	data := [][]string{
 		{"Passed", "first run", strconv.Itoa(statistics.PassedOnFirstRun)},
 		{"Passed", "on retry", strconv.Itoa(statistics.PassedOnRetry)},
 		{"Muted", "passed", strconv.Itoa(statistics.MutedPassed)},
 		{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
 		{"Failed", "", strconv.Itoa(statistics.Failed)},
+		{"Error", "", strconv.Itoa(statistics.Error)},
+		{"Skipped", fmt.Sprintf("by %s", runnerName), strconv.Itoa(statistics.SkippedByTestRunner)},
+		{"Skipped", "by Test Engine", strconv.Itoa(statistics.SkippedByTestEngine)},
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.AppendBulk(data)
@@ -165,6 +178,18 @@ func printReport(runResult runner.RunResult) {
 		fmt.Println("+++ Failed Tests:")
 		for _, failedTests := range runResult.FailedTests() {
 			fmt.Printf("- %s %s\n", failedTests.Scope, failedTests.Name)
+		}
+	}
+
+	skippedTests := runResult.SkippedTests()
+	if len(skippedTests.TestEngine)+len(skippedTests.TestRunner) > 0 {
+		fmt.Println("")
+		fmt.Println("+++ Skipped Tests:")
+		for _, skippedTest := range skippedTests.TestRunner {
+			fmt.Printf("- %s %s (skipped by %s)\n", skippedTest.Scope, skippedTest.Name, runnerName)
+		}
+		for _, skippedTest := range skippedTests.TestEngine {
+			fmt.Printf("- %s %s (skipped by Test Engine)\n", skippedTest.Scope, skippedTest.Name)
 		}
 	}
 
@@ -247,7 +272,7 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 }
 
 func logSignalAndExit(name string, signal syscall.Signal) {
-	fmt.Printf("Buildkite Test Engine: %s was terminated with signal: %v (%v)\n", name, unix.SignalName(signal), signal)
+	fmt.Printf("Buildkite Test Engine Client: %s was terminated with signal: %v (%v)\n", name, unix.SignalName(signal), signal)
 
 	exitCode := 128 + int(signal)
 	os.Exit(exitCode)
@@ -255,7 +280,7 @@ func logSignalAndExit(name string, signal syscall.Signal) {
 
 // logErrorAndExit logs an error message and exits with the given exit code.
 func logErrorAndExit(exitCode int, format string, v ...any) {
-	fmt.Printf("Buildkite Test Engine: "+format+"\n", v...)
+	fmt.Printf("Buildkite Test Engine Client: "+format+"\n", v...)
 	os.Exit(exitCode)
 }
 

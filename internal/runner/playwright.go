@@ -43,7 +43,6 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 
 	cmdName, cmdArgs, err := p.commandNameAndArgs(p.TestCommand, testPaths)
 	if err != nil {
-		result.err = err
 		return fmt.Errorf("failed to build command: %w", err)
 	}
 
@@ -52,23 +51,31 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 	err = runAndForwardSignal(cmd)
 
 	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		result.err = err
 		return err
 	}
 
 	report, parseErr := p.parseReport(p.ResultPath)
 	if parseErr != nil {
 		fmt.Println("Buildkite Test Engine Client: Failed to read Playwright output, tests will not be retried.")
-		result.err = err
 		return err
 	}
 
 	for _, suite := range report.Suites {
 		testResults := p.getTestResultsFromSuite(suite, suite.Title)
 		for _, testResult := range testResults {
-			result.RecordTestResult(testResult.TestCase, testResult.Status)
+
+			if testResult.Status == TestStatusSkipped {
+				result.RecordSkipTest(testResult.TestCase, SkipMethodRunner)
+			} else {
+				result.RecordTestResult(testResult.TestCase, testResult.Status)
+			}
 		}
 	}
+
+	for _, reportError := range report.Errors {
+		result.errors = append(result.errors, fmt.Errorf("Playwright error: %s", reportError.Message))
+	}
+
 	return nil
 
 }
@@ -82,10 +89,12 @@ func (p Playwright) getTestResultsFromSuite(suite PlaywrightReportSuite, suiteNa
 	for _, spec := range suite.Specs {
 		projectName := spec.Tests[0].ProjectName
 		var status TestStatus
-		if spec.Ok {
-			status = TestStatusPassed
-		} else {
+		if !spec.Ok {
 			status = TestStatusFailed
+		} else if spec.Tests[0].Status == "skipped" {
+			status = TestStatusSkipped
+		} else {
+			status = TestStatusPassed
 		}
 
 		testResults = append(testResults, TestResult{
@@ -164,6 +173,7 @@ func (p Playwright) GetExamples(files []string) ([]plan.TestCase, error) {
 
 type PlaywrightTest struct {
 	ProjectName string
+	Status      string
 }
 
 type PlaywrightSpec struct {
@@ -187,5 +197,8 @@ type PlaywrightReport struct {
 	Stats  struct {
 		Expected   int
 		Unexpected int
+	}
+	Errors []struct {
+		Message string
 	}
 }

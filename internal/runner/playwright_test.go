@@ -1,9 +1,12 @@
 package runner
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -65,6 +68,16 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 			Path:  "failed.spec.js:5",
 			Name:  "failed",
 		},
+		{
+			Scope: " chromium failed.spec.js timed out",
+			Path:  "failed.spec.js:14",
+			Name:  "timed out",
+		},
+		{
+			Scope: " firefox failed.spec.js timed out",
+			Path:  "failed.spec.js:14",
+			Name:  "timed out",
+		},
 	}
 
 	if err != nil {
@@ -86,6 +99,106 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 
 	if diff := cmp.Diff(result.FailedTests(), wantFailedTests, sorter); diff != "" {
 		t.Errorf("Playwright.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+	}
+}
+
+func TestPlaywrightRun_TestSkipped(t *testing.T) {
+	changeCwd(t, "./testdata/playwright")
+
+	playwright := NewPlaywright(RunnerConfig{
+		TestCommand: "yarn run playwright test",
+		ResultPath:  "test-results/results.json",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./testdata/playwright/tests/skipped.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+
+	test := result.tests[" chromium skipped.spec.js it is skipped/it is skipped"]
+	if test.Status != TestStatusSkipped {
+		t.Errorf("Playwright.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
+	}
+
+	if test.SkipMethod != SkipMethodRunner {
+		t.Errorf("Rspec.Run(%q) test.SkipMethod = %v, want %v", testCases, test.SkipMethod, SkipMethodRunner)
+	}
+}
+
+func TestPlaywrightRun_Error(t *testing.T) {
+	changeCwd(t, "./testdata/playwright")
+
+	playwright := NewPlaywright(RunnerConfig{
+		ResultPath: "test-results/results.json",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./tests/example.spec.js"},
+		{Path: "./tests/error.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusError {
+		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	}
+}
+
+func TestPlaywrightRun_CommandFailed(t *testing.T) {
+	playwright := NewPlaywright(RunnerConfig{
+		TestCommand: "npx playwright test --oops",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./doesnt-matter.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+	}
+
+	exitError := new(exec.ExitError)
+	if !errors.As(err, &exitError) {
+		t.Errorf("Playwright.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
+	}
+}
+
+func TestPlaywrightRun_SignaledError(t *testing.T) {
+	playwright := NewPlaywright(RunnerConfig{
+		TestCommand: "./testdata/segv.sh --outputFile {{resultPath}}",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./doesnt-matter.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+	}
+
+	signalError := new(ProcessSignaledError)
+	if !errors.As(err, &signalError) {
+		t.Errorf("Playwright.Run(%q) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
+	}
+	if signalError.Signal != syscall.SIGSEGV {
+		t.Errorf("Playwright.Run(%q) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
 	}
 }
 
@@ -147,8 +260,10 @@ func TestPlaywrightGetFiles(t *testing.T) {
 	}
 
 	want := []string{
+		"tests/error.spec.js",
 		"tests/example.spec.js",
 		"tests/failed.spec.js",
+		"tests/skipped.spec.js",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {

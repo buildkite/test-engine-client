@@ -28,8 +28,8 @@ func TestCypressRun(t *testing.T) {
 		t.Errorf("Cypress.Run(%q) error = %v", testCases, err)
 	}
 
-	if result.Status() != RunStatusPassed {
-		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 }
 
@@ -47,8 +47,8 @@ func TestCypressRun_TestFailed(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := cypress.Run(result, testCases, false)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -66,8 +66,8 @@ func TestCypressRun_CommandFailed(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := cypress.Run(result, testCases, false)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -87,8 +87,8 @@ func TestCypressRun_SignaledError(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := cypress.Run(result, testCases, false)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	signalError := new(ProcessSignaledError)
