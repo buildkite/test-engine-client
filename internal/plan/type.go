@@ -25,8 +25,9 @@ type Task struct {
 
 // TestPlan represents the entire test plan.
 type TestPlan struct {
-	Experiment string           `json:"experiment"`
-	Tasks      map[string]*Task `json:"tasks"`
-	Fallback   bool
-	MutedTests []TestCase `json:"muted_tests,omitempty"`
+	Experiment   string           `json:"experiment"`
+	Tasks        map[string]*Task `json:"tasks"`
+	Fallback     bool
+	MutedTests   []TestCase `json:"muted_tests,omitempty"`
+	SkippedTests []TestCase `json:"skipped_tests,omitempty"`
 }

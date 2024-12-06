@@ -120,14 +120,21 @@ func main() {
 		sendMetadata(ctx, apiClient, cfg, timeline)
 	}
 
-	printReport(runResult)
+	// Tests skipped by Test Engine will not be passed to the runner
+	// and will not be in the runner result.
+	// Therefore, we need to record them here.
+	for _, testCase := range testPlan.SkippedTests {
+		runResult.RecordSkipTest(testCase, runner.SkipMethodTestEngine)
+	}
+
+	printReport(runResult, testRunner.Name())
 
 	if runResult.Status() == runner.RunStatusFailed || runResult.Status() == runner.RunStatusError {
 		os.Exit(1)
 	}
 }
 
-func printReport(runResult runner.RunResult) {
+func printReport(runResult runner.RunResult, runnerName string) {
 	statistics := runResult.Statistics()
 
 	if statistics.Total == 0 {
@@ -144,6 +151,8 @@ func printReport(runResult runner.RunResult) {
 		{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
 		{"Failed", "", strconv.Itoa(statistics.Failed)},
 		{"Error", "", strconv.Itoa(statistics.Error)},
+		{"Skipped", fmt.Sprintf("by %s", runnerName), strconv.Itoa(statistics.SkippedByTestRunner)},
+		{"Skipped", "by Test Engine", strconv.Itoa(statistics.SkippedByTestEngine)},
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.AppendBulk(data)
@@ -169,6 +178,18 @@ func printReport(runResult runner.RunResult) {
 		fmt.Println("+++ Failed Tests:")
 		for _, failedTests := range runResult.FailedTests() {
 			fmt.Printf("- %s %s\n", failedTests.Scope, failedTests.Name)
+		}
+	}
+
+	skippedTests := runResult.SkippedTests()
+	if len(skippedTests.TestEngine)+len(skippedTests.TestRunner) > 0 {
+		fmt.Println("")
+		fmt.Println("+++ Skipped Tests:")
+		for _, skippedTest := range skippedTests.TestRunner {
+			fmt.Printf("- %s %s (skipped by %s)\n", skippedTest.Scope, skippedTest.Name, runnerName)
+		}
+		for _, skippedTest := range skippedTests.TestEngine {
+			fmt.Printf("- %s %s (skipped by Test Engine)\n", skippedTest.Scope, skippedTest.Name)
 		}
 	}
 

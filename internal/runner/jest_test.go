@@ -150,6 +150,47 @@ func TestJestRun_TestFailed(t *testing.T) {
 	}
 }
 
+func TestJestRun_TestSkipped(t *testing.T) {
+	changeCwd(t, "./testdata/jest")
+
+	jest := NewJest(RunnerConfig{
+		TestCommand: "jest --json --outputFile {{resultPath}}",
+		ResultPath:  "jest.json",
+	})
+
+	t.Cleanup(func() {
+		os.Remove(jest.ResultPath)
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./testdata/jest/skipped.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+
+	test := result.tests["this will be skipped/for sure"]
+	if test.Status != TestStatusSkipped {
+		t.Errorf("Jest.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
+	}
+
+	todoTest := result.tests["this will be skipped/todo yeah"]
+	if todoTest.Status != TestStatusSkipped {
+		t.Errorf("Jest.Run(%q) todoTest.Status = %v, want %v", testCases, todoTest.Status, TestStatusSkipped)
+	}
+
+	if test.SkipMethod != SkipMethodRunner {
+		t.Errorf("Rspec.Run(%q) test.SkipMethod = %v, want %v", testCases, test.SkipMethod, SkipMethodRunner)
+	}
+}
+
 func TestJestRun_RuntimeError(t *testing.T) {
 	changeCwd(t, "./testdata/jest")
 
@@ -389,6 +430,7 @@ func TestJestGetFiles(t *testing.T) {
 	want := []string{
 		"failure.spec.js",
 		"runtimeError.spec.js",
+		"skipped.spec.js",
 		"spells/expelliarmus.spec.js",
 	}
 

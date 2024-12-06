@@ -7,7 +7,7 @@ type TestStatus string
 const (
 	TestStatusPassed  TestStatus = "passed"
 	TestStatusFailed  TestStatus = "failed"
-	TestStatusPending TestStatus = "pending"
+	TestStatusSkipped TestStatus = "skipped"
 )
 
 // TestResult is a struct to keep track the result of an individual test case.
@@ -16,8 +16,16 @@ type TestResult struct {
 	Status         TestStatus
 	ExecutionCount int
 	Muted          bool
+	SkipMethod     SkipMethod
 }
 
 func testIdentifier(testCase plan.TestCase) string {
 	return testCase.Scope + "/" + testCase.Name
 }
+
+type SkipMethod string
+
+const (
+	SkipMethodRunner     SkipMethod = "runner"
+	SkipMethodTestEngine SkipMethod = "test-engine"
+)
