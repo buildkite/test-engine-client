@@ -67,8 +67,8 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 		}
 	}
 
-	for _, reportError := range report.Errors {
-		result.errors = append(result.errors, fmt.Errorf("Playwright error: %s", reportError.Message))
+	if len(report.Errors) > 0 {
+		result.error = fmt.Errorf("Playwright failed with errors")
 	}
 
 	return nil

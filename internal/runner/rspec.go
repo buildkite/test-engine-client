@@ -117,8 +117,8 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 		result.RecordTestResult(mapExampleToTestCase(example), status)
 	}
 
-	for i := 0; i < report.Summary.ErrorsOutsideOfExamplesCount; i++ {
-		result.errors = append(result.errors, ErrOutsideOfTest)
+	if report.Summary.ErrorsOutsideOfExamplesCount > 0 {
+		result.error = fmt.Errorf("RSpec failed with errors outside of examples")
 	}
 
 	return nil

@@ -1,8 +1,6 @@
 package runner
 
 import (
-	"errors"
-
 	"github.com/buildkite/test-engine-client/internal/plan"
 )
 
@@ -20,8 +18,6 @@ const (
 	RunStatusUnknown RunStatus = "unknown"
 )
 
-var ErrOutsideOfTest = errors.New("errors outside of tests")
-
 // RunResult is a struct to keep track the results of a test run.
 // It contains the logics to record test results, calculate the status of the run.
 type RunResult struct {
@@ -30,7 +26,7 @@ type RunResult struct {
 	// mutedTestLookup is a map containing the test identifiers of muted tests.
 	// This list might contain tests that are not part of the current run (i.e. belong to a different node).
 	mutedTestLookup map[string]bool
-	errors          []error
+	error           error
 }
 
 func NewRunResult(mutedTests []plan.TestCase) *RunResult {
@@ -105,7 +101,7 @@ func (r *RunResult) MutedTests() []TestResult {
 // If there are failed tests, it returns RunStatusFailed.
 // Otherwise, it returns RunStatusPassed.
 func (r *RunResult) Status() RunStatus {
-	if len(r.errors) > 0 {
+	if r.error != nil {
 		return RunStatusError
 	}
 
@@ -118,6 +114,10 @@ func (r *RunResult) Status() RunStatus {
 	}
 
 	return RunStatusPassed
+}
+
+func (r *RunResult) Error() error {
+	return r.error
 }
 
 type RunStatistics struct {

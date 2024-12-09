@@ -119,8 +119,8 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		}
 	}
 
-	for i := 0; i < report.NumRuntimeErrorTestSuites; i++ {
-		result.errors = append(result.errors, ErrOutsideOfTest)
+	if report.NumRuntimeErrorTestSuites > 0 {
+		result.error = fmt.Errorf("Jest failed with runtime error test suites")
 	}
 
 	return nil

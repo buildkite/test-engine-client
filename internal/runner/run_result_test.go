@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -224,7 +225,7 @@ func TestRunStatus_Failed(t *testing.T) {
 
 func TestRunStatus_Error(t *testing.T) {
 	r := NewRunResult([]plan.TestCase{})
-	r.errors = append(r.errors, ErrOutsideOfTest)
+	r.error = fmt.Errorf("error")
 	if r.Status() != RunStatusError {
 		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusError)
 	}

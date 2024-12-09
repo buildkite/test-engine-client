@@ -130,13 +130,6 @@ func main() {
 }
 
 func printReport(runResult runner.RunResult) {
-	statistics := runResult.Statistics()
-
-	if statistics.Total == 0 {
-		return
-	}
-
-	// Print statistics
 	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
 
 	switch runResult.Status() {
@@ -145,9 +138,12 @@ func printReport(runResult runner.RunResult) {
 	case runner.RunStatusFailed:
 		fmt.Println("❌ Some tests failed.")
 	case runner.RunStatusError:
-		fmt.Println("🚨 Errors encountered outside of tests.")
+		fmt.Printf("🚨 %s\n", runResult.Error())
 	}
+	fmt.Println("")
 
+	// Print statistics
+	statistics := runResult.Statistics()
 	data := [][]string{
 		{"Passed", "first run", strconv.Itoa(statistics.PassedOnFirstRun)},
 		{"Passed", "on retry", strconv.Itoa(statistics.PassedOnRetry)},
