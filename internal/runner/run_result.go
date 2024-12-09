@@ -127,7 +127,6 @@ type RunStatistics struct {
 	MutedPassed      int
 	MutedFailed      int
 	Failed           int
-	Error            int
 }
 
 func (r *RunResult) Statistics() RunStatistics {
@@ -156,12 +155,11 @@ func (r *RunResult) Statistics() RunStatistics {
 	}
 
 	return RunStatistics{
-		Total:            len(r.tests) + len(r.errors),
+		Total:            len(r.tests),
 		PassedOnFirstRun: passedOnFirstRun,
 		PassedOnRetry:    passedOnRetry,
 		MutedPassed:      mutedPassed,
 		MutedFailed:      mutedFailed,
 		Failed:           failed,
-		Error:            len(r.errors),
 	}
 }

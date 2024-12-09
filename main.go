@@ -99,7 +99,8 @@ func main() {
 	var timeline []api.Timeline
 	runResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline)
 
-	// handling error that prevents the runner from completing successfully
+	// Handle errors that prevent the runner from finishing.
+	// By finishing, it means that the runner has completed with a readable result.
 	if err != nil {
 		// runner terminated by signal: exit with 128 + signal number
 		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
@@ -115,7 +116,8 @@ func main() {
 		logErrorAndExit(16, "Couldn't run tests: %v", err)
 	}
 
-	// from this point, the runner is expected, to have completed successfully
+	// At this point, the runner is expected to have completed
+
 	if !testPlan.Fallback {
 		sendMetadata(ctx, apiClient, cfg, timeline)
 	}
@@ -137,13 +139,21 @@ func printReport(runResult runner.RunResult) {
 	// Print statistics
 	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
 
+	switch runResult.Status() {
+	case runner.RunStatusPassed:
+		fmt.Println("✅ All tests passed.")
+	case runner.RunStatusFailed:
+		fmt.Println("❌ Some tests failed.")
+	case runner.RunStatusError:
+		fmt.Println("🚨 Errors encountered outside of tests.")
+	}
+
 	data := [][]string{
 		{"Passed", "first run", strconv.Itoa(statistics.PassedOnFirstRun)},
 		{"Passed", "on retry", strconv.Itoa(statistics.PassedOnRetry)},
 		{"Muted", "passed", strconv.Itoa(statistics.MutedPassed)},
 		{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
 		{"Failed", "", strconv.Itoa(statistics.Failed)},
-		{"Error", "", strconv.Itoa(statistics.Error)},
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.AppendBulk(data)
