@@ -193,15 +193,19 @@ func TestRunStatistics(t *testing.T) {
 	r.RecordTestResult(plan.TestCase{Scope: "banana", Name: "is yellow"}, TestStatusFailed)
 	r.RecordTestResult(plan.TestCase{Scope: "banana", Name: "is yellow"}, TestStatusFailed) // test failed twice
 
+	// skipped: 1
+	r.RecordSkipTest(plan.TestCase{Scope: "orange", Name: "is orange"}, SkipMethodRunner)
+
 	stats := r.Statistics()
 
 	if diff := cmp.Diff(stats, RunStatistics{
-		Total:            6,
-		PassedOnFirstRun: 2,
-		PassedOnRetry:    1,
-		MutedPassed:      1,
-		MutedFailed:      1,
-		Failed:           1,
+		Total:               7,
+		PassedOnFirstRun:    2,
+		PassedOnRetry:       1,
+		MutedPassed:         1,
+		MutedFailed:         1,
+		Failed:              1,
+		SkippedByTestRunner: 1,
 	}); diff != "" {
 		t.Errorf("Statistics() diff (-got +want):\n%s", diff)
 	}
@@ -210,6 +214,7 @@ func TestRunStatistics(t *testing.T) {
 func TestRunStatus(t *testing.T) {
 	r := NewRunResult([]plan.TestCase{})
 	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusPassed)
+	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is red"}, TestStatusSkipped)
 	if r.Status() != RunStatusPassed {
 		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusPassed)
 	}
