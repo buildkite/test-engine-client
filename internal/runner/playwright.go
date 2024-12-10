@@ -43,7 +43,6 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 
 	cmdName, cmdArgs, err := p.commandNameAndArgs(p.TestCommand, testPaths)
 	if err != nil {
-		result.err = err
 		return fmt.Errorf("failed to build command: %w", err)
 	}
 
@@ -52,14 +51,12 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 	err = runAndForwardSignal(cmd)
 
 	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		result.err = err
 		return err
 	}
 
 	report, parseErr := p.parseReport(p.ResultPath)
 	if parseErr != nil {
 		fmt.Println("Buildkite Test Engine Client: Failed to read Playwright output, tests will not be retried.")
-		result.err = err
 		return err
 	}
 
@@ -69,6 +66,11 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 			result.RecordTestResult(testResult.TestCase, testResult.Status)
 		}
 	}
+
+	if len(report.Errors) > 0 {
+		result.error = fmt.Errorf("Playwright failed with errors")
+	}
+
 	return nil
 
 }
@@ -187,5 +189,8 @@ type PlaywrightReport struct {
 	Stats  struct {
 		Expected   int
 		Unexpected int
+	}
+	Errors []struct {
+		Message string
 	}
 }
