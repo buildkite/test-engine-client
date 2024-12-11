@@ -128,10 +128,6 @@ func TestPlaywrightRun_TestSkipped(t *testing.T) {
 	if test.Status != TestStatusSkipped {
 		t.Errorf("Playwright.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
 	}
-
-	if test.SkipMethod != SkipMethodRunner {
-		t.Errorf("Rspec.Run(%q) test.SkipMethod = %v, want %v", testCases, test.SkipMethod, SkipMethodRunner)
-	}
 }
 
 func TestPlaywrightRun_Error(t *testing.T) {

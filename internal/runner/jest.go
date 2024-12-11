@@ -120,11 +120,7 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 				Scope: strings.Join(example.AncestorTitles, " "),
 			}
 
-			if status == TestStatusSkipped {
-				result.RecordSkipTest(testCase, SkipMethodRunner)
-			} else {
-				result.RecordTestResult(testCase, status)
-			}
+			result.RecordTestResult(testCase, status)
 		}
 	}
 

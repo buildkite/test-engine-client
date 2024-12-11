@@ -63,12 +63,7 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 	for _, suite := range report.Suites {
 		testResults := p.getTestResultsFromSuite(suite, suite.Title)
 		for _, testResult := range testResults {
-
-			if testResult.Status == TestStatusSkipped {
-				result.RecordSkipTest(testResult.TestCase, SkipMethodRunner)
-			} else {
-				result.RecordTestResult(testResult.TestCase, testResult.Status)
-			}
+			result.RecordTestResult(testResult.TestCase, testResult.Status)
 		}
 	}
 

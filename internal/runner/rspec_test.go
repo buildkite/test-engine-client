@@ -206,10 +206,6 @@ func TestRspecRun_TestSkipped(t *testing.T) {
 	if test.Status != TestStatusSkipped {
 		t.Errorf("Rspec.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
 	}
-
-	if test.SkipMethod != SkipMethodRunner {
-		t.Errorf("Rspec.Run(%q) test.SkipMethod = %v, want %v", testCases, test.SkipMethod, SkipMethodRunner)
-	}
 }
 
 func TestRspecRun_ErrorOutsideOfExamples(t *testing.T) {

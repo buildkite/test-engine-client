@@ -122,21 +122,14 @@ func main() {
 		sendMetadata(ctx, apiClient, cfg, timeline)
 	}
 
-	// Tests skipped by Test Engine will not be passed to the runner
-	// and will not be in the runner result.
-	// Therefore, we need to record them here.
-	for _, testCase := range testPlan.SkippedTests {
-		runResult.RecordSkipTest(testCase, runner.SkipMethodTestEngine)
-	}
-
-	printReport(runResult, testRunner.Name())
+	printReport(runResult, testPlan.SkippedTests, testRunner.Name())
 
 	if runResult.Status() == runner.RunStatusFailed || runResult.Status() == runner.RunStatusError {
 		os.Exit(1)
 	}
 }
 
-func printReport(runResult runner.RunResult, runnerName string) {
+func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {
 	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
 
 	switch runResult.Status() {
@@ -157,8 +150,7 @@ func printReport(runResult runner.RunResult, runnerName string) {
 		{"Muted", "passed", strconv.Itoa(statistics.MutedPassed)},
 		{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
 		{"Failed", "", strconv.Itoa(statistics.Failed)},
-		{"Skipped", fmt.Sprintf("by %s", runnerName), strconv.Itoa(statistics.SkippedByTestRunner)},
-		{"Skipped", "by Test Engine", strconv.Itoa(statistics.SkippedByTestEngine)},
+		{"Skipped", "", strconv.Itoa(statistics.Skipped)},
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.AppendBulk(data)
@@ -187,15 +179,20 @@ func printReport(runResult runner.RunResult, runnerName string) {
 		}
 	}
 
-	skippedTests := runResult.SkippedTests()
-	if len(skippedTests.TestEngine)+len(skippedTests.TestRunner) > 0 {
+	testsSkippedByRunner := runResult.SkippedTests()
+	if len(testsSkippedByRunner) > 0 {
 		fmt.Println("")
-		fmt.Println("+++ Skipped Tests:")
-		for _, skippedTest := range skippedTests.TestRunner {
-			fmt.Printf("- %s %s (skipped by %s)\n", skippedTest.Scope, skippedTest.Name, runnerName)
+		fmt.Printf("+++ Skipped by %s:\n", runnerName)
+		for _, skippedTest := range testsSkippedByRunner {
+			fmt.Printf("- %s %s\n", skippedTest.Scope, skippedTest.Name)
 		}
-		for _, skippedTest := range skippedTests.TestEngine {
-			fmt.Printf("- %s %s (skipped by Test Engine)\n", skippedTest.Scope, skippedTest.Name)
+	}
+
+	if len(testsSkippedByTestEngine) > 0 {
+		fmt.Println("")
+		fmt.Println("+++ Skipped by Test Engine:")
+		for _, skippedTest := range testsSkippedByTestEngine {
+			fmt.Printf("- %s %s\n", skippedTest.Scope, skippedTest.Name)
 		}
 	}
 

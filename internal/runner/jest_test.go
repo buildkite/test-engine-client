@@ -185,10 +185,6 @@ func TestJestRun_TestSkipped(t *testing.T) {
 	if todoTest.Status != TestStatusSkipped {
 		t.Errorf("Jest.Run(%q) todoTest.Status = %v, want %v", testCases, todoTest.Status, TestStatusSkipped)
 	}
-
-	if test.SkipMethod != SkipMethodRunner {
-		t.Errorf("Rspec.Run(%q) test.SkipMethod = %v, want %v", testCases, test.SkipMethod, SkipMethodRunner)
-	}
 }
 
 func TestJestRun_RuntimeError(t *testing.T) {

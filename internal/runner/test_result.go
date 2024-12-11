@@ -16,16 +16,8 @@ type TestResult struct {
 	Status         TestStatus
 	ExecutionCount int
 	Muted          bool
-	SkipMethod     SkipMethod
 }
 
 func testIdentifier(testCase plan.TestCase) string {
 	return testCase.Scope + "/" + testCase.Name
 }
-
-type SkipMethod string
-
-const (
-	SkipMethodRunner     SkipMethod = "runner"
-	SkipMethodTestEngine SkipMethod = "test-engine"
-)
