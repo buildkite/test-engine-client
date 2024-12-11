@@ -25,3 +25,7 @@ internal/api/pacts/
 
 dist/
 node_modules/
+
+internal/runner/testdata/jest/jest-result.json
+
+internal/runner/testdata/rspec/rspec-result.json
