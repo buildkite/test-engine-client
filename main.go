@@ -248,8 +248,14 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 			return *runResult, nil
 		}
 
-		// Retry only the failed tests.
-		*testsCases = runResult.FailedTests()
+		// Retry only if there are failed tests.
+		failedTests := runResult.FailedTests()
+
+		if len(failedTests) == 0 {
+			return *runResult, nil
+		}
+
+		*testsCases = failedTests
 		attemptCount++
 	}
 
