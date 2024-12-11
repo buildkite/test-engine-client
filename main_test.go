@@ -275,6 +275,42 @@ func TestRunTestsWithRetry_CommandError(t *testing.T) {
 	}
 }
 
+func TestRunTestsWithRetry_RunResultError(t *testing.T) {
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand:      "rspec --format json --out {{resultPath}}",
+		RetryTestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:       "tmp/rspec.json",
+	})
+	maxRetries := 2
+	testCases := []plan.TestCase{
+		{
+			Path: "testdata/rspec/spec/fruits/apple_spec.rb",
+		},
+		{
+			Path: "testdata/rspec/spec/fruits/bad_syntax.rb",
+		},
+	}
+	timeline := []api.Timeline{}
+	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline)
+
+	t.Cleanup(func() {
+		os.Remove(testRunner.ResultPath)
+	})
+
+	if err != nil {
+		t.Errorf("runTestsWithRetry(...) error = %v", err)
+	}
+
+	if testResult.Status() != runner.RunStatusError {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusError)
+	}
+
+	// If RunResult.Status() is RunStatusError, and there are no failed tests, it shouldn't do retry.
+	if len(timeline) != 2 {
+		t.Errorf("timeline length = %v, want %d", len(timeline), 2)
+	}
+}
+
 func TestFetchOrCreateTestPlan(t *testing.T) {
 	files := []string{"apple"}
 	testRunner := runner.Rspec{}
