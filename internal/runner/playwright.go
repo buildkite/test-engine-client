@@ -84,10 +84,12 @@ func (p Playwright) getTestResultsFromSuite(suite PlaywrightReportSuite, suiteNa
 	for _, spec := range suite.Specs {
 		projectName := spec.Tests[0].ProjectName
 		var status TestStatus
-		if spec.Ok {
-			status = TestStatusPassed
-		} else {
+		if !spec.Ok {
 			status = TestStatusFailed
+		} else if spec.Tests[0].Status == "skipped" {
+			status = TestStatusSkipped
+		} else {
+			status = TestStatusPassed
 		}
 
 		testResults = append(testResults, TestResult{
@@ -166,6 +168,7 @@ func (p Playwright) GetExamples(files []string) ([]plan.TestCase, error) {
 
 type PlaywrightTest struct {
 	ProjectName string
+	Status      string
 }
 
 type PlaywrightSpec struct {

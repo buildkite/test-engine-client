@@ -122,14 +122,14 @@ func main() {
 		sendMetadata(ctx, apiClient, cfg, timeline)
 	}
 
-	printReport(runResult)
+	printReport(runResult, testPlan.SkippedTests, testRunner.Name())
 
 	if runResult.Status() == runner.RunStatusFailed || runResult.Status() == runner.RunStatusError {
 		os.Exit(1)
 	}
 }
 
-func printReport(runResult runner.RunResult) {
+func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {
 	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
 
 	switch runResult.Status() {
@@ -150,6 +150,7 @@ func printReport(runResult runner.RunResult) {
 		{"Muted", "passed", strconv.Itoa(statistics.MutedPassed)},
 		{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
 		{"Failed", "", strconv.Itoa(statistics.Failed)},
+		{"Skipped", "", strconv.Itoa(statistics.Skipped)},
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.AppendBulk(data)
@@ -175,6 +176,23 @@ func printReport(runResult runner.RunResult) {
 		fmt.Println("+++ Failed Tests:")
 		for _, failedTests := range runResult.FailedTests() {
 			fmt.Printf("- %s %s\n", failedTests.Scope, failedTests.Name)
+		}
+	}
+
+	testsSkippedByRunner := runResult.SkippedTests()
+	if len(testsSkippedByRunner) > 0 {
+		fmt.Println("")
+		fmt.Printf("+++ Skipped by %s:\n", runnerName)
+		for _, skippedTest := range testsSkippedByRunner {
+			fmt.Printf("- %s %s\n", skippedTest.Scope, skippedTest.Name)
+		}
+	}
+
+	if len(testsSkippedByTestEngine) > 0 {
+		fmt.Println("")
+		fmt.Println("+++ Skipped by Test Engine:")
+		for _, skippedTest := range testsSkippedByTestEngine {
+			fmt.Printf("- %s %s\n", skippedTest.Scope, skippedTest.Name)
 		}
 	}
 
