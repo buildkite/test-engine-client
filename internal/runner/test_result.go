@@ -7,7 +7,7 @@ type TestStatus string
 const (
 	TestStatusPassed  TestStatus = "passed"
 	TestStatusFailed  TestStatus = "failed"
-	TestStatusPending TestStatus = "pending"
+	TestStatusSkipped TestStatus = "skipped"
 )
 
 // TestResult is a struct to keep track the result of an individual test case.

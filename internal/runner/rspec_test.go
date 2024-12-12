@@ -178,6 +178,36 @@ func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
 	}
 }
 
+func TestRspecRun_TestSkipped(t *testing.T) {
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}} --format progress",
+		ResultPath:  "tmp/rspec.json",
+	})
+
+	t.Cleanup(func() {
+		os.Remove(rspec.ResultPath)
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/skipped_spec.rb"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+
+	test := result.tests["skipped/is skipped"]
+	if test.Status != TestStatusSkipped {
+		t.Errorf("Rspec.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
+	}
+}
+
 func TestRspecRun_ErrorOutsideOfExamples(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec --format json --out {{resultPath}} --format documentation",

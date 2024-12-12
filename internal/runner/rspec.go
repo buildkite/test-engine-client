@@ -112,6 +112,8 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 			status = TestStatusFailed
 		case "passed":
 			status = TestStatusPassed
+		case "pending":
+			status = TestStatusSkipped
 		}
 
 		result.RecordTestResult(mapExampleToTestCase(example), status)

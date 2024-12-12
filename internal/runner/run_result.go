@@ -96,6 +96,17 @@ func (r *RunResult) MutedTests() []TestResult {
 	return mutedTests
 }
 
+func (r *RunResult) SkippedTests() []plan.TestCase {
+	var skippedTests []plan.TestCase
+
+	for _, test := range r.tests {
+		if test.Status == TestStatusSkipped {
+			skippedTests = append(skippedTests, test.TestCase)
+		}
+	}
+	return skippedTests
+}
+
 // Status returns the overall status of the test run.
 // If there is an error, it returns RunStatusError.
 // If there are failed tests, it returns RunStatusFailed.
@@ -127,39 +138,37 @@ type RunStatistics struct {
 	MutedPassed      int
 	MutedFailed      int
 	Failed           int
+	Skipped          int
 }
 
 func (r *RunResult) Statistics() RunStatistics {
-	var passedOnFirstRun, passedOnRetry, mutedPassed, mutedFailed, failed int
+	stat := &RunStatistics{}
 
 	for _, testResult := range r.tests {
 		switch {
 		case testResult.Muted:
 			switch testResult.Status {
 			case TestStatusPassed:
-				mutedPassed++
+				stat.MutedPassed++
 			case TestStatusFailed:
-				mutedFailed++
+				stat.MutedFailed++
 			}
 
 		case testResult.Status == TestStatusPassed:
 			if testResult.ExecutionCount > 1 {
-				passedOnRetry++
+				stat.PassedOnRetry++
 			} else {
-				passedOnFirstRun++
+				stat.PassedOnFirstRun++
 			}
 
 		case testResult.Status == TestStatusFailed:
-			failed++
+			stat.Failed++
+		case testResult.Status == TestStatusSkipped:
+			stat.Skipped++
 		}
 	}
 
-	return RunStatistics{
-		Total:            len(r.tests),
-		PassedOnFirstRun: passedOnFirstRun,
-		PassedOnRetry:    passedOnRetry,
-		MutedPassed:      mutedPassed,
-		MutedFailed:      mutedFailed,
-		Failed:           failed,
-	}
+	stat.Total = len(r.tests)
+
+	return *stat
 }
