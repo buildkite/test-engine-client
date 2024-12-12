@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.1 - 2024-12-12
+- Fix issue where the run would pass despite errors outside of tests, such as syntax or runtime errors.
+
 ## 1.2.0 - 2024-11-26
 - Add support for muting tests.
 - Fix issue with Cypress command by passing the list of test files separated by commas.
