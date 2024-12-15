@@ -841,6 +841,9 @@ func TestSendMetadata(t *testing.T) {
 				"BUILDKITE_TEST_ENGINE_TEST_RUNNER":               "rspec",
 				"BUILDKITE_BRANCH":                                "",
 			},
+			Statistics: runner.RunStatistics{
+				Total: 3,
+			},
 		}
 
 		if diff := cmp.Diff(got, want); diff != "" {
@@ -863,7 +866,11 @@ func TestSendMetadata(t *testing.T) {
 		ServerBaseUrl: cfg.ServerBaseUrl,
 	})
 
-	sendMetadata(context.Background(), client, cfg, timeline)
+	statistics := runner.RunStatistics{
+		Total: 3,
+	}
+
+	sendMetadata(context.Background(), client, cfg, timeline, statistics)
 }
 
 func TestSendMetadata_Unauthorized(t *testing.T) {
@@ -884,5 +891,9 @@ func TestSendMetadata_Unauthorized(t *testing.T) {
 
 	timeline := []api.Timeline{}
 
-	sendMetadata(context.Background(), client, cfg, timeline)
+	statistics := runner.RunStatistics{
+		Total: 3,
+	}
+
+	sendMetadata(context.Background(), client, cfg, timeline, statistics)
 }
