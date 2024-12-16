@@ -119,7 +119,7 @@ func main() {
 	// At this point, the runner is expected to have completed
 
 	if !testPlan.Fallback {
-		sendMetadata(ctx, apiClient, cfg, timeline)
+		sendMetadata(ctx, apiClient, cfg, timeline, runResult.Statistics())
 	}
 
 	printReport(runResult, testPlan.SkippedTests, testRunner.Name())
@@ -203,11 +203,12 @@ func createTimestamp() string {
 	return time.Now().Format(time.RFC3339Nano)
 }
 
-func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline) {
+func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline, statistics runner.RunStatistics) {
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
-		Timeline: timeline,
-		Env:      cfg.DumpEnv(),
-		Version:  Version,
+		Timeline:   timeline,
+		Env:        cfg.DumpEnv(),
+		Version:    Version,
+		Statistics: statistics,
 	})
 
 	// Error is suppressed because we don't want to fail the build if we can't send metadata.

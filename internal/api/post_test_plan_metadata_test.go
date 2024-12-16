@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/pact-foundation/pact-go/v2/consumer"
 	"github.com/pact-foundation/pact-go/v2/matchers"
 )
@@ -38,6 +39,9 @@ func TestPostTestPlanMetadata(t *testing.T) {
 				Event:     "test_end",
 				Timestamp: "2024-06-20T04:49:09.609793Z",
 			},
+		},
+		Statistics: runner.RunStatistics{
+			Total: 3,
 		},
 	}
 
@@ -111,6 +115,9 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 				Event:     "test_end",
 				Timestamp: "2024-06-20T04:49:09.609793Z",
 			},
+		},
+		Statistics: runner.RunStatistics{
+			Total: 3,
 		},
 	}
 
