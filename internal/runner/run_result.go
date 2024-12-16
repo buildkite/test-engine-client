@@ -132,13 +132,13 @@ func (r *RunResult) Error() error {
 }
 
 type RunStatistics struct {
-	Total            int
-	PassedOnFirstRun int
-	PassedOnRetry    int
-	MutedPassed      int
-	MutedFailed      int
-	Failed           int
-	Skipped          int
+	Total            int `json:"total"`
+	PassedOnFirstRun int `json:"passed_on_first_run"`
+	PassedOnRetry    int `json:"passed_on_retry"`
+	MutedPassed      int `json:"muted_passed"`
+	MutedFailed      int `json:"muted_failed"`
+	Failed           int `json:"failed"`
+	Skipped          int `json:"skipped"`
 }
 
 func (r *RunResult) Statistics() RunStatistics {
