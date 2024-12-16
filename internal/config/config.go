@@ -34,6 +34,8 @@ type Config struct {
 	TestRunner string
 	// Branch is the string value of the git branch name, used by Buildkite only.
 	Branch string
+	// JobRetryCount is the count of the number of times the job has been retried.
+	JobRetryCount int
 	// errs is a map of environment variables name and the validation errors associated with them.
 	errs InvalidConfigError
 }

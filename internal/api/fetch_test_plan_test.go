@@ -32,6 +32,7 @@ func TestFetchTestPlan(t *testing.T) {
 		WithRequest("GET", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan", func(b *consumer.V2RequestBuilder) {
 			b.Header("Authorization", matchers.Like("Bearer asdf1234"))
 			b.Query("identifier", matchers.Like("abc123"))
+			b.Query("job_retry_count", matchers.Like("0"))
 		}).
 		WillRespondWith(200, func(b *consumer.V2ResponseBuilder) {
 			b.Header("Content-Type", matchers.Like("application/json; charset=utf-8"))
@@ -62,7 +63,7 @@ func TestFetchTestPlan(t *testing.T) {
 
 			c := NewClient(cfg)
 
-			got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123")
+			got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
 
 			if err != nil {
 				t.Errorf("FetchTestPlan() error = %v", err)
@@ -113,7 +114,8 @@ func TestFetchTestPlan_NotFound(t *testing.T) {
 		WithRequest("GET", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan", func(b *consumer.V2RequestBuilder) {
 			b.
 				Header("Authorization", matchers.Like("Bearer asdf1234")).
-				Query("identifier", matchers.Like("abc123"))
+				Query("identifier", matchers.Like("abc123")).
+				Query("job_retry_count", matchers.Like("0"))
 		}).
 		WillRespondWith(404, func(b *consumer.V2ResponseBuilder) {
 			b.Header("Content-Type", matchers.Like("application/json; charset=utf-8"))
@@ -132,7 +134,7 @@ func TestFetchTestPlan_NotFound(t *testing.T) {
 
 			c := NewClient(cfg)
 
-			got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123")
+			got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
 
 			if err != nil {
 				t.Errorf("FetchTestPlan() error = %v", err)
@@ -165,7 +167,7 @@ func TestFetchTestPlan_BadRequest(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	got, err := c.FetchTestPlan(context.Background(), "my-suite", "xyz")
+	got, err := c.FetchTestPlan(context.Background(), "my-suite", "xyz", 0)
 
 	if requestCount > 1 {
 		t.Errorf("http request count = %v, want %d", requestCount, 1)
@@ -199,7 +201,7 @@ func TestFetchTestPlan_InternalServerError(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	got, err := c.FetchTestPlan(context.Background(), "my-suite", "xyz")
+	got, err := c.FetchTestPlan(context.Background(), "my-suite", "xyz", 0)
 
 	if !errors.Is(err, ErrRetryTimeout) {
 		t.Errorf("FetchTestPlan() error = %v, want %v", err, ErrRetryTimeout)

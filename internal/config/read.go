@@ -26,6 +26,7 @@ import (
 // - BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN (TestFilePattern)
 // - BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN (TestFileExcludePattern)
 // - BUILDKITE_BRANCH (Branch)
+// - BUILDKITE_RETRY_COUNT (JobRetryCount)
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
@@ -58,6 +59,12 @@ func (c *Config) readFromEnv() error {
 
 	// used by Buildkite only, for experimental plans
 	c.Branch = os.Getenv("BUILDKITE_BRANCH")
+
+	JobRetryCount, err := getIntEnvWithDefault("BUILDKITE_RETRY_COUNT", 0)
+	c.JobRetryCount = JobRetryCount
+	if err != nil {
+		c.errs.appendFieldError("BUILDKITE_RETRY_COUNT", "was %q, must be a number", os.Getenv("BUILDKITE_RETRY_COUNT"))
+	}
 
 	MaxRetries, err := getIntEnvWithDefault("BUILDKITE_TEST_ENGINE_RETRY_COUNT", 0)
 	c.MaxRetries = MaxRetries

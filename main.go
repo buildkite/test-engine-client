@@ -300,7 +300,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 	debug.Println("Fetching test plan")
 
 	// Fetch the plan from the server's cache.
-	cachedPlan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier)
+	cachedPlan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier, cfg.JobRetryCount)
 
 	handleError := func(err error) (plan.TestPlan, error) {
 		if errors.Is(err, api.ErrRetryTimeout) {
