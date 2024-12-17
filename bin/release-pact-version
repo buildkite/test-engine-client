@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# Use this to record a published pact version as a production release.
+# You'll need to have an environment variable called PACT_BROKER_TOKEN
+# with a write-access token.
+#
+# Run it like: bin/release-pact-version v0.6.0
+
+VERSION=$1
+PACT_BROKER_BASE_URL=https://buildkite.pactflow.io
+
+docker run --rm \
+  -e PACT_BROKER_BASE_URL \
+  -e PACT_BROKER_TOKEN \
+    pactfoundation/pact-cli:latest \
+    pact-broker \
+    record-release \
+    --environment production \
+    --pacticipant TestEngineClient \
+    --version ${VERSION}
