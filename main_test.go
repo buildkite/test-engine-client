@@ -798,6 +798,7 @@ func TestSendMetadata(t *testing.T) {
 		"BUILDKITE_TEST_ENGINE_SUITE_SLUG":    "rspec",
 		"BUILDKITE_TEST_ENGINE_TEST_CMD":      "bundle exec rspec",
 		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":   "rspec",
+		"BUILDKITE_RETRY_COUNT":               "0",
 	}
 	for k, v := range env {
 		_ = os.Setenv(k, v)
@@ -840,6 +841,7 @@ func TestSendMetadata(t *testing.T) {
 				"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN":         "",
 				"BUILDKITE_TEST_ENGINE_TEST_RUNNER":               "rspec",
 				"BUILDKITE_BRANCH":                                "",
+				"BUILDKITE_RETRY_COUNT":                           "0",
 			},
 			Statistics: runner.RunStatistics{
 				Total: 3,

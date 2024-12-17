@@ -52,6 +52,7 @@ func (c Config) DumpEnv() map[string]string {
 		"BUILDKITE_TEST_ENGINE_TEST_RUNNER",
 		"BUILDKITE_STEP_ID",
 		"BUILDKITE_BRANCH",
+		"BUILDKITE_RETRY_COUNT",
 	}
 
 	envs := make(map[string]string)

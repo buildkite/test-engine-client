@@ -22,6 +22,7 @@ func setEnv(t *testing.T) {
 	os.Setenv("BUILDKITE_STEP_ID", "456")
 	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "rspec")
 	os.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "tmp/rspec.json")
+	os.Setenv("BUILDKITE_RETRY_COUNT", "0")
 }
 
 func TestNewConfig(t *testing.T) {
@@ -44,6 +45,7 @@ func TestNewConfig(t *testing.T) {
 		ResultPath:       "tmp/rspec.json",
 		SuiteSlug:        "my_suite",
 		TestRunner:       "rspec",
+		JobRetryCount:    0,
 		errs:             InvalidConfigError{},
 	}
 
@@ -84,6 +86,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		SuiteSlug:        "my_suite",
 		TestRunner:       "rspec",
 		ResultPath:       "tmp/rspec.json",
+		JobRetryCount:    0,
 	}
 
 	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {

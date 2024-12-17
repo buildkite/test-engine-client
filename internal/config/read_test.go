@@ -45,6 +45,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		TestFileExcludePattern: "spec/feature/**/*_spec.rb",
 		TestRunner:             "rspec",
 		ResultPath:             "result.json",
+		JobRetryCount:          0,
 	}
 
 	if err != nil {
