@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+# Use this to publish pact json files to the pact broker.
+# The pact JSON needs to be generated first by running the tests.
+# You'll need to have an environment variable called PACT_BROKER_TOKEN
+# with a write-access token.
+#
+# Run it like: bin/publish-pact v0.6.0
+
+VERSION=$1
+PACT_BROKER_BASE_URL=https://buildkite.pactflow.io
+
+docker run --rm \
+  -w ${PWD} \
+  -v ${PWD}:${PWD} \
+  -e PACT_BROKER_BASE_URL \
+  -e PACT_BROKER_TOKEN \
+    pactfoundation/pact-cli:latest \
+    publish \
+    ${PWD}/internal/api/pacts \
+    --consumer-app-version ${VERSION} \
+    --tag-with-git-branch
