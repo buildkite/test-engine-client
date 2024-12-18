@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+# This script is used to run bktec against the sample project for the given test runner.
+# Sample project can be found in internal/runner/testdata/<test-runner>
+#
+# Usage: ./bin/e2e <test-runner> <parallel-job>
+# 
+# Note: you need to manually set the following environment variables
+# - BUILDKITE_ORGANIZATION_SLUG
+# - BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN
+# - BUILDKITE_TEST_ENGINE_SUITE_SLUG
+
+export BUILDKITE_BUILD_ID=$(uuidgen)
+export BUILDKITE_PARALLEL_JOB=${2:-0}
+export BUILDKITE_PARALLEL_JOB_COUNT=2
+export BUILDKITE_STEP_ID=$BUILDKITE_TEST_ENGINE_TEST_RUNNER
+export BUILDKITE_TEST_ENGINE_RESULT_PATH="${BUILDKITE_TEST_ENGINE_TEST_RUNNER}-result.json"
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER=${1:-rspec}
+
+# Override the following variables to the default value, in case they are set somewhere else
+export BUILDKITE_TEST_ENGINE_TEST_CMD=""
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=""
+
+# Extra configuration for playwright
+if [ "$BUILDKITE_TEST_ENGINE_TEST_RUNNER" == "playwright" ]; then
+  # We need to tell bktec to use playwright's result path configured in playwright.config.js
+  export BUILDKITE_TEST_ENGINE_RESULT_PATH="test-results/results.json"
+  # error.spec.js will prevent other tests from running, so we exclude it
+  export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN="**/*/error.spec.js"
+fi
+
+cd ./internal/runner/testdata/$BUILDKITE_TEST_ENGINE_TEST_RUNNER
+
+go run ../../../../main.go
