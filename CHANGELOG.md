@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0 - 2024-12-20
+- Add skipped tests to the test report.
+- Add support for muted tests in job retry.
+- Add run statistic to the test plan metadata.
+
 ## 1.2.1 - 2024-12-12
 - Fix issue where the run would pass despite errors outside of tests, such as syntax or runtime errors.
 
