@@ -3,19 +3,20 @@
 # This script is used to run bktec against the sample project for the given test runner.
 # Sample project can be found in internal/runner/testdata/<test-runner>
 #
-# Usage: ./bin/e2e <test-runner> <parallel-job>
+# Usage: ./bin/e2e <test-runner>
 # 
 # Note: you need to manually set the following environment variables
 # - BUILDKITE_ORGANIZATION_SLUG
 # - BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN
 # - BUILDKITE_TEST_ENGINE_SUITE_SLUG
 
-export BUILDKITE_BUILD_ID=$(uuidgen)
-export BUILDKITE_PARALLEL_JOB=${2:-0}
-export BUILDKITE_PARALLEL_JOB_COUNT=2
-export BUILDKITE_STEP_ID=$BUILDKITE_TEST_ENGINE_TEST_RUNNER
-export BUILDKITE_TEST_ENGINE_RESULT_PATH="${BUILDKITE_TEST_ENGINE_TEST_RUNNER}-result.json"
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=${1:-rspec}
+export BUILDKITE_TEST_ENGINE_RESULT_PATH="${BUILDKITE_TEST_ENGINE_TEST_RUNNER}-result.json"
+
+export BUILDKITE_BUILD_ID=$(date +%s)
+export BUILDKITE_PARALLEL_JOB=${BUILDKITE_PARALLEL_JOB:-0}
+export BUILDKITE_PARALLEL_JOB_COUNT=${BUILDKITE_PARALLEL_JOB_COUNT:-2}
+export BUILDKITE_STEP_ID=$BUILDKITE_TEST_ENGINE_TEST_RUNNER
 
 # Override the following variables to the default value, in case they are set somewhere else
 export BUILDKITE_TEST_ENGINE_TEST_CMD=""
