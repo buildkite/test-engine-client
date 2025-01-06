@@ -95,3 +95,18 @@ bktec may exit with a variety of exit statuses, outlined below:
   SIGABRT, the exit status returned will be equal to 128 plus the signal number.
   For example, if the runner raises a SIGSEGV, the exit status will be (128 +
   11) = 139.
+
+## Development
+
+Make sure you have Go, Ruby, and Node.js installed in your environment. You can follow the installation guides for each of these tools:
+
+- [Go Installation Guide](https://golang.org/doc/install)
+- [Ruby Installation Guide](https://www.ruby-lang.org/en/documentation/installation/)
+- [Node.js Installation Guide](https://nodejs.org/en/download/package-manager/)
+
+Once you have these dependencies installed, run `bin/setup` to install dependencies for the sample projects for testing purposes. 
+
+To test, run:
+```sh
+go test ./...
+```
