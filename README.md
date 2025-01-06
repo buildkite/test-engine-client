@@ -4,11 +4,11 @@ Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your 
 
 bktec supports multiple test runners and offers various features to enhance your testing workflow. Below is a comparison of the features supported by each test runner:
 
-| Feature                                            | Rspec | Jest | Playwright | Cypress |
-| -------------------------------------------------- | :---: | :--: | :--------: | :-----: |
-| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |
-| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |
-| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |
+| Feature                                            | Rspec | Jest | Playwright | Cypress | Go |
+| -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :--: |
+| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |   ✅  |
+| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |   ✅  |
+| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |   ✅  |
 
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
@@ -58,7 +58,7 @@ To configure the test runner for bktec, please refer to the detailed guides prov
 - [Jest](./docs/jest.md)
 - [Playwright](./docs/playwright.md)
 - [Cypress](./docs/cypress.md)
-
+- [Go](./docs/go.md)
 
 ### Running bktec
 Please download the executable and make it available in your testing environment.
@@ -79,7 +79,18 @@ steps:
 > You can find example configurations and usage instructions for each test runner in our [examples repository](https://github.com/buildkite/test-engine-client-examples).
 
 
+### Development
+
+Testing bktec requires an environment with ruby, jest, playwright, cypress, and go installed. The easiest way to set up the environment is to use docker compose.
+
+```bash
+docker compose -f .buildkite/docker-compose.yml run ci ./.buildkite/steps/tests.sh
+```
+
+The images are built with the `linux/amd64` platform, so you'll need to run the tests on an AMD64 machine or use Rosetta 2 to run the tests on an Apple Silicon machine.
+
 ### Debugging
+
 To enable debug mode, set the `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` environment variable to `true`. This will print detailed output to assist in debugging bktec.
 
 ### Possible exit statuses
