@@ -57,7 +57,7 @@ func TestJestRun(t *testing.T) {
 	changeCwd(t, "./testdata/jest")
 
 	jest := NewJest(RunnerConfig{
-		TestCommand: "jest --json --outputFile {{resultPath}}",
+		TestCommand: "npx jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
 	})
 
@@ -89,7 +89,7 @@ func TestJestRun_Retry(t *testing.T) {
 
 	jest := NewJest(RunnerConfig{
 		TestCommand:      "jest --invalid-option --json --outputFile {{resultPath}}",
-		RetryTestCommand: "jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}} ./testdata/jest/spells/expelliarmus.spec.js ./testdata/jest/failure.spec.js",
+		RetryTestCommand: "npx jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}} ./testdata/jest/spells/expelliarmus.spec.js ./testdata/jest/failure.spec.js",
 		ResultPath:       "jest.json",
 	})
 
@@ -116,7 +116,7 @@ func TestJestRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/jest")
 
 	jest := NewJest(RunnerConfig{
-		TestCommand: "jest --json --outputFile {{resultPath}}",
+		TestCommand: "npx jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
 	})
 
@@ -154,7 +154,7 @@ func TestJestRun_TestSkipped(t *testing.T) {
 	changeCwd(t, "./testdata/jest")
 
 	jest := NewJest(RunnerConfig{
-		TestCommand: "jest --json --outputFile {{resultPath}}",
+		TestCommand: "npx jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
 	})
 
@@ -191,7 +191,7 @@ func TestJestRun_RuntimeError(t *testing.T) {
 	changeCwd(t, "./testdata/jest")
 
 	jest := NewJest(RunnerConfig{
-		TestCommand: "jest --json --outputFile {{resultPath}}",
+		TestCommand: "npx jest --json --outputFile {{resultPath}}",
 		ResultPath:  "jest.json",
 	})
 
@@ -217,7 +217,7 @@ func TestJestRun_RuntimeError(t *testing.T) {
 
 func TestJestRun_CommandFailed(t *testing.T) {
 	jest := NewJest(RunnerConfig{
-		TestCommand: "jest --invalid-option --outputFile {{resultPath}}",
+		TestCommand: "npx jest --invalid-option --outputFile {{resultPath}}",
 	})
 
 	t.Cleanup(func() {

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+echo "🛠️ Installing dependencies for sample projects..."
+
+cd ./internal/runner/testdata
+# if yarn is available, use it to install dependencies
+# otherwise, use npm
+if command -v yarn &> /dev/null
+then
+  yarn install
+else
+  npm install
+fi
+
+# Install Playwright dependencies
+cd ./playwright
+npx playwright install
+npx playwright install-deps
+
+# Install Cypress dependencies
+cd ../cypress
+npx cypress install
+npx cypress verify
+
+# Install RSpec dependencies
+cd ../rspec
+bundle install
+
