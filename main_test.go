@@ -674,6 +674,69 @@ func TestCreateRequestParams(t *testing.T) {
 	}
 }
 
+func TestCreateRequestParams_NonRSpec(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `
+{
+	"tests": [
+		{ "path": "testdata/jest/banana.spec.js", "reason": "slow file" },
+		{ "path": "testdata/jest/fig.spec.js", "reason": "slow file" }
+	]
+}`)
+	}))
+	defer svr.Close()
+
+	runners := []TestRunner{
+		runner.Jest{}, runner.Playwright{}, runner.Cypress{},
+	}
+
+	for _, r := range runners {
+		t.Run(r.Name(), func(t *testing.T) {
+			cfg := config.Config{
+				OrganizationSlug: "my-org",
+				SuiteSlug:        "my-suite",
+				Identifier:       "identifier",
+				Parallelism:      7,
+				Branch:           "",
+				TestRunner:       r.Name(),
+			}
+
+			client := api.NewClient(api.ClientConfig{
+				ServerBaseUrl: svr.URL,
+			})
+			files := []string{
+				"testdata/fruits/apple.spec.js",
+				"testdata/fruits/banana.spec.js",
+				"testdata/fruits/cherry.spec.js",
+			}
+
+			got, err := createRequestParam(context.Background(), cfg, files, *client, r)
+
+			if err != nil {
+				t.Errorf("createRequestParam() error = %v", err)
+			}
+
+			want := api.TestPlanParams{
+				Identifier:  "identifier",
+				Parallelism: 7,
+				Branch:      "",
+				Runner:      r.Name(),
+				Tests: api.TestPlanParamsTest{
+					Files: []plan.TestCase{
+						{Path: "testdata/fruits/apple.spec.js"},
+						{Path: "testdata/fruits/banana.spec.js"},
+						{Path: "testdata/fruits/cherry.spec.js"},
+					},
+				},
+			}
+
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{ "message": "forbidden" }`, http.StatusForbidden)
@@ -705,7 +768,7 @@ func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 
 	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{})
 
-	if err.Error() != "failed to filter tests: forbidden" {
+	if err.Error() != "filter tests: forbidden" {
 		t.Errorf("createRequestParam() error = %v, want forbidden error", err)
 	}
 }

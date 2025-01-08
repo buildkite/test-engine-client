@@ -362,12 +362,9 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 	return testPlan, nil
 }
 
-// createRequestParam creates the request parameters for the test plan with the given configuration and files.
-// The files should have been filtered by include/exclude patterns before passing to this function.
-// If SplitByExample is disabled (default), it will return the default params that contain all the files.
-// If SplitByExample is enabled, it will split the slow files into examples and return it along with the rest of the files.
-//
-// Error is returned if there is a failure to fetch test file timings or to get the test examples from test files when SplitByExample is enabled.
+// createRequestParam generates the parameters needed for a test plan request.
+// For runners other than "rspec", it constructs the test plan parameters with all test files.
+// For the "rspec" runner, it filters the test files through the Test Engine API and splits the filtered files into examples.
 func createRequestParam(ctx context.Context, cfg config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	testFiles := []plan.TestCase{}
 	for _, file := range files {
@@ -376,22 +373,8 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		})
 	}
 
-	if cfg.SplitByExample {
-		debug.Println("Splitting by example")
-	}
-
-	debug.Printf("Filtering %d files", len(files))
-	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
-		Files: testFiles,
-		Env:   cfg.DumpEnv(),
-	})
-
-	if err != nil {
-		return api.TestPlanParams{}, fmt.Errorf("failed to filter tests: %w", err)
-	}
-
-	if len(filteredFiles) == 0 {
-		debug.Println("No filtered files found")
+	// Splitting files by example is only supported for rspec runner.
+	if runner.Name() != "RSpec" {
 		return api.TestPlanParams{
 			Identifier:  cfg.Identifier,
 			Parallelism: cfg.Parallelism,
@@ -403,31 +386,16 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		}, nil
 	}
 
-	debug.Printf("Filtered %d files", len(filteredFiles))
-
-	debug.Printf("Getting examples for %d filtered files", len(filteredFiles))
-
-	filteredFilesMap := map[string]bool{}
-	filteredFilesPath := []string{}
-	for _, file := range filteredFiles {
-		filteredFilesMap[file.Path] = true
-		filteredFilesPath = append(filteredFilesPath, file.Path)
+	if cfg.SplitByExample {
+		debug.Println("Splitting by example")
 	}
 
-	examples, err := runner.GetExamples(filteredFilesPath)
+	// The SplitByExample flag indicates whether to filter slow files for splitting by example.
+	// Regardless of the flag's state, the API will still filter other files that need to be split by example, such as those containing skipped tests.
+	// Therefore, we must filter and split files even when SplitByExample is disabled.
+	testParams, err := filterAndSplitFiles(ctx, cfg, client, testFiles, runner)
 	if err != nil {
-		return api.TestPlanParams{}, fmt.Errorf("failed to get examples for filtered files: %w", err)
-	}
-
-	debug.Printf("Got %d examples within the filtered files", len(examples))
-
-	unfilteredTestFiles := []plan.TestCase{}
-	for _, file := range files {
-		if _, ok := filteredFilesMap[file]; !ok {
-			unfilteredTestFiles = append(unfilteredTestFiles, plan.TestCase{
-				Path: file,
-			})
-		}
+		return api.TestPlanParams{}, err
 	}
 
 	return api.TestPlanParams{
@@ -435,9 +403,60 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		Parallelism: cfg.Parallelism,
 		Branch:      cfg.Branch,
 		Runner:      cfg.TestRunner,
-		Tests: api.TestPlanParamsTest{
-			Examples: examples,
-			Files:    unfilteredTestFiles,
-		},
+		Tests:       testParams,
+	}, nil
+}
+
+// filterAndSplitFiles filters the test files through the Test Engine API and splits the filtered files into examples.
+// It returns the test plan parameters with the examples from the filtered files and the remaining files.
+// An error is returned if there is a failure in any of the process.
+func filterAndSplitFiles(ctx context.Context, cfg config.Config, client api.Client, files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
+	// Filter files that need to be split.
+	debug.Printf("Filtering %d files", len(files))
+	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
+		Files: files,
+		Env:   cfg.DumpEnv(),
+	})
+
+	if err != nil {
+		return api.TestPlanParamsTest{}, fmt.Errorf("filter tests: %w", err)
+	}
+
+	// If no files are filtered, return the all files.
+	if len(filteredFiles) == 0 {
+		debug.Println("No filtered files found")
+		return api.TestPlanParamsTest{
+			Files: files,
+		}, nil
+	}
+
+	debug.Printf("Filtered %d files", len(filteredFiles))
+	debug.Printf("Getting examples for %d filtered files", len(filteredFiles))
+
+	filteredFilesMap := make(map[string]bool, len(filteredFiles))
+	filteredFilesPath := make([]string, 0, len(filteredFiles))
+	for _, file := range filteredFiles {
+		filteredFilesMap[file.Path] = true
+		filteredFilesPath = append(filteredFilesPath, file.Path)
+	}
+
+	examples, err := runner.GetExamples(filteredFilesPath)
+	if err != nil {
+		return api.TestPlanParamsTest{}, fmt.Errorf("get examples: %w", err)
+	}
+
+	debug.Printf("Got %d examples within the filtered files", len(examples))
+
+	// Get the remaining files that are not filtered.
+	remainingFiles := make([]plan.TestCase, 0, len(files)-len(filteredFiles))
+	for _, file := range files {
+		if _, ok := filteredFilesMap[file.Path]; !ok {
+			remainingFiles = append(remainingFiles, file)
+		}
+	}
+
+	return api.TestPlanParamsTest{
+		Examples: examples,
+		Files:    remainingFiles,
 	}, nil
 }
