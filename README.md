@@ -9,6 +9,8 @@ bktec supports multiple test runners and offers various features to enhance your
 | Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |
 | Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |
 | Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |
+| Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |
+| Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |
 
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
