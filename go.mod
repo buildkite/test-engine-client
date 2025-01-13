@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.22.4
 
 require (
-	github.com/buildkite/roko v1.2.0
+	github.com/buildkite/roko v1.3.0
 	github.com/google/go-cmp v0.6.0
 )
 
