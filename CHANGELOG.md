@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.1 - 2025-01-10
+- Fix issue where non-RSpec runners would terminate when attempting to split by example, as splitting by example is only supported in RSpec.
+
 ## 1.3.0 - 2024-12-20
 - Add skipped tests to the test report.
 - Add support for muted tests in job retry.
