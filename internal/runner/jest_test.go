@@ -134,6 +134,7 @@ func TestJestRun_TestFailed(t *testing.T) {
 		{
 			Scope: "this will fail",
 			Name:  "for sure",
+			Path:  "failure.spec.js:2:3",
 		},
 	}
 
@@ -176,12 +177,12 @@ func TestJestRun_TestSkipped(t *testing.T) {
 		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
-	test := result.tests["this will be skipped/for sure"]
+	test := result.tests["this will be skipped/for sure/skipped.spec.js:2:3"]
 	if test.Status != TestStatusSkipped {
 		t.Errorf("Jest.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
 	}
 
-	todoTest := result.tests["this will be skipped/todo yeah"]
+	todoTest := result.tests["this will be skipped/todo yeah/skipped.spec.js:6:6"]
 	if todoTest.Status != TestStatusSkipped {
 		t.Errorf("Jest.Run(%q) todoTest.Status = %v, want %v", testCases, todoTest.Status, TestStatusSkipped)
 	}
