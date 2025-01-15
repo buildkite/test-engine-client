@@ -202,7 +202,7 @@ func TestRspecRun_TestSkipped(t *testing.T) {
 		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
-	test := result.tests["skipped/is skipped"]
+	test := result.tests["skipped/is skipped/./testdata/rspec/spec/skipped_spec.rb[1:1]"]
 	if test.Status != TestStatusSkipped {
 		t.Errorf("Rspec.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
 	}
