@@ -172,21 +172,22 @@ func TestMutedTests(t *testing.T) {
 func TestRunStatistics(t *testing.T) {
 	r := NewRunResult([]plan.TestCase{
 		// muted tests
-		{Scope: "mango", Name: "is sweet"},
+		{Scope: "mango", Name: "is sweet", Path: "mango.rb:1"},
 		{Scope: "mango", Name: "is sour"},
 		{Scope: "cat", Name: "is not a fruit"}, // unrecorded (not related to this run) test case should be ignored
 	})
 
-	// passed on first run: 2
+	// passed on first run: 3
 	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is red"}, TestStatusPassed)
-	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is red"}, TestStatusPassed)
+	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is red", Path: "mango.rb:3"}, TestStatusPassed)
+	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is red", Path: "mango.rb:7"}, TestStatusPassed) // Different tests with the same name and scope should be counted separately
 
 	//passed on retry: 1
 	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is green"}, TestStatusFailed)
 	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is green"}, TestStatusPassed)
 
 	// muted: 1 failed, 1 passed
-	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sweet"}, TestStatusPassed)
+	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sweet", Path: "mango.rb:5"}, TestStatusPassed) // This test matched with a test in the muted tests lists even though the path is different because we only compare the scope and name for muted tests
 	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusFailed)
 
 	// failed: 1
@@ -199,8 +200,8 @@ func TestRunStatistics(t *testing.T) {
 	stats := r.Statistics()
 
 	if diff := cmp.Diff(stats, RunStatistics{
-		Total:            7,
-		PassedOnFirstRun: 2,
+		Total:            8,
+		PassedOnFirstRun: 3,
 		PassedOnRetry:    1,
 		MutedPassed:      1,
 		MutedFailed:      1,
