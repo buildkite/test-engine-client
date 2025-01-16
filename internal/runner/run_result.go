@@ -36,7 +36,7 @@ func NewRunResult(mutedTests []plan.TestCase) *RunResult {
 	}
 
 	for _, testCase := range mutedTests {
-		identifier := testIdentifier(testCase)
+		identifier := mutedTestIdentifier(testCase)
 		r.mutedTestLookup[identifier] = true
 	}
 	return r
@@ -67,7 +67,7 @@ func (r *RunResult) RecordTestResult(testCase plan.TestCase, status TestStatus) 
 	test := r.getTest(testCase)
 	test.Status = status
 	test.ExecutionCount++
-	if r.mutedTestLookup[testIdentifier(testCase)] {
+	if r.mutedTestLookup[mutedTestIdentifier(testCase)] {
 		test.Muted = true
 	}
 }

@@ -124,7 +124,7 @@ func TestPlaywrightRun_TestSkipped(t *testing.T) {
 		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
-	test := result.tests[" chromium skipped.spec.js it is skipped/it is skipped"]
+	test := result.tests[" chromium skipped.spec.js it is skipped/it is skipped/skipped.spec.js:4"]
 	if test.Status != TestStatusSkipped {
 		t.Errorf("Playwright.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
 	}
