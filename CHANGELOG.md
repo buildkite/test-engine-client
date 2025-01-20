@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.2 - 2025-01-20
+- Fix issue where a test incorrectly reported as "Passed on Retry".
+
 ## 1.3.1 - 2025-01-10
 - Fix issue where non-RSpec runners would terminate when attempting to split by example, as splitting by example is only supported in RSpec.
 
