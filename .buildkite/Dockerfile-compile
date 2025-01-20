@@ -1,7 +1,7 @@
 FROM ruby:3.4.1-slim-bookworm AS ruby
 FROM cypress/included:13.17.0 AS cypress
 
-FROM public.ecr.aws/docker/library/golang:1.23.4 AS golang
+FROM public.ecr.aws/docker/library/golang:1.23.5 AS golang
 
 COPY --from=ruby / /
 COPY --from=cypress / /
