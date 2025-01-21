@@ -225,6 +225,53 @@ func TestDoWithRetry_429(t *testing.T) {
 	}
 }
 
+func TestDoWithRetry_409(t *testing.T) {
+	originalTimeout := retryTimeout
+	originalInitialDelay := initialDelay
+
+	retryTimeout = 1000 * time.Millisecond
+	initialDelay = 1 * time.Millisecond
+	t.Cleanup(func() {
+		retryTimeout = originalTimeout
+		initialDelay = originalInitialDelay
+	})
+
+	requestCount := 0
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+
+		w.WriteHeader(http.StatusConflict)
+	}))
+	defer svr.Close()
+
+	cfg := ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "my-org",
+		ServerBaseUrl:    svr.URL,
+	}
+
+	c := NewClient(cfg)
+
+	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+		Method: http.MethodGet,
+		URL:    svr.URL,
+	}, nil)
+
+	// it retries the request and returns ErrRetryTimeout with the 409 status code.
+	if requestCount < 2 {
+		t.Errorf("http request count = %v, want at least %d", requestCount, 2)
+	}
+
+	if !errors.Is(err, ErrRetryTimeout) {
+		t.Errorf("DoWithRetry() error = %v, want %v", err, ErrRetryTimeout)
+	}
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusConflict)
+	}
+}
+
 func TestDoWithRetry_500(t *testing.T) {
 	originalTimeout := retryTimeout
 	originalInitialDelay := initialDelay
