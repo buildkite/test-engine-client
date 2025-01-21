@@ -158,9 +158,9 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 			return resp, fmt.Errorf("response code: 429")
 		}
 
-		// If we get a 423, we aren't the first client to create the plan so return
+		// If we get a 409, we aren't the first client to create the plan so return
 		// and retry
-		if resp.StatusCode == http.StatusLocked {
+		if resp.StatusCode == http.StatusConflict {
 			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
 		}
 

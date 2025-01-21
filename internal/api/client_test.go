@@ -225,7 +225,7 @@ func TestDoWithRetry_429(t *testing.T) {
 	}
 }
 
-func TestDoWithRetry_423(t *testing.T) {
+func TestDoWithRetry_409(t *testing.T) {
 	originalTimeout := retryTimeout
 	originalInitialDelay := initialDelay
 
@@ -241,7 +241,7 @@ func TestDoWithRetry_423(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
 
-		w.WriteHeader(http.StatusLocked)
+		w.WriteHeader(http.StatusConflict)
 	}))
 	defer svr.Close()
 
@@ -258,7 +258,7 @@ func TestDoWithRetry_423(t *testing.T) {
 		URL:    svr.URL,
 	}, nil)
 
-	// it retries the request and returns ErrRetryTimeout with the 423 status code.
+	// it retries the request and returns ErrRetryTimeout with the 409 status code.
 	if requestCount < 2 {
 		t.Errorf("http request count = %v, want at least %d", requestCount, 2)
 	}
@@ -267,8 +267,8 @@ func TestDoWithRetry_423(t *testing.T) {
 		t.Errorf("DoWithRetry() error = %v, want %v", err, ErrRetryTimeout)
 	}
 
-	if resp.StatusCode != http.StatusLocked {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusLocked)
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusConflict)
 	}
 }
 
