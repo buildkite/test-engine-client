@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.3 - 2025-02-14
+- Update server-side error handling.
+
 ## 1.3.2 - 2025-01-20
 - Fix issue where a test incorrectly reported as "Passed on Retry".
 
