@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/buildkite/test-engine-client/internal/api"
+	"github.com/buildkite/test-engine-client/internal/bes"
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -59,6 +61,14 @@ func main() {
 	}
 
 	printStartUpMessage()
+
+	// TODO: proper subcommands
+	if flag.Arg(0) == "bazel" && flag.Arg(1) == "listen" {
+		if err := bes.Listen(); err != nil {
+			log.Fatal(err)
+		}
+		os.Exit(0)
+	}
 
 	// get config
 	cfg, err := config.New()
