@@ -1,8 +1,7 @@
 module github.com/buildkite/test-engine-client
 
 go 1.21
-
-toolchain go1.22.4
+toolchain go1.23.7
 
 require (
 	github.com/buildkite/roko v1.3.1
@@ -14,7 +13,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pact-foundation/pact-go/v2 v2.0.10
-	golang.org/x/sys v0.30.0
+	golang.org/x/sys v0.31.0
 )
 
 require (
