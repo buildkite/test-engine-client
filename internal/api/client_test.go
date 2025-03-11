@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -61,6 +62,12 @@ func TestHttpClient_AttachAccessTokenToRequest(t *testing.T) {
 }
 
 func TestHttpClient_AttachUserAgentToRequest(t *testing.T) {
+	originalVersion := version.Version
+	version.Version = "0.5.1"
+	defer func() {
+		version.Version = originalVersion
+	}()
+
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -71,7 +78,6 @@ func TestHttpClient_AttachUserAgentToRequest(t *testing.T) {
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
 		ServerBaseUrl:    svr.URL,
-		Version:          "0.5.1",
 	}
 
 	c := NewClient(cfg)
