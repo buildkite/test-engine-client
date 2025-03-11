@@ -11,6 +11,7 @@ require (
 
 require (
 	drjosh.dev/zzglob v0.4.0
+	github.com/google/uuid v1.6.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pact-foundation/pact-go/v2 v2.0.10
