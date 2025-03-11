@@ -564,6 +564,12 @@ var cliCommand = &cli.Command{
 			},
 		},
 		{
+			Name:      "upload",
+			Usage:     "Upload test results to Test Engine",
+			ArgsUsage: "<path-to-junit.xml-or-results.json>",
+			Action:    uploadAction,
+		},
+		{
 			Name:   "tools",
 			Usage:  "Utility tools",
 			Hidden: !previewSelectionEnabled(),
