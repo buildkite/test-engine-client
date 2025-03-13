@@ -18,11 +18,10 @@ import (
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
+	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/sys/unix"
 )
-
-var Version = ""
 
 const Logo = `
 ______ ______ _____
@@ -35,7 +34,7 @@ _  /_/ /  ,<  / /_ /  __/ /__
 func printStartUpMessage() {
 	const green = "\033[32m"
 	const reset = "\033[0m"
-	fmt.Println("+++ Buildkite Test Engine Client: bktec " + Version + "\n")
+	fmt.Println("+++ Buildkite Test Engine Client: bktec " + version.Version + "\n")
 	fmt.Println(green + Logo + reset)
 }
 
@@ -54,7 +53,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Println(Version)
+		fmt.Printf("bktec %s\n", version.Version)
 		os.Exit(0)
 	}
 
@@ -82,7 +81,6 @@ func main() {
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
-		Version:          Version,
 	})
 
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
@@ -207,7 +205,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
 		Timeline:   timeline,
 		Env:        cfg.DumpEnv(),
-		Version:    Version,
+		Version:    version.Version,
 		Statistics: statistics,
 	})
 

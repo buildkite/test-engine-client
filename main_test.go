@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
+	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -837,10 +838,10 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 }
 
 func TestSendMetadata(t *testing.T) {
-	originalVersion := Version
-	Version = "0.1.0"
+	originalVersion := version.Version
+	version.Version = "0.1.0"
 	defer func() {
-		Version = originalVersion
+		version.Version = originalVersion
 	}()
 
 	timeline := []api.Timeline{
