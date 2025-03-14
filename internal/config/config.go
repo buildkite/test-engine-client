@@ -1,5 +1,7 @@
 package config
 
+import "github.com/buildkite/test-engine-client/internal/env"
+
 // Config is the internal representation of the complete test engine client configuration.
 type Config struct {
 	// AccessToken is the access token for the API.
@@ -42,11 +44,13 @@ type Config struct {
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.
 // It returns Config struct and an InvalidConfigError if there is an invalid configuration.
-func New() (Config, error) {
-	c := Config{errs: InvalidConfigError{}}
+func New(env env.Env) (Config, error) {
+	c := Config{
+		errs: InvalidConfigError{},
+	}
 
 	// TODO: remove error from readFromEnv and validate functions
-	_ = c.readFromEnv()
+	_ = c.readFromEnv(env)
 	_ = c.validate()
 
 	if len(c.errs) > 0 {

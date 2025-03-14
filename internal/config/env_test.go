@@ -2,20 +2,18 @@ package config
 
 import (
 	"errors"
-	"os"
 	"strconv"
 	"testing"
+
+	"github.com/buildkite/test-engine-client/internal/env"
 )
 
 func TestGetIntEnvWithDefault(t *testing.T) {
-	os.Setenv("MY_KEY", "10")
-	defer os.Unsetenv("MY_KEY")
-
-	os.Setenv("EMPTY_KEY", "")
-	defer os.Unsetenv("EMPTY_KEY")
-
-	os.Setenv("INVALID_KEY", "invalid_value")
-	defer os.Unsetenv("INVALID_KEY")
+	env := env.Map{
+		"MY_KEY":      "10",
+		"EMPTY_KEY":   "",
+		"INVALID_KEY": "invalid_value",
+	}
 
 	tests := []struct {
 		key          string
@@ -51,7 +49,7 @@ func TestGetIntEnvWithDefault(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
-			got, err := getIntEnvWithDefault(tt.key, tt.defaultValue)
+			got, err := getIntEnvWithDefault(env, tt.key, tt.defaultValue)
 			if err != nil && !errors.Is(err, tt.err) {
 				t.Errorf("getIntEnvWithDefault(%q, %d) error = %v, want %v", tt.key, tt.defaultValue, err, tt.err)
 			}
@@ -63,14 +61,11 @@ func TestGetIntEnvWithDefault(t *testing.T) {
 }
 
 func TestGetEnvWithDefault(t *testing.T) {
-	os.Setenv("MY_KEY", "my_value")
-	defer os.Unsetenv("MY_KEY")
-
-	os.Setenv("EMPTY_KEY", "")
-	defer os.Unsetenv("EMPTY_KEY")
-
-	os.Setenv("OTHER_KEY", "other_value")
-	defer os.Unsetenv("OTHER_KEY")
+	env := env.Map{
+		"MY_KEY":    "my_value",
+		"EMPTY_KEY": "",
+		"OTHER_KEY": "other_value",
+	}
 
 	tests := []struct {
 		key          string
@@ -94,14 +89,14 @@ func TestGetEnvWithDefault(t *testing.T) {
 		},
 		{
 			key:          "EMPTY_KEY",
-			defaultValue: os.Getenv("OTHER_KEY"),
+			defaultValue: env.Get("OTHER_KEY"),
 			want:         "other_value",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
-			if got := getEnvWithDefault(tt.key, tt.defaultValue); got != tt.want {
+			if got := getEnvWithDefault(env, tt.key, tt.defaultValue); got != tt.want {
 				t.Errorf("getEnvWithDefault(%q, %q) = %q, want %q", tt.key, tt.defaultValue, got, tt.want)
 			}
 		})
