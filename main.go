@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
@@ -46,7 +47,9 @@ type TestRunner interface {
 }
 
 func main() {
-	debug.SetDebug(os.Getenv("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
+	env := env.OS{}
+
+	debug.SetDebug(env.Get("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
 
 	versionFlag := flag.Bool("version", false, "print version information")
 
@@ -60,7 +63,7 @@ func main() {
 	printStartUpMessage()
 
 	// get config
-	cfg, err := config.New()
+	cfg, err := config.New(env)
 	if err != nil {
 		logErrorAndExit(16, "Invalid configuration...\n%v", err)
 	}

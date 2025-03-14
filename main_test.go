@@ -15,6 +15,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
+	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
@@ -346,6 +347,7 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		Parallelism:   10,
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
@@ -416,6 +418,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		OrganizationSlug: "org",
 		SuiteSlug:        "suite",
 		Branch:           "tat-123/my-cool-feature",
+		Env:              env.Map{},
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl:    cfg.ServerBaseUrl,
@@ -463,6 +466,7 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 		Identifier:    "identifier",
 		Branch:        "tat-123/my-cool-feature",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
@@ -501,6 +505,7 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 		Identifier:    "identifier",
 		Branch:        "tat-123/my-cool-feature",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
@@ -536,6 +541,7 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 		Identifier:    "identifier",
 		Branch:        "",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
@@ -571,6 +577,7 @@ func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
 		Identifier:    "identifier",
 		Branch:        "",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
@@ -607,6 +614,7 @@ func TestCreateRequestParams(t *testing.T) {
 		Parallelism:      7,
 		Branch:           "",
 		TestRunner:       "rspec",
+		Env:              env.Map{},
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -700,6 +708,7 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 				Parallelism:      7,
 				Branch:           "",
 				TestRunner:       r.Name(),
+				Env:              env.Map{},
 			}
 
 			client := api.NewClient(api.ClientConfig{
@@ -752,6 +761,7 @@ func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 		Parallelism:      7,
 		Branch:           "",
 		SplitByExample:   true,
+		Env:              env.Map{},
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -790,6 +800,7 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 		Parallelism:      7,
 		Branch:           "",
 		SplitByExample:   true,
+		Env:              env.Map{},
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -849,7 +860,7 @@ func TestSendMetadata(t *testing.T) {
 		{Event: "test_end", Timestamp: "2024-06-20T04:49:09.609793Z"},
 	}
 
-	env := map[string]string{
+	env := env.Map{
 		"BUILDKITE_BUILD_ID":                  "xyz",
 		"BUILDKITE_JOB_ID":                    "abc",
 		"BUILDKITE_STEP_ID":                   "pqr",
@@ -864,10 +875,6 @@ func TestSendMetadata(t *testing.T) {
 		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":   "rspec",
 		"BUILDKITE_RETRY_COUNT":               "0",
 	}
-	for k, v := range env {
-		_ = os.Setenv(k, v)
-	}
-	defer os.Clearenv()
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
@@ -927,6 +934,7 @@ func TestSendMetadata(t *testing.T) {
 		SuiteSlug:        "rspec",
 		Identifier:       "fruitsabc",
 		ServerBaseUrl:    svr.URL,
+		Env:              env,
 	}
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
@@ -950,6 +958,7 @@ func TestSendMetadata_Unauthorized(t *testing.T) {
 		SuiteSlug:        "my-suite",
 		Identifier:       "identifier",
 		ServerBaseUrl:    svr.URL,
+		Env:              env.Map{},
 	}
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,

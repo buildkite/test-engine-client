@@ -2,33 +2,32 @@ package config
 
 import (
 	"errors"
-	"os"
 	"testing"
 
+	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestConfigReadFromEnv(t *testing.T) {
-	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
-	os.Setenv("BUILDKITE_PARALLEL_JOB", "0")
-	os.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", "https://buildkite.localhost")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "bin/rspec {{testExamples}}")
-	os.Setenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "my_token")
-	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
-	os.Setenv("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "my_suite")
-	os.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "3")
-	os.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "TRUE")
-	os.Setenv("BUILDKITE_BUILD_ID", "123")
-	os.Setenv("BUILDKITE_STEP_ID", "456")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN", "spec/unit/**/*_spec.rb")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN", "spec/feature/**/*_spec.rb")
-	os.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "result.json")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "rspec")
-	defer os.Clearenv()
-
 	c := Config{}
-	err := c.readFromEnv()
+	err := c.readFromEnv(env.Map{
+		"BUILDKITE_PARALLEL_JOB_COUNT":                    "10",
+		"BUILDKITE_PARALLEL_JOB":                          "0",
+		"BUILDKITE_TEST_ENGINE_BASE_URL":                  "https://buildkite.localhost",
+		"BUILDKITE_TEST_ENGINE_TEST_CMD":                  "bin/rspec {{testExamples}}",
+		"BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN":          "my_token",
+		"BUILDKITE_ORGANIZATION_SLUG":                     "my_org",
+		"BUILDKITE_TEST_ENGINE_SUITE_SLUG":                "my_suite",
+		"BUILDKITE_TEST_ENGINE_RETRY_COUNT":               "3",
+		"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":          "TRUE",
+		"BUILDKITE_BUILD_ID":                              "123",
+		"BUILDKITE_STEP_ID":                               "456",
+		"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN":         "spec/unit/**/*_spec.rb",
+		"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN": "spec/feature/**/*_spec.rb",
+		"BUILDKITE_TEST_ENGINE_RESULT_PATH":               "result.json",
+		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":               "rspec",
+	})
 
 	want := Config{
 		Parallelism:            10,
@@ -58,16 +57,16 @@ func TestConfigReadFromEnv(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
-	os.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_MODE", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "")
-	os.Setenv("BUILDKITE_BUILD_ID", "123")
-	os.Setenv("BUILDKITE_STEP_ID", "456")
-	defer os.Clearenv()
-
 	c := Config{errs: InvalidConfigError{}}
-	c.readFromEnv()
+	c.readFromEnv(env.Map{
+		"BUILDKITE_TEST_ENGINE_BASE_URL":    "",
+		"BUILDKITE_TEST_ENGINE_MODE":        "",
+		"BUILDKITE_TEST_ENGINE_TEST_CMD":    "",
+		"BUILDKITE_TEST_ENGINE_RETRY_COUNT": "",
+		"BUILDKITE_BUILD_ID":                "123",
+		"BUILDKITE_STEP_ID":                 "456",
+	})
+
 	if c.ServerBaseUrl != "https://api.buildkite.com" {
 		t.Errorf("ServerBaseUrl = %v, want %v", c.ServerBaseUrl, "https://api.buildkite.com")
 	}
@@ -82,17 +81,13 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_NotInteger(t *testing.T) {
-	os.Setenv("BUILDKITE_BUILD_ID", "abc")
-	os.Setenv("BUILDKITE_STEP_ID", "123")
-	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "foo")
-	os.Setenv("BUILDKITE_PARALLEL_JOB", "bar")
-	defer os.Unsetenv("BUILDKITE_BUILD_ID")
-	defer os.Unsetenv("BUILDKITE_STEP_ID")
-	defer os.Unsetenv("BUILDKITE_PARALLEL_JOB_COUNT")
-	defer os.Unsetenv("BUILDKITE_PARALLEL_JOB")
-
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv()
+	err := c.readFromEnv(env.Map{
+		"BUILDKITE_BUILD_ID":           "abc",
+		"BUILDKITE_STEP_ID":            "123",
+		"BUILDKITE_PARALLEL_JOB_COUNT": "foo",
+		"BUILDKITE_PARALLEL_JOB":       "bar",
+	})
 
 	var invConfigError InvalidConfigError
 	if !errors.As(err, &invConfigError) {
@@ -106,17 +101,16 @@ func TestConfigReadFromEnv_NotInteger(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
-	os.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_MODE", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "")
-	os.Setenv("BUILDKITE_STEP_ID", "123")
-	os.Setenv("BUILDKITE_PARALLEL_JOB", "1")
-	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
-	defer os.Clearenv()
-
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv()
+	err := c.readFromEnv(env.Map{
+		"BUILDKITE_TEST_ENGINE_BASE_URL":    "",
+		"BUILDKITE_TEST_ENGINE_MODE":        "",
+		"BUILDKITE_TEST_ENGINE_TEST_CMD":    "",
+		"BUILDKITE_TEST_ENGINE_RETRY_COUNT": "",
+		"BUILDKITE_STEP_ID":                 "123",
+		"BUILDKITE_PARALLEL_JOB":            "1",
+		"BUILDKITE_PARALLEL_JOB_COUNT":      "10",
+	})
 
 	var invConfigError InvalidConfigError
 	if !errors.As(err, &invConfigError) {
@@ -131,17 +125,16 @@ func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
-	os.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_MODE", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "")
-	os.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "")
-	os.Setenv("BUILDKITE_BUILD_ID", "123")
-	os.Setenv("BUILDKITE_PARALLEL_JOB", "1")
-	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
-	defer os.Clearenv()
-
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv()
+	err := c.readFromEnv(env.Map{
+		"BUILDKITE_TEST_ENGINE_BASE_URL":    "",
+		"BUILDKITE_TEST_ENGINE_MODE":        "",
+		"BUILDKITE_TEST_ENGINE_TEST_CMD":    "",
+		"BUILDKITE_TEST_ENGINE_RETRY_COUNT": "",
+		"BUILDKITE_BUILD_ID":                "123",
+		"BUILDKITE_PARALLEL_JOB":            "1",
+		"BUILDKITE_PARALLEL_JOB_COUNT":      "10",
+	})
 
 	var invConfigError InvalidConfigError
 	if !errors.As(err, &invConfigError) {
@@ -158,14 +151,13 @@ func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_InvalidParallelJob(t *testing.T) {
-	os.Setenv("BUILDKITE_BUILD_ID", "123")
-	os.Setenv("BUILDKITE_STEP_ID", "456")
-	os.Setenv("BUILDKITE_PARALLEL_JOB", "")
-	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "10")
-	defer os.Clearenv()
-
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv()
+	err := c.readFromEnv(env.Map{
+		"BUILDKITE_BUILD_ID":           "123",
+		"BUILDKITE_STEP_ID":            "456",
+		"BUILDKITE_PARALLEL_JOB":       "",
+		"BUILDKITE_PARALLEL_JOB_COUNT": "10",
+	})
 
 	var invConfigError InvalidConfigError
 	if !errors.As(err, &invConfigError) {
@@ -180,14 +172,13 @@ func TestConfigReadFromEnv_InvalidParallelJob(t *testing.T) {
 }
 
 func TestConfigReadFromEnv_InvalidParallelJobCount(t *testing.T) {
-	os.Setenv("BUILDKITE_BUILD_ID", "123")
-	os.Setenv("BUILDKITE_STEP_ID", "456")
-	os.Setenv("BUILDKITE_PARALLEL_JOB", "10")
-	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "")
-	defer os.Clearenv()
-
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv()
+	err := c.readFromEnv(env.Map{
+		"BUILDKITE_BUILD_ID":           "123",
+		"BUILDKITE_STEP_ID":            "456",
+		"BUILDKITE_PARALLEL_JOB":       "10",
+		"BUILDKITE_PARALLEL_JOB_COUNT": "",
+	})
 
 	var invConfigError InvalidConfigError
 	if !errors.As(err, &invConfigError) {

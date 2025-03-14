@@ -1,15 +1,16 @@
 package config
 
 import (
-	"os"
 	"strconv"
+
+	"github.com/buildkite/test-engine-client/internal/env"
 )
 
 // getEnvWithDefault retrieves the value of the environment variable named by the key.
 // If the variable is present and not empty, the value is returned.
 // Otherwise the returned value will be the default value.
-func getEnvWithDefault(key string, defaultValue string) string {
-	value, ok := os.LookupEnv(key)
+func getEnvWithDefault(env env.Env, key string, defaultValue string) string {
+	value, ok := env.Lookup(key)
 	if !ok {
 		return defaultValue
 	}
@@ -19,8 +20,8 @@ func getEnvWithDefault(key string, defaultValue string) string {
 	return value
 }
 
-func getIntEnvWithDefault(key string, defaultValue int) (int, error) {
-	value := os.Getenv(key)
+func getIntEnvWithDefault(env env.Env, key string, defaultValue int) (int, error) {
+	value := env.Get(key)
 	// If the environment variable is not set, return the default value.
 	if value == "" {
 		return defaultValue, nil
@@ -57,7 +58,7 @@ func (c Config) DumpEnv() map[string]string {
 
 	envs := make(map[string]string)
 	for _, key := range keys {
-		envs[key] = os.Getenv(key)
+		envs[key] = c.Env.Get(key)
 	}
 
 	envs["BUILDKITE_TEST_ENGINE_IDENTIFIER"] = c.Identifier
