@@ -38,6 +38,9 @@ type Config struct {
 	Branch string
 	// JobRetryCount is the count of the number of times the job has been retried.
 	JobRetryCount int
+	// Env provides access to environment variables.
+	// It's public because many tests in other packages reference it (perhaps they should not).
+	Env env.Env
 	// errs is a map of environment variables name and the validation errors associated with them.
 	errs InvalidConfigError
 }
@@ -46,6 +49,7 @@ type Config struct {
 // It returns Config struct and an InvalidConfigError if there is an invalid configuration.
 func New(env env.Env) (Config, error) {
 	c := Config{
+		Env:  env,
 		errs: InvalidConfigError{},
 	}
 

@@ -35,7 +35,7 @@ func getIntEnvWithDefault(env env.Env, key string, defaultValue int) (int, error
 	return valueInt, nil
 }
 
-func (c Config) DumpEnv(env env.Env) map[string]string {
+func (c Config) DumpEnv() map[string]string {
 	keys := []string{
 		"BUILDKITE_BUILD_ID",
 		"BUILDKITE_JOB_ID",
@@ -58,7 +58,7 @@ func (c Config) DumpEnv(env env.Env) map[string]string {
 
 	envs := make(map[string]string)
 	for _, key := range keys {
-		envs[key] = env.Get(key)
+		envs[key] = c.Env.Get(key)
 	}
 
 	envs["BUILDKITE_TEST_ENGINE_IDENTIFIER"] = c.Identifier

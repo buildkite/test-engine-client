@@ -342,12 +342,12 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	defer svr.Close()
 
 	ctx := context.Background()
-	env := env.Map{}
 	cfg := config.Config{
 		NodeIndex:     0,
 		Parallelism:   10,
 		Identifier:    "identifier",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
@@ -363,7 +363,7 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, env, files, testRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -418,8 +418,8 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		OrganizationSlug: "org",
 		SuiteSlug:        "suite",
 		Branch:           "tat-123/my-cool-feature",
+		Env:              env.Map{},
 	}
-	env := env.Map{}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		OrganizationSlug: cfg.OrganizationSlug,
@@ -437,7 +437,7 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(context.Background(), apiClient, cfg, env, tests, testRunner)
+	got, err := fetchOrCreateTestPlan(context.Background(), apiClient, cfg, tests, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
 	}
@@ -466,8 +466,8 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 		Identifier:    "identifier",
 		Branch:        "tat-123/my-cool-feature",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
-	env := env.Map{}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
 	})
@@ -475,7 +475,7 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, env, files, TestRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, TestRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -505,8 +505,8 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 		Identifier:    "identifier",
 		Branch:        "tat-123/my-cool-feature",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
-	env := env.Map{}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
 	})
@@ -514,7 +514,7 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(fetchCtx, apiClient, cfg, env, files, testRunner)
+	got, err := fetchOrCreateTestPlan(fetchCtx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -541,8 +541,8 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 		Identifier:    "identifier",
 		Branch:        "",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
-	env := env.Map{}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
 	})
@@ -550,7 +550,7 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	// we want the function to return an empty test plan and an error
 	want := plan.TestPlan{}
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, env, files, testRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err == nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
 	}
@@ -577,8 +577,8 @@ func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
 		Identifier:    "identifier",
 		Branch:        "",
 		ServerBaseUrl: svr.URL,
+		Env:           env.Map{},
 	}
-	env := env.Map{}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
 	})
@@ -586,7 +586,7 @@ func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, env, files, testRunner)
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -614,8 +614,8 @@ func TestCreateRequestParams(t *testing.T) {
 		Parallelism:      7,
 		Branch:           "",
 		TestRunner:       "rspec",
+		Env:              env.Map{},
 	}
-	env := env.Map{}
 
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: svr.URL,
@@ -630,7 +630,7 @@ func TestCreateRequestParams(t *testing.T) {
 		"testdata/rspec/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(context.Background(), cfg, env, files, *client, runner.Rspec{
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
 		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "rspec",
 		},
@@ -708,8 +708,8 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 				Parallelism:      7,
 				Branch:           "",
 				TestRunner:       r.Name(),
+				Env:              env.Map{},
 			}
-			env := env.Map{}
 
 			client := api.NewClient(api.ClientConfig{
 				ServerBaseUrl: svr.URL,
@@ -720,7 +720,7 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 				"testdata/fruits/cherry.spec.js",
 			}
 
-			got, err := createRequestParam(context.Background(), cfg, env, files, *client, r)
+			got, err := createRequestParam(context.Background(), cfg, files, *client, r)
 
 			if err != nil {
 				t.Errorf("createRequestParam() error = %v", err)
@@ -761,8 +761,8 @@ func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 		Parallelism:      7,
 		Branch:           "",
 		SplitByExample:   true,
+		Env:              env.Map{},
 	}
-	env := env.Map{}
 
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: svr.URL,
@@ -777,7 +777,7 @@ func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 		"grape_spec.rb",
 	}
 
-	_, err := createRequestParam(context.Background(), cfg, env, files, *client, runner.Rspec{})
+	_, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{})
 
 	if err.Error() != "filter tests: forbidden" {
 		t.Errorf("createRequestParam() error = %v, want forbidden error", err)
@@ -800,8 +800,8 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 		Parallelism:      7,
 		Branch:           "",
 		SplitByExample:   true,
+		Env:              env.Map{},
 	}
-	env := env.Map{}
 
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: svr.URL,
@@ -816,7 +816,7 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 		"testdata/rspec/spec/fruits/grape_spec.rb",
 	}
 
-	got, err := createRequestParam(context.Background(), cfg, env, files, *client, runner.Rspec{
+	got, err := createRequestParam(context.Background(), cfg, files, *client, runner.Rspec{
 		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "rspec",
 		},
@@ -934,6 +934,7 @@ func TestSendMetadata(t *testing.T) {
 		SuiteSlug:        "rspec",
 		Identifier:       "fruitsabc",
 		ServerBaseUrl:    svr.URL,
+		Env:              env,
 	}
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
@@ -943,7 +944,7 @@ func TestSendMetadata(t *testing.T) {
 		Total: 3,
 	}
 
-	sendMetadata(context.Background(), client, cfg, env, timeline, statistics)
+	sendMetadata(context.Background(), client, cfg, timeline, statistics)
 }
 
 func TestSendMetadata_Unauthorized(t *testing.T) {
@@ -957,8 +958,8 @@ func TestSendMetadata_Unauthorized(t *testing.T) {
 		SuiteSlug:        "my-suite",
 		Identifier:       "identifier",
 		ServerBaseUrl:    svr.URL,
+		Env:              env.Map{},
 	}
-	env := env.Map{}
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseUrl: cfg.ServerBaseUrl,
 	})
@@ -969,5 +970,5 @@ func TestSendMetadata_Unauthorized(t *testing.T) {
 		Total: 3,
 	}
 
-	sendMetadata(context.Background(), client, cfg, env, timeline, statistics)
+	sendMetadata(context.Background(), client, cfg, timeline, statistics)
 }

@@ -86,7 +86,7 @@ func main() {
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
-	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, env, files, testRunner)
+	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		logErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
 	}
@@ -120,7 +120,7 @@ func main() {
 	// At this point, the runner is expected to have completed
 
 	if !testPlan.Fallback {
-		sendMetadata(ctx, apiClient, cfg, env, timeline, runResult.Statistics())
+		sendMetadata(ctx, apiClient, cfg, timeline, runResult.Statistics())
 	}
 
 	printReport(runResult, testPlan.SkippedTests, testRunner.Name())
@@ -204,10 +204,10 @@ func createTimestamp() string {
 	return time.Now().Format(time.RFC3339Nano)
 }
 
-func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, env env.Env, timeline []api.Timeline, statistics runner.RunStatistics) {
+func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline, statistics runner.RunStatistics) {
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
 		Timeline:   timeline,
-		Env:        cfg.DumpEnv(env),
+		Env:        cfg.DumpEnv(),
 		Version:    version.Version,
 		Statistics: statistics,
 	})
@@ -297,7 +297,7 @@ func logErrorAndExit(exitCode int, format string, v ...any) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg config.Config, env env.Env, files []string, testRunner TestRunner) (plan.TestPlan, error) {
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
 	debug.Println("Fetching test plan")
 
 	// Fetch the plan from the server's cache.
@@ -339,7 +339,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 
 	debug.Println("No test plan found, creating a new plan")
 	// If the cache is empty, create a new plan.
-	params, err := createRequestParam(ctx, cfg, env, files, *apiClient, testRunner)
+	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
 	if err != nil {
 		return handleError(err)
 	}
@@ -366,7 +366,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 // createRequestParam generates the parameters needed for a test plan request.
 // For runners other than "rspec", it constructs the test plan parameters with all test files.
 // For the "rspec" runner, it filters the test files through the Test Engine API and splits the filtered files into examples.
-func createRequestParam(ctx context.Context, cfg config.Config, env env.Env, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
+func createRequestParam(ctx context.Context, cfg config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	testFiles := []plan.TestCase{}
 	for _, file := range files {
 		testFiles = append(testFiles, plan.TestCase{
@@ -394,7 +394,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, env env.Env, fil
 	// The SplitByExample flag indicates whether to filter slow files for splitting by example.
 	// Regardless of the flag's state, the API will still filter other files that need to be split by example, such as those containing skipped tests.
 	// Therefore, we must filter and split files even when SplitByExample is disabled.
-	testParams, err := filterAndSplitFiles(ctx, cfg, env, client, testFiles, runner)
+	testParams, err := filterAndSplitFiles(ctx, cfg, client, testFiles, runner)
 	if err != nil {
 		return api.TestPlanParams{}, err
 	}
@@ -411,12 +411,12 @@ func createRequestParam(ctx context.Context, cfg config.Config, env env.Env, fil
 // filterAndSplitFiles filters the test files through the Test Engine API and splits the filtered files into examples.
 // It returns the test plan parameters with the examples from the filtered files and the remaining files.
 // An error is returned if there is a failure in any of the process.
-func filterAndSplitFiles(ctx context.Context, cfg config.Config, env env.Env, client api.Client, files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
+func filterAndSplitFiles(ctx context.Context, cfg config.Config, client api.Client, files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
 	// Filter files that need to be split.
 	debug.Printf("Filtering %d files", len(files))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
 		Files: files,
-		Env:   cfg.DumpEnv(env),
+		Env:   cfg.DumpEnv(),
 	})
 
 	if err != nil {

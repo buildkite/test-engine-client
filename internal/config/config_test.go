@@ -27,7 +27,9 @@ func getExampleEnv() env.Env {
 }
 
 func TestNewConfig(t *testing.T) {
-	c, err := New(getExampleEnv())
+	env := getExampleEnv()
+
+	c, err := New(env)
 	if err != nil {
 		t.Errorf("config.New() error = %v", err)
 	}
@@ -44,6 +46,7 @@ func TestNewConfig(t *testing.T) {
 		SuiteSlug:        "my_suite",
 		TestRunner:       "rspec",
 		JobRetryCount:    0,
+		Env:              env,
 		errs:             InvalidConfigError{},
 	}
 
@@ -82,6 +85,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		TestRunner:       "rspec",
 		ResultPath:       "tmp/rspec.json",
 		JobRetryCount:    0,
+		Env:              env,
 	}
 
 	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {
