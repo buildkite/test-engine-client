@@ -16,7 +16,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/buildkite/buildkite-sdk/sdk/go/sdk/buildkite"
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
@@ -47,10 +46,6 @@ type TestRunner interface {
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string
-}
-
-type Insteption struct {
-	Steps []buildkite.CommandStep
 }
 
 type StepTemplate struct {
@@ -96,6 +91,17 @@ func main() {
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
+	switch flag.Arg(0) {
+	case "insteption":
+		insteption(ctx, apiClient, cfg, files, testRunner)
+		os.Exit(0)
+	case "run":
+		// get plan
+		// execute tests
+	default:
+		// do current behavior
+	}
+
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		logErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
@@ -105,39 +111,6 @@ func main() {
 
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
-
-	// Insteption Hack!
-	dependencyKey, err := exec.Command("buildkite-agent", "step", "get", "key").Output()
-	if err != nil {
-		log.Fatalf("problem getting step key")
-	}
-
-	// TODO: get this from Test Plan API
-	parallelism := 2
-
-	// TODO: get the path from args
-	b, err := os.ReadFile("./insteption.yml")
-	if err != nil {
-		log.Fatalf("problem opening file: %v", err)
-	}
-
-	t := template.Must(template.New("steps").Parse(string(b)))
-	var yaml bytes.Buffer
-	t.Execute(&yaml, StepTemplate{
-		DependsOn:   string(dependencyKey),
-		Parallelism: parallelism,
-	})
-
-	cmd := exec.Command("buildkite-agent", "pipeline", "upload")
-	cmd.Stdin = bytes.NewReader(yaml.Bytes())
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("problem uploading pipeline: %v", err)
-	}
-
-	os.Exit(0)
 
 	// execute tests
 	var timeline []api.Timeline
@@ -503,4 +476,46 @@ func filterAndSplitFiles(ctx context.Context, cfg config.Config, client api.Clie
 		Examples: examples,
 		Files:    remainingFiles,
 	}, nil
+}
+
+func insteption(ctx context.Context, client *api.Client, cfg config.Config, files []string, testRunner TestRunner) {
+	parallelism := getParallelism()
+	cfg.Parallelism = parallelism
+
+	_, err := fetchOrCreateTestPlan(ctx, client, cfg, files, testRunner)
+	if err != nil {
+		logErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
+	}
+
+	dependencyKey, err := exec.Command("buildkite-agent", "step", "get", "key").Output()
+	if err != nil {
+		log.Fatalf("problem getting step key")
+	}
+
+	// TODO: get the path from args
+	b, err := os.ReadFile("./insteption.yml")
+	if err != nil {
+		log.Fatalf("problem opening file: %v", err)
+	}
+
+	t := template.Must(template.New("steps").Parse(string(b)))
+	var yaml bytes.Buffer
+	t.Execute(&yaml, StepTemplate{
+		DependsOn:   string(dependencyKey),
+		Parallelism: parallelism,
+	})
+
+	cmd := exec.Command("buildkite-agent", "pipeline", "upload")
+	cmd.Stdin = bytes.NewReader(yaml.Bytes())
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("problem uploading pipeline: %v", err)
+	}
+}
+
+// TODO: get from API
+func getParallelism() int {
+	return 7
 }
