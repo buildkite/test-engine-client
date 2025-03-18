@@ -2,7 +2,9 @@ package bes
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/buildbarn/bb-portal/third_party/bazel/gen/bes"
@@ -24,8 +26,9 @@ type BuildEventChannel interface {
 }
 
 type buildEventChannel struct {
-	ctx      context.Context
-	streamID *build.StreamId
+	ctx       context.Context
+	streamID  *build.StreamId
+	filenames chan<- string
 }
 
 // HandleBuildEvent implements BuildEventChannel.HandleBuildEvent.
@@ -45,7 +48,12 @@ func (c *buildEventChannel) HandleBuildEvent(event *build.BuildEvent) error {
 		files := []string{}
 		for _, x := range r.GetTestActionOutput() {
 			if x.GetName() == "test.xml" {
-				files = append(files, x.GetUri())
+				path, err := pathFromURI(x.GetUri())
+				if err != nil {
+					return err // maybe just a log a warning?
+				}
+				files = append(files, path)
+				c.filenames <- path
 			}
 		}
 		slog.Info("TestResult",
@@ -59,13 +67,24 @@ func (c *buildEventChannel) HandleBuildEvent(event *build.BuildEvent) error {
 	return nil
 }
 
+func pathFromURI(uri string) (string, error) {
+	url, err := url.Parse(uri)
+	if err != nil {
+		return "", err
+	}
+	if url.Scheme != "file" {
+		return "", fmt.Errorf("expected file://..., got %v://...", url.Scheme)
+	}
+	return url.Path, nil
+}
+
 // Finalize implements BuildEventChannel.Finalize.
 func (c *buildEventChannel) Finalize() error {
 	// defer the ctx so its not reaped when the client closes the connection
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour*24)
 	defer cancel()
 
-	slog.Debug("finalizing build event channel")
+	slog.Info("finalizing build event channel")
 	_ = ctx
 	// TODO: finalize anything that needs finalizing?
 

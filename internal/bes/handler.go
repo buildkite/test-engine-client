@@ -13,11 +13,14 @@ import (
 // For each incoming stream, and BuildEventChannel is created, which handles that stream.
 // BuildEventHandler is responsible for managing the things that are common to these event streams.
 type BuildEventHandler struct {
+	filenames chan<- string
 }
 
 // NewBuildEventHandler constructs a new BuildEventHandler
-func NewBuildEventHandler() *BuildEventHandler {
-	return &BuildEventHandler{}
+func NewBuildEventHandler(filenames chan<- string) *BuildEventHandler {
+	return &BuildEventHandler{
+		filenames: filenames,
+	}
 }
 
 // CreateEventChannel creates a new BuildEventChannel
@@ -29,7 +32,8 @@ func (h *BuildEventHandler) CreateEventChannel(ctx context.Context, initialEvent
 	}
 
 	return &buildEventChannel{
-		ctx:      ctx,
-		streamID: initialEvent.StreamId,
+		ctx:       ctx,
+		streamID:  initialEvent.StreamId,
+		filenames: h.filenames,
 	}
 }

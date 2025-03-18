@@ -8,45 +8,19 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"sort"
 
 	slog "github.com/buildkite/test-engine-client/internal/bes/quietslog"
 
 	"google.golang.org/genproto/googleapis/devtools/build/v1"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var host = "127.0.0.1"
-var port = 60242 // 0 for OS-allocated
-
 type BuildEventServer struct {
 	handler *BuildEventHandler
-}
-
-func Listen() error {
-	addr := fmt.Sprintf("%s:%d", host, port)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("listening on %s: %w", addr, err)
-	}
-	fmt.Println("Bazel BES listener: grpc://" + listener.Addr().String())
-
-	opts := []grpc.ServerOption{}
-	grpcServer := grpc.NewServer(opts...)
-
-	build.RegisterPublishBuildEventServer(grpcServer, newServer())
-	grpcServer.Serve(listener)
-
-	return nil
-}
-
-func newServer() build.PublishBuildEventServer {
-	return BuildEventServer{}
 }
 
 // PublishLifecycleEvent is copied verbatim from:

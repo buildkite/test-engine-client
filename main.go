@@ -72,7 +72,7 @@ func main() {
 		}
 		os.Exit(0)
 	} else if flag.Arg(0) == "bazel" && flag.Arg(1) == "listen" {
-		if err := bes.Listen(); err != nil {
+		if err := bes.ListenCLI(os.Args[3:], env); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
