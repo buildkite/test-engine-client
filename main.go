@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"strconv"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/buildkite/buildkite-sdk/sdk/go/sdk/buildkite"
@@ -23,7 +25,6 @@ import (
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/sys/unix"
-	"gopkg.in/yaml.v3"
 )
 
 const Logo = `
@@ -50,6 +51,11 @@ type TestRunner interface {
 
 type Insteption struct {
 	Steps []buildkite.CommandStep
+}
+
+type StepTemplate struct {
+	DependsOn   string
+	Parallelism int
 }
 
 func main() {
@@ -95,34 +101,41 @@ func main() {
 		logErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
 	}
 
-	debug.Printf("My favoursssite ice cream is %s", testPlan.Experiment)
+	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
 
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
 
 	// Insteption Hack!
 	dependencyKey, err := exec.Command("buildkite-agent", "step", "get", "key").Output()
-	parallelismKey := 2
-
-	debug.Printf(string(dependencyKey))
-	debug.Printf(string(parallelismKey))
-
-	b, err := os.ReadFile("./insteption.yml")
 	if err != nil {
-		log.Fatalf("Problem opening file: %v", err)
+		log.Fatalf("problem getting step key")
 	}
 
-	var insteption Insteption
-	yaml.Unmarshal(b, &insteption)
+	// TODO: get this from Test Plan API
+	parallelism := 2
 
-	switcherooCmd := fmt.Sprintf("'s/DEPENDS/%s/'", dependencyKey)
+	// TODO: get the path from args
+	b, err := os.ReadFile("./insteption.yml")
+	if err != nil {
+		log.Fatalf("problem opening file: %v", err)
+	}
 
-	fmt.Println(yaml.Marshal(insteption))
+	t := template.Must(template.New("steps").Parse(string(b)))
+	var yaml bytes.Buffer
+	t.Execute(&yaml, StepTemplate{
+		DependsOn:   string(dependencyKey),
+		Parallelism: parallelism,
+	})
 
-	cmd := exec.Command("sed", "-e", switcherooCmd, "local/te-sample-rspec-repo/insteption.yml", "|", "buildkite-agent", "pipeline", "upload")
+	cmd := exec.Command("buildkite-agent", "pipeline", "upload")
+	cmd.Stdin = bytes.NewReader(yaml.Bytes())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("problem uploading pipeline: %v", err)
+	}
 
 	os.Exit(0)
 
