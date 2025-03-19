@@ -63,11 +63,12 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 	var cmd *exec.Cmd
 	var err error
 
+	testPaths := make([]string, len(testCases))
+	for i, testCase := range testCases {
+		testPaths[i] = testCase.Path
+	}
+
 	if !retry {
-		testPaths := make([]string, len(testCases))
-		for i, testCase := range testCases {
-			testPaths[i] = testCase.Path
-		}
 		commandName, commandArgs, err := j.commandNameAndArgs(j.TestCommand, testPaths)
 		if err != nil {
 			return fmt.Errorf("failed to build command: %w", err)
@@ -79,7 +80,7 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		for i, testCase := range testCases {
 			testNames[i] = fmt.Sprintf("%s %s", testCase.Scope, testCase.Name)
 		}
-		commandName, commandArgs, err := j.retryCommandNameAndArgs(j.RetryTestCommand, testNames)
+		commandName, commandArgs, err := j.retryCommandNameAndArgs(j.RetryTestCommand, testNames, testPaths)
 		if err != nil {
 			return fmt.Errorf("failed to build command: %w", err)
 		}
@@ -198,7 +199,7 @@ func (j Jest) commandNameAndArgs(cmd string, testCases []string) (string, []stri
 	return words[0], words[1:], nil
 }
 
-func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string, testPaths []string) (string, []string, error) {
 	words, err := shellquote.Split(cmd)
 	if err != nil {
 		return "", []string{}, err
@@ -218,6 +219,11 @@ func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string) (string, [
 	testNamePattern := fmt.Sprintf("(%s)", strings.Join(escapedTestCases, "|"))
 
 	words = slices.Replace(words, idx, idx+1, testNamePattern)
+
+	testExamplesIdx := slices.Index(words, "{{testExamples}}")
+	if testExamplesIdx >= 0 {
+		words = slices.Replace(words, testExamplesIdx, testExamplesIdx+1, testPaths...)
+	}
 
 	outputIdx := slices.Index(words, "{{resultPath}}")
 	if outputIdx < 0 {

@@ -382,6 +382,7 @@ func TestJestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 
 func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 	testCases := []string{"this will fail", "this other one will fail"}
+	testPaths := []string{"spec/user.spec.js", "spec/billing.spec.js"}
 	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 
 	jest := NewJest(RunnerConfig{
@@ -389,7 +390,7 @@ func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 		ResultPath:       "jest.json",
 	})
 
-	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases)
+	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases, testPaths)
 	if err != nil {
 		t.Errorf("retryCommandNameAndArgs(%q, %q) error = %v", testCases, retryTestCommand, err)
 	}
@@ -407,6 +408,7 @@ func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 
 func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
 	testCases := []string{"test with special characters .+*?()|[]{}^$", "another test"}
+	testPaths := []string{"spec/user.spec.js", "spec/billing.spec.js"}
 	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 
 	jest := NewJest(RunnerConfig{
@@ -414,7 +416,7 @@ func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
 		ResultPath:       "jest.json",
 	})
 
-	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases)
+	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases, testPaths)
 	if err != nil {
 		t.Errorf("retryCommandNameAndArgs(%q, %q) error = %v", testCases, retryTestCommand, err)
 	}
@@ -432,6 +434,7 @@ func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
 
 func TestJestRetryCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"this will fail", "this other one will fail"}
+	testPaths := []string{"spec/user.spec.js", "spec/billing.spec.js"}
 	retryTestCommand := "jest --json --outputFile {{resultPath}}"
 
 	jest := NewJest(RunnerConfig{
@@ -439,7 +442,7 @@ func TestJestRetryCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.
 		ResultPath:       "jest.json",
 	})
 
-	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases)
+	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases, testPaths)
 	fmt.Println(err)
 
 	wantName := ""
@@ -455,6 +458,41 @@ func TestJestRetryCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.
 	desiredString := "couldn't find '{{testNamePattern}}' sentinel in retry command"
 	if err.Error() != desiredString {
 		t.Errorf("retryCommandNameAndArgs() error = %v, want %v", err, desiredString)
+	}
+}
+
+func TestJestRetryCommandNameAndArgs_WithTestExamplesPlaceholder(t *testing.T) {
+	testCases := []string{"this will fail", "this other one will fail"}
+	testPaths := []string{"spec/user.spec.js", "spec/billing.spec.js"}
+	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}"
+
+	jest := NewJest(RunnerConfig{
+		RetryTestCommand: retryTestCommand,
+		ResultPath:       "jest.json",
+	})
+
+	gotName, gotArgs, err := jest.retryCommandNameAndArgs(retryTestCommand, testCases, testPaths)
+	if err != nil {
+		t.Errorf("retryCommandNameAndArgs(%q, %q) error = %v", testCases, retryTestCommand, err)
+	}
+
+	wantName := "jest"
+	wantArgs := []string{
+		"--testNamePattern",
+		"(this will fail|this other one will fail)",
+		"spec/user.spec.js",
+		"spec/billing.spec.js",
+		"--json",
+		"--testLocationInResults",
+		"--outputFile",
+		"jest.json",
+	}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("retryCommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("retryCommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 }
 
