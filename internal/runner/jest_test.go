@@ -112,6 +112,35 @@ func TestJestRun_Retry(t *testing.T) {
 	}
 }
 
+func TestJestRun_Retry_WithTestFilePattern(t *testing.T) {
+	changeCwd(t, "./testdata/jest")
+
+	jest := NewJest(RunnerConfig{
+		TestCommand:      "jest --invalid-option --json --outputFile {{resultPath}}",
+		RetryTestCommand: "npx jest {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}}",
+		ResultPath:       "jest.json",
+	})
+
+	t.Cleanup(func() {
+		os.Remove(jest.ResultPath)
+	})
+
+	testCases := []plan.TestCase{
+		{Scope: "expelliarmus", Name: "disarms the opponent", Path: "./testdata/jest/spells/expelliarmus.spec.js:1:1"},
+		{Scope: "lumos", Name: "illuminates the room", Path: "./testdata/jest/spells/lumos.spec.js:1:1"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, true)
+
+	if err != nil {
+		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+}
+
 func TestJestRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/jest")
 
@@ -511,6 +540,7 @@ func TestJestGetFiles(t *testing.T) {
 		"skipped.spec.js",
 		"slow.spec.js",
 		"spells/expelliarmus.spec.js",
+		"spells/lumos.spec.js",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {

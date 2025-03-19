@@ -61,5 +61,11 @@ export BUILDKITE_TEST_ENGINE_RETRY_CMD="yarn test --testNamePattern '{{testNameP
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
 
+To limit the number of files that Jest parses when retrying tests, you can also include a `{{testExamples}}` placeholder to specify the filenames of retried tests:
+```sh
+export BUILDKITE_TEST_ENGINE_RETRY_CMD="yarn test {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
+export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
+```
+
 > [!IMPORTANT]
 > Make sure to append `--testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}` in your custom retry command.
