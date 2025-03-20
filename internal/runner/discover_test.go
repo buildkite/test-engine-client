@@ -85,6 +85,7 @@ func TestDiscoverTestFiles_ExcludeNodeModules(t *testing.T) {
 		"testdata/jest/jest.config.js",
 		"testdata/jest/runtimeError.spec.js",
 		"testdata/jest/skipped.spec.js",
+		"testdata/jest/slow.spec.js",
 		"testdata/jest/spells/expelliarmus.spec.js",
 		"testdata/playwright/playwright.config.js",
 		"testdata/playwright/tests/error.spec.js",
