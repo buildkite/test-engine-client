@@ -68,6 +68,9 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		testPaths[i] = testCase.Path
 	}
 
+	slices.Sort(testPaths)
+	testPaths = slices.Compact(testPaths)
+
 	if !retry {
 		commandName, commandArgs, err := j.commandNameAndArgs(j.TestCommand, testPaths)
 		if err != nil {

@@ -126,8 +126,8 @@ func TestJestRun_Retry_WithTestFilePattern(t *testing.T) {
 	})
 
 	testCases := []plan.TestCase{
-		{Scope: "expelliarmus", Name: "disarms the opponent", Path: "./testdata/jest/spells/expelliarmus.spec.js:1:1"},
-		{Scope: "lumos", Name: "illuminates the room", Path: "./testdata/jest/spells/lumos.spec.js:1:1"},
+		{Scope: "expelliarmus", Name: "disarms the opponent", Path: "./testdata/jest/spells/expelliarmus.spec.js"},
+		{Scope: "this will fail", Name: "for sure", Path: "./testdata/jest/failure.spec.js"},
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, true)
@@ -136,8 +136,12 @@ func TestJestRun_Retry_WithTestFilePattern(t *testing.T) {
 		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
 
-	if result.Status() != RunStatusPassed {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	if got := len(result.tests); got != 2 {
+		t.Errorf("Jest.Run(%q) test count = %d, want %d", testCases, got, 2)
+	}
+
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 }
 
@@ -540,7 +544,6 @@ func TestJestGetFiles(t *testing.T) {
 		"skipped.spec.js",
 		"slow.spec.js",
 		"spells/expelliarmus.spec.js",
-		"spells/lumos.spec.js",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
