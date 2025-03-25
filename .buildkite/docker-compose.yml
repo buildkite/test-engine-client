@@ -4,7 +4,7 @@ services:
   ci:
     build:
       context: .
-      dockerfile: Dockerfile-compile
+      dockerfile: Dockerfile
     volumes:
       - ../:/work:cached
       - ~/gocache:/gocache
