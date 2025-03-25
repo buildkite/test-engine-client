@@ -134,7 +134,7 @@ func TestJestRun_TestFailed(t *testing.T) {
 		{
 			Scope: "this will fail",
 			Name:  "for sure",
-			Path:  "failure.spec.js:2:3",
+			Path:  "failure.spec.js",
 		},
 	}
 
@@ -177,12 +177,12 @@ func TestJestRun_TestSkipped(t *testing.T) {
 		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
-	test := result.tests["this will be skipped/for sure/skipped.spec.js:2:3"]
+	test := result.tests["this will be skipped/for sure/skipped.spec.js"]
 	if test.Status != TestStatusSkipped {
 		t.Errorf("Jest.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
 	}
 
-	todoTest := result.tests["this will be skipped/todo yeah/skipped.spec.js:6:6"]
+	todoTest := result.tests["this will be skipped/todo yeah/skipped.spec.js"]
 	if todoTest.Status != TestStatusSkipped {
 		t.Errorf("Jest.Run(%q) todoTest.Status = %v, want %v", testCases, todoTest.Status, TestStatusSkipped)
 	}
@@ -213,6 +213,49 @@ func TestJestRun_RuntimeError(t *testing.T) {
 
 	if result.Status() != RunStatusError {
 		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	}
+}
+
+// This test ensures that when a test fails due to timeout and passes after retry, the run result should be passed.
+// It covers the scenario where the test location is missing when it timed out, but set properly when passed, resulting in the test
+// being treated as different tests.
+func TestJestRun_TestTimeoutWithRetry(t *testing.T) {
+	changeCwd(t, "./testdata/jest")
+
+	jest := NewJest(RunnerConfig{
+		TestCommand:      "npx jest --json --outputFile {{resultPath}} --testTimeout=1",
+		ResultPath:       "jest.json",
+		RetryTestCommand: "npx jest --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}} ./testdata/jest/slow.spec.js",
+	})
+
+	t.Cleanup(func() {
+		os.Remove(jest.ResultPath)
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./testdata/jest/slow.spec.js"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := jest.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Jest.Run() error = %v", err)
+	}
+
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Jest.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
+	}
+
+	// after the test failed due to timeout, retry the test that will eventually passed
+	failedTests := result.FailedTests()
+	err = jest.Run(result, failedTests, true)
+
+	if err != nil {
+		t.Errorf("Jest.Run() error = %v", err)
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Jest.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusPassed)
 	}
 }
 
@@ -428,6 +471,7 @@ func TestJestGetFiles(t *testing.T) {
 		"failure.spec.js",
 		"runtimeError.spec.js",
 		"skipped.spec.js",
+		"slow.spec.js",
 		"spells/expelliarmus.spec.js",
 	}
 

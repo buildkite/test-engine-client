@@ -128,7 +128,7 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 			testCase := plan.TestCase{
 				Name:  example.Title,
 				Scope: strings.Join(example.AncestorTitles, " "),
-				Path:  fmt.Sprintf("%s:%d:%d", testPath, example.Location.Line, example.Location.Column),
+				Path:  testPath,
 			}
 
 			result.RecordTestResult(testCase, status)
