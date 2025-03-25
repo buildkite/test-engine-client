@@ -13,7 +13,10 @@ import (
 func TestPytestRun(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
-	pytest := NewPytest(RunnerConfig{})
+	pytest := NewPytest(RunnerConfig{
+		TestCommand: "pytest",
+		ResultPath:  "result-passed.json",
+	})
 	testCases := []plan.TestCase{
 		{Path: "test_sample.py"},
 	}
@@ -24,28 +27,30 @@ func TestPytestRun(t *testing.T) {
 		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
 	}
 
-	if result.Status() != RunStatusUnknown {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
 func TestPytestRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
-	pytest := NewPytest(RunnerConfig{})
+	pytest := NewPytest(RunnerConfig{
+		TestCommand: "pytest",
+		ResultPath:  "result-failed.json",
+	})
 	testCases := []plan.TestCase{
 		{Path: "failed_test.py"},
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, false)
 
-	if result.Status() != RunStatusUnknown {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+	if err != nil {
+		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
 	}
 
-	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Pytest.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 }
 
@@ -92,10 +97,11 @@ func TestPytestGetFiles(t *testing.T) {
 
 func TestPytestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []string{"failed_test.py", "test_sample.py"}
-	testCommand := "pytest {{testExamples}} --full-trace"
+	testCommand := "pytest {{testExamples}} --full-trace --json={{resultPath}}"
 
 	pytest := NewPytest(RunnerConfig{
 		TestCommand: testCommand,
+		ResultPath:  "result.json",
 	})
 
 	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
@@ -104,7 +110,7 @@ func TestPytestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	}
 
 	wantName := "pytest"
-	wantArgs := []string{"failed_test.py", "test_sample.py", "--full-trace"}
+	wantArgs := []string{"failed_test.py", "test_sample.py", "--full-trace", "--json=result.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
@@ -159,5 +165,15 @@ func TestPytestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	}
 	if !errors.Is(err, shellquote.UnterminatedSingleQuoteError) {
 		t.Errorf("commandNameAndArgs() error = %v, want %v", err, shellquote.UnterminatedSingleQuoteError)
+	}
+}
+
+func TestParseBuildkitePytestCollectorResult(t *testing.T) {
+	results, err := ParsePytestCollectorResult("testdata/pytest/pytest-collector-result.json")
+	if err != nil {
+		t.Errorf("ParseBuildkitePytestCollectorResult() error = %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("len(results) = %d, want 2", len(results))
 	}
 }
