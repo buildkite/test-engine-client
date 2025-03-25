@@ -2,34 +2,34 @@ package config
 
 import (
 	"errors"
-	"os"
 	"testing"
 
+	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func setEnv(t *testing.T) {
-	t.Helper()
-	os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "60")
-	os.Setenv("BUILDKITE_PARALLEL_JOB", "7")
-	os.Setenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "my_token")
-	os.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", "https://build.kite")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "bin/rspec {{testExamples}}")
-	os.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my_org")
-	os.Setenv("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "my_suite")
-	os.Setenv("BUILDKITE_BUILD_ID", "123")
-	os.Setenv("BUILDKITE_STEP_ID", "456")
-	os.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "rspec")
-	os.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "tmp/rspec.json")
-	os.Setenv("BUILDKITE_RETRY_COUNT", "0")
+func getExampleEnv() env.Env {
+	return env.Map{
+		"BUILDKITE_PARALLEL_JOB_COUNT":           "60",
+		"BUILDKITE_PARALLEL_JOB":                 "7",
+		"BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN": "my_token",
+		"BUILDKITE_TEST_ENGINE_BASE_URL":         "https://build.kite",
+		"BUILDKITE_TEST_ENGINE_TEST_CMD":         "bin/rspec {{testExamples}}",
+		"BUILDKITE_ORGANIZATION_SLUG":            "my_org",
+		"BUILDKITE_TEST_ENGINE_SUITE_SLUG":       "my_suite",
+		"BUILDKITE_BUILD_ID":                     "123",
+		"BUILDKITE_STEP_ID":                      "456",
+		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":      "rspec",
+		"BUILDKITE_TEST_ENGINE_RESULT_PATH":      "tmp/rspec.json",
+		"BUILDKITE_RETRY_COUNT":                  "0",
+	}
 }
 
 func TestNewConfig(t *testing.T) {
-	setEnv(t)
-	defer os.Clearenv()
+	env := getExampleEnv()
 
-	c, err := New()
+	c, err := New(env)
 	if err != nil {
 		t.Errorf("config.New() error = %v", err)
 	}
@@ -46,6 +46,7 @@ func TestNewConfig(t *testing.T) {
 		SuiteSlug:        "my_suite",
 		TestRunner:       "rspec",
 		JobRetryCount:    0,
+		Env:              env,
 		errs:             InvalidConfigError{},
 	}
 
@@ -55,9 +56,7 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestNewConfig_EmptyConfig(t *testing.T) {
-	os.Clearenv()
-
-	_, err := New()
+	_, err := New(env.Map{})
 
 	if !errors.As(err, new(InvalidConfigError)) {
 		t.Errorf("config.Validate() error = %v, want InvalidConfigError", err)
@@ -65,13 +64,12 @@ func TestNewConfig_EmptyConfig(t *testing.T) {
 }
 
 func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
-	setEnv(t)
-	os.Unsetenv("BUILDKITE_TEST_ENGINE_MODE")
-	os.Unsetenv("BUILDKITE_TEST_ENGINE_BASE_URL")
-	os.Unsetenv("BUILDKITE_TEST_ENGINE_TEST_CMD")
-	defer os.Clearenv()
+	env := getExampleEnv()
+	env.Delete("BUILDKITE_TEST_ENGINE_MODE")
+	env.Delete("BUILDKITE_TEST_ENGINE_BASE_URL")
+	env.Delete("BUILDKITE_TEST_ENGINE_TEST_CMD")
 
-	c, err := New()
+	c, err := New(env)
 	if err != nil {
 		t.Errorf("config.New() error = %v", err)
 	}
@@ -87,6 +85,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		TestRunner:       "rspec",
 		ResultPath:       "tmp/rspec.json",
 		JobRetryCount:    0,
+		Env:              env,
 	}
 
 	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {
@@ -95,12 +94,11 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 }
 
 func TestNewConfig_InvalidConfig(t *testing.T) {
-	setEnv(t)
-	os.Setenv("BUILDKITE_TEST_ENGINE_MODE", "dynamic")
-	os.Unsetenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN")
-	defer os.Clearenv()
+	env := getExampleEnv()
+	env.Set("BUILDKITE_TEST_ENGINE_MODE", "dynamic")
+	env.Delete("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN")
 
-	_, err := New()
+	_, err := New(env)
 
 	var invConfigError InvalidConfigError
 	if !errors.As(err, &invConfigError) {
