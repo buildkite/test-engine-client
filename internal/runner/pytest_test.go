@@ -32,6 +32,26 @@ func TestPytestRun(t *testing.T) {
 	}
 }
 
+func TestPytestRun_RetryCommand(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
+	pytest := NewPytest(RunnerConfig{
+		TestCommand:      "pytest failed_test.py",
+		RetryTestCommand: "pytest",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "test_sample.py"},
+	}
+
+	result := NewRunResult([]plan.TestCase{})
+	err := pytest.Run(result, testCases, true)
+
+	if err != nil {
+		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
+	}
+}
+
 func TestPytestRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
@@ -51,6 +71,48 @@ func TestPytestRun_TestFailed(t *testing.T) {
 
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+	}
+
+	failedTest := result.FailedTests()
+
+	if len(failedTest) != 1 {
+		t.Errorf("len(result.FailedTests()) = %d, want 1", len(failedTest))
+	}
+
+	wantFailedTests := []plan.TestCase{
+		{
+			Format:     "example",
+			Identifier: "a1be7e52-0dba-4018-83ce-a1598ca68807",
+			Name:       "test_failed",
+			Path:       "tests/failed_test.py::test_failed",
+			Scope:      "tests/failed_test.py",
+		},
+	}
+
+	if diff := cmp.Diff(failedTest, wantFailedTests); diff != "" {
+		t.Errorf("Pytest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+	}
+}
+
+func TestPytestRun_TestFailedWithoutResultFile(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
+	pytest := NewPytest(RunnerConfig{
+		TestCommand: "pytest",
+	})
+	testCases := []plan.TestCase{
+		{Path: "failed_test.py"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := pytest.Run(result, testCases, false)
+
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+	}
+
+	exitError := new(exec.ExitError)
+	if !errors.As(err, &exitError) {
+		t.Errorf("Pytest.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
 	}
 }
 
