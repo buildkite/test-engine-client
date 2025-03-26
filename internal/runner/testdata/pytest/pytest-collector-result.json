@@ -1,0 +1,56 @@
+[
+  {
+    "id": "db2c4ffa-efee-4b6a-b293-a4c4168aa353",
+    "scope": "Analytics::Upload associations",
+    "name": "passed",
+    "location": "./spec/models/analytics/upload_spec.rb:12",
+    "file_name": "./spec/models/analytics/upload_spec.rb",
+    "result": "passed",
+    "failure_reason": "",
+    "failure_expanded": [],
+    "history": {
+      "start_at": 347611.724809,
+      "end_at": 347612.451041,
+      "duration": 0.726232000044547,
+      "children": []
+    }
+  },
+  {
+    "id": "95f7e024-9e0a-450f-bc64-9edb62d43fa9",
+    "scope": "Analytics::Upload associations",
+    "name": "fails",
+    "location": "./spec/models/analytics/upload_spec.rb:24",
+    "file_name": "./spec/models/analytics/upload_spec.rb",
+    "result": "failed",
+    "failure_reason": "Failure/Error: expect(true).to eq false",
+    "failure_expanded": [
+      {
+        "expanded": [
+          "  expected: false",
+          "       got: true",
+          "",
+          "  (compared using ==)",
+          "",
+          "  Diff:",
+          "  @@ -1 +1 @@",
+          "  -false",
+          "  +true"
+        ],
+        "backtrace": [
+          "./spec/models/analytics/upload_spec.rb:25:in `block (3 levels) in <top (required)>'",
+          "./spec/support/log.rb:17:in `run'",
+          "./spec/support/log.rb:66:in `block (2 levels) in <top (required)>'",
+          "./spec/support/database.rb:19:in `block (2 levels) in <top (required)>'",
+          "/Users/abc/Documents/rspec-buildkite-analytics/lib/rspec/buildkite/analytics/uploader.rb:153:in `block (2 levels) in configure'",
+          "-e:1:in `<main>'"
+        ]
+      }
+    ],
+    "history": {
+      "start_at": 347611.724809,
+      "end_at": 347612.451041,
+      "duration": 0.726232000044547,
+      "children": []
+    }
+  }
+]
