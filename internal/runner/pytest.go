@@ -30,6 +30,10 @@ func NewPytest(c RunnerConfig) Pytest {
 		c.TestFilePattern = "**/{*_test,test_*}.py"
 	}
 
+	if c.RetryTestCommand == "" {
+		c.RetryTestCommand = c.TestCommand
+	}
+
 	return Pytest{
 		RunnerConfig: c,
 	}
@@ -40,7 +44,14 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	for i, tc := range testCases {
 		testPaths[i] = tc.Path
 	}
-	cmdName, cmdArgs, err := p.commandNameAndArgs(p.TestCommand, testPaths)
+
+	command := p.TestCommand
+
+	if retry {
+		command = p.RetryTestCommand
+	}
+
+	cmdName, cmdArgs, err := p.commandNameAndArgs(command, testPaths)
 	if err != nil {
 		return fmt.Errorf("failed to build command: %w", err)
 	}
