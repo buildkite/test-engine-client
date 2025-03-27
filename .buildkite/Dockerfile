@@ -11,3 +11,4 @@ COPY --from=python / /
 RUN gem install rspec
 RUN yarn global add jest
 RUN pip install pytest
+RUN pip install buildkite-test-collector==0.2.0

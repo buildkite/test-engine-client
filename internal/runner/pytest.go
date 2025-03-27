@@ -1,11 +1,14 @@
 package runner
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
@@ -32,6 +35,10 @@ func NewPytest(c RunnerConfig) Pytest {
 
 	if c.RetryTestCommand == "" {
 		c.RetryTestCommand = c.TestCommand
+	}
+
+	if c.ResultPath == "" && checkPythonPackageInstalled("buildkite-test-collector") {
+		c.ResultPath = getRandomTempFilename()
 	}
 
 	return Pytest{
@@ -155,4 +162,20 @@ func ParsePytestCollectorResult(path string) ([]TestEngineTest, error) {
 	}
 
 	return results, nil
+}
+
+func getRandomTempFilename() string {
+	max := int64(1e10)
+	n, err := rand.Int(rand.Reader, big.NewInt(max))
+	if err != nil {
+		panic(err)
+	}
+	return filepath.Join(os.TempDir(), fmt.Sprintf("pytest-results-%d.json", n))
+}
+
+func checkPythonPackageInstalled(pkgName string) bool {
+	cmd := exec.Command("pip", "show", pkgName)
+	_, err := cmd.CombinedOutput()
+
+	return err == nil
 }

@@ -1,5 +1,26 @@
 #!/usr/bin/env bash
 
+# install pact-go as a dev dependency
+go get github.com/pact-foundation/pact-go/v2
+
+# install the `pact-go` CLI
+go install github.com/pact-foundation/pact-go/v2
+
+# Check if asdf is installed and being used for Go
+if command -v asdf &> /dev/null && asdf current golang &> /dev/null; then
+  echo "🔄 Reshimming asdf golang..."
+  asdf reshim golang
+fi
+
+# download and install the required libraries.
+# TODO if pact-go check return non- zero then install it
+if ! pact-go check &> /dev/null; then
+  echo "🔄 Installing pact-go dependencies..."
+  sudo pact-go -l DEBUG install
+else
+  echo "✅ pact-go dependencies already installed"
+fi
+
 echo "🛠️ Installing dependencies for sample projects..."
 
 cd ./internal/runner/testdata
@@ -26,3 +47,16 @@ npx cypress verify
 cd ../rspec
 bundle install
 
+# Install various python things, dependencies for pytest test cases
+if [ -n "$VIRTUAL_ENV" ]; then
+  echo "Python virtual environment is active: $VIRTUAL_ENV"
+else
+  echo "No python virtual environment active, creating .venv..."
+  echo "You may have to activate the venv by yourself to make it work!"
+  echo "  source .venv/bin/activate"
+  python -m venv .venv && source .venv/bin/activate
+fi
+pip install pytest
+pip install buildkite-test-collector==0.2.0
+
+echo "💖 Everything is fantastic!"
