@@ -6,8 +6,8 @@ steps:
           entrypoint: ""
           command: [".buildkite/steps/prepare-release.sh"]
           mount-buildkite-agent: true
-  
-  - wait 
+
+  - wait
 
   - name: ":rocket: Release"
     artifact_paths: "dist/**/*"
@@ -20,7 +20,7 @@ steps:
             DOCKERHUB_USER: /pipelines/buildkite/test-engine-client-release/dockerhub-user
             DOCKERHUB_PASSWORD: /pipelines/buildkite/test-engine-client-release/dockerhub-password
       - docker#v5.11.0:
-          image: goreleaser/goreleaser:v2.1.0
+          image: goreleaser/goreleaser:v2.8.1
           entrypoint: ""
           command: [".buildkite/steps/release.sh"]
           mount-buildkite-agent: true

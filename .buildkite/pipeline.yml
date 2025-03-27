@@ -2,7 +2,7 @@ steps:
   - name: ":golangci-lint: Lint"
     plugins:
       - docker#v5.11.0:
-          image: golangci/golangci-lint:v1.61.0
+          image: golangci/golangci-lint:v1.64.8
           workdir: /go/src/github.com/your-org/your-repo
           command:
             - golangci-lint
@@ -27,7 +27,7 @@ steps:
       artifact_paths: "dist/**/*"
       plugins:
         docker#v5.11.0:
-          image: goreleaser/goreleaser:v2.1.0
+          image: goreleaser/goreleaser:v2.8.1
           mount-buildkite-agent: true
           environment:
             - GOOS={{matrix.os}}
