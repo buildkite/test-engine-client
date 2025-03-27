@@ -167,3 +167,14 @@ func TestConfigValidate_ResultPathOptionalWithCypress(t *testing.T) {
 		t.Errorf("config.validate() error = %v", err)
 	}
 }
+
+func TestConfigValidate_ResultPathOptionalWithPytest(t *testing.T) {
+	c := createConfig()
+	c.ResultPath = ""
+	c.TestRunner = "pytest"
+	err := c.validate()
+
+	if err != nil {
+		t.Errorf("config.validate() error = %v", err)
+	}
+}

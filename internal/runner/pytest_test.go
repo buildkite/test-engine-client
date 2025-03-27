@@ -10,13 +10,11 @@ import (
 	"github.com/kballard/go-shellquote"
 )
 
+// Testing happy path where all configurtions are auto configured.
 func TestPytestRun(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
-	pytest := NewPytest(RunnerConfig{
-		TestCommand: "pytest",
-		ResultPath:  "result-passed.json",
-	})
+	pytest := NewPytest(RunnerConfig{})
 	testCases := []plan.TestCase{
 		{Path: "test_sample.py"},
 	}
@@ -97,6 +95,7 @@ func TestPytestRun_TestFailed(t *testing.T) {
 func TestPytestRun_TestFailedWithoutResultFile(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
+	// When there is TestCommand, but it didn't leave space for ResultPath
 	pytest := NewPytest(RunnerConfig{
 		TestCommand: "pytest",
 	})

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
@@ -32,6 +33,10 @@ func NewPytest(c RunnerConfig) Pytest {
 
 	if c.RetryTestCommand == "" {
 		c.RetryTestCommand = c.TestCommand
+	}
+
+	if c.ResultPath == "" && checkPythonPackageInstalled("buildkite-test-collector") {
+		c.ResultPath = getRandomTempFilename()
 	}
 
 	return Pytest{
@@ -155,4 +160,19 @@ func ParsePytestCollectorResult(path string) ([]TestEngineTest, error) {
 	}
 
 	return results, nil
+}
+
+func getRandomTempFilename() string {
+	tempDir, err := os.MkdirTemp("", "bktec-pytest-*")
+	if err != nil {
+		panic(err)
+	}
+	return filepath.Join(tempDir, "pytest-results.json")
+}
+
+func checkPythonPackageInstalled(pkgName string) bool {
+	cmd := exec.Command("pip", "show", pkgName)
+	_, err := cmd.CombinedOutput()
+
+	return err == nil
 }
