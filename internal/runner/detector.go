@@ -13,7 +13,10 @@ type RunnerConfig struct {
 	TestFilePattern        string
 	TestFileExcludePattern string
 	RetryTestCommand       string
-	ResultPath             string
+	// ResultPath is used internally so bktec can read result from Test Runner.
+	// User typically don't need to worry about setting this except in in RSpec and playwright.
+	// In playwright, for example, it can only be configured via a config file, therefore it's mandatory for user to set.
+	ResultPath string
 }
 
 type TestRunner interface {
