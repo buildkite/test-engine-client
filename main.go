@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -14,11 +15,13 @@ import (
 	"time"
 
 	"github.com/buildkite/test-engine-client/internal/api"
+	"github.com/buildkite/test-engine-client/internal/bes"
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
+	"github.com/buildkite/test-engine-client/internal/upload"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/sys/unix"
@@ -61,6 +64,19 @@ func main() {
 	}
 
 	printStartUpMessage()
+
+	// TODO: proper subcommands
+	if flag.Arg(0) == "upload" {
+		if err := upload.UploadCLI(flag.CommandLine, env); err != nil {
+			logErrorAndExit(16, "upload: %v", err)
+		}
+		os.Exit(0)
+	} else if flag.Arg(0) == "bazel" && flag.Arg(1) == "listen" {
+		if err := bes.ListenCLI(os.Args[3:], env); err != nil {
+			log.Fatal(err)
+		}
+		os.Exit(0)
+	}
 
 	// get config
 	cfg, err := config.New(env)
