@@ -23,6 +23,12 @@ func (p Pytest) Name() string {
 }
 
 func NewPytest(c RunnerConfig) Pytest {
+	if !checkPythonPackageInstalled("buildkite_test_collector") { // python import only use underscore
+		fmt.Fprintln(os.Stderr, "Error: Required Python package 'buildkite-test-collector' is not installed.")
+		fmt.Fprintln(os.Stderr, "Please install it with: pip install buildkite-test-collector.")
+		os.Exit(1)
+	}
+
 	if c.TestCommand == "" {
 		c.TestCommand = "pytest {{testExamples}} --json={{resultPath}}"
 	}
@@ -35,7 +41,7 @@ func NewPytest(c RunnerConfig) Pytest {
 		c.RetryTestCommand = c.TestCommand
 	}
 
-	if c.ResultPath == "" && checkPythonPackageInstalled("buildkite-test-collector") {
+	if c.ResultPath == "" {
 		c.ResultPath = getRandomTempFilename()
 	}
 
@@ -171,8 +177,9 @@ func getRandomTempFilename() string {
 }
 
 func checkPythonPackageInstalled(pkgName string) bool {
-	cmd := exec.Command("pip", "show", pkgName)
-	_, err := cmd.CombinedOutput()
+	// This is the most reliable way I can find. Hopefully it should work regardless of if user uses pip, poetry or uv
+	pythonCmd := exec.Command("python", "-c", "import importlib.util, sys; print(importlib.util.find_spec(sys.argv[1]) is not None)", pkgName)
+	output, err := pythonCmd.Output()
 
-	return err == nil
+	return err == nil && strings.TrimSpace(string(output)) == "True"
 }
