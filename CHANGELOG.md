@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0 - 2025-02-14
+- Support pytest.
+- Upgrade Go to 1.24.
+- Filter jest command with file paths on retries
+
 ## 1.3.3 - 2025-02-14
 - Update server-side error handling.
 
