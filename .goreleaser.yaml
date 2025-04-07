@@ -5,7 +5,7 @@ release:
   name_template: Test Engine Client v{{.Version}}
   draft: false
   prerelease: auto
-  make_latest: false
+  make_latest: "{{not .Prerelease}}"
   mode: replace
 
 changelog:
