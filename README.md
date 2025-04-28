@@ -4,13 +4,13 @@ Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your 
 
 bktec supports multiple test runners and offers various features to enhance your testing workflow. Below is a comparison of the features supported by each test runner:
 
-| Feature                                            | RSpec | Jest | Playwright | Cypress | pytest |
-| -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: |
-| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |    ✅   |
-| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |    ✅   |
-| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |    ❌   |
-| Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |    ✅   |
-| Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |    ❌   |
+| Feature                                            | RSpec | Jest | Playwright | Cypress | pytest | Go test |
+| -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: | :--: |
+| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |    ✅   |  ❌  |
+| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |    ✅   |  ✅  |
+| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |    ❌   |  ❌  |
+| Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |    ✅   |  ✅  |
+| Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |    ❌   |  ❌  |
 
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
@@ -56,11 +56,12 @@ export BUILDKITE_TEST_ENGINE_SUITE_SLUG=my-slug
 
 ### Configure the test runner
 To configure the test runner for bktec, please refer to the detailed guides provided for each supported test runner. You can find the guides at the following links:
-- [RSpec](./docs/rspec.md)
 - [Jest](./docs/jest.md)
 - [Playwright](./docs/playwright.md)
 - [Cypress](./docs/cypress.md)
 - [pytest](./docs/pytest.md)
+- [go test](./docs/gotest.md)
+- [RSpec](./docs/rspec.md)
 
 
 ### Running bktec
@@ -107,7 +108,7 @@ Make sure you have Go, Ruby, and Node.js installed in your environment. You can 
 - [Ruby Installation Guide](https://www.ruby-lang.org/en/documentation/installation/)
 - [Node.js Installation Guide](https://nodejs.org/en/download/package-manager/)
 
-Once you have these dependencies installed, run `bin/setup` to install dependencies for the sample projects for testing purposes. 
+Once you have these dependencies installed, run `bin/setup` to install dependencies for the sample projects for testing purposes.
 
 To test, run:
 ```sh
