@@ -77,8 +77,9 @@ export BUILDKITE_TEST_ENGINE_RETRY_COUNT=1
   commands:
     - bktec
   env:
+    BUILDKITE_ANALYTICS_TOKEN: your-suite-token # For test collector
     BUILDKITE_TEST_ENGINE_SUITE_SLUG: your-suite-slug
-    BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: your-token
+    BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: your-api-token # For state management
     BUILDKITE_TEST_ENGINE_TEST_RUNNER: gotest
     BUILDKITE_TEST_ENGINE_RESULT_PATH: tmp/gotest-result.xml
     BUILDKITE_TEST_ENGINE_RETRY_COUNT: 1
