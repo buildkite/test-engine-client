@@ -40,8 +40,14 @@ func printStartUpMessage() {
 }
 
 type TestRunner interface {
+	// Run takes testCases as input, executes the test against the test cases, and mutates the runner.RunResult with the test results.
 	Run(result *runner.RunResult, testCases []plan.TestCase, retry bool) error
+	// GetExamples discovers all tests within given files.
+	// This function is only used for split by example use case. Currently only supported by RSpec.
 	GetExamples(files []string) ([]plan.TestCase, error)
+	// GetFiles discover all test files that the runner should execute.
+	// This is sent to server-side when creating test plan.
+	// This is also used to obtain a fallback non-intelligent test splitting mechanism.
 	GetFiles() ([]string, error)
 	Name() string
 }
