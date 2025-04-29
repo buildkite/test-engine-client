@@ -1,3 +1,6 @@
+env:
+  AWS_DEFAULT_REGION: us-east-1
+
 steps:
   - name: ":golangci-lint: Lint"
     plugins:
@@ -9,15 +12,29 @@ steps:
             - run
 
   - name: ":go: Tests"
-    command: ".buildkite/steps/tests.sh -race"
+    command: ".buildkite/steps/tests.sh"
+    parallelism: 2
     artifact_paths:
       - cover.{html,out}
       - internal/api/pacts/*
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-engine-client
+      - aws-ssm#v1.0.0:
+          parameters:
+            BUILDKITE_ANALYTICS_TOKEN: /pipelines/buildkite/test-engine-client/SUITE_TOKEN
+            BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: /pipelines/buildkite/test-engine-client/API_ACCESS_TOKEN
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           run: ci
+          propagate-environment: true
+          environment:
+            - BUILDKITE_ANALYTICS_TOKEN
+            - BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN
+      - test-collector#v1.11.0:
+          files: "junit-*.xml"
+          format: "junit"
 
   - wait
 
