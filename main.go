@@ -21,7 +21,6 @@ import (
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/olekukonko/tablewriter"
-	"golang.org/x/sys/unix"
 )
 
 const Logo = `
@@ -289,8 +288,9 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 }
 
 func logSignalAndExit(name string, signal syscall.Signal) {
-	fmt.Printf("Buildkite Test Engine Client: %s was terminated with signal: %v (%v)\n", name, unix.SignalName(signal), signal)
+	fmt.Printf("Buildkite Test Engine Client: %s was terminated with signal: %v\n", name, signal)
 
+	// Exit with 128 + signal number, the standard convention.
 	exitCode := 128 + int(signal)
 	os.Exit(exitCode)
 }

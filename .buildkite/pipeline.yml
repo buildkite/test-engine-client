@@ -61,6 +61,7 @@ steps:
           os:
             - darwin
             - linux
+            - windows
           arch:
             - amd64
             - arm64
