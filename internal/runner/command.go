@@ -39,9 +39,8 @@ func runAndForwardSignal(cmd *exec.Cmd) error {
 		for {
 			select {
 			case sig := <-sigCh:
-				// When the subprocess exits, it sends SIGCHLD to the parent process.
-				// We ignore this signal because we don't want to forward it back to the subprocess.
-				if sig == syscall.SIGCHLD {
+				// Check if the signal should be ignored (e.g., SIGCHLD on Unix).
+				if isIgnoredSignal(sig) {
 					continue
 				}
 				// Ignore the error when sending the signal to the command.
