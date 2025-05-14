@@ -103,7 +103,7 @@ func main() {
 
 	// execute tests
 	var timeline []api.Timeline
-	runResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline)
+	runResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest)
 
 	// Handle errors that prevent the runner from finishing.
 	// By finishing, it means that the runner has completed with a readable result.
@@ -223,7 +223,14 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config,
 	}
 }
 
-func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline) (runner.RunResult, error) {
+// runTestsWithRetry can be considered the core of bktec.
+// It invoke testRunner, orchestrate retries.
+// It returns RunResult.
+//
+// For next reader, there is a small caveat with current implementation:
+// - testCases and timeline are both expected to be mutated.
+// - testCases in this case serve both as input and output -> we should probably change it.
+func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest bool) (runner.RunResult, error) {
 	attemptCount := 0
 
 	// Create a new run result with muted tests to keep track of the results.
@@ -268,20 +275,24 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 			return *runResult, nil
 		}
 
-		// Don't retry if tests are passed.
-		if runResult.Status() == runner.RunStatusPassed {
-			return *runResult, nil
-		}
-
-		// Retry only if there are failed tests.
 		failedTests := runResult.FailedTests()
+		failedMutedTests := runResult.FailedMutedTests()
 
-		if len(failedTests) == 0 {
+		shouldRetryForHardFailedTests := len(failedTests) > 0
+		shouldRetryForMutedTests := retryForMutedTest && len(failedMutedTests) > 0
+		shouldRetry := shouldRetryForHardFailedTests || shouldRetryForMutedTests
+
+		if shouldRetry {
+			*testsCases = failedTests
+
+			if shouldRetryForMutedTests {
+				*testsCases = append(*testsCases, failedMutedTests...)
+			}
+
+			attemptCount++
+		} else {
 			return *runResult, nil
 		}
-
-		*testsCases = failedTests
-		attemptCount++
 	}
 
 	return *runResult, nil

@@ -12,21 +12,22 @@ import (
 func TestConfigReadFromEnv(t *testing.T) {
 	c := Config{}
 	err := c.readFromEnv(env.Map{
-		"BUILDKITE_PARALLEL_JOB_COUNT":                    "10",
-		"BUILDKITE_PARALLEL_JOB":                          "0",
-		"BUILDKITE_TEST_ENGINE_BASE_URL":                  "https://buildkite.localhost",
-		"BUILDKITE_TEST_ENGINE_TEST_CMD":                  "bin/rspec {{testExamples}}",
-		"BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN":          "my_token",
-		"BUILDKITE_ORGANIZATION_SLUG":                     "my_org",
-		"BUILDKITE_TEST_ENGINE_SUITE_SLUG":                "my_suite",
-		"BUILDKITE_TEST_ENGINE_RETRY_COUNT":               "3",
-		"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":          "TRUE",
-		"BUILDKITE_BUILD_ID":                              "123",
-		"BUILDKITE_STEP_ID":                               "456",
-		"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN":         "spec/unit/**/*_spec.rb",
-		"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN": "spec/feature/**/*_spec.rb",
-		"BUILDKITE_TEST_ENGINE_RESULT_PATH":               "result.json",
-		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":               "rspec",
+		"BUILDKITE_PARALLEL_JOB_COUNT":                       "10",
+		"BUILDKITE_PARALLEL_JOB":                             "0",
+		"BUILDKITE_TEST_ENGINE_BASE_URL":                     "https://buildkite.localhost",
+		"BUILDKITE_TEST_ENGINE_TEST_CMD":                     "bin/rspec {{testExamples}}",
+		"BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN":             "my_token",
+		"BUILDKITE_ORGANIZATION_SLUG":                        "my_org",
+		"BUILDKITE_TEST_ENGINE_SUITE_SLUG":                   "my_suite",
+		"BUILDKITE_TEST_ENGINE_RETRY_COUNT":                  "3",
+		"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":             "TRUE",
+		"BUILDKITE_BUILD_ID":                                 "123",
+		"BUILDKITE_STEP_ID":                                  "456",
+		"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN":            "spec/unit/**/*_spec.rb",
+		"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN":    "spec/feature/**/*_spec.rb",
+		"BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST": "TRUE",
+		"BUILDKITE_TEST_ENGINE_RESULT_PATH":                  "result.json",
+		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":                  "rspec",
 	})
 
 	want := Config{
@@ -44,6 +45,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 		TestFileExcludePattern: "spec/feature/**/*_spec.rb",
 		TestRunner:             "rspec",
 		ResultPath:             "result.json",
+		RetryForMutedTest:      false,
 		JobRetryCount:          0,
 	}
 

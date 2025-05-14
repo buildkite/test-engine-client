@@ -107,6 +107,17 @@ func (r *RunResult) SkippedTests() []plan.TestCase {
 	return skippedTests
 }
 
+func (r *RunResult) FailedMutedTests() []plan.TestCase {
+	var failedTests []plan.TestCase
+
+	for _, test := range r.tests {
+		if test.Status == TestStatusFailed && test.Muted {
+			failedTests = append(failedTests, test.TestCase)
+		}
+	}
+	return failedTests
+}
+
 // Status returns the overall status of the test run.
 // If there is an error, it returns RunStatusError.
 // If there are failed tests, it returns RunStatusFailed.

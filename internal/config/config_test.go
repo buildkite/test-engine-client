@@ -11,18 +11,19 @@ import (
 
 func getExampleEnv() env.Env {
 	return env.Map{
-		"BUILDKITE_PARALLEL_JOB_COUNT":           "60",
-		"BUILDKITE_PARALLEL_JOB":                 "7",
-		"BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN": "my_token",
-		"BUILDKITE_TEST_ENGINE_BASE_URL":         "https://build.kite",
-		"BUILDKITE_TEST_ENGINE_TEST_CMD":         "bin/rspec {{testExamples}}",
-		"BUILDKITE_ORGANIZATION_SLUG":            "my_org",
-		"BUILDKITE_TEST_ENGINE_SUITE_SLUG":       "my_suite",
-		"BUILDKITE_BUILD_ID":                     "123",
-		"BUILDKITE_STEP_ID":                      "456",
-		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":      "rspec",
-		"BUILDKITE_TEST_ENGINE_RESULT_PATH":      "tmp/rspec.json",
-		"BUILDKITE_RETRY_COUNT":                  "0",
+		"BUILDKITE_PARALLEL_JOB_COUNT":                       "60",
+		"BUILDKITE_PARALLEL_JOB":                             "7",
+		"BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN":             "my_token",
+		"BUILDKITE_TEST_ENGINE_BASE_URL":                     "https://build.kite",
+		"BUILDKITE_TEST_ENGINE_TEST_CMD":                     "bin/rspec {{testExamples}}",
+		"BUILDKITE_ORGANIZATION_SLUG":                        "my_org",
+		"BUILDKITE_TEST_ENGINE_SUITE_SLUG":                   "my_suite",
+		"BUILDKITE_BUILD_ID":                                 "123",
+		"BUILDKITE_STEP_ID":                                  "456",
+		"BUILDKITE_TEST_ENGINE_TEST_RUNNER":                  "rspec",
+		"BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST": "true",
+		"BUILDKITE_TEST_ENGINE_RESULT_PATH":                  "tmp/rspec.json",
+		"BUILDKITE_RETRY_COUNT":                              "0",
 	}
 }
 
@@ -35,19 +36,20 @@ func TestNewConfig(t *testing.T) {
 	}
 
 	want := Config{
-		Parallelism:      60,
-		NodeIndex:        7,
-		ServerBaseUrl:    "https://build.kite",
-		Identifier:       "123/456",
-		TestCommand:      "bin/rspec {{testExamples}}",
-		AccessToken:      "my_token",
-		OrganizationSlug: "my_org",
-		ResultPath:       "tmp/rspec.json",
-		SuiteSlug:        "my_suite",
-		TestRunner:       "rspec",
-		JobRetryCount:    0,
-		Env:              env,
-		errs:             InvalidConfigError{},
+		Parallelism:       60,
+		NodeIndex:         7,
+		ServerBaseUrl:     "https://build.kite",
+		Identifier:        "123/456",
+		TestCommand:       "bin/rspec {{testExamples}}",
+		AccessToken:       "my_token",
+		OrganizationSlug:  "my_org",
+		RetryForMutedTest: false,
+		ResultPath:        "tmp/rspec.json",
+		SuiteSlug:         "my_suite",
+		TestRunner:        "rspec",
+		JobRetryCount:     0,
+		Env:               env,
+		errs:              InvalidConfigError{},
 	}
 
 	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {
@@ -68,6 +70,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	env.Delete("BUILDKITE_TEST_ENGINE_MODE")
 	env.Delete("BUILDKITE_TEST_ENGINE_BASE_URL")
 	env.Delete("BUILDKITE_TEST_ENGINE_TEST_CMD")
+	env.Delete("BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST")
 
 	c, err := New(env)
 	if err != nil {
@@ -75,17 +78,18 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	}
 
 	want := Config{
-		Parallelism:      60,
-		NodeIndex:        7,
-		ServerBaseUrl:    "https://api.buildkite.com",
-		Identifier:       "123/456",
-		AccessToken:      "my_token",
-		OrganizationSlug: "my_org",
-		SuiteSlug:        "my_suite",
-		TestRunner:       "rspec",
-		ResultPath:       "tmp/rspec.json",
-		JobRetryCount:    0,
-		Env:              env,
+		Parallelism:       60,
+		NodeIndex:         7,
+		ServerBaseUrl:     "https://api.buildkite.com",
+		Identifier:        "123/456",
+		AccessToken:       "my_token",
+		OrganizationSlug:  "my_org",
+		SuiteSlug:         "my_suite",
+		TestRunner:        "rspec",
+		RetryForMutedTest: true,
+		ResultPath:        "tmp/rspec.json",
+		JobRetryCount:     0,
+		Env:               env,
 	}
 
 	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {

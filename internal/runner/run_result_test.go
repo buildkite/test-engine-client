@@ -84,7 +84,7 @@ func TestFailedTests(t *testing.T) {
 	}
 }
 
-func TestFailedTests_TetsPassAfterRetry(t *testing.T) {
+func TestFailedTests_TestPassAfterRetry(t *testing.T) {
 	r := NewRunResult([]plan.TestCase{})
 
 	apple1 := plan.TestCase{Scope: "apple", Name: "is red"}
@@ -121,15 +121,24 @@ func TestFailedTests_ExcludeMutedTests(t *testing.T) {
 	r := NewRunResult([]plan.TestCase{
 		apple1,
 	})
-	r.RecordTestResult(apple1, TestStatusFailed)
+	r.RecordTestResult(apple1, TestStatusFailed) // Muted so no impact
+	r.RecordTestResult(apple1, TestStatusFailed) // Retry fails, but muted so no impact
 	r.RecordTestResult(apple2, TestStatusPassed)
-	r.RecordTestResult(banana, TestStatusFailed)
 
-	failedTests := r.FailedTests()
+	// At this point the run status is "passsed"
+	if r.Status() != RunStatusPassed {
+		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusPassed)
+	}
+
+	// Now it enters "failed" status
+	r.RecordTestResult(banana, TestStatusFailed)
 
 	if r.Status() != RunStatusFailed {
 		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusFailed)
 	}
+
+	// Asserting the failed tests don't include muted test
+	failedTests := r.FailedTests()
 
 	if len(failedTests) != 1 {
 		t.Errorf("failed tests count is %d, want %d", len(failedTests), 1)
