@@ -20,6 +20,9 @@ type Config struct {
 	Parallelism int
 	// The path to the result file.
 	ResultPath string
+	// Whether a failed muted test should be retried.
+	// This is default to true because we want more signal for our flaky detection system.
+	RetryForMutedTest bool
 	// ServerBaseUrl is the base URL of the test plan server.
 	ServerBaseUrl string
 	// SplitByExample is the flag to enable split the test by example.

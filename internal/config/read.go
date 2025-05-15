@@ -53,6 +53,7 @@ func (c *Config) readFromEnv(env env.Env) error {
 	c.TestFilePattern = env.Get("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN")
 	c.TestFileExcludePattern = env.Get("BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN")
 	c.TestRunner = env.Get("BUILDKITE_TEST_ENGINE_TEST_RUNNER")
+	c.RetryForMutedTest = strings.ToLower(env.Get("BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST")) != "true"
 	c.ResultPath = env.Get("BUILDKITE_TEST_ENGINE_RESULT_PATH")
 
 	c.SplitByExample = strings.ToLower(env.Get("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE")) == "true"
