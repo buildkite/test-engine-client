@@ -51,8 +51,10 @@ func DetectRunner(cfg config.Config) (TestRunner, error) {
 		return NewPytestPants(runnerConfig), nil
 	case "gotest":
 		return NewGoTest(runnerConfig), nil
+	case "cucumber":
+		return NewCucumber(runnerConfig), nil
 	default:
 		// Update the error message to include the new runner
-		return nil, errors.New("runner value is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'pytest-pants', or 'gotest'")
+		return nil, errors.New("runner value is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'pytest-pants', 'gotest', or 'cucumber'")
 	}
 }
