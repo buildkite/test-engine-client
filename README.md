@@ -4,13 +4,13 @@ Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your 
 
 bktec supports multiple test runners and offers various features to enhance your testing workflow. Below is a comparison of the features supported by each test runner:
 
-| Feature                                            | RSpec | Jest | Playwright | Cypress | pytest | Go test |
-| -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: | :--: |
-| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |    ✅   |  ❌  |
-| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |    ✅   |  ✅  |
-| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |    ❌   |  ❌  |
-| Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |    ✅   |  ✅  |
-| Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |    ❌   |  ❌  |
+| Feature                                            | RSpec | Jest | Playwright | Cypress | pytest | Go test | Cucumber |
+| -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: | :--: | :-----: |
+| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |    ✅   |  ❌  |   ✅ |
+| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |    ✅   |  ✅  |   ✅ |
+| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |    ❌   |  ❌  |   ❌ |
+| Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |    ✅   |  ✅  |   ✅ |
+| Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |    ❌   |  ❌  |   ❌ |
 
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
@@ -62,6 +62,7 @@ To configure the test runner for bktec, please refer to the detailed guides prov
 - [pytest](./docs/pytest.md)
 - [go test](./docs/gotest.md)
 - [RSpec](./docs/rspec.md)
+- [Cucumber](./docs/cucumber.md)
 
 
 ### Running bktec
