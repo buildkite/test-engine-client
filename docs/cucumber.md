@@ -54,5 +54,5 @@ A typical retry command might look like:
 export BUILDKITE_TEST_ENGINE_RETRY_CMD="bundle exec cucumber {{testExamples}} --format json --out {{resultPath}}"
 ```
 
-## Limitation – Split by example
-Splitting slow files by individual scenario is not currently supported for Cucumber. Test plans will be generated at the feature-file level.
+## Split slow files by scenario
+When generating a test plan, bktec will split slow feature files by *individual scenario*. This allows highly parallel execution similar to our RSpec support. No additional configuration is required – `GetExamples` automatically enumerates the scenarios via a Cucumber `--dry-run`.

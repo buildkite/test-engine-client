@@ -7,6 +7,7 @@ import (
     "os"
     "os/exec"
     "slices"
+    "strings"
 
     "github.com/buildkite/test-engine-client/internal/debug"
     "github.com/buildkite/test-engine-client/internal/plan"
@@ -21,8 +22,9 @@ import (
 // if any step in it failed or has undefined status. "pending" and "skipped" are
 // mapped to TestStatusSkipped.
 //
-// NOTE: Splitting by example for Cucumber is not currently supported – GetExamples
-// returns an error so the server will fall-back to file-level splitting.
+// Splitting slow feature files by individual scenario _is_ supported via the
+// GetExamples implementation which performs a `--dry-run` to enumerate all
+// scenarios in the provided feature files.
 
 type Cucumber struct {
     RunnerConfig
@@ -119,7 +121,7 @@ func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) 
                 Name:       scenario.Name,
                 Scope:      feature.Name,
                 // Running an individual scenario in cucumber can be done using line-number.
-                Path: fmt.Sprintf("%s:%d", feature.URI, scenario.Line),
+                Path: fmt.Sprintf("./%s:%d", feature.URI, scenario.Line),
             }
 
             result.RecordTestResult(testCase, testStatus)
@@ -132,9 +134,59 @@ func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) 
     return nil
 }
 
-// GetExamples is not supported for Cucumber at the moment.
+// GetExamples returns an array of scenarios (test cases) inside the given feature files.
+// We run Cucumber in --dry-run mode so that steps are not executed – we only need the
+// formatter to emit JSON describing the scenarios.
 func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
-    return nil, fmt.Errorf("not supported in Cucumber")
+    // Create a temporary file to store the JSON output of the cucumber dry-run. We can’t
+    // rely on stdout because users may add additional formatters which would pollute the
+    // output. Using the JSON formatter guarantees deterministic output.
+    f, err := os.CreateTemp("", "cucumber-dry-run-*.json")
+    if err != nil {
+        return []plan.TestCase{}, fmt.Errorf("failed to create temporary file for cucumber dry run: %v", err)
+    }
+
+    defer func() {
+        f.Close()
+        os.Remove(f.Name())
+    }()
+
+    // Build the base command from user-supplied TestCommand so we respect custom paths
+    // and environment. This also takes care of {{testExamples}} / {{resultPath}} interpolation.
+    cmdName, cmdArgs, err := c.commandNameAndArgs(c.TestCommand, files)
+    if err != nil {
+        return nil, err
+    }
+
+    // Append dry-run flags and JSON formatter pointing to the temp file. We also add a
+    // progress formatter for helpful console output (mirrors RSpec behaviour).
+    cmdArgs = append(cmdArgs, "--dry-run", "--format", "json", "--out", f.Name(), "--format", "progress")
+
+    debug.Printf("Running `%s %s` for dry run", cmdName, strings.Join(cmdArgs, " "))
+
+    output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
+    if err != nil {
+        return []plan.TestCase{}, fmt.Errorf("failed to run cucumber dry run: %s", output)
+    }
+
+    report, err := c.ParseReport(f.Name())
+    if err != nil {
+        return []plan.TestCase{}, err
+    }
+
+    var testCases []plan.TestCase
+    for _, feature := range report {
+        for _, scenario := range feature.Elements {
+            testCases = append(testCases, plan.TestCase{
+                Identifier: scenario.ID,
+                Name:       scenario.Name,
+                Path:       fmt.Sprintf("./%s:%d", feature.URI, scenario.Line),
+                Scope:      feature.Name,
+            })
+        }
+    }
+
+    return testCases, nil
 }
 
 // commandNameAndArgs replaces placeholders and returns command + args.

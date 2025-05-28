@@ -3,8 +3,6 @@ package runner
 import (
     "errors"
     "os"
-    "os/exec"
-    "syscall"
     "testing"
 
     "github.com/buildkite/test-engine-client/internal/plan"
@@ -199,5 +197,41 @@ func TestCucumberCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
     }
     if !errors.Is(err, shellquote.UnterminatedSingleQuoteError) {
         t.Errorf("commandNameAndArgs() error = %v, want %v", err, shellquote.UnterminatedSingleQuoteError)
+    }
+}
+
+func TestCucumberGetExamples(t *testing.T) {
+    // Run inside the cucumber testdata directory so relative paths match
+    changeCwd(t, "./testdata/cucumber")
+
+    cucumber := NewCucumber(RunnerConfig{
+        TestCommand: "cucumber", // "cucumber --dry-run" will be appended in GetExamples
+    })
+
+    files := []string{"./features/spells/expelliarmus.feature"}
+
+    got, err := cucumber.GetExamples(files)
+
+    if err != nil {
+        t.Errorf("Cucumber.GetExamples(%q) error = %v", files, err)
+    }
+
+    want := []plan.TestCase{
+        {
+            Identifier: "expelliarmus;disarms-the-opponent",
+            Name:       "disarms the opponent",
+            Path:       "./features/spells/expelliarmus.feature:3",
+            Scope:      "Expelliarmus",
+        },
+        {
+            Identifier: "expelliarmus;knocks-the-wand-out-of-the-opponents-hand",
+            Name:       "knocks the wand out of the opponents hand",
+            Path:       "./features/spells/expelliarmus.feature:7",
+            Scope:      "Expelliarmus",
+        },
+    }
+
+    if diff := cmp.Diff(got, want); diff != "" {
+        t.Errorf("Cucumber.GetExamples(%q) diff (-got +want):\n%s", files, diff)
     }
 }
