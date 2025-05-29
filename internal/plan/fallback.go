@@ -7,7 +7,7 @@ import (
 )
 
 // CreateFallbackPlan creates a fallback test plan for the given tests and parallelism.
-// It distributes test cases evenly accross the tasks using deterministic algorithm.
+// It distributes test cases evenly across the tasks using deterministic algorithm.
 func CreateFallbackPlan(files []string, parallelism int) TestPlan {
 	// sort all test cases
 	slices.SortFunc(files, func(a, b string) int {
