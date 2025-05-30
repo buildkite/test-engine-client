@@ -1,0 +1,20 @@
+[GLOBAL]
+pants_version = "2.26.0"
+
+backend_packages = [
+    "pants.backend.python",
+]
+
+[python]
+interpreter_constraints = [">=3.10,<3.14"]
+resolves_generate_lockfiles = true
+enable_resolves = true
+default_resolve = "pytest"
+
+
+[pytest]
+install_from_resolve = "pytest"
+requirements = ["//3rdparty/python:pytest"]
+
+[python.resolves]
+pytest = "3rdparty/python/pytest.lock"
