@@ -23,14 +23,30 @@ func (p Pytest) Name() string {
 }
 
 func NewPytest(c RunnerConfig) Pytest {
-	if !checkPythonPackageInstalled("buildkite_test_collector") { // python import only use underscore
-		fmt.Fprintln(os.Stderr, "Error: Required Python package 'buildkite-test-collector' is not installed.")
-		fmt.Fprintln(os.Stderr, "Please install it with: pip install buildkite-test-collector.")
-		os.Exit(1)
+	// pants uses its own system for managing dependencies, so we don't need to check for buildkite-test-collector
+	if c.IsPantsVariant() {
+		fmt.Fprintln(os.Stderr, "Info: Python package 'buildkite-test-collector' is required and will not be verified by bktec. Please ensure it is added to the pants resolve used by pytest.")
+	} else {
+		if !checkPythonPackageInstalled("buildkite_test_collector") { // python import only use underscore
+			fmt.Fprintln(os.Stderr, "Error: Required Python package 'buildkite-test-collector' is not installed.")
+			fmt.Fprintln(os.Stderr, "Please install it with: pip install buildkite-test-collector.")
+			os.Exit(1)
+		}
 	}
 
 	if c.TestCommand == "" {
-		c.TestCommand = "pytest {{testExamples}} --json={{resultPath}}"
+		if c.IsPantsVariant() {
+			fmt.Fprintln(os.Stderr, "Error: When using the pants test runner variant, the test command must be set via BUILDKITE_TEST_ENGINE_TEST_COMMAND.")
+			os.Exit(1)
+		} else {
+			c.TestCommand = "pytest {{testExamples}} --json={{resultPath}}"
+		}
+	}
+
+	if c.IsPantsVariant() && (c.TestFilePattern != "" || c.TestFileExcludePattern != "") {
+		fmt.Fprintln(os.Stderr, "Warning: Pants test runner variant does not support discovering test files. Please ensure the test command is set correctly via BUILDKITE_TEST_ENGINE_TEST_COMMAND and do *not* set either:")
+		fmt.Fprintf(os.Stderr, "  BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN=%q\n", c.TestFilePattern)
+		fmt.Fprintf(os.Stderr, "  BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=%q\n", c.TestFileExcludePattern)
 	}
 
 	if c.TestFilePattern == "" {
@@ -101,6 +117,10 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 }
 
 func (p Pytest) GetFiles() ([]string, error) {
+	if p.IsPantsVariant() {
+		return []string{}, nil
+	}
+
 	debug.Println("Discovering test files with include pattern:", p.TestFilePattern, "exclude pattern:", p.TestFileExcludePattern)
 	files, err := discoverTestFiles(p.TestFilePattern, p.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -123,10 +143,17 @@ func (p Pytest) GetExamples(files []string) ([]plan.TestCase, error) {
 func (p Pytest) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
 	testExamples := strings.Join(testCases, " ")
 
-	if strings.Contains(cmd, "{{testExamples}}") {
-		cmd = strings.Replace(cmd, "{{testExamples}}", testExamples, 1)
+	if p.IsPantsVariant() {
+		if strings.Contains(cmd, "{{testExamples}}") {
+			fmt.Fprintln(os.Stderr, "Error: Currently, bktec does not support dynamically injecting {{testExamples}}. Please ensure the test command in BUILDKITE_TEST_ENGINE_TEST_COMMAND does *not* include {{testExamples}}.")
+			os.Exit(1)
+		}
 	} else {
-		cmd = cmd + " " + testExamples
+		if strings.Contains(cmd, "{{testExamples}}") {
+			cmd = strings.Replace(cmd, "{{testExamples}}", testExamples, 1)
+		} else {
+			cmd = cmd + " " + testExamples
+		}
 	}
 
 	cmd = strings.Replace(cmd, "{{resultPath}}", p.ResultPath, 1)
