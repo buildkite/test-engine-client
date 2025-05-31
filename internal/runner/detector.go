@@ -17,6 +17,8 @@ type RunnerConfig struct {
 	// User typically don't need to worry about setting this except in in RSpec and playwright.
 	// In playwright, for example, it can only be configured via a config file, therefore it's mandatory for user to set.
 	ResultPath string
+	// TestRunnerVariant is used by Pytest to determine which runner variant to use. Currently only supports "pants".
+	TestRunnerVariant string
 }
 
 type TestRunner interface {
@@ -34,6 +36,7 @@ func DetectRunner(cfg config.Config) (TestRunner, error) {
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		RetryTestCommand:       cfg.RetryCommand,
 		ResultPath:             cfg.ResultPath,
+		TestRunnerVariant:      cfg.TestRunnerVariant,
 	}
 
 	switch cfg.TestRunner {
@@ -53,4 +56,10 @@ func DetectRunner(cfg config.Config) (TestRunner, error) {
 		// Update the error message to include the new runner
 		return nil, errors.New("runner value is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', or 'gotest'")
 	}
+}
+
+// IsPantsVariant checks if the TestRunnerVariant is set to 'pants'.
+// This is used to determine specific behavior for the 'pytest' test runner.
+func (c RunnerConfig) IsPantsVariant() bool {
+	return c.TestRunnerVariant == "pants"
 }

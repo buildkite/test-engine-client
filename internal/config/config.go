@@ -46,6 +46,8 @@ type Config struct {
 	Env env.Env
 	// errs is a map of environment variables name and the validation errors associated with them.
 	errs InvalidConfigError
+	// TestRunnerVariant specifies the variant of the test runner, if applicable.
+	TestRunnerVariant string
 }
 
 // New wraps the readFromEnv and validate functions to create a new Config struct.

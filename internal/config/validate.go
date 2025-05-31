@@ -68,6 +68,10 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "must not be blank")
 	}
 
+	if c.TestRunnerVariant != "" && c.TestRunnerVariant != "pants" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER_VARIANT", "must be 'pants' if specified")
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}
