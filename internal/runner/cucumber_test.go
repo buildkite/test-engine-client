@@ -478,3 +478,77 @@ func TestCucumberCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 		t.Errorf("commandNameAndArgs() error = %v, want %v", err, shellquote.UnterminatedSingleQuoteError)
 	}
 }
+
+func TestCucumberGetExamples_WithOtherFormatters(t *testing.T) {
+	changeCwd(t, "./testdata/cucumber")
+
+	files := []string{"features/simple_scenarios.feature"}
+	want := []plan.TestCase{
+		{
+			Path:       "features/simple_scenarios.feature:5",
+			Name:       "First simple scenario",
+			Identifier: "features/simple_scenarios.feature:5",
+		},
+		{
+			Path:       "features/simple_scenarios.feature:11",
+			Name:       "Second simple scenario",
+			Identifier: "features/simple_scenarios.feature:11",
+		},
+		{
+			Path:       "features/simple_scenarios.feature:15",
+			Name:       "A pending scenario",
+			Identifier: "features/simple_scenarios.feature:15",
+		},
+		{
+			Path:       "features/simple_scenarios.feature:19",
+			Name:       "A skipped scenario",
+			Identifier: "features/simple_scenarios.feature:19",
+		},
+		{
+			Path:       "features/simple_scenarios.feature:23",
+			Name:       "A failing scenario",
+			Identifier: "features/simple_scenarios.feature:23",
+		},
+	}
+	sort.Slice(want, func(i, j int) bool { return want[i].Path < want[j].Path })
+
+	// Create a temporary file to store the JSON output of the cucumber dry run for one of the commands.
+	// So we don't end up with a lot of files after running this test.
+	// We'll clean up the file after the test.
+	// Ensure tmp directory exists (it's created by other tests, but good for standalone robustness)
+	if err := os.MkdirAll("tmp", 0755); err != nil {
+		t.Fatalf("could not create tmp directory: %v", err)
+	}
+	f, err := os.CreateTemp("tmp", "cucumber-*.html") 
+	if err != nil {
+		t.Fatalf("os.CreateTemp() error = %v", err)
+	}
+	f.Close()
+	// The global Cleanup in TestMain or individual test Cleanups for "tmp" should handle this.
+	// os.Remove(f.Name()) // Not strictly needed if tmp is cleaned up globally.
+
+	commands := []string{
+		"cucumber --format progress",
+		"cucumber --format pretty",
+		"cucumber --format html --out " + f.Name(),
+		"cucumber --format progress --format json --out some_other.json", // GetExamples should override this json output for dry-run
+	}
+
+	for _, command := range commands {
+		cucumberRunner := NewCucumber(RunnerConfig{ // Renamed to avoid conflict with package name
+			TestCommand: command,
+		})
+		t.Run(command, func(t *testing.T) {
+			got, err := cucumberRunner.GetExamples(files)
+			if err != nil {
+				t.Fatalf("Cucumber.GetExamples(%v) with TestCommand '%s' error = %v", files, command, err)
+			}
+
+			sort.Slice(got, func(i, j int) bool { return got[i].Path < got[j].Path })
+
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("Cucumber.GetExamples(%v) with TestCommand '%s' diff (-want +got):\n%s", files, command, diff)
+			}
+		})
+	}
+}
