@@ -49,7 +49,6 @@ func TestNewCucumber(t *testing.T) {
 		}
 	}
 }
-
 func TestCucumberRun(t *testing.T) {
 	cucumber := NewCucumber(RunnerConfig{
 		TestCommand: "cucumber --format json --out {{resultPath}}",
@@ -57,8 +56,13 @@ func TestCucumberRun(t *testing.T) {
 	})
 
 	t.Cleanup(func() {
-		os.Remove(cucumber.ResultPath)
+		os.RemoveAll("tmp") // Clean up the whole tmp directory
 	})
+
+	// Create the directory for the results
+	if err := os.MkdirAll("tmp", 0755); err != nil {
+		t.Fatalf("could not create tmp directory: %v", err)
+	}
 
 	testCases := []plan.TestCase{
 		{Path: "./testdata/cucumber/features/spells/expelliarmus.feature"},
@@ -79,13 +83,18 @@ func TestCucumberRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/cucumber")
 
 	cucumber := NewCucumber(RunnerConfig{
-		TestCommand: "bundle exec cucumber --format json --out {{resultPath}}",
+		TestCommand: "cucumber --format json --out {{resultPath}}",
 		ResultPath:  "tmp/cucumber.json",
 	})
 
 	t.Cleanup(func() {
-		os.Remove(cucumber.ResultPath)
+		os.RemoveAll("tmp") // Clean up the whole tmp directory
 	})
+
+	// Create the directory for the results
+	if err := os.MkdirAll("tmp", 0755); err != nil {
+		t.Fatalf("could not create tmp directory: %v", err)
+	}
 
 	testCases := []plan.TestCase{
 		{Path: "./features/failure.feature"},
