@@ -8,7 +8,8 @@ COPY --from=ruby / /
 COPY --from=cypress / /
 COPY --from=python / /
 
-RUN gem install rspec cucumber bigdecimal
+RUN gem install rspec cucumber base64
+RUN gem install bigdecimal -v 3.2.0
 RUN yarn global add jest
 RUN pip install pytest
 RUN pip install buildkite-test-collector==0.2.0
