@@ -1,0 +1,244 @@
+[
+  {
+    "id": "simple-scenarios",
+    "uri": "features/simple_scenarios.feature",
+    "keyword": "Feature",
+    "name": "Simple Scenarios",
+    "description": "",
+    "line": 1,
+    "elements": [
+      {
+        "keyword": "Background",
+        "name": "",
+        "description": "",
+        "line": 2,
+        "type": "background",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a background step",
+            "line": 3,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped",
+              "duration": 10000
+            }
+          }
+        ]
+      },
+      {
+        "id": "simple-scenarios;first-simple-scenario",
+        "keyword": "Scenario",
+        "name": "First simple scenario",
+        "description": "",
+        "line": 5,
+        "type": "scenario",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a step",
+            "line": 7,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped"
+            }
+          },
+          {
+            "keyword": "When ",
+            "name": "another step",
+            "line": 8,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped"
+            }
+          },
+          {
+            "keyword": "Then ",
+            "name": "a final step",
+            "line": 9,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped"
+            }
+          }
+        ]
+      },
+      {
+        "keyword": "Background",
+        "name": "",
+        "description": "",
+        "line": 2,
+        "type": "background",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a background step",
+            "line": 3,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped",
+              "duration": 3000
+            }
+          }
+        ]
+      },
+      {
+        "id": "simple-scenarios;second-simple-scenario",
+        "keyword": "Scenario",
+        "name": "Second simple scenario",
+        "description": "",
+        "line": 11,
+        "type": "scenario",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a different step",
+            "line": 13,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped"
+            }
+          }
+        ]
+      },
+      {
+        "keyword": "Background",
+        "name": "",
+        "description": "",
+        "line": 2,
+        "type": "background",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a background step",
+            "line": 3,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped",
+              "duration": 5000
+            }
+          }
+        ]
+      },
+      {
+        "id": "simple-scenarios;a-pending-scenario",
+        "keyword": "Scenario",
+        "name": "A pending scenario",
+        "description": "",
+        "line": 15,
+        "type": "scenario",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a step that marks as pending",
+            "line": 17,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped"
+            }
+          }
+        ]
+      },
+      {
+        "keyword": "Background",
+        "name": "",
+        "description": "",
+        "line": 2,
+        "type": "background",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a background step",
+            "line": 3,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped",
+              "duration": 4000
+            }
+          }
+        ]
+      },
+      {
+        "id": "simple-scenarios;a-skipped-scenario",
+        "keyword": "Scenario",
+        "name": "A skipped scenario",
+        "description": "",
+        "line": 19,
+        "type": "scenario",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a step that skips",
+            "line": 21,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped"
+            }
+          }
+        ]
+      },
+      {
+        "keyword": "Background",
+        "name": "",
+        "description": "",
+        "line": 2,
+        "type": "background",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a background step",
+            "line": 3,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped",
+              "duration": 3000
+            }
+          }
+        ]
+      },
+      {
+        "id": "simple-scenarios;a-failing-scenario",
+        "keyword": "Scenario",
+        "name": "A failing scenario",
+        "description": "",
+        "line": 23,
+        "type": "scenario",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "a step that fails",
+            "line": 25,
+            "match": {
+              "location": "/Users/tom/.rbenv/versions/3.2.2/lib/ruby/gems/3.2.0/gems/cucumber-9.2.1/lib/cucumber/step_match.rb:101"
+            },
+            "result": {
+              "status": "skipped"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
