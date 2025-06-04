@@ -50,6 +50,8 @@ func TestNewCucumber(t *testing.T) {
 	}
 }
 func TestCucumberRun(t *testing.T) {
+	changeCwd(t, "./testdata/cucumber")
+
 	cucumber := NewCucumber(RunnerConfig{
 		TestCommand: "cucumber --format json --out {{resultPath}}",
 		ResultPath:  "tmp/cucumber.json",
@@ -65,7 +67,7 @@ func TestCucumberRun(t *testing.T) {
 	}
 
 	testCases := []plan.TestCase{
-		{Path: "./testdata/cucumber/features/spells/expelliarmus.feature"},
+		{Path: "./features/spells/expelliarmus.feature"},
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := cucumber.Run(result, testCases, false)
@@ -123,7 +125,9 @@ func TestCucumberRun_TestFailed(t *testing.T) {
 }
 
 func TestCucumberGetFiles(t *testing.T) {
-	cucumber := NewCucumber(RunnerConfig{})
+	cucumber := NewCucumber(RunnerConfig{
+		TestFilePattern: "testdata/cucumber/features/**/*.feature",
+	})
 
 	got, err := cucumber.GetFiles()
 	if err != nil {
