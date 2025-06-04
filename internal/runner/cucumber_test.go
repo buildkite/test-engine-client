@@ -51,10 +51,8 @@ func TestNewCucumber(t *testing.T) {
 }
 
 func TestCucumberRun(t *testing.T) {
-	changeCwd(t, "./testdata/cucumber")
-
 	cucumber := NewCucumber(RunnerConfig{
-		TestCommand: "bundle exec cucumber --format json --out {{resultPath}}",
+		TestCommand: "cucumber --format json --out {{resultPath}}",
 		ResultPath:  "tmp/cucumber.json",
 	})
 
@@ -63,7 +61,7 @@ func TestCucumberRun(t *testing.T) {
 	})
 
 	testCases := []plan.TestCase{
-		{Path: "./features/spells/expelliarmus.feature"},
+		{Path: "./testdata/cucumber/features/spells/expelliarmus.feature"},
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := cucumber.Run(result, testCases, false)
