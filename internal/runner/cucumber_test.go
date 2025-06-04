@@ -49,12 +49,13 @@ func TestNewCucumber(t *testing.T) {
 		}
 	}
 }
+
 func TestCucumberRun(t *testing.T) {
 	changeCwd(t, "./testdata/cucumber")
 
 	cucumber := NewCucumber(RunnerConfig{
 		TestCommand: "cucumber --format json --out {{resultPath}}",
-		ResultPath:  "tmp/cucumber.json",
+		ResultPath:  "cucumber.json",
 	})
 
 	t.Cleanup(func() {
