@@ -31,7 +31,7 @@ type Cucumber struct {
 func NewCucumber(c RunnerConfig) Cucumber {
 	if c.TestCommand == "" {
 		// The pretty formatter gives a nice progress bar in the console, the JSON formatter is required for bktec.
-		c.TestCommand = "bundle exec cucumber --format pretty --format json --out {{resultPath}} {{testExamples}}"
+		c.TestCommand = "cucumber --format pretty --format json --out {{resultPath}} {{testExamples}}"
 	}
 
 	if c.TestFilePattern == "" {

@@ -19,10 +19,10 @@ func TestNewCucumber(t *testing.T) {
 		{
 			input: RunnerConfig{},
 			want: RunnerConfig{
-				TestCommand:            "bundle exec cucumber --format pretty --format json --out {{resultPath}} {{testExamples}}",
+				TestCommand:            "cucumber --format pretty --format json --out {{resultPath}} {{testExamples}}",
 				TestFilePattern:        "features/**/*.feature",
 				TestFileExcludePattern: "",
-				RetryTestCommand:       "bundle exec cucumber --format pretty --format json --out {{resultPath}} {{testExamples}}",
+				RetryTestCommand:       "cucumber --format pretty --format json --out {{resultPath}} {{testExamples}}",
 			},
 		},
 		// custom
@@ -75,6 +75,13 @@ func TestCucumberRun(t *testing.T) {
 	}
 
 	if result.Status() != RunStatusPassed {
+		// Attempt to read and log the content of cucumber.json for debugging
+		jsonContent, readErr := os.ReadFile("tmp/cucumber.json")
+		if readErr != nil {
+			t.Logf("Failed to read tmp/cucumber.json: %v", readErr)
+		} else {
+			t.Logf("Content of tmp/cucumber.json:\n%s", string(jsonContent))
+		}
 		t.Errorf("Cucumber.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
