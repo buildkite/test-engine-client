@@ -185,7 +185,7 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 
 	output, err := exec.Command(cmdName, dryRunArgs...).CombinedOutput()
 	if err != nil {
-		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %s", output)
+		return []plan.TestCase{}, fmt.Errorf("failed to run Cucumber dry run: %s", output)
 	}
 
 	dryRunReport, parseErr := parseCucumberDryRunJSONOutput(f.Name()) // Use parser from cucumber_result_parser.go
