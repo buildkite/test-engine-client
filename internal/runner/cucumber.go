@@ -171,63 +171,21 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 		}
 	}()
 
-	// Use a default command if TestCommand is not set, or adapt existing TestCommand.
-	// For simplicity, we'll assume a base command structure here.
-	// In a real scenario, this might need to parse c.TestCommand to inject dry-run flags correctly.
-	baseCmd := "cucumber"
-	cmdArgs := []string{}
-
-	// If c.TestCommand is set, try to split it. This is a naive split and might need improvement.
-	if c.TestCommand != "" {
-		parts, err := shellquote.Split(c.TestCommand)
-		if err == nil && len(parts) > 0 {
-			baseCmd = parts[0]
-			cmdArgs = parts[1:]
-			// Remove existing format/out options if they conflict, or ensure they don't.
-			// This part can be complex. For now, we'll append, assuming user command doesn't clash badly.
-		} else {
-			debug.Printf("Could not parse TestCommand '%s', using default 'cucumber'. Error: %v", c.TestCommand, err)
-		}
+	cmdName, _, err := c.commandNameAndArgs(c.TestCommand, files)
+	if err != nil {
+		return nil, err
 	}
 
-	// Add dry-run specific arguments
-	dryRunArgs := []string{"--dry-run", "--format", "json", "--out", f.Name()}
-	cmdArgs = append(cmdArgs, dryRunArgs...)
-	cmdArgs = append(cmdArgs, files...)
+	dryRunArgs := append(
+		[]string{"--dry-run", "--format", "json", "--out", f.Name(), "--format", "progress"},
+		files...
+	)
 
-	// Ensure CWD is correct if features are specified with relative paths from a specific root
-	// This logic might need to mirror what's in c.Run() if paths are relative to testdata/cucumber, etc.
-	// For now, assume files are paths that cucumber can find from the current CWD (e.g. internal/runner)
+	debug.Printf("Running `%s %s` for dry run", cmdName, strings.Join(dryRunArgs, " "))
 
-	debug.Printf("Running Cucumber dry run: %s %s", baseCmd, strings.Join(cmdArgs, " "))
-
-	cmd := exec.Command(baseCmd, cmdArgs...)
-	// If tests are run from a specific subdirectory (e.g. testdata/cucumber for TestCucumberRun)
-	// GetExamples might need to adjust CWD or paths similarly.
-	// For now, let's assume CWD is internal/runner, and file paths in `files` are relative to that (e.g. "testdata/cucumber/features/foo.feature")
-
-	output, execErr := cmd.CombinedOutput()
-
-	if execErr != nil {
-		// Check if the error is because no scenarios were found (empty output might be ok)
-		// but cucumber might exit with non-zero if files are empty or no features match.
-		// For now, treat any non-zero exit as an error, but log output for diagnosis.
-		return nil, fmt.Errorf("failed to run cucumber dry run command '%s %s': %w. Output:\n%s", baseCmd, strings.Join(cmdArgs, " "), execErr, string(output))
-	}
-	debug.Printf("Cucumber dry run output:\n%s", string(output)) // Log stdout/stderr from the command
-
-	// It's possible cucumber outputs nothing to stdout/stderr on success for dry-run, relying on --out file.
-	// Check if the output file has content.
-	fileInfo, statErr := f.Stat()
-	if statErr != nil {
-		return nil, fmt.Errorf("failed to stat temp file %s after dry run: %w", f.Name(), statErr)
-	}
-	if fileInfo.Size() == 0 {
-		// This could mean no scenarios were found, or an issue with cucumber writing to --out.
-		// If `files` was empty or matched no features, this is expected.
-		// If `files` was not empty, this might be an issue or simply no scenarios.
-		debug.Printf("Cucumber dry run output file %s is empty. This may be normal if no scenarios were found.", f.Name())
-		return []plan.TestCase{}, nil // No scenarios found
+	output, err := exec.Command(cmdName, dryRunArgs...).CombinedOutput()
+	if err != nil {
+		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %s", output)
 	}
 
 	dryRunReport, parseErr := parseCucumberDryRunJSONOutput(f.Name()) // Use parser from cucumber_result_parser.go
