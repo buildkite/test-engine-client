@@ -1,4 +1,4 @@
-FROM ruby:3.4.4-slim-bookworm AS ruby
+FROM ruby:3.4.4-bookworm AS ruby
 FROM cypress/included:14.4.0 AS cypress
 FROM python:3.13.3-bookworm AS python
 
@@ -8,7 +8,8 @@ COPY --from=ruby / /
 COPY --from=cypress / /
 COPY --from=python / /
 
-RUN gem install rspec
+RUN gem install rspec cucumber base64
+RUN gem install bigdecimal -v 3.2.0
 RUN yarn global add jest
 RUN pip install pytest
 RUN pip install buildkite-test-collector==0.2.0

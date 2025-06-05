@@ -392,7 +392,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 	}
 
 	// Splitting files by example is only supported for rspec runner.
-	if runner.Name() != "RSpec" {
+	if runner.Name() != "RSpec" && runner.Name() != "Cucumber" {
 		return api.TestPlanParams{
 			Identifier:  cfg.Identifier,
 			Parallelism: cfg.Parallelism,
