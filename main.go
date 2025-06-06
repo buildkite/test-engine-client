@@ -361,19 +361,25 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 		return handleError(err)
 	}
 
-	debug.Println("Creating test plan")
-	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+	var testPlan plan.TestPlan
+	if params.Runner != "pytestpants" {
+		debug.Println("Creating test plan")
+		createdPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 
-	if err != nil {
-		return handleError(err)
-	}
+		if err != nil {
+			return handleError(err)
+		}
 
-	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
-	// In this case, we should create a fallback plan.
-	if len(testPlan.Tasks) == 0 {
-		fmt.Println("⚠️ Error plan received, falling back to non-intelligent splitting. Your build may take longer than usual.")
+		// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
+		// In this case, we should create a fallback plan.
+		if len(createdPlan.Tasks) == 0 {
+			fmt.Println("⚠️ Error plan received, falling back to non-intelligent splitting. Your build may take longer than usual.")
+			testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
+		} else {
+			testPlan = createdPlan
+		}
+	} else {
 		testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
-		return testPlan, nil
 	}
 
 	debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)
