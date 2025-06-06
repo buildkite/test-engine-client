@@ -2,10 +2,12 @@
 
 > [!WARNING]
 > Pants support is currently experimental and has limited feature support. Only the following features are supported:
+>
 > - Automatically retry failed tests
 > - Mute tests (ignore test failures)
 >
 > The following features are not supported:
+>
 > - Filter test files
 > - Split slow files by individual test example
 > - Skip tests
@@ -28,18 +30,19 @@ Only running `pants test` with `python_test` targets is supported at this time.
 
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=pytestpants
-export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test --changed-since=HEAD~1 test -- --json={{resultPath}}"
+export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test --changed-since=HEAD~1 test -- --json={{resultPath}} --merge-json"
 bktec
 ```
 
 ## Configure test command
+
 While pants support is experimental there is no default command. That means it is required to set `BUILDKITE_TEST_ENGINE_TEST_CMD`.
 Below are a few recommendations for specific scenarios:
 
 ---
 
 ```sh
-export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test test //:: -- --json={{resultPath}}"
+export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test test //:: -- --json={{resultPath}} --merge-json""
 ```
 
 This command is a good option if you want to run all python tests in your repository.
@@ -47,7 +50,7 @@ This command is a good option if you want to run all python tests in your reposi
 ---
 
 ```sh
-export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test --changed-since=HEAD~1 test -- --json={{resultPath}}"
+export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test --changed-since=HEAD~1 test -- --json={{resultPath}} --merge-json"
 ```
 
 This command is a good option if you want to only run the python tests that were
@@ -63,12 +66,15 @@ In both commands, `{{resultPath}}` is replaced with a unique temporary path crea
 > Make sure to append `-- --json={{resultPath}}` in your custom pants test command, as bktec requires this to read the test results for retries and verification purposes.
 
 ## Filter test files
+
 There is not support for filtering test files at this time.
 
 ## Automatically retry failed tests
+
 You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using either the default test command or the command specified in `BUILDKITE_TEST_ENGINE_TEST_CMD`. Because pants caches test results, only failed tests will be retried.
 
 To enable automatic retry, set the following environment variable:
+
 ```sh
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
