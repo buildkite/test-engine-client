@@ -393,7 +393,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 
 	// Splitting files by example is only supported for rspec runner.
 	if runner.Name() != "RSpec" {
-		return api.TestPlanParams{
+		params := api.TestPlanParams{
 			Identifier:  cfg.Identifier,
 			Parallelism: cfg.Parallelism,
 			Branch:      cfg.Branch,
@@ -401,7 +401,17 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 			Tests: api.TestPlanParamsTest{
 				Files: testFiles,
 			},
-		}, nil
+		}
+
+		// This is a workaround for the fact that the pytest-pants runner is not
+		// supported by the Test Engine API. For now, we use the pytest runner. At
+		// some point, there may be a difference between the two runners, but for
+		// now the response from the Test Engine API is the same for both runners.
+		if cfg.TestRunner == "pytest-pants" {
+			params.Runner = "pytest"
+		}
+
+		return params, nil
 	}
 
 	if cfg.SplitByExample {

@@ -810,6 +810,66 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 	}
 }
 
+func TestCreateRequestParams_PytestPants(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `
+{
+	"tests": [
+		{ "path": "test/banana_test.py", "reason": "slow file" },
+		{ "path": "test/fig_test.py", "reason": "slow file" }
+	]
+}`)
+	}))
+	defer svr.Close()
+
+	runner := runner.PytestPants{}
+
+	t.Run(runner.Name(), func(t *testing.T) {
+		cfg := config.Config{
+			OrganizationSlug: "my-org",
+			SuiteSlug:        "my-suite",
+			Identifier:       "identifier",
+			Parallelism:      7,
+			Branch:           "",
+			TestRunner:       runner.Name(),
+			Env:              env.Map{},
+		}
+
+		client := api.NewClient(api.ClientConfig{
+			ServerBaseUrl: svr.URL,
+		})
+		files := []string{
+			"test/apple_test.py",
+			"test/banana_test.py",
+			"test/cherry_test.py",
+		}
+
+		got, err := createRequestParam(context.Background(), cfg, files, *client, runner)
+
+		if err != nil {
+			t.Errorf("createRequestParam() error = %v", err)
+		}
+
+		want := api.TestPlanParams{
+			Identifier:  "identifier",
+			Parallelism: 7,
+			Branch:      "",
+			Runner:      "pytest",
+			Tests: api.TestPlanParamsTest{
+				Files: []plan.TestCase{
+					{Path: "test/apple_test.py"},
+					{Path: "test/banana_test.py"},
+					{Path: "test/cherry_test.py"},
+				},
+			},
+		}
+
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+		}
+	})
+}
+
 func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{ "message": "forbidden" }`, http.StatusForbidden)

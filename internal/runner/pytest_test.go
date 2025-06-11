@@ -139,6 +139,8 @@ func TestPytestRun_CommandFailed(t *testing.T) {
 }
 
 func TestPytestGetFiles(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
 	pytest := NewPytest(RunnerConfig{})
 
 	got, err := pytest.GetFiles()
@@ -147,8 +149,8 @@ func TestPytestGetFiles(t *testing.T) {
 	}
 
 	want := []string{
-		"testdata/pytest/failed_test.py",
-		"testdata/pytest/test_sample.py",
+		"failed_test.py",
+		"test_sample.py",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
