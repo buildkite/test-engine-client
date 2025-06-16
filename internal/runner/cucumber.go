@@ -178,7 +178,7 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 
 	dryRunArgs := append(
 		[]string{"--dry-run", "--format", "json", "--out", f.Name(), "--format", "progress"},
-		files...
+		files...,
 	)
 
 	debug.Printf("Running `%s %s` for dry run", cmdName, strings.Join(dryRunArgs, " "))

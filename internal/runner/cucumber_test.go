@@ -228,7 +228,7 @@ func TestCucumberGetExamples(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create empty feature file %s: %v", emptyFeatureFilePath, err)
 	}
-	f.Close() // Close the file immediately after creation.
+	f.Close()                             // Close the file immediately after creation.
 	defer os.Remove(emptyFeatureFilePath) // Clean up the empty file.
 
 	// Path to GetExamples is relative to c.Dir
@@ -384,10 +384,10 @@ func TestCucumberRun_ScenarioStatuses(t *testing.T) {
 	// Keys are Scope/Name/Path as stored by RunResult
 	wantStatuses := map[string]TestStatus{ // Use TestStatus from runner package
 		"Simple Scenarios/First simple scenario/features/simple_scenarios.feature:5":   TestStatusPassed,
-		"Simple Scenarios/Second simple scenario/features/simple_scenarios.feature:11":  TestStatusPassed,
-		"Simple Scenarios/A pending scenario/features/simple_scenarios.feature:15":    TestStatusSkipped, // Pending scenario
-		"Simple Scenarios/A skipped scenario/features/simple_scenarios.feature:19":   TestStatusSkipped, // Skipped scenario
-		"Simple Scenarios/A failing scenario/features/simple_scenarios.feature:23":    TestStatusFailed,  // Failing scenario
+		"Simple Scenarios/Second simple scenario/features/simple_scenarios.feature:11": TestStatusPassed,
+		"Simple Scenarios/A pending scenario/features/simple_scenarios.feature:15":     TestStatusSkipped, // Pending scenario
+		"Simple Scenarios/A skipped scenario/features/simple_scenarios.feature:19":     TestStatusSkipped, // Skipped scenario
+		"Simple Scenarios/A failing scenario/features/simple_scenarios.feature:23":     TestStatusFailed,  // Failing scenario
 	}
 
 	if len(result.tests) != expectedScenarioCount { // Access result.tests map directly
@@ -520,7 +520,7 @@ func TestCucumberGetExamples_WithOtherFormatters(t *testing.T) {
 	if err := os.MkdirAll("tmp", 0755); err != nil {
 		t.Fatalf("could not create tmp directory: %v", err)
 	}
-	f, err := os.CreateTemp("tmp", "cucumber-*.html") 
+	f, err := os.CreateTemp("tmp", "cucumber-*.html")
 	if err != nil {
 		t.Fatalf("os.CreateTemp() error = %v", err)
 	}

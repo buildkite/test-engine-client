@@ -21,14 +21,14 @@ type CucumberFeature struct {
 
 // CucumberElement represents a scenario or background in Cucumber's JSON output.
 type CucumberElement struct {
-	ID          string        `json:"id"`
-	Keyword     string        `json:"keyword"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Line        int           `json:"line"`
-	Type        string        `json:"type"` // e.g., "scenario", "background"
-	Steps       []CucumberStep  `json:"steps"`
-	Tags        []CucumberTag `json:"tags,omitempty"`
+	ID          string         `json:"id"`
+	Keyword     string         `json:"keyword"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Line        int            `json:"line"`
+	Type        string         `json:"type"` // e.g., "scenario", "background"
+	Steps       []CucumberStep `json:"steps"`
+	Tags        []CucumberTag  `json:"tags,omitempty"`
 	// Examples    []CucumberExample `json:"examples,omitempty"` // For scenario outlines
 }
 
@@ -68,12 +68,12 @@ func (e CucumberElement) AggregatedStatus() string {
 
 // CucumberStep represents a single step in a scenario.
 type CucumberStep struct {
-	Keyword    string          `json:"keyword"`
-	Name       string          `json:"name"`
-	Line       int             `json:"line"`
-	Result     *CucumberResult `json:"result,omitempty"`
-	Match      *CucumberMatch  `json:"match,omitempty"`
-	DocString  *CucumberDocString `json:"doc_string,omitempty"`
+	Keyword       string                 `json:"keyword"`
+	Name          string                 `json:"name"`
+	Line          int                    `json:"line"`
+	Result        *CucumberResult        `json:"result,omitempty"`
+	Match         *CucumberMatch         `json:"match,omitempty"`
+	DocString     *CucumberDocString     `json:"doc_string,omitempty"`
 	DataTableRows []CucumberDataTableRow `json:"rows,omitempty"` // For data tables
 }
 
@@ -106,7 +106,6 @@ type CucumberDocString struct {
 type CucumberDataTableRow struct {
 	Cells []string `json:"cells"`
 }
-
 
 // ParseCucumberJSONReport parses the JSON output from a cucumber run (not dry run).
 // This is for actual test results.
