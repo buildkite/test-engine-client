@@ -137,11 +137,12 @@ func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) 
 // For brevity, they are assumed here.
 
 // mapScenarioToTestCase maps a Cucumber scenario (element) to a plan.TestCase
-func mapScenarioToTestCase(featureURI string, scenario CucumberElement) plan.TestCase {
+func mapScenarioToTestCase(featureName string, featureURI string, scenario CucumberElement) plan.TestCase {
 	// Cucumber scenarios are identified by file_path:line_number
 	identifier := fmt.Sprintf("%s:%d", featureURI, scenario.Line)
 	return plan.TestCase{
 		Path:       identifier,
+		Scope:      featureName,
 		Name:       scenario.Name,
 		Identifier: identifier, // Or scenario.ID if it's more suitable and consistently available
 	}
@@ -197,7 +198,7 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 	for _, feature := range dryRunReport {
 		for _, scenario := range feature.Elements {
 			if scenario.Type == "scenario" { // Only include scenarios, not scenario outlines directly (examples are handled differently)
-				testCases = append(testCases, mapScenarioToTestCase(feature.URI, scenario))
+				testCases = append(testCases, mapScenarioToTestCase(feature.Name, feature.URI, scenario))
 			} else if scenario.Type == "scenario_outline" && scenario.Keyword == "Scenario Outline" {
 				// Scenario outlines themselves aren't runnable directly by path:line of the outline.
 				// Cucumber expands them into concrete scenarios based on their Examples tables.
