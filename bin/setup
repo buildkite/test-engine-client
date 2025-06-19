@@ -47,6 +47,10 @@ npx cypress verify
 cd ../rspec
 bundle install
 
+# Install Cucumber dependencies
+cd ../cucumber
+bundle install
+
 # Install various python things, dependencies for pytest test cases
 if [ -n "$VIRTUAL_ENV" ]; then
   echo "Python virtual environment is active: $VIRTUAL_ENV"
