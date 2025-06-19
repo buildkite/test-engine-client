@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.0 - 2025-06-19
+- Add support for the Cucumber test runner.
+
 ## 1.5.0 - 2025-05-30
 - Add support for the Go test runner.
 - Change the retry behavior to automatically retry muted tests that fail. To disable this, set the `BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST` environment variable to `true`.
