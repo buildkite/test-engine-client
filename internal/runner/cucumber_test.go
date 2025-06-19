@@ -174,31 +174,37 @@ func TestCucumberGetExamples(t *testing.T) {
 	want := []plan.TestCase{
 		{
 			Path:       "features/simple_scenarios.feature:5",
+			Scope:      "Simple Scenarios",
 			Name:       "First simple scenario",
 			Identifier: "features/simple_scenarios.feature:5",
 		},
 		{
 			Path:       "features/simple_scenarios.feature:11",
+			Scope:      "Simple Scenarios",
 			Name:       "Second simple scenario",
 			Identifier: "features/simple_scenarios.feature:11",
 		},
 		{
 			Path:       "features/simple_scenarios.feature:15",
+			Scope:      "Simple Scenarios",
 			Name:       "A pending scenario",
 			Identifier: "features/simple_scenarios.feature:15",
 		},
 		{
 			Path:       "features/simple_scenarios.feature:19",
+			Scope:      "Simple Scenarios",
 			Name:       "A skipped scenario",
 			Identifier: "features/simple_scenarios.feature:19",
 		},
 		{
 			Path:       "features/simple_scenarios.feature:23",
+			Scope:      "Simple Scenarios",
 			Name:       "A failing scenario",
 			Identifier: "features/simple_scenarios.feature:23",
 		},
 		{
 			Path:       "features/another_feature.feature:3",
+			Scope:      "Another Feature",
 			Name:       "Scenario in another feature",
 			Identifier: "features/another_feature.feature:3",
 		},
@@ -487,26 +493,31 @@ func TestCucumberGetExamples_WithOtherFormatters(t *testing.T) {
 	want := []plan.TestCase{
 		{
 			Path:       "features/simple_scenarios.feature:5",
+			Scope:      "Simple Scenarios",
 			Name:       "First simple scenario",
 			Identifier: "features/simple_scenarios.feature:5",
 		},
 		{
 			Path:       "features/simple_scenarios.feature:11",
+			Scope:      "Simple Scenarios",
 			Name:       "Second simple scenario",
 			Identifier: "features/simple_scenarios.feature:11",
 		},
 		{
 			Path:       "features/simple_scenarios.feature:15",
+			Scope:      "Simple Scenarios",
 			Name:       "A pending scenario",
 			Identifier: "features/simple_scenarios.feature:15",
 		},
 		{
 			Path:       "features/simple_scenarios.feature:19",
+			Scope:      "Simple Scenarios",
 			Name:       "A skipped scenario",
 			Identifier: "features/simple_scenarios.feature:19",
 		},
 		{
 			Path:       "features/simple_scenarios.feature:23",
+			Scope:      "Simple Scenarios",
 			Name:       "A failing scenario",
 			Identifier: "features/simple_scenarios.feature:23",
 		},
