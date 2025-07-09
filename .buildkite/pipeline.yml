@@ -18,8 +18,12 @@ steps:
       - cover.{html,out}
       - internal/api/pacts/*
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-engine-client
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
       - aws-ssm#v1.0.0:
           parameters:
             BUILDKITE_TEST_ENGINE_SUITE_TOKEN: /pipelines/buildkite/test-engine-client/SUITE_TOKEN
