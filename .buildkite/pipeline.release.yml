@@ -12,8 +12,12 @@ steps:
   - name: ":rocket: Release"
     artifact_paths: "dist/**/*"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-engine-client-release
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
       - aws-ssm#v1.0.0:
           parameters:
             GITHUB_TOKEN: /pipelines/buildkite/test-engine-client-release/GH_TOKEN
