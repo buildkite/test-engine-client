@@ -14,7 +14,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pact-foundation/pact-go/v2 v2.4.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 )
 
 require (
