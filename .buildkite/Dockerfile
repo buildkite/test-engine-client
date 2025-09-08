@@ -1,5 +1,5 @@
 FROM ruby:3.4.5-slim-bookworm AS ruby
-FROM cypress/included:14.5.3 AS cypress
+FROM cypress/included:15.1.0 AS cypress
 FROM python:3.13.7-bookworm AS python
 
 FROM golang:1.25.0-bookworm AS golang
