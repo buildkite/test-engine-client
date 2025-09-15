@@ -30,7 +30,7 @@ brews:
     description: "Buildkite Test Engine Client"
     homepage: "https://github.com/buildkite/test-engine-client"
     skip_upload: auto
-    directory: .
+    directory: Formula
     test: |
       version_output = shell_output("bktec --version")
       assert_match "v#{version}\n", version_output
