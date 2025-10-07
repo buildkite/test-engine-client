@@ -7,9 +7,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -57,6 +59,7 @@ func main() {
 	debug.SetDebug(env.Get("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
 
 	versionFlag := flag.Bool("version", false, "print version information")
+	filesFlag := flag.String("files", "", "override the default test file discovery by providing a path to a file containing a list of test files")
 
 	flag.Parse()
 
@@ -78,9 +81,18 @@ func main() {
 		logErrorAndExit(16, "Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER %q: %v", cfg.TestRunner, err)
 	}
 
-	files, err := testRunner.GetFiles()
-	if err != nil {
-		logErrorAndExit(16, "Couldn't get files: %v", err)
+	var files []string
+
+	if *filesFlag != "" {
+		files, err = getTestFilesFromFile(*filesFlag)
+		if err != nil {
+			logErrorAndExit(16, "Couldn't get files: %v", err)
+		}
+	} else {
+		files, err = testRunner.GetFiles()
+		if err != nil {
+			logErrorAndExit(16, "Couldn't get files: %v", err)
+		}
 	}
 
 	// get plan
@@ -133,6 +145,20 @@ func main() {
 	if runResult.Status() == runner.RunStatusFailed || runResult.Status() == runner.RunStatusError {
 		os.Exit(1)
 	}
+}
+
+func getTestFilesFromFile(path string) ([]string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't read files from %s", path)
+	}
+
+	contentType := http.DetectContentType(content)
+	if !strings.HasPrefix(contentType, "text/") {
+		return nil, fmt.Errorf("%s is not a text file", path)
+	}
+
+	return strings.Fields(string(content)), nil
 }
 
 func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {
