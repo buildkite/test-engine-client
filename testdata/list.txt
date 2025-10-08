@@ -1,4 +1,5 @@
 ./a_spec.rb
 ./b_spec.rb
-./c_spec.rb ./d_spec.rb
-./e_spec.rb       ./f_spec.rb
+./c_spec.rb
+./spec/my spec.rb 
+

@@ -59,7 +59,7 @@ func main() {
 	debug.SetDebug(env.Get("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
 
 	versionFlag := flag.Bool("version", false, "print version information")
-	filesFlag := flag.String("files", "", "override the default test file discovery by providing a path to a file containing a list of test files")
+	filesFlag := flag.String("files", "", "override the default test file discovery by providing a path to a file containing a list of test files (one per line)")
 
 	flag.Parse()
 
@@ -158,7 +158,20 @@ func getTestFilesFromFile(path string) ([]string, error) {
 		return nil, fmt.Errorf("%s is not a text file", path)
 	}
 
-	return strings.Fields(string(content)), nil
+	lines := strings.Split(string(content), "\n")
+	fileNames := []string{}
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine != "" {
+			fileNames = append(fileNames, trimmedLine)
+		}
+	}
+
+	if len(fileNames) == 0 {
+		return nil, fmt.Errorf("no test files found in %s", path)
+	}
+
+	return fileNames, nil
 }
 
 func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {

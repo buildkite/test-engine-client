@@ -16,9 +16,7 @@ func TestGetTestFilesFromFile(t *testing.T) {
 		"./a_spec.rb",
 		"./b_spec.rb",
 		"./c_spec.rb",
-		"./d_spec.rb",
-		"./e_spec.rb",
-		"./f_spec.rb",
+		"./spec/my spec.rb",
 	}
 	if diff := cmp.Diff(files, expected); diff != "" {
 		t.Errorf("files diff (-got +want):\n%s", diff)
