@@ -1,0 +1,5 @@
+./a_spec.rb
+./b_spec.rb
+./c_spec.rb
+./spec/my spec.rb 
+
