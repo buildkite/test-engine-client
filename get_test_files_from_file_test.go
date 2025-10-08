@@ -1,13 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )
 
 func TestGetTestFilesFromFile(t *testing.T) {
-	files, err := getTestFilesFromFile("testdata/list.txt")
+	files, err := getTestFilesFromFile("testdata/test_file_discovery/list.txt")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -31,11 +32,26 @@ func TestGetTestFilesFromFile_Dir(t *testing.T) {
 }
 
 func TestGetTestFilesFromFile_BinaryFile(t *testing.T) {
-	_, err := getTestFilesFromFile("testdata/image.png")
+	path := "testdata/test_file_discovery/image.png"
+	_, err := getTestFilesFromFile(path)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
-	if err.Error() != "testdata/image.png is not a text file" {
-		t.Fatalf("expected specific error, got %v", err)
+
+	expectedError := fmt.Sprintf("%s is not a text file", path)
+	if err.Error() != expectedError {
+		t.Fatalf("expected error: %q, got %v", expectedError, err)
+	}
+}
+
+func TestGetTestFilesFromFile_EmptyFile(t *testing.T) {
+	path := "testdata/test_file_discovery/empty_list.txt"
+	_, err := getTestFilesFromFile(path)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	expectedError := fmt.Sprintf("no test files found in %s", path)
+	if err.Error() != expectedError {
+		t.Fatalf("expected error: %q, got %v", expectedError, err)
 	}
 }
