@@ -23,7 +23,7 @@ fi
 
 echo "🛠️ Installing dependencies for sample projects..."
 
-cd ./internal/runner/testdata
+pushd ./internal/runner/testdata || exit 1
 # if yarn is available, use it to install dependencies
 # otherwise, use npm
 if command -v yarn &> /dev/null
@@ -32,24 +32,29 @@ then
 else
   npm install
 fi
+popd || exit 1
 
 # Install Playwright dependencies
-cd ./playwright
+pushd ./internal/runner/testdata/playwright || exit 1
 npx playwright install
 npx playwright install-deps
+popd || exit 1
 
 # Install Cypress dependencies
-cd ../cypress
+pushd ./internal/runner/testdata/cypress || exit 1
 npx cypress install
 npx cypress verify
+popd || exit 1
 
 # Install RSpec dependencies
-cd ../rspec
+pushd ./internal/runner/testdata/rspec || exit 1
 bundle install
+popd || exit 1
 
 # Install Cucumber dependencies
-cd ../cucumber
+pushd ./internal/runner/testdata/cucumber || exit 1
 bundle install
+popd || exit 1
 
 # Install various python things, dependencies for pytest test cases
 if [ -n "$VIRTUAL_ENV" ]; then
