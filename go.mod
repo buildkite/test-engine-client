@@ -28,6 +28,7 @@ require (
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
+	github.com/urfave/cli/v3 v3.4.1 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
