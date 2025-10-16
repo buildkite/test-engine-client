@@ -56,7 +56,7 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 
 	report, parseErr := p.parseReport(p.ResultPath)
 	if parseErr != nil {
-		fmt.Println("Buildkite Test Engine Client: Failed to read Playwright output, tests will not be retried.")
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Playwright output, tests will not be retried: %v", parseErr)
 		return err
 	}
 

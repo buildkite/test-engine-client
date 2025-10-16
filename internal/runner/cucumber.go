@@ -92,7 +92,7 @@ func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) 
 
 	report, parseErr := c.ParseReport(c.ResultPath)
 	if parseErr != nil {
-		fmt.Println("Buildkite Test Engine Client: Failed to read Cucumber JSON output, tests will not be retried.")
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Cucumber JSON output, tests will not be retried: %v", parseErr)
 		return err
 	}
 

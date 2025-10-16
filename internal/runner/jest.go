@@ -99,7 +99,7 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 
 	report, parseErr := j.ParseReport(j.ResultPath)
 	if parseErr != nil {
-		fmt.Println("Buildkite Test Engine Client: Failed to read Jest output, tests will not be retried.")
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Jest output, tests will not be retried: %v", parseErr)
 		return err
 	}
 

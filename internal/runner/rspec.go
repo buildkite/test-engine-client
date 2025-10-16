@@ -99,9 +99,10 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 
 	report, parseErr := r.ParseReport(r.ResultPath)
 	if parseErr != nil {
-		// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing),
-		// therefore we need to bubble up the error.
-		fmt.Println("Buildkite Test Engine Client: Failed to read Rspec output, tests will not be retried.")
+		// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing).
+		// In this case don't try to continue manipulating the report and return the error (which may be nil)
+    // *from runAndForwardSignal*, effectively the exit code of the rspec command.
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Rspec output, tests will not be retried: %v", parseErr)
 		return err
 	}
 
