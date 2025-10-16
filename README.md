@@ -114,5 +114,5 @@ Once you have these dependencies installed, run `bin/setup` to install dependenc
 
 To test, run:
 ```sh
-go test ./...
+./bin/test
 ```
