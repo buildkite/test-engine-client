@@ -46,7 +46,7 @@ func TestPytestRun_RetryCommand(t *testing.T) {
 	err := pytest.Run(result, testCases, true)
 
 	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
+		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
 	}
 }
 
