@@ -6,6 +6,8 @@ go get github.com/pact-foundation/pact-go/v2
 # install the `pact-go` CLI
 go install github.com/pact-foundation/pact-go/v2
 
+go install gotest.tools/gotestsum@v1.8.0
+
 # Check if asdf is installed and being used for Go
 if command -v asdf &> /dev/null && asdf current golang &> /dev/null; then
   echo "🔄 Reshimming asdf golang..."
@@ -67,5 +69,6 @@ else
 fi
 pip install pytest
 pip install buildkite-test-collector==0.2.0
+curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash
 
 echo "💖 Everything is fantastic!"
