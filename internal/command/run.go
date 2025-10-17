@@ -54,12 +54,12 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 	// get config
 	cfg, err := config.New(env)
 	if err != nil {
-		LogErrorAndExit(16, "Invalid configuration...\n%v", err)
+		return fmt.Errorf("Invalid configuration...\n%w", err)
 	}
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
-		LogErrorAndExit(16, "Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER %q: %v", cfg.TestRunner, err)
+		return fmt.Errorf("Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
 	var files []string
@@ -67,12 +67,12 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 	if cmd.String("files") != "" {
 		files, err = getTestFilesFromFile(cmd.String("files"))
 		if err != nil {
-			LogErrorAndExit(16, "Couldn't get files: %v", err)
+			return err
 		}
 	} else {
 		files, err = testRunner.GetFiles()
 		if err != nil {
-			LogErrorAndExit(16, "Couldn't get files: %v", err)
+			return err
 		}
 	}
 
@@ -85,7 +85,7 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
-		LogErrorAndExit(16, "Couldn't fetch or create test plan: %v", err)
+		return fmt.Errorf("Couldn't fetch or create test plan: %w", err)
 	}
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
@@ -107,11 +107,10 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 
 		// runner exited with error: exit with the exit code
 		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-			LogErrorAndExit(exitError.ExitCode(), "%s exited with error: %v", testRunner.Name(), err)
+			return fmt.Errorf("%s exited with error: %w", testRunner.Name(), err)
 		}
 
-		// other errors: exit with 16
-		LogErrorAndExit(16, "Couldn't run tests: %v", err)
+		return err
 	}
 
 	// At this point, the runner is expected to have completed
@@ -330,12 +329,6 @@ func logSignalAndExit(name string, signal syscall.Signal) {
 
 	// Exit with 128 + signal number, the standard convention.
 	exitCode := 128 + int(signal)
-	os.Exit(exitCode)
-}
-
-// LogErrorAndExit logs an error message and exits with the given exit code.
-func LogErrorAndExit(exitCode int, format string, v ...any) {
-	fmt.Printf("Buildkite Test Engine Client: "+format+"\n", v...)
 	os.Exit(exitCode)
 }
 

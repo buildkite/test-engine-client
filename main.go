@@ -4,8 +4,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/buildkite/test-engine-client/internal/command"
 	"github.com/buildkite/test-engine-client/internal/version"
@@ -40,7 +42,7 @@ func main() {
 	}
 
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		command.LogErrorAndExit(16, "Error: %v", err)
+		logErrorAndExit(err)
 	}
 }
 
@@ -52,4 +54,16 @@ func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error
 	fmt.Printf("bktec %s\n", version.Version)
 	os.Exit(0)
 	return nil
+}
+
+func logErrorAndExit(err error) {
+	exitError := new(exec.ExitError)
+
+	if errors.As(err, &exitError) {
+		// If error wraps an exitError exit with the specified code ...
+		os.Exit(exitError.ExitCode())
+	} else {
+		// otherwise exit code 16
+		os.Exit(16)
+	}
 }
