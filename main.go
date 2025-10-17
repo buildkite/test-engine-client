@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -23,6 +22,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/olekukonko/tablewriter"
+	"github.com/urfave/cli/v3"
 )
 
 const Logo = `
@@ -54,19 +54,51 @@ type TestRunner interface {
 }
 
 func main() {
+	cmd := &cli.Command{
+		Name:   "bktec",
+		Usage:  "Buildkite Test Engine Client",
+		Action: run,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "files",
+				Value: "",
+				Usage: "override the default test file discovery by providing a path to a file containing a list of test files (one per line)",
+			},
+			&cli.BoolFlag{
+				Name:   "version",
+				Value:  false,
+				Usage:  "print version information and exit",
+				Action: printVersion,
+			},
+		},
+		Commands: []*cli.Command{
+			{
+				Name:   "run",
+				Usage:  "Run tests (default)",
+				Action: run,
+			},
+		},
+	}
+
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		logErrorAndExit(16, "Error: %v", err)
+	}
+}
+
+func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error {
+	// Flag will be true if called with `bktec [...] --version`
+	if !versionFlag {
+		return nil
+	}
+	fmt.Printf("bktec %s\n", version.Version)
+	os.Exit(0)
+	return nil
+}
+
+func run(ctx context.Context, cmd *cli.Command) error {
 	env := env.OS{}
 
 	debug.SetDebug(env.Get("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
-
-	versionFlag := flag.Bool("version", false, "print version information")
-	filesFlag := flag.String("files", "", "override the default test file discovery by providing a path to a file containing a list of test files (one per line)")
-
-	flag.Parse()
-
-	if *versionFlag {
-		fmt.Printf("bktec %s\n", version.Version)
-		os.Exit(0)
-	}
 
 	printStartUpMessage()
 
@@ -83,8 +115,8 @@ func main() {
 
 	var files []string
 
-	if *filesFlag != "" {
-		files, err = getTestFilesFromFile(*filesFlag)
+	if cmd.String("files") != "" {
+		files, err = getTestFilesFromFile(cmd.String("files"))
 		if err != nil {
 			logErrorAndExit(16, "Couldn't get files: %v", err)
 		}
@@ -96,7 +128,6 @@ func main() {
 	}
 
 	// get plan
-	ctx := context.Background()
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 		AccessToken:      cfg.AccessToken,
@@ -145,6 +176,7 @@ func main() {
 	if runResult.Status() == runner.RunStatusFailed || runResult.Status() == runner.RunStatusError {
 		os.Exit(1)
 	}
+	return nil
 }
 
 func getTestFilesFromFile(path string) ([]string, error) {
