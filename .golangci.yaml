@@ -1,6 +1,7 @@
 linters:
   enable:
     - gosec
+    - gofmt
 
 issues:
   exclude-rules:
