@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -62,18 +60,9 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	var files []string
-
-	if cmd.String("files") != "" {
-		files, err = getTestFilesFromFile(cmd.String("files"))
-		if err != nil {
-			return err
-		}
-	} else {
-		files, err = testRunner.GetFiles()
-		if err != nil {
-			return err
-		}
+	files, err := getTestFiles(cmd.String("files"), testRunner)
+	if err != nil {
+		return err
 	}
 
 	// get plan
@@ -132,33 +121,6 @@ func printStartUpMessage() {
 	const reset = "\033[0m"
 	fmt.Println("+++ Buildkite Test Engine Client: bktec " + version.Version + "\n")
 	fmt.Println(green + Logo + reset)
-}
-
-func getTestFilesFromFile(path string) ([]string, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't read files from %s", path)
-	}
-
-	contentType := http.DetectContentType(content)
-	if !strings.HasPrefix(contentType, "text/") {
-		return nil, fmt.Errorf("%s is not a text file", path)
-	}
-
-	lines := strings.Split(string(content), "\n")
-	fileNames := []string{}
-	for _, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine != "" {
-			fileNames = append(fileNames, trimmedLine)
-		}
-	}
-
-	if len(fileNames) == 0 {
-		return nil, fmt.Errorf("no test files found in %s", path)
-	}
-
-	return fileNames, nil
 }
 
 func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {

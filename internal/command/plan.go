@@ -35,18 +35,9 @@ func Plan(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	var files []string
-
-	if cmd.String("files") != "" {
-		files, err = getTestFilesFromFile(cmd.String("files"))
-		if err != nil {
-			return err
-		}
-	} else {
-		files, err = testRunner.GetFiles()
-		if err != nil {
-			return err
-		}
+	files, err := getTestFiles(cmd.String("files"), testRunner)
+	if err != nil {
+		return err
 	}
 
 	apiClient := api.NewClient(api.ClientConfig{
