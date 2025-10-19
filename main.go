@@ -38,6 +38,11 @@ func main() {
 				Usage:  "Run tests (default)",
 				Action: command.Run,
 			},
+			{
+				Name:   "plan",
+				Usage:  "Generate test plan without running tests",
+				Action: command.Plan,
+			},
 		},
 	}
 

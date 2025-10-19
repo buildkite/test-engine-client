@@ -35,6 +35,8 @@ type Task struct {
 
 // TestPlan represents the entire test plan.
 type TestPlan struct {
+	Identifier   string           `json:"identifier"`
+	Parallelism  int              `json:"parallelism"`
 	Experiment   string           `json:"experiment"`
 	Tasks        map[string]*Task `json:"tasks"`
 	Fallback     bool
