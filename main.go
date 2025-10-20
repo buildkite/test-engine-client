@@ -62,8 +62,9 @@ func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error
 }
 
 func logErrorAndExit(err error) {
-	exitError := new(exec.ExitError)
+	fmt.Fprintln(os.Stderr, err)
 
+	exitError := new(exec.ExitError)
 	if errors.As(err, &exitError) {
 		// If error wraps an exitError exit with the specified code ...
 		os.Exit(exitError.ExitCode())
