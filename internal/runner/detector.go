@@ -1,7 +1,7 @@
 package runner
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -36,7 +36,7 @@ func DetectRunner(cfg config.Config) (TestRunner, error) {
 		ResultPath:             cfg.ResultPath,
 	}
 
-	switch cfg.TestRunner {
+	switch testRunner := cfg.TestRunner; testRunner {
 	case "rspec":
 		return NewRspec(runnerConfig), nil
 	case "jest":
@@ -55,6 +55,6 @@ func DetectRunner(cfg config.Config) (TestRunner, error) {
 		return NewCucumber(runnerConfig), nil
 	default:
 		// Update the error message to include the new runner
-		return nil, errors.New("runner value is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'pytest-pants', 'gotest', or 'cucumber'")
+		return nil, fmt.Errorf("runner value %q is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'pytest-pants', 'gotest', or 'cucumber'", testRunner)
 	}
 }
