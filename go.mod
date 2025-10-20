@@ -10,11 +10,12 @@ require (
 )
 
 require (
-	drjosh.dev/zzglob v0.4.1
+	drjosh.dev/zzglob v0.4.2
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pact-foundation/pact-go/v2 v2.4.1
 	github.com/stretchr/testify v1.10.0
+	github.com/urfave/cli/v3 v3.4.1
 )
 
 require (
@@ -28,7 +29,6 @@ require (
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
-	github.com/urfave/cli/v3 v3.4.1 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
