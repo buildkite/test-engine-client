@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
+	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/urfave/cli/v3"
@@ -25,10 +26,15 @@ type TestPlanSummary struct {
 func Plan(ctx context.Context, cmd *cli.Command) error {
 	env := env.OS{}
 
+	debug.SetDebug(env.Get("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
+	debug.SetOutput(os.Stderr)
+
 	cfg, err := config.New(env)
 	if err != nil {
 		return fmt.Errorf("Invalid configuration...\n%w", err)
 	}
+
+	cfg.MaxParallelism = cmd.Int("max-parallelism")
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {

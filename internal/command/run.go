@@ -376,10 +376,11 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 	// Splitting files by example is only supported for rspec runner & cucumber
 	if runner.Name() != "RSpec" && runner.Name() != "Cucumber" {
 		params := api.TestPlanParams{
-			Identifier:  cfg.Identifier,
-			Parallelism: cfg.Parallelism,
-			Branch:      cfg.Branch,
-			Runner:      cfg.TestRunner,
+			Identifier:     cfg.Identifier,
+			Parallelism:    cfg.Parallelism,
+			MaxParallelism: cfg.MaxParallelism,
+			Branch:         cfg.Branch,
+			Runner:         cfg.TestRunner,
 			Tests: api.TestPlanParamsTest{
 				Files: testFiles,
 			},
@@ -409,11 +410,12 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 	}
 
 	return api.TestPlanParams{
-		Identifier:  cfg.Identifier,
-		Parallelism: cfg.Parallelism,
-		Branch:      cfg.Branch,
-		Runner:      cfg.TestRunner,
-		Tests:       testParams,
+		Identifier:     cfg.Identifier,
+		Parallelism:    cfg.Parallelism,
+		MaxParallelism: cfg.MaxParallelism,
+		Branch:         cfg.Branch,
+		Runner:         cfg.TestRunner,
+		Tests:          testParams,
 	}, nil
 }
 

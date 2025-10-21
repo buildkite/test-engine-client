@@ -18,6 +18,8 @@ type Config struct {
 	OrganizationSlug string
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int
+	// Maximum parallelism when calculating parallelism dynamically.
+	MaxParallelism int
 	// The path to the result file.
 	ResultPath string
 	// Whether a failed muted test should be retried.
