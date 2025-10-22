@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/urfave/cli/v3"
 )
+
+var planWriter io.Writer = os.Stdout
 
 // Structure of the JSON that is output when running `bktec plan`.
 type TestPlanSummary struct {
@@ -62,7 +65,7 @@ func Plan(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("Create test plan failed: %w", err)
 	}
 
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(planWriter)
 	data := &TestPlanSummary{
 		Identifier:  testPlan.Identifier,
 		Parallelism: strconv.Itoa(testPlan.Parallelism),
@@ -72,4 +75,9 @@ func Plan(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return nil
+}
+
+// By default command.Plan writes to os.Stdout but the output can be changed here.
+func SetPlanWriter(writer io.Writer) {
+	planWriter = writer
 }
