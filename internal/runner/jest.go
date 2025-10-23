@@ -108,7 +108,6 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		// When a TestResult has status "failed" but has no AssertionResults, it indicates a runtime error at the file level.
 		if testResult.Status == "failed" && len(testResult.AssertionResults) == 0 {
 			result.error = fmt.Errorf("Jest failed with runtime error test suites")
-			continue
 		}
 
 		for _, example := range testResult.AssertionResults {
