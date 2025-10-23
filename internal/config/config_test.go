@@ -4,13 +4,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func getExampleEnv() env.Env {
-	return env.Map{
+func getExampleEnv() map[string]string {
+	return map[string]string{
 		"BUILDKITE_PARALLEL_JOB_COUNT":                       "60",
 		"BUILDKITE_PARALLEL_JOB":                             "7",
 		"BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN":             "my_token",
@@ -48,7 +47,6 @@ func TestNewConfig(t *testing.T) {
 		SuiteSlug:         "my_suite",
 		TestRunner:        "rspec",
 		JobRetryCount:     0,
-		Env:               env,
 		errs:              InvalidConfigError{},
 	}
 
@@ -58,7 +56,7 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestNewConfig_EmptyConfig(t *testing.T) {
-	_, err := New(env.Map{})
+	_, err := New(map[string]string{})
 
 	if !errors.As(err, new(InvalidConfigError)) {
 		t.Errorf("config.Validate() error = %v, want InvalidConfigError", err)
@@ -67,10 +65,10 @@ func TestNewConfig_EmptyConfig(t *testing.T) {
 
 func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	env := getExampleEnv()
-	env.Delete("BUILDKITE_TEST_ENGINE_MODE")
-	env.Delete("BUILDKITE_TEST_ENGINE_BASE_URL")
-	env.Delete("BUILDKITE_TEST_ENGINE_TEST_CMD")
-	env.Delete("BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST")
+	delete(env, "BUILDKITE_TEST_ENGINE_MODE")
+	delete(env, "BUILDKITE_TEST_ENGINE_BASE_URL")
+	delete(env, "BUILDKITE_TEST_ENGINE_TEST_CMD")
+	delete(env, "BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST")
 
 	c, err := New(env)
 	if err != nil {
@@ -89,7 +87,6 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 		RetryForMutedTest: true,
 		ResultPath:        "tmp/rspec.json",
 		JobRetryCount:     0,
-		Env:               env,
 	}
 
 	if diff := cmp.Diff(c, want, cmpopts.IgnoreUnexported(Config{})); diff != "" {
@@ -99,8 +96,8 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 
 func TestNewConfig_InvalidConfig(t *testing.T) {
 	env := getExampleEnv()
-	env.Set("BUILDKITE_TEST_ENGINE_MODE", "dynamic")
-	env.Delete("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN")
+	env["BUILDKITE_TEST_ENGINE_MODE"] = "dynamic"
+	delete(env, "BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN")
 
 	_, err := New(env)
 

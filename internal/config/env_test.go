@@ -4,12 +4,10 @@ import (
 	"errors"
 	"strconv"
 	"testing"
-
-	"github.com/buildkite/test-engine-client/internal/env"
 )
 
 func TestGetIntEnvWithDefault(t *testing.T) {
-	env := env.Map{
+	env := map[string]string{
 		"MY_KEY":      "10",
 		"EMPTY_KEY":   "",
 		"INVALID_KEY": "invalid_value",
@@ -61,7 +59,7 @@ func TestGetIntEnvWithDefault(t *testing.T) {
 }
 
 func TestGetEnvWithDefault(t *testing.T) {
-	env := env.Map{
+	env := map[string]string{
 		"MY_KEY":    "my_value",
 		"EMPTY_KEY": "",
 		"OTHER_KEY": "other_value",
@@ -89,7 +87,7 @@ func TestGetEnvWithDefault(t *testing.T) {
 		},
 		{
 			key:          "EMPTY_KEY",
-			defaultValue: env.Get("OTHER_KEY"),
+			defaultValue: env["OTHER_KEY"],
 			want:         "other_value",
 		},
 	}
