@@ -1,7 +1,10 @@
 version: "2"
 linters:
+  # https://golangci-lint.run/docs/linters/#enabled-by-default
+  default: standard
   enable:
     - gosec
+    - govet
   exclusions:
     presets:
       - comments
@@ -20,6 +23,7 @@ linters:
 formatters:
   enable:
     - gofmt
+    - goimports
   exclusions:
     paths:
       - third_party$
