@@ -1002,7 +1002,7 @@ func TestSendMetadata(t *testing.T) {
 				"BUILDKITE_TEST_ENGINE_TEST_CMD":    "bundle exec rspec",
 				"BUILDKITE_STEP_ID":                 "pqr",
 				// ensure that empty env vars is included in the request
-				"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":          "",
+				"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":          "false",
 				"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN": "",
 				"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN":         "",
 				"BUILDKITE_TEST_ENGINE_TEST_RUNNER":               "rspec",
