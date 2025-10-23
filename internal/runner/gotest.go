@@ -145,7 +145,7 @@ func (g GoTest) getPackages(testCases []plan.TestCase) ([]string, error) {
 	}
 	if len(packages) == 0 {
 		// The likelihood of this is very low
-		return nil, fmt.Errorf("Unable to extract package names from test plan")
+		return nil, fmt.Errorf("unable to extract package names from test plan")
 	}
 	debug.Printf("Packages: %v\n", packages)
 

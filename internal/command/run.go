@@ -54,12 +54,12 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 	// get config
 	cfg, err := config.New(env)
 	if err != nil {
-		return fmt.Errorf("Invalid configuration...\n%w", err)
+		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
-		return fmt.Errorf("Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
+		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
 	var files []string
@@ -85,7 +85,7 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
-		return fmt.Errorf("Couldn't fetch or create test plan: %w", err)
+		return fmt.Errorf("couldn't fetch or create test plan: %w", err)
 	}
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
