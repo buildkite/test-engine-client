@@ -4,14 +4,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestConfigReadFromEnv(t *testing.T) {
 	c := Config{}
-	err := c.readFromEnv(env.Map{
+	err := c.readFromEnv(map[string]string{
 		"BUILDKITE_PARALLEL_JOB_COUNT":                       "10",
 		"BUILDKITE_PARALLEL_JOB":                             "0",
 		"BUILDKITE_TEST_ENGINE_BASE_URL":                     "https://buildkite.localhost",
@@ -60,7 +59,7 @@ func TestConfigReadFromEnv(t *testing.T) {
 
 func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	c.readFromEnv(env.Map{
+	c.readFromEnv(map[string]string{
 		"BUILDKITE_TEST_ENGINE_BASE_URL":    "",
 		"BUILDKITE_TEST_ENGINE_MODE":        "",
 		"BUILDKITE_TEST_ENGINE_TEST_CMD":    "",
@@ -84,7 +83,7 @@ func TestConfigReadFromEnv_MissingConfigWithDefault(t *testing.T) {
 
 func TestConfigReadFromEnv_NotInteger(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv(env.Map{
+	err := c.readFromEnv(map[string]string{
 		"BUILDKITE_BUILD_ID":           "abc",
 		"BUILDKITE_STEP_ID":            "123",
 		"BUILDKITE_PARALLEL_JOB_COUNT": "foo",
@@ -104,7 +103,7 @@ func TestConfigReadFromEnv_NotInteger(t *testing.T) {
 
 func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv(env.Map{
+	err := c.readFromEnv(map[string]string{
 		"BUILDKITE_TEST_ENGINE_BASE_URL":    "",
 		"BUILDKITE_TEST_ENGINE_MODE":        "",
 		"BUILDKITE_TEST_ENGINE_TEST_CMD":    "",
@@ -128,7 +127,7 @@ func TestConfigReadFromEnv_MissingBuildId(t *testing.T) {
 
 func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv(env.Map{
+	err := c.readFromEnv(map[string]string{
 		"BUILDKITE_TEST_ENGINE_BASE_URL":    "",
 		"BUILDKITE_TEST_ENGINE_MODE":        "",
 		"BUILDKITE_TEST_ENGINE_TEST_CMD":    "",
@@ -154,7 +153,7 @@ func TestConfigReadFromEnv_MissingStepId(t *testing.T) {
 
 func TestConfigReadFromEnv_InvalidParallelJob(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv(env.Map{
+	err := c.readFromEnv(map[string]string{
 		"BUILDKITE_BUILD_ID":           "123",
 		"BUILDKITE_STEP_ID":            "456",
 		"BUILDKITE_PARALLEL_JOB":       "",
@@ -175,7 +174,7 @@ func TestConfigReadFromEnv_InvalidParallelJob(t *testing.T) {
 
 func TestConfigReadFromEnv_InvalidParallelJobCount(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	err := c.readFromEnv(env.Map{
+	err := c.readFromEnv(map[string]string{
 		"BUILDKITE_BUILD_ID":           "123",
 		"BUILDKITE_STEP_ID":            "456",
 		"BUILDKITE_PARALLEL_JOB":       "10",

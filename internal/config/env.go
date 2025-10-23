@@ -2,15 +2,13 @@ package config
 
 import (
 	"strconv"
-
-	"github.com/buildkite/test-engine-client/internal/env"
 )
 
 // getEnvWithDefault retrieves the value of the environment variable named by the key.
 // If the variable is present and not empty, the value is returned.
 // Otherwise the returned value will be the default value.
-func getEnvWithDefault(env env.Env, key string, defaultValue string) string {
-	value, ok := env.Lookup(key)
+func getEnvWithDefault(env map[string]string, key string, defaultValue string) string {
+	value, ok := env[key]
 	if !ok {
 		return defaultValue
 	}
@@ -20,8 +18,8 @@ func getEnvWithDefault(env env.Env, key string, defaultValue string) string {
 	return value
 }
 
-func getIntEnvWithDefault(env env.Env, key string, defaultValue int) (int, error) {
-	value := env.Get(key)
+func getIntEnvWithDefault(env map[string]string, key string, defaultValue int) (int, error) {
+	value := env[key]
 	// If the environment variable is not set, return the default value.
 	if value == "" {
 		return defaultValue, nil
@@ -36,32 +34,26 @@ func getIntEnvWithDefault(env env.Env, key string, defaultValue int) (int, error
 }
 
 func (c Config) DumpEnv() map[string]string {
-	keys := []string{
-		"BUILDKITE_BUILD_ID",
-		"BUILDKITE_JOB_ID",
-		"BUILDKITE_ORGANIZATION_SLUG",
-		"BUILDKITE_PARALLEL_JOB_COUNT",
-		"BUILDKITE_PARALLEL_JOB",
-		"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED",
-		"BUILDKITE_TEST_ENGINE_RETRY_COUNT",
-		"BUILDKITE_TEST_ENGINE_RETRY_CMD",
-		"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE",
-		"BUILDKITE_TEST_ENGINE_SUITE_SLUG",
-		"BUILDKITE_TEST_ENGINE_TEST_CMD",
-		"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN",
-		"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN",
-		"BUILDKITE_TEST_ENGINE_TEST_RUNNER",
-		"BUILDKITE_STEP_ID",
-		"BUILDKITE_BRANCH",
-		"BUILDKITE_RETRY_COUNT",
-	}
-
 	envs := make(map[string]string)
-	for _, key := range keys {
-		envs[key] = c.Env.Get(key)
-	}
-
+	envs["BUILDKITE_BUILD_ID"] = c.BuildId
+	envs["BUILDKITE_JOB_ID"] = c.JobId
+	envs["BUILDKITE_STEP_ID"] = c.StepId
+	envs["BUILDKITE_ORGANIZATION_SLUG"] = c.OrganizationSlug
+	envs["BUILDKITE_PARALLEL_JOB_COUNT"] = strconv.Itoa(c.Parallelism)
+	envs["BUILDKITE_PARALLEL_JOB"] = strconv.Itoa(c.NodeIndex)
+	envs["BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"] = strconv.FormatBool(c.DebugEnabled)
+	envs["BUILDKITE_TEST_ENGINE_RETRY_COUNT"] = strconv.Itoa(c.MaxRetries)
+	envs["BUILDKITE_TEST_ENGINE_RETRY_CMD"] = c.RetryCommand
+	envs["BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE"] = strconv.FormatBool(c.SplitByExample)
+	envs["BUILDKITE_TEST_ENGINE_SUITE_SLUG"] = c.SuiteSlug
+	envs["BUILDKITE_TEST_ENGINE_TEST_CMD"] = c.TestCommand
+	envs["BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN"] = c.TestFileExcludePattern
+	envs["BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN"] = c.TestFilePattern
+	envs["BUILDKITE_TEST_ENGINE_TEST_RUNNER"] = c.TestRunner
+	envs["BUILDKITE_BRANCH"] = c.Branch
+	envs["BUILDKITE_RETRY_COUNT"] = strconv.Itoa(c.JobRetryCount)
 	envs["BUILDKITE_TEST_ENGINE_IDENTIFIER"] = c.Identifier
+	envs["BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"] = strconv.FormatBool(c.DebugEnabled)
 
 	return envs
 }
