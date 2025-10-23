@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -62,18 +60,9 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	var files []string
-
-	if cmd.String("files") != "" {
-		files, err = getTestFilesFromFile(cmd.String("files"))
-		if err != nil {
-			return err
-		}
-	} else {
-		files, err = testRunner.GetFiles()
-		if err != nil {
-			return err
-		}
+	files, err := getTestFiles(cmd.String("files"), testRunner)
+	if err != nil {
+		return err
 	}
 
 	// get plan
@@ -132,33 +121,6 @@ func printStartUpMessage() {
 	const reset = "\033[0m"
 	fmt.Println("+++ Buildkite Test Engine Client: bktec " + version.Version + "\n")
 	fmt.Println(green + Logo + reset)
-}
-
-func getTestFilesFromFile(path string) ([]string, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't read files from %s", path)
-	}
-
-	contentType := http.DetectContentType(content)
-	if !strings.HasPrefix(contentType, "text/") {
-		return nil, fmt.Errorf("%s is not a text file", path)
-	}
-
-	lines := strings.Split(string(content), "\n")
-	fileNames := []string{}
-	for _, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine != "" {
-			fileNames = append(fileNames, trimmedLine)
-		}
-	}
-
-	if len(fileNames) == 0 {
-		return nil, fmt.Errorf("no test files found in %s", path)
-	}
-
-	return fileNames, nil
 }
 
 func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {
@@ -398,113 +360,4 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg confi
 
 	debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)
 	return testPlan, nil
-}
-
-// createRequestParam generates the parameters needed for a test plan request.
-// For runners other than "rspec", it constructs the test plan parameters with all test files.
-// For the "rspec" runner, it filters the test files through the Test Engine API and splits the filtered files into examples.
-func createRequestParam(ctx context.Context, cfg config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
-	testFiles := []plan.TestCase{}
-	for _, file := range files {
-		testFiles = append(testFiles, plan.TestCase{
-			Path: file,
-		})
-	}
-
-	// Splitting files by example is only supported for rspec runner & cucumber
-	if runner.Name() != "RSpec" && runner.Name() != "Cucumber" {
-		params := api.TestPlanParams{
-			Identifier:  cfg.Identifier,
-			Parallelism: cfg.Parallelism,
-			Branch:      cfg.Branch,
-			Runner:      cfg.TestRunner,
-			Tests: api.TestPlanParamsTest{
-				Files: testFiles,
-			},
-		}
-
-		// This is a workaround for the fact that the pytest-pants runner is not
-		// supported by the Test Engine API. For now, we use the pytest runner. At
-		// some point, there may be a difference between the two runners, but for
-		// now the response from the Test Engine API is the same for both runners.
-		if cfg.TestRunner == "pytest-pants" {
-			params.Runner = "pytest"
-		}
-
-		return params, nil
-	}
-
-	if cfg.SplitByExample {
-		debug.Println("Splitting by example")
-	}
-
-	// The SplitByExample flag indicates whether to filter slow files for splitting by example.
-	// Regardless of the flag's state, the API will still filter other files that need to be split by example, such as those containing skipped tests.
-	// Therefore, we must filter and split files even when SplitByExample is disabled.
-	testParams, err := filterAndSplitFiles(ctx, cfg, client, testFiles, runner)
-	if err != nil {
-		return api.TestPlanParams{}, err
-	}
-
-	return api.TestPlanParams{
-		Identifier:  cfg.Identifier,
-		Parallelism: cfg.Parallelism,
-		Branch:      cfg.Branch,
-		Runner:      cfg.TestRunner,
-		Tests:       testParams,
-	}, nil
-}
-
-// filterAndSplitFiles filters the test files through the Test Engine API and splits the filtered files into examples.
-// It returns the test plan parameters with the examples from the filtered files and the remaining files.
-// An error is returned if there is a failure in any of the process.
-func filterAndSplitFiles(ctx context.Context, cfg config.Config, client api.Client, files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
-	// Filter files that need to be split.
-	debug.Printf("Filtering %d files", len(files))
-	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
-		Files: files,
-		Env:   cfg.DumpEnv(),
-	})
-
-	if err != nil {
-		return api.TestPlanParamsTest{}, fmt.Errorf("filter tests: %w", err)
-	}
-
-	// If no files are filtered, return the all files.
-	if len(filteredFiles) == 0 {
-		debug.Println("No filtered files found")
-		return api.TestPlanParamsTest{
-			Files: files,
-		}, nil
-	}
-
-	debug.Printf("Filtered %d files", len(filteredFiles))
-	debug.Printf("Getting examples for %d filtered files", len(filteredFiles))
-
-	filteredFilesMap := make(map[string]bool, len(filteredFiles))
-	filteredFilesPath := make([]string, 0, len(filteredFiles))
-	for _, file := range filteredFiles {
-		filteredFilesMap[file.Path] = true
-		filteredFilesPath = append(filteredFilesPath, file.Path)
-	}
-
-	examples, err := runner.GetExamples(filteredFilesPath)
-	if err != nil {
-		return api.TestPlanParamsTest{}, fmt.Errorf("get examples: %w", err)
-	}
-
-	debug.Printf("Got %d examples within the filtered files", len(examples))
-
-	// Get the remaining files that are not filtered.
-	remainingFiles := make([]plan.TestCase, 0, len(files)-len(filteredFiles))
-	for _, file := range files {
-		if _, ok := filteredFilesMap[file.Path]; !ok {
-			remainingFiles = append(remainingFiles, file)
-		}
-	}
-
-	return api.TestPlanParamsTest{
-		Examples: examples,
-		Files:    remainingFiles,
-	}, nil
 }

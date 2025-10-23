@@ -38,6 +38,24 @@ func main() {
 				Usage:  "Run tests (default)",
 				Action: command.Run,
 			},
+			{
+				Name:   "plan",
+				Usage:  "Generate test plan without running tests",
+				Action: command.Plan,
+				Flags: []cli.Flag{
+					&cli.IntFlag{
+						Name:  "max-parallelism",
+						Value: 0,
+						Usage: "instruct the test planner to calculate optimal parallelism for the build, not to exceed the provided value. When 0 this flag is ignored and the test plan parallelism will be derived from the BUILDKITE_PARALLEL_JOB_COUNT environment variable",
+						Action: func(ctx context.Context, cmd *cli.Command, v int) error {
+							if v < 0 || v > 1000 {
+								return fmt.Errorf("max-parallelism must be between 0 and 1000")
+							}
+							return nil
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -57,8 +75,9 @@ func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error
 }
 
 func logErrorAndExit(err error) {
-	exitError := new(exec.ExitError)
+	fmt.Fprintln(os.Stderr, err)
 
+	exitError := new(exec.ExitError)
 	if errors.As(err, &exitError) {
 		// If error wraps an exitError exit with the specified code ...
 		os.Exit(exitError.ExitCode())
