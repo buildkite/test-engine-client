@@ -20,7 +20,12 @@ var planWriter io.Writer = os.Stdout
 
 // Structure of the JSON that is output when running `bktec plan`.
 type TestPlanSummary struct {
-	Identifier  string `json:"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"`
+	Identifier string `json:"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"`
+
+	// Parallelism is strictly an int not a string. It's represented as a string
+	// here because when this struct is Marshaled to JSON it's intended to be
+	// piped into buildkite-agent env set --input-format=json -, which requires
+	// string keys and string values.
 	Parallelism string `json:"BUILDKITE_TEST_ENGINE_PARALLELISM"`
 }
 
