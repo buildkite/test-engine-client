@@ -36,3 +36,6 @@ internal/runner/testdata/cucumber/cucumber.json
 .envrc
 
 .direnv
+
+# Output binary with `go build`
+test-engine-client
