@@ -1,11 +1,31 @@
+version: "2"
 linters:
+  # https://golangci-lint.run/docs/linters/#enabled-by-default
+  default: standard
   enable:
     - gosec
+    - govet
+  exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - gosec
+        path: _test.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
     - gofmt
-
-issues:
-  exclude-rules:
-    - path: _test.go
-      linters:
-        - errcheck
-        - gosec
+    - goimports
+  exclusions:
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
