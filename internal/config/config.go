@@ -1,11 +1,5 @@
 package config
 
-import (
-	"fmt"
-
-	"github.com/urfave/cli/v3"
-)
-
 // Config is the internal representation of the complete test engine client configuration.
 type Config struct {
 	BuildId string
@@ -67,9 +61,8 @@ func New(env map[string]string) (Config, error) {
 		errs: InvalidConfigError{},
 	}
 
-	// TODO: remove error from readFromEnv and validate functions
-	_ = c.readFromEnv(env)
-	_ = c.validate()
+	c.readFromEnv(env)
+	_ = c.Validate()
 
 	if len(c.errs) > 0 {
 		return Config{}, c.errs
