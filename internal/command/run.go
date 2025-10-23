@@ -17,7 +17,6 @@ import (
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/olekukonko/tablewriter"
-	"github.com/urfave/cli/v3"
 )
 
 type TestRunner interface {
@@ -41,29 +40,15 @@ _  /_/ /  ,<  / /_ /  __/ /__
 /_.___//_/|_| \__/ \___/\___/
 `
 
-func Run(ctx context.Context, cmd *cli.Command) error {
-	env := env.OS{}
-
-	debug.SetDebug(env.Get("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
-
+func Run(ctx context.Context, cfg config.Config, testListFilename string) error {
 	printStartUpMessage()
-
-	// get config
-	cfg, err := config.New(env)
-	if err != nil {
-		return fmt.Errorf("invalid configuration...\n%w", err)
-	}
-
-	if cmd.String("plan-identifier") != "" {
-		cfg.Identifier = cmd.String("plan-identifier")
-	}
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	files, err := getTestFiles(cmd.String("files"), testRunner)
+	files, err := getTestFiles(testListFilename, testRunner)
 	if err != nil {
 		return err
 	}

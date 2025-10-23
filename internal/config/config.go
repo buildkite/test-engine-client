@@ -56,6 +56,10 @@ type Config struct {
 	errs InvalidConfigError
 }
 
+func NewEmpty() Config {
+	return Config{errs: InvalidConfigError{}}
+}
+
 // New wraps the readFromEnv and validate functions to create a new Config struct.
 // It returns Config struct and an InvalidConfigError if there is an invalid configuration.
 func New(env map[string]string) (Config, error) {
@@ -71,56 +75,5 @@ func New(env map[string]string) (Config, error) {
 		return Config{}, c.errs
 	}
 
-	return c, nil
-}
-
-// Create and validate a Config struct from a cli.Command.
-// Returns an InvalidConfigError if there is an invalid configuration.
-func NewFromCliCommand(cmd *cli.Command) (Config, error) {
-	c := Config{
-		errs: InvalidConfigError{},
-	}
-
-	c.AccessToken = cmd.String("access-token")
-	c.OrganizationSlug = cmd.String("organization-slug")
-	c.SuiteSlug = cmd.String("suite-slug")
-
-	buildId := cmd.String("build-id")
-	if buildId == "" {
-		c.errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
-	}
-
-	stepId := cmd.String("step-id")
-	if stepId == "" {
-		c.errs.appendFieldError("BUILDKITE_STEP_ID", "must not be blank")
-	}
-
-	c.Identifier = fmt.Sprintf("%s/%s", buildId, stepId)
-
-	c.ServerBaseUrl = cmd.String("base-url")
-	c.TestCommand = cmd.String("test-command")
-	c.TestFilePattern = cmd.String("test-file-pattern")
-	c.TestFileExcludePattern = cmd.String("test-file-exclude-pattern")
-	c.TestRunner = cmd.String("test-runner")
-	c.RetryForMutedTest = !cmd.Bool("disable-retry-muted")
-	c.ResultPath = cmd.String("result-path")
-
-	c.SplitByExample = cmd.Bool("split-by-example")
-
-	c.Branch = cmd.String("branch")
-
-	c.JobRetryCount = cmd.Int("retry-count")
-
-	c.MaxRetries = cmd.Int("test-engine-retry-count")
-	c.RetryCommand = cmd.String("retry-command")
-
-	c.Parallelism = cmd.Int("parallelism")
-	c.NodeIndex = cmd.Int("parallel-job")
-
-	_ = c.validate()
-
-	if len(c.errs) > 0 {
-		return c, c.errs
-	}
 	return c, nil
 }
