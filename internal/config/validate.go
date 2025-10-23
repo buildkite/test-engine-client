@@ -1,14 +1,28 @@
 package config
 
 import (
+	"fmt"
 	"net/url"
 )
 
-// validate checks if the Config struct is valid and returns InvalidConfigError if it's invalid.
-func (c *Config) validate() error {
+// Validate checks if the Config struct is valid and returns InvalidConfigError if it's invalid.
+func (c *Config) Validate() error {
 
 	if c.MaxRetries < 0 {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)
+	}
+
+	if c.Identifier == "" {
+		if c.BuildId != "" && c.StepId != "" {
+			c.Identifier = fmt.Sprintf("%s/%s", c.BuildId, c.StepId)
+		} else {
+			if c.BuildId == "" {
+				c.errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
+			}
+			if c.StepId == "" {
+				c.errs.appendFieldError("BUILDKITE_STEP_ID", "must not be blank")
+			}
+		}
 	}
 
 	// We validate BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT in two steps.

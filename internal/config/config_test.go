@@ -35,6 +35,8 @@ func TestNewConfig(t *testing.T) {
 	}
 
 	want := Config{
+		BuildId:           "123",
+		StepId:            "456",
 		Parallelism:       60,
 		NodeIndex:         7,
 		ServerBaseUrl:     "https://build.kite",
@@ -76,6 +78,8 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	}
 
 	want := Config{
+		BuildId:           "123",
+		StepId:            "456",
 		Parallelism:       60,
 		NodeIndex:         7,
 		ServerBaseUrl:     "https://api.buildkite.com",

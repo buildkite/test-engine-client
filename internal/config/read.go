@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -29,22 +28,13 @@ import (
 //
 // If we are going to support other CI environment in the future,
 // we will need to change where we read the configuration from.
-func (c *Config) readFromEnv(env map[string]string) error {
+func (c *Config) readFromEnv(env map[string]string) {
 	c.AccessToken = env["BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN"]
 	c.OrganizationSlug = env["BUILDKITE_ORGANIZATION_SLUG"]
 	c.SuiteSlug = env["BUILDKITE_TEST_ENGINE_SUITE_SLUG"]
 
-	buildId := env["BUILDKITE_BUILD_ID"]
-	if buildId == "" {
-		c.errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
-	}
-
-	stepId := env["BUILDKITE_STEP_ID"]
-	if stepId == "" {
-		c.errs.appendFieldError("BUILDKITE_STEP_ID", "must not be blank")
-	}
-
-	c.Identifier = fmt.Sprintf("%s/%s", buildId, stepId)
+	c.BuildId = env["BUILDKITE_BUILD_ID"]
+	c.StepId = env["BUILDKITE_STEP_ID"]
 
 	c.ServerBaseUrl = getEnvWithDefault(env, "BUILDKITE_TEST_ENGINE_BASE_URL", "https://api.buildkite.com")
 	c.TestCommand = env["BUILDKITE_TEST_ENGINE_TEST_CMD"]
@@ -85,9 +75,4 @@ func (c *Config) readFromEnv(env map[string]string) error {
 		c.errs.appendFieldError("BUILDKITE_PARALLEL_JOB", "was %q, must be a number", nodeIndex)
 	}
 	c.NodeIndex = nodeIndexInt
-
-	if len(c.errs) > 0 {
-		return c.errs
-	}
-	return nil
 }
