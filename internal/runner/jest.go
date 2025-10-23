@@ -104,6 +104,13 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 	}
 
 	for _, testResult := range report.TestResults {
+		// TestResult represents a test file result, while AssertionResult represents the individual test cases result.
+		// When a TestResult has status "failed" but has no AssertionResults, it indicates a runtime error at the file level.
+		if testResult.Status == "failed" && len(testResult.AssertionResults) == 0 {
+			result.error = fmt.Errorf("Jest failed with runtime error test suites")
+			continue
+		}
+
 		for _, example := range testResult.AssertionResults {
 			var status TestStatus
 			switch example.Status {
@@ -139,10 +146,6 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		}
 	}
 
-	if report.NumRuntimeErrorTestSuites > 0 {
-		result.error = fmt.Errorf("Jest failed with runtime error test suites")
-	}
-
 	return nil
 }
 
@@ -158,11 +161,11 @@ type JestExample struct {
 }
 
 type JestReport struct {
-	NumFailedTests            int
-	NumRuntimeErrorTestSuites int
-	TestResults               []struct {
+	NumFailedTests int
+	TestResults    []struct {
 		AssertionResults []JestExample
 		FileName         string `json:"name"`
+		Status           string
 	}
 }
 
