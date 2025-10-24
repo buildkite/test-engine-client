@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/runner"
 )
 
@@ -15,7 +16,7 @@ type Timeline struct {
 
 type TestPlanMetadataParams struct {
 	Version    string               `json:"version"`
-	Env        map[string]string    `json:"env"`
+	Env        config.Config        `json:"env"`
 	Timeline   []Timeline           `json:"timeline"`
 	Statistics runner.RunStatistics `json:"statistics"`
 }

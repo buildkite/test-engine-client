@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pact-foundation/pact-go/v2/consumer"
@@ -25,6 +26,10 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 		t.Error("Error mocking provider", err)
 	}
 
+	cfg := config.New()
+	cfg.Parallelism = 3
+	cfg.SplitByExample = true
+
 	params := FilterTestsParams{
 		Files: []plan.TestCase{
 			{
@@ -37,10 +42,7 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 				Path: "./turtle_spec.rb",
 			},
 		},
-		Env: map[string]string{
-			"BUILDKITE_PARALLEL_JOB_COUNT":           "3",
-			"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE": "true",
-		},
+		Env: cfg,
 	}
 
 	err = mockProvider.

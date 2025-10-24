@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/pact-foundation/pact-go/v2/consumer"
 	"github.com/pact-foundation/pact-go/v2/matchers"
@@ -20,16 +21,15 @@ func TestPostTestPlanMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	cfg := config.New()
+	cfg.Parallelism = 3
+	cfg.NodeIndex = 1
+	cfg.SuiteSlug = "my_slug"
+	cfg.Identifier = "abc123"
+
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		Env: map[string]string{
-			"BUILDKITE_PARALLEL_JOB_COUNT":               "3",
-			"BUILDKITE_PARALLEL_JOB":                     "1",
-			"BUILDKITE_TEST_ENGINE_SUITE_SLUG":           "my_slug",
-			"BUILDKITE_TEST_ENGINE_TEST_EXCLUDE_PATTERN": "",
-			"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":     "false",
-			"BUILDKITE_TEST_ENGINE_IDENTIFIER":           "abc123",
-		},
+		Env:     cfg,
 		Timeline: []Timeline{
 			{
 				Event:     "test_start",
@@ -96,16 +96,15 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	cfg := config.New()
+	cfg.Parallelism = 3
+	cfg.NodeIndex = 1
+	cfg.SuiteSlug = "my_slug"
+	cfg.Identifier = "abc123"
+
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		Env: map[string]string{
-			"BUILDKITE_PARALLEL_JOB_COUNT":               "3",
-			"BUILDKITE_PARALLEL_JOB":                     "1",
-			"BUILDKITE_TEST_ENGINE_SUITE_SLUG":           "my_slug",
-			"BUILDKITE_TEST_ENGINE_TEST_EXCLUDE_PATTERN": "",
-			"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":     "false",
-			"BUILDKITE_TEST_ENGINE_IDENTIFIER":           "abc123",
-		},
+		Env:     cfg,
 		Timeline: []Timeline{
 			{
 				Event:     "test_start",

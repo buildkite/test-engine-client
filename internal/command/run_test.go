@@ -19,6 +19,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -971,6 +972,23 @@ func TestSendMetadata(t *testing.T) {
 		{Event: "test_end", Timestamp: "2024-06-20T04:49:09.609793Z"},
 	}
 
+	cfg := config.Config{
+		BuildId:          "xyz",
+		JobId:            "abc",
+		StepId:           "pqr",
+		OrganizationSlug: "buildkite",
+		Parallelism:      10,
+		NodeIndex:        5,
+		MaxRetries:       2,
+		RetryCommand:     "bundle exec rspec --only-failures",
+		SuiteSlug:        "rspec",
+		TestCommand:      "bundle exec rspec",
+		TestRunner:       "rspec",
+		JobRetryCount:    0,
+		Identifier:       "fruitsabc",
+		DebugEnabled:     true,
+	}
+
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -987,34 +1005,13 @@ func TestSendMetadata(t *testing.T) {
 		want := api.TestPlanMetadataParams{
 			Version:  "0.1.0",
 			Timeline: timeline,
-			Env: map[string]string{
-				"BUILDKITE_BUILD_ID":                  "xyz",
-				"BUILDKITE_JOB_ID":                    "abc",
-				"BUILDKITE_ORGANIZATION_SLUG":         "buildkite",
-				"BUILDKITE_PARALLEL_JOB_COUNT":        "10",
-				"BUILDKITE_PARALLEL_JOB":              "5",
-				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": "true",
-				// ensure that the identifier is included in the request
-				"BUILDKITE_TEST_ENGINE_IDENTIFIER":  "fruitsabc",
-				"BUILDKITE_TEST_ENGINE_RETRY_COUNT": "2",
-				"BUILDKITE_TEST_ENGINE_RETRY_CMD":   "bundle exec rspec --only-failures",
-				"BUILDKITE_TEST_ENGINE_SUITE_SLUG":  "rspec",
-				"BUILDKITE_TEST_ENGINE_TEST_CMD":    "bundle exec rspec",
-				"BUILDKITE_STEP_ID":                 "pqr",
-				// ensure that empty env vars is included in the request
-				"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE":          "false",
-				"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN": "",
-				"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN":         "",
-				"BUILDKITE_TEST_ENGINE_TEST_RUNNER":               "rspec",
-				"BUILDKITE_BRANCH":                                "",
-				"BUILDKITE_RETRY_COUNT":                           "0",
-			},
+			Env:      cfg,
 			Statistics: runner.RunStatistics{
 				Total: 3,
 			},
 		}
 
-		if diff := cmp.Diff(got, want); diff != "" {
+		if diff := cmp.Diff(got, want, cmpopts.IgnoreUnexported(config.Config{})); diff != "" {
 			t.Errorf("sendMetadata() request params diff (-got +want):\n%s", diff)
 			w.WriteHeader(http.StatusBadRequest)
 		} else {
@@ -1024,25 +1021,8 @@ func TestSendMetadata(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	cfg := config.Config{
-		BuildId:          "xyz",
-		JobId:            "abc",
-		StepId:           "pqr",
-		OrganizationSlug: "buildkite",
-		Parallelism:      10,
-		NodeIndex:        5,
-		MaxRetries:       2,
-		RetryCommand:     "bundle exec rspec --only-failures",
-		SuiteSlug:        "rspec",
-		TestCommand:      "bundle exec rspec",
-		TestRunner:       "rspec",
-		JobRetryCount:    0,
-		Identifier:       "fruitsabc",
-		DebugEnabled:     true,
-		ServerBaseUrl:    svr.URL,
-	}
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseUrl: svr.URL,
 	})
 
 	statistics := runner.RunStatistics{
