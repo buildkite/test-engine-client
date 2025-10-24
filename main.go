@@ -37,6 +37,13 @@ func main() {
 				Name:   "run",
 				Usage:  "Run tests (default)",
 				Action: command.Run,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "plan-identifier",
+						Value: "",
+						Usage: "run the tests from a plan previously generated matching the provided plan-identifier",
+					},
+				},
 			},
 			{
 				Name:   "plan",

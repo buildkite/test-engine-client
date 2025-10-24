@@ -55,6 +55,10 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
+	if cmd.String("plan-identifier") != "" {
+		cfg.Identifier = cmd.String("plan-identifier")
+	}
+
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
