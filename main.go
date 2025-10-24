@@ -16,9 +16,22 @@ import (
 
 func main() {
 	cmd := &cli.Command{
-		Name:   "bktec",
-		Usage:  "Buildkite Test Engine Client",
-		Action: command.Run,
+		Name:  "bktec",
+		Usage: "Buildkite Test Engine Client",
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			// This action is called when no command is given, and calls run().
+			// So running `bktec` is the same as running `bktec run`.
+			//
+			// Because this action is also called when no matching command is found
+			// a typo like `bktec plaan` will call run() with "plaan" in cmd.Args().
+			// We error here if any arguments are present and assume the first is a
+			// mis-spelled command name.
+			if cmd.Args().Len() > 0 {
+				fmt.Fprintf(os.Stderr, "invalid command %q\n", cmd.Args().Get(0))
+				cli.ShowRootCommandHelpAndExit(cmd, 1)
+			}
+			return command.Run(ctx, cmd)
+		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "files",
