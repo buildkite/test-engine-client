@@ -39,14 +39,14 @@ func Plan(ctx context.Context, cmd *cli.Command) error {
 
 	cfg, err := config.New(env)
 	if err != nil {
-		return fmt.Errorf("Invalid configuration...\n%w", err)
+		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
 	cfg.MaxParallelism = cmd.Int("max-parallelism")
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
-		return fmt.Errorf("Unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
+		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
 	files, err := getTestFiles(cmd.String("files"), testRunner)
@@ -67,7 +67,7 @@ func Plan(ctx context.Context, cmd *cli.Command) error {
 
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 	if err != nil {
-		return fmt.Errorf("Create test plan failed: %w", err)
+		return fmt.Errorf("create test plan failed: %w", err)
 	}
 
 	enc := json.NewEncoder(planWriter)
