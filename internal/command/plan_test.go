@@ -40,7 +40,7 @@ func TestPlan(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	cfg := config.NewEmpty()
+	cfg := config.New()
 
 	cfg.Branch = "tet-123-add-branch-name"
 	cfg.BuildId = "123"

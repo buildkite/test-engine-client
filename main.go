@@ -16,7 +16,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-var cfg = config.NewEmpty()
+var cfg = config.New()
 
 var Cli = &cli.Command{
 	Name:   "bktec",

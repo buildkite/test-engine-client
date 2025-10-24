@@ -50,13 +50,13 @@ type Config struct {
 	errs InvalidConfigError
 }
 
-func NewEmpty() Config {
+func New() Config {
 	return Config{errs: InvalidConfigError{}}
 }
 
-// New wraps the readFromEnv and validate functions to create a new Config struct.
+// NewFromEnv wraps the readFromEnv and validate functions to create a new Config struct.
 // It returns Config struct and an InvalidConfigError if there is an invalid configuration.
-func New(env map[string]string) (Config, error) {
+func NewFromEnv(env map[string]string) (Config, error) {
 	c := Config{
 		errs: InvalidConfigError{},
 	}
