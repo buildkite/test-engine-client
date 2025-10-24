@@ -29,7 +29,7 @@ func getExampleEnv() map[string]string {
 func TestNewConfig(t *testing.T) {
 	env := getExampleEnv()
 
-	c, err := New(env)
+	c, err := NewFromEnv(env)
 	if err != nil {
 		t.Errorf("config.New() error = %v", err)
 	}
@@ -58,7 +58,7 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestNewConfig_EmptyConfig(t *testing.T) {
-	_, err := New(map[string]string{})
+	_, err := NewFromEnv(map[string]string{})
 
 	if !errors.As(err, new(InvalidConfigError)) {
 		t.Errorf("config.Validate() error = %v, want InvalidConfigError", err)
@@ -72,7 +72,7 @@ func TestNewConfig_MissingConfigWithDefault(t *testing.T) {
 	delete(env, "BUILDKITE_TEST_ENGINE_TEST_CMD")
 	delete(env, "BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST")
 
-	c, err := New(env)
+	c, err := NewFromEnv(env)
 	if err != nil {
 		t.Errorf("config.New() error = %v", err)
 	}
@@ -103,7 +103,7 @@ func TestNewConfig_InvalidConfig(t *testing.T) {
 	env["BUILDKITE_TEST_ENGINE_MODE"] = "dynamic"
 	delete(env, "BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN")
 
-	_, err := New(env)
+	_, err := NewFromEnv(env)
 
 	var invConfigError InvalidConfigError
 	if !errors.As(err, &invConfigError) {
