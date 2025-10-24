@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/plan"
 )
 
 type FilterTestsParams struct {
-	Files []plan.TestCase   `json:"files"`
-	Env   map[string]string `json:"env"`
+	Files []plan.TestCase `json:"files"`
+	Env   config.Config   `json:"env"`
 }
 
 type FilteredTest struct {

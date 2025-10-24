@@ -23,17 +23,36 @@ func createConfig() Config {
 
 func TestConfigValidate(t *testing.T) {
 	c := createConfig()
-	if err := c.validate(); err != nil {
+	if err := c.Validate(); err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
 }
 
 func TestConfigValidate_Empty(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	err := c.validate()
+	err := c.Validate()
 
 	if !errors.As(err, new(InvalidConfigError)) {
 		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+	}
+}
+
+func TestConfigValidate_SetsDefaults(t *testing.T) {
+	c := createConfig()
+
+	c.ServerBaseUrl = ""
+
+	err := c.Validate()
+
+	if err != nil {
+		t.Errorf("config.validate() error = %v", err)
+	}
+
+	want := "https://api.buildkite.com"
+	got := c.ServerBaseUrl
+
+	if want != got {
+		t.Errorf("c.Validate() -> c.ServerBaseUrl want %q got %q", want, got)
 	}
 }
 
@@ -105,7 +124,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 				c.TestRunner = s.value.(string)
 			}
 
-			err := c.validate()
+			err := c.Validate()
 
 			var invConfigError InvalidConfigError
 			if !errors.As(err, &invConfigError) {
@@ -125,7 +144,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 	t.Run("Parallelism is less than 1", func(t *testing.T) {
 		c := createConfig()
 		c.Parallelism = 0
-		err := c.validate()
+		err := c.Validate()
 
 		var invConfigError InvalidConfigError
 		if !errors.As(err, &invConfigError) {
@@ -143,7 +162,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 	t.Run("MaxRetries is less than 0", func(t *testing.T) {
 		c := createConfig()
 		c.MaxRetries = -1
-		err := c.validate()
+		err := c.Validate()
 
 		var invConfigError InvalidConfigError
 		if !errors.As(err, &invConfigError) {
@@ -155,13 +174,47 @@ func TestConfigValidate_Invalid(t *testing.T) {
 			t.Errorf("config.validate() error length = %d, want 1", len(invConfigError))
 		}
 	})
+
+	t.Run("BuildId, StepId and Identifier are empty", func(t *testing.T) {
+		c := createConfig()
+		c.BuildId = ""
+		c.StepId = ""
+		c.Identifier = ""
+		err := c.Validate()
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+			return
+		}
+
+		for _, field := range []string{"BUILDKITE_BUILD_ID", "BUILDKITE_STEP_ID"} {
+			if len(invConfigError[field]) != 1 {
+				t.Errorf("config.validate() error for %s length = %d, want 1", field, len(invConfigError[field]))
+			}
+		}
+
+		if len(invConfigError) != 2 {
+			t.Errorf("config.validate() error length = %d, want 2", len(invConfigError))
+		}
+	})
+}
+
+func TestConfigValidate_IdentifierPresentBuildIdStepIdMissing(t *testing.T) {
+	c := createConfig()
+	c.BuildId = ""
+	c.StepId = ""
+
+	if err := c.Validate(); err != nil {
+		t.Errorf("config.validate() error = %v", err)
+	}
 }
 
 func TestConfigValidate_ResultPathOptionalWithCypress(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""
 	c.TestRunner = "cypress"
-	err := c.validate()
+	err := c.Validate()
 
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
@@ -172,7 +225,7 @@ func TestConfigValidate_ResultPathOptionalWithPytest(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""
 	c.TestRunner = "pytest"
-	err := c.validate()
+	err := c.Validate()
 
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)

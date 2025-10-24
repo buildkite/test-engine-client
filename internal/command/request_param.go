@@ -75,7 +75,7 @@ func filterAndSplitFiles(ctx context.Context, cfg config.Config, client api.Clie
 	debug.Printf("Filtering %d files", len(files))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
 		Files: files,
-		Env:   cfg.DumpEnv(),
+		Env:   cfg,
 	})
 
 	if err != nil {
