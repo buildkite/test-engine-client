@@ -37,6 +37,25 @@ func TestConfigValidate_Empty(t *testing.T) {
 	}
 }
 
+func TestConfigValidate_SetsDefaults(t *testing.T) {
+	c := createConfig()
+
+	c.ServerBaseUrl = ""
+
+	err := c.Validate()
+
+	if err != nil {
+		t.Errorf("config.validate() error = %v", err)
+	}
+
+	want := "https://api.buildkite.com"
+	got := c.ServerBaseUrl
+
+	if want != got {
+		t.Errorf("c.Validate() -> c.ServerBaseUrl want %q got %q", want, got)
+	}
+}
+
 func TestConfigValidate_Invalid(t *testing.T) {
 	scenario := []struct {
 		name  string

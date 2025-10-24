@@ -25,12 +25,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// We validate BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT in two steps.
-	// 1. Validate the type and presence of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT when reading them from the environment. See readFromEnv() in ./read.go.
-	// 2. Validate the range of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT
-	//
-	// This is the second step. We don't validate the range of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT if the first validation step fails.
-	//
 	// The order of the range validation matters.
 	// The range validation of BUILDKITE_PARALLEL_JOB depends on the result of BUILDKITE_PARALLEL_JOB_COUNT validation at the first step.
 	// We need to validate the range of BUILDKITE_PARALLEL_JOB first before we add the range validation error to BUILDKITE_PARALLEL_JOB_COUNT.
@@ -56,7 +50,9 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.ServerBaseUrl != "" {
+	if c.ServerBaseUrl == "" {
+		c.ServerBaseUrl = "https://api.buildkite.com"
+	} else {
 		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
 		}
