@@ -188,7 +188,7 @@ func createTimestamp() string {
 func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline, statistics runner.RunStatistics) {
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
 		Timeline:   timeline,
-		Env:        cfg.DumpEnv(),
+		Env:        cfg,
 		Version:    version.Version,
 		Statistics: statistics,
 	})
