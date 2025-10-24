@@ -53,20 +53,3 @@ type Config struct {
 func New() Config {
 	return Config{errs: InvalidConfigError{}}
 }
-
-// NewFromEnv wraps the readFromEnv and validate functions to create a new Config struct.
-// It returns Config struct and an InvalidConfigError if there is an invalid configuration.
-func NewFromEnv(env map[string]string) (Config, error) {
-	c := Config{
-		errs: InvalidConfigError{},
-	}
-
-	c.readFromEnv(env)
-	_ = c.Validate()
-
-	if len(c.errs) > 0 {
-		return Config{}, c.errs
-	}
-
-	return c, nil
-}
