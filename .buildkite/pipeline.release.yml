@@ -1,7 +1,7 @@
 steps:
   - name: ":cook: Prepare release"
     plugins:
-      - docker#v5.11.0:
+      - docker#v5.13.0:
           image: ghcr.io/caarlos0/svu:v2.1.0
           entrypoint: ""
           command: [".buildkite/steps/prepare-release.sh"]
@@ -23,7 +23,7 @@ steps:
             GITHUB_TOKEN: /pipelines/buildkite/test-engine-client-release/GH_TOKEN
             DOCKERHUB_USER: /pipelines/buildkite/test-engine-client-release/dockerhub-user
             DOCKERHUB_PASSWORD: /pipelines/buildkite/test-engine-client-release/dockerhub-password
-      - docker#v5.11.0:
+      - docker#v5.13.0:
           image: goreleaser/goreleaser:v2.8.1
           entrypoint: ""
           command: [".buildkite/steps/release.sh"]
