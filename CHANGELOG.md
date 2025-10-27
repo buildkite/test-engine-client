@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.1 - 2025-10-24
+- Improve compatibility with Vitest (unofficial support) by updating the `jest` runner to correctly handle file-level runtime errors.
+
 ## 1.6.0 - 2025-06-19
 - Add support for the Cucumber test runner.
 

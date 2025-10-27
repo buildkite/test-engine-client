@@ -244,6 +244,11 @@ func TestJestRun_RuntimeError(t *testing.T) {
 		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
 
+	// Make sure that we capture other tests that are not affected by the runtime error (expelliarmus.spec.js)
+	if len(result.tests) != 1 {
+		t.Errorf("Jest.Run(%q) len(RunResult.tests) = %d, want 1", testCases, len(result.tests))
+	}
+
 	if result.Status() != RunStatusError {
 		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
