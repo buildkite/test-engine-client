@@ -30,6 +30,12 @@ internal/runner/testdata/jest/jest-result.json
 
 internal/runner/testdata/rspec/rspec-result.json
 
+internal/runner/testdata/cucumber/tmp/
+internal/runner/testdata/cucumber/cucumber.json
+
 .envrc
 
 .direnv
+
+# Output binary with `go build`
+test-engine-client

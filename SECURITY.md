@@ -10,8 +10,6 @@ If you believe you have found a security vulnerability in any Buildkite reposito
 
 Instead, please report them via the [HackerOne Bug Bounty program](https://hackerone.com/buildkite?type=team). Currently, the program is private and invite only. You can request access by contacting us [directly](mailto:security@buildkite.com?subject=Vulnerability reporting invite).
 
-If you prefer to submit without logging in, you can email us at [security@buildkite.com](mailto:security@buildkite.com).  If possible, please encrypt your message with our PGP key. You can download it from the [Buildkite Security](https://buildkite.com/security) page.
-
 Please include the requested information listed below (as much as you can provide) to help us better understand the nature and scope of the possible issue:
 
   * Type of issue (e.g. buffer overflow, SQL injection, cross-site scripting, etc.)

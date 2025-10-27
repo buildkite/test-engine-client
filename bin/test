@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# Required for internal/runner python tests
+source .venv/bin/activate
+
+# Required for buildkite/test-collector-python v0.2.0
+export CI=true
+
+gotestsum

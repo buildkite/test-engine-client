@@ -99,7 +99,7 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 
 	report, parseErr := j.ParseReport(j.ResultPath)
 	if parseErr != nil {
-		fmt.Println("Buildkite Test Engine Client: Failed to read Jest output, tests will not be retried.")
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Jest output, tests will not be retried: %v", parseErr)
 		return err
 	}
 
@@ -196,7 +196,7 @@ func (j Jest) commandNameAndArgs(cmd string, testCases []string) (string, []stri
 
 	outputIdx := slices.Index(words, "{{resultPath}}")
 	if outputIdx < 0 {
-		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in command, exiting.")
+		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in command, exiting")
 		return "", []string{}, err
 	}
 	words = slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
@@ -232,7 +232,7 @@ func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string, testPaths 
 
 	outputIdx := slices.Index(words, "{{resultPath}}")
 	if outputIdx < 0 {
-		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in retry command, exiting.")
+		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in retry command, exiting")
 		return "", []string{}, err
 	}
 	words = slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)

@@ -5,7 +5,7 @@ steps:
   - name: ":golangci-lint: Lint"
     plugins:
       - docker#v5.13.0:
-          image: golangci/golangci-lint:v1.64.8
+          image: golangci/golangci-lint:v2.5.0
           workdir: /go/src/github.com/your-org/your-repo
           command:
             - golangci-lint

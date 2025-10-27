@@ -15,11 +15,12 @@ type TestPlanParamsTest struct {
 
 // TestPlanParams represents the config params sent when fetching a test plan.
 type TestPlanParams struct {
-	Runner      string             `json:"runner"`
-	Identifier  string             `json:"identifier"`
-	Parallelism int                `json:"parallelism"`
-	Branch      string             `json:"branch"`
-	Tests       TestPlanParamsTest `json:"tests"`
+	Runner         string             `json:"runner"`
+	Identifier     string             `json:"identifier"`
+	Parallelism    int                `json:"parallelism"`
+	MaxParallelism int                `json:"max_parallelism,omitempty"`
+	Branch         string             `json:"branch"`
+	Tests          TestPlanParamsTest `json:"tests"`
 }
 
 // CreateTestPlan creates a test plan from the server.
