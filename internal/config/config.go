@@ -6,7 +6,7 @@ type Config struct {
 	JobId   string `json:"BUILDKITE_JOB_ID"`
 	StepId  string `json:"BUILDKITE_STEP_ID"`
 	// AccessToken is the access token for the API.
-	AccessToken string
+	AccessToken string `json:"-"`
 	// Identifier is the identifier of the build.
 	Identifier string `json:"BUILDKITE_TEST_ENGINE_IDENTIFIER"`
 	// MaxRetries is the maximum number of retries for a failed test.
@@ -20,14 +20,14 @@ type Config struct {
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"BUILDKITE_PARALLEL_JOB_COUNT"`
 	// Maximum parallelism when calculating parallelism dynamically.
-	MaxParallelism int
+	MaxParallelism int `json:"-"`
 	// The path to the result file.
-	ResultPath string
+	ResultPath string `json:"-"`
 	// Whether a failed muted test should be retried.
 	// This is default to true because we want more signal for our flaky detection system.
-	RetryForMutedTest bool
+	RetryForMutedTest bool `json:"-"`
 	// ServerBaseUrl is the base URL of the test plan server.
-	ServerBaseUrl string
+	ServerBaseUrl string `json:"-"`
 	// SplitByExample is the flag to enable split the test by example.
 	SplitByExample bool `json:"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE"`
 	// SuiteSlug is the slug of the suite.
