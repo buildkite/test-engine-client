@@ -10,10 +10,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
-	"github.com/buildkite/test-engine-client/internal/debug"
-	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/buildkite/test-engine-client/internal/runner"
-	"github.com/urfave/cli/v3"
 )
 
 var planWriter io.Writer = os.Stdout
@@ -31,25 +28,13 @@ type TestPlanSummary struct {
 
 // This command creates a test plan via the API and returns the plan identifier
 // and parallelism of the plan in JSON format to STDOUT.
-func Plan(ctx context.Context, cmd *cli.Command) error {
-	env := env.OS{}
-
-	debug.SetDebug(env.Get("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
-	debug.SetOutput(os.Stderr)
-
-	cfg, err := config.New(env)
-	if err != nil {
-		return fmt.Errorf("invalid configuration...\n%w", err)
-	}
-
-	cfg.MaxParallelism = cmd.Int("max-parallelism")
-
+func Plan(ctx context.Context, cfg config.Config, testFileList string) error {
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	files, err := getTestFiles(cmd.String("files"), testRunner)
+	files, err := getTestFiles(testFileList, testRunner)
 	if err != nil {
 		return err
 	}

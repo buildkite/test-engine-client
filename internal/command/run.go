@@ -13,12 +13,10 @@ import (
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
-	"github.com/buildkite/test-engine-client/internal/env"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/olekukonko/tablewriter"
-	"github.com/urfave/cli/v3"
 )
 
 type TestRunner interface {
@@ -42,29 +40,15 @@ _  /_/ /  ,<  / /_ /  __/ /__
 /_.___//_/|_| \__/ \___/\___/
 `
 
-func Run(ctx context.Context, cmd *cli.Command) error {
-	env := env.OS{}
-
-	debug.SetDebug(env.Get("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED") == "true")
-
+func Run(ctx context.Context, cfg config.Config, testListFilename string) error {
 	printStartUpMessage()
-
-	// get config
-	cfg, err := config.New(env)
-	if err != nil {
-		return fmt.Errorf("invalid configuration...\n%w", err)
-	}
-
-	if cmd.String("plan-identifier") != "" {
-		cfg.Identifier = cmd.String("plan-identifier")
-	}
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	files, err := getTestFiles(cmd.String("files"), testRunner)
+	files, err := getTestFiles(testListFilename, testRunner)
 	if err != nil {
 		return err
 	}
@@ -204,7 +188,7 @@ func createTimestamp() string {
 func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline, statistics runner.RunStatistics) {
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
 		Timeline:   timeline,
-		Env:        cfg.DumpEnv(),
+		Env:        cfg,
 		Version:    version.Version,
 		Statistics: statistics,
 	})

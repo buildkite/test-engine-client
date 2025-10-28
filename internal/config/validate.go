@@ -1,22 +1,30 @@
 package config
 
 import (
+	"fmt"
 	"net/url"
 )
 
-// validate checks if the Config struct is valid and returns InvalidConfigError if it's invalid.
-func (c *Config) validate() error {
+// Validate checks if the Config struct is valid and returns InvalidConfigError if it's invalid.
+func (c *Config) Validate() error {
 
 	if c.MaxRetries < 0 {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)
 	}
 
-	// We validate BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT in two steps.
-	// 1. Validate the type and presence of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT when reading them from the environment. See readFromEnv() in ./read.go.
-	// 2. Validate the range of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT
-	//
-	// This is the second step. We don't validate the range of BUILDKITE_PARALLEL_JOB and BUILDKITE_PARALLEL_JOB_COUNT if the first validation step fails.
-	//
+	if c.Identifier == "" {
+		if c.BuildId != "" && c.StepId != "" {
+			c.Identifier = fmt.Sprintf("%s/%s", c.BuildId, c.StepId)
+		} else {
+			if c.BuildId == "" {
+				c.errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
+			}
+			if c.StepId == "" {
+				c.errs.appendFieldError("BUILDKITE_STEP_ID", "must not be blank")
+			}
+		}
+	}
+
 	// The order of the range validation matters.
 	// The range validation of BUILDKITE_PARALLEL_JOB depends on the result of BUILDKITE_PARALLEL_JOB_COUNT validation at the first step.
 	// We need to validate the range of BUILDKITE_PARALLEL_JOB first before we add the range validation error to BUILDKITE_PARALLEL_JOB_COUNT.
@@ -42,7 +50,9 @@ func (c *Config) validate() error {
 		}
 	}
 
-	if c.ServerBaseUrl != "" {
+	if c.ServerBaseUrl == "" {
+		c.ServerBaseUrl = "https://api.buildkite.com"
+	} else {
 		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
 		}
