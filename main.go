@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/buildkite/test-engine-client/internal/command"
 	"github.com/buildkite/test-engine-client/internal/config"
@@ -244,6 +245,23 @@ var cliCommand = &cli.Command{
 						if v < 0 || v > 1000 {
 							return fmt.Errorf("max-parallelism must be between 0 and 1000")
 						}
+						return nil
+					},
+				},
+				&cli.DurationFlag{
+					Name:        "target-time",
+					Value:       0,
+					Usage:       "the desired target time (e.g. 4m30s) for the entire test suite to complete. When 0 this flag is ignored and the test plan will not consider target time when deriving parallelism. Must be used in conjunction with --max-parallelism",
+					Destination: &cfg.TargetTime,
+					Action: func(ctx context.Context, cmd *cli.Command, v time.Duration) error {
+						if v != 0 && cmd.Int("max-parallelism") == 0 {
+							return fmt.Errorf("target-time must be used in conjunction with --max-parallelism")
+						}
+
+						if v < 0 || v > 86400*time.Second {
+							return fmt.Errorf("target-time must be between 0 and 86400 seconds")
+						}
+
 						return nil
 					},
 				},
