@@ -31,6 +31,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 			Identifier:     cfg.Identifier,
 			Parallelism:    cfg.Parallelism,
 			MaxParallelism: cfg.MaxParallelism,
+			TargetTime:     float64(cfg.TargetTime.Milliseconds() / 1000),
 			Branch:         cfg.Branch,
 			Runner:         cfg.TestRunner,
 			Tests: api.TestPlanParamsTest{
@@ -65,6 +66,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 		Identifier:     cfg.Identifier,
 		Parallelism:    cfg.Parallelism,
 		MaxParallelism: cfg.MaxParallelism,
+		TargetTime:     float64(cfg.TargetTime.Milliseconds() / 1000),
 		Branch:         cfg.Branch,
 		Runner:         cfg.TestRunner,
 		Tests:          testParams,
@@ -81,7 +83,6 @@ func filterAndSplitFiles(ctx context.Context, cfg config.Config, client api.Clie
 		Files: files,
 		Env:   cfg,
 	})
-
 	if err != nil {
 		return api.TestPlanParamsTest{}, fmt.Errorf("filter tests: %w", err)
 	}
