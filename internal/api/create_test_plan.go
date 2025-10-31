@@ -19,6 +19,7 @@ type TestPlanParams struct {
 	Identifier     string             `json:"identifier"`
 	Parallelism    int                `json:"parallelism"`
 	MaxParallelism int                `json:"max_parallelism,omitempty"`
+	TargetTime     float64            `json:"target_time,omitempty"`
 	Branch         string             `json:"branch"`
 	Tests          TestPlanParamsTest `json:"tests"`
 }
@@ -34,7 +35,6 @@ func (c Client) CreateTestPlan(ctx context.Context, suiteSlug string, params Tes
 		URL:    postUrl,
 		Body:   params,
 	}, &testPlan)
-
 	if err != nil {
 		return plan.TestPlan{}, err
 	}
