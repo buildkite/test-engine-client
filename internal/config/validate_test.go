@@ -21,16 +21,18 @@ func createConfig() Config {
 	}
 }
 
+var opts = ValidationOpts{}
+
 func TestConfigValidate(t *testing.T) {
 	c := createConfig()
-	if err := c.Validate(); err != nil {
+	if err := c.Validate(opts); err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
 }
 
 func TestConfigValidate_Empty(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	err := c.Validate()
+	err := c.Validate(opts)
 
 	if !errors.As(err, new(InvalidConfigError)) {
 		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
@@ -42,7 +44,7 @@ func TestConfigValidate_SetsDefaults(t *testing.T) {
 
 	c.ServerBaseUrl = ""
 
-	err := c.Validate()
+	err := c.Validate(opts)
 
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
@@ -124,7 +126,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 				c.TestRunner = s.value.(string)
 			}
 
-			err := c.Validate()
+			err := c.Validate(opts)
 
 			var invConfigError InvalidConfigError
 			if !errors.As(err, &invConfigError) {
@@ -144,7 +146,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 	t.Run("Parallelism is less than 1", func(t *testing.T) {
 		c := createConfig()
 		c.Parallelism = 0
-		err := c.Validate()
+		err := c.Validate(opts)
 
 		var invConfigError InvalidConfigError
 		if !errors.As(err, &invConfigError) {
@@ -159,10 +161,24 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		}
 	})
 
+	t.Run("opts.SkipParallelism is true", func(t *testing.T) {
+		c := createConfig()
+
+		// Normally these 2 field values would fail validation. When
+		// SkipParallelism is true we want them to pass.
+		c.Parallelism = 0
+		c.NodeIndex = 0
+		err := c.Validate(ValidationOpts{SkipParallelism: true})
+
+		if err != nil {
+			t.Errorf("config.validate() err = %v, want nil", err)
+		}
+	})
+
 	t.Run("MaxRetries is less than 0", func(t *testing.T) {
 		c := createConfig()
 		c.MaxRetries = -1
-		err := c.Validate()
+		err := c.Validate(opts)
 
 		var invConfigError InvalidConfigError
 		if !errors.As(err, &invConfigError) {
@@ -180,7 +196,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		c.BuildId = ""
 		c.StepId = ""
 		c.Identifier = ""
-		err := c.Validate()
+		err := c.Validate(opts)
 
 		var invConfigError InvalidConfigError
 		if !errors.As(err, &invConfigError) {
@@ -205,7 +221,7 @@ func TestConfigValidate_IdentifierPresentBuildIdStepIdMissing(t *testing.T) {
 	c.BuildId = ""
 	c.StepId = ""
 
-	if err := c.Validate(); err != nil {
+	if err := c.Validate(opts); err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
 }
@@ -214,7 +230,7 @@ func TestConfigValidate_ResultPathOptionalWithCypress(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""
 	c.TestRunner = "cypress"
-	err := c.Validate()
+	err := c.Validate(opts)
 
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
@@ -225,7 +241,7 @@ func TestConfigValidate_ResultPathOptionalWithPytest(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""
 	c.TestRunner = "pytest"
-	err := c.Validate()
+	err := c.Validate(opts)
 
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
