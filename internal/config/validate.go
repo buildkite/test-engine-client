@@ -26,6 +26,12 @@ func (c *Config) Validate(opts ValidationOpts) error {
 		}
 	}
 
+	if c.MaxParallelism != 0 {
+		if c.MaxParallelism < 0 || c.MaxParallelism > 1000 {
+			c.errs.appendFieldError("max-parallelism", "was %d, must be between 0 and 1000", c.MaxParallelism)
+		}
+	}
+
 	if c.MaxRetries < 0 {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)
 	}

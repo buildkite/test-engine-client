@@ -318,3 +318,21 @@ func TestTargeTimeWithZeroParallelism(t *testing.T) {
 		t.Errorf("config.validate() error for max-parallelism = %v, want 'must be set when target-time is set'", invConfigError["max-parallelism"][0])
 	}
 }
+
+func TestMaxParallelismOutOfRange(t *testing.T) {
+	c := createConfig()
+	c.MaxParallelism = 1500
+	err := c.Validate(opts)
+	if err == nil {
+		t.Errorf("config.validate() error = nil, want InvalidConfigError")
+	}
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+	}
+
+	if invConfigError["max-parallelism"][0].Error() != "was 1500, must be between 0 and 1000" {
+		t.Errorf("config.validate() error for max-parallelism = %v, want 'was 1500, must be between 0 and 1000'", invConfigError["max-parallelism"][0])
+	}
+}
