@@ -240,12 +240,14 @@ var cliCommand = &cli.Command{
 					Value:       0,
 					Usage:       "instruct the test planner to calculate optimal parallelism for the build, not to exceed the provided value. When 0 this flag is ignored and the test plan parallelism will be derived from the BUILDKITE_PARALLEL_JOB_COUNT environment variable",
 					Destination: &cfg.MaxParallelism,
-					Action: func(ctx context.Context, cmd *cli.Command, v int) error {
-						if v < 0 || v > 1000 {
-							return fmt.Errorf("max-parallelism must be between 0 and 1000")
-						}
-						return nil
-					},
+					Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_MAX_PARALLELISM"),
+				},
+				&cli.DurationFlag{
+					Name:        "target-time",
+					Value:       0,
+					Usage:       "the desired target time (e.g. 4m30s) for the entire test suite to complete. When 0 this flag is ignored and the test plan will not consider target time when deriving parallelism. Must be used in conjunction with --max-parallelism",
+					Destination: &cfg.TargetTime,
+					Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TARGET_TIME"),
 				},
 			},
 		},

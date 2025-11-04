@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net/url"
+	"time"
 )
 
 type ValidationOpts struct {
@@ -11,6 +12,25 @@ type ValidationOpts struct {
 
 // Validate checks if the Config struct is valid and returns InvalidConfigError if it's invalid.
 func (c *Config) Validate(opts ValidationOpts) error {
+	if c.TargetTime != 0 {
+		if c.TargetTime <= 0 {
+			c.errs.appendFieldError("target-time", "was %s, must be greater than 0", c.TargetTime.String())
+		}
+
+		if c.TargetTime > time.Hour*24 {
+			c.errs.appendFieldError("target-time", "was %s, must be less than or equal to 24 hours", c.TargetTime.String())
+		}
+
+		if c.MaxParallelism == 0 {
+			c.errs.appendFieldError("max-parallelism", "must be set when target-time is set")
+		}
+	}
+
+	if c.MaxParallelism != 0 {
+		if c.MaxParallelism < 0 || c.MaxParallelism > 1000 {
+			c.errs.appendFieldError("max-parallelism", "was %d, must be between 0 and 1000", c.MaxParallelism)
+		}
+	}
 
 	if c.MaxRetries < 0 {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)

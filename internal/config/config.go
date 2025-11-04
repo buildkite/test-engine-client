@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // Config is the internal representation of the complete test engine client configuration.
 type Config struct {
 	BuildId string `json:"BUILDKITE_BUILD_ID"`
@@ -20,7 +22,9 @@ type Config struct {
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"BUILDKITE_PARALLEL_JOB_COUNT"`
 	// Maximum parallelism when calculating parallelism dynamically.
-	MaxParallelism int `json:"-"`
+	MaxParallelism int `json:"BUILDKITE_TEST_ENGINE_MAX_PARALLELISM"`
+	// TargetTime is the target time in seconds for the test plan.
+	TargetTime time.Duration `json:"BUILDKITE_TEST_ENGINE_TARGET_TIME"`
 	// The path to the result file.
 	ResultPath string `json:"-"`
 	// Whether a failed muted test should be retried.

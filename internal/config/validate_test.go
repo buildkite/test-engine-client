@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func createConfig() Config {
@@ -45,7 +46,6 @@ func TestConfigValidate_SetsDefaults(t *testing.T) {
 	c.ServerBaseUrl = ""
 
 	err := c.Validate(opts)
-
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
@@ -169,7 +169,6 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		c.Parallelism = 0
 		c.NodeIndex = 0
 		err := c.Validate(ValidationOpts{SkipParallelism: true})
-
 		if err != nil {
 			t.Errorf("config.validate() err = %v, want nil", err)
 		}
@@ -230,8 +229,8 @@ func TestConfigValidate_ResultPathOptionalWithCypress(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""
 	c.TestRunner = "cypress"
-	err := c.Validate(opts)
 
+	err := c.Validate(opts)
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
@@ -241,9 +240,99 @@ func TestConfigValidate_ResultPathOptionalWithPytest(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""
 	c.TestRunner = "pytest"
-	err := c.Validate(opts)
 
+	err := c.Validate(opts)
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
+	}
+}
+
+func TestTargetTimeParsing(t *testing.T) {
+	c := createConfig()
+	c.TargetTime, _ = time.ParseDuration("1.5s")
+	c.MaxParallelism = 10
+
+	err := c.Validate(opts)
+	if err != nil {
+		t.Errorf("config.validate() error = %v", err)
+	}
+	expected := 1500 * time.Millisecond
+
+	if c.TargetTime != expected {
+		t.Errorf("c.TargetTime = %v, want %v", c.TargetTime, expected)
+	}
+}
+
+func TestTargetTimeInvalid(t *testing.T) {
+	c := createConfig()
+	c.TargetTime, _ = time.ParseDuration("-5s")
+	c.MaxParallelism = 10
+	err := c.Validate(opts)
+	if err == nil {
+		t.Errorf("config.validate() error = nil, want InvalidConfigError")
+	}
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+	}
+
+	if invConfigError["target-time"][0].Error() != "was -5s, must be greater than 0" {
+		t.Errorf("config.validate() error for target-time = %v, want 'was -5s, must be greater than 0'", invConfigError["target-time"][0])
+	}
+}
+
+func TestTargetTimeExceedsMax(t *testing.T) {
+	c := createConfig()
+	c.TargetTime, _ = time.ParseDuration("24h1s")
+	c.MaxParallelism = 10
+	err := c.Validate(opts)
+	if err == nil {
+		t.Errorf("config.validate() error = nil, want InvalidConfigError")
+	}
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+	}
+
+	if invConfigError["target-time"][0].Error() != "was 24h0m1s, must be less than or equal to 24 hours" {
+		t.Errorf("config.validate() error for target-time = %v, want 'was 24h0m1s, must be less than or equal to 24 hours'", invConfigError["target-time"][0])
+	}
+}
+
+func TestTargeTimeWithZeroParallelism(t *testing.T) {
+	c := createConfig()
+	c.TargetTime, _ = time.ParseDuration("5m")
+	err := c.Validate(opts)
+	if err == nil {
+		t.Errorf("config.validate() error = nil, want InvalidConfigError")
+	}
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+	}
+
+	if invConfigError["max-parallelism"][0].Error() != "must be set when target-time is set" {
+		t.Errorf("config.validate() error for max-parallelism = %v, want 'must be set when target-time is set'", invConfigError["max-parallelism"][0])
+	}
+}
+
+func TestMaxParallelismOutOfRange(t *testing.T) {
+	c := createConfig()
+	c.MaxParallelism = 1500
+	err := c.Validate(opts)
+	if err == nil {
+		t.Errorf("config.validate() error = nil, want InvalidConfigError")
+	}
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+	}
+
+	if invConfigError["max-parallelism"][0].Error() != "was 1500, must be between 0 and 1000" {
+		t.Errorf("config.validate() error for max-parallelism = %v, want 'was 1500, must be between 0 and 1000'", invConfigError["max-parallelism"][0])
 	}
 }
