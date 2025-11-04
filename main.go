@@ -261,7 +261,7 @@ func main() {
 func run(ctx context.Context, cmd *cli.Command) error {
 	debug.SetDebug(cmd.Bool("debug"))
 
-	err := cfg.Validate()
+	err := cfg.Validate(config.ValidationOpts{})
 	if err != nil {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
@@ -273,7 +273,7 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 	debug.SetDebug(cmd.Bool("debug"))
 	debug.SetOutput(os.Stderr)
 
-	err := cfg.Validate()
+	err := cfg.Validate(config.ValidationOpts{SkipParallelism: true})
 	if err != nil {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
