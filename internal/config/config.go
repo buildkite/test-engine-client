@@ -24,7 +24,7 @@ type Config struct {
 	// Maximum parallelism when calculating parallelism dynamically.
 	MaxParallelism int `json:"-"`
 	// TargetTime is the target time in seconds for the test plan.
-	TargetTime time.Duration `json:"-"`
+	TargetTime time.Duration `json:"BUILDKITE_TEST_ENGINE_TARGET_TIME"`
 	// The path to the result file.
 	ResultPath string `json:"-"`
 	// Whether a failed muted test should be retried.
