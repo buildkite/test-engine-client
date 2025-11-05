@@ -13,7 +13,7 @@ import (
 // createRequestParam generates the parameters needed for a test plan request.
 // For runners other than "rspec", it constructs the test plan parameters with all test files.
 // For the "rspec" runner, it filters the test files through the Test Engine API and splits the filtered files into examples.
-func createRequestParam(ctx context.Context, cfg config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
+func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	testFiles := []plan.TestCase{}
 	for _, file := range files {
 		testFiles = append(testFiles, plan.TestCase{
@@ -76,7 +76,7 @@ func createRequestParam(ctx context.Context, cfg config.Config, files []string, 
 // filterAndSplitFiles filters the test files through the Test Engine API and splits the filtered files into examples.
 // It returns the test plan parameters with the examples from the filtered files and the remaining files.
 // An error is returned if there is a failure in any of the process.
-func filterAndSplitFiles(ctx context.Context, cfg config.Config, client api.Client, files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
+func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Client, files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
 	// Filter files that need to be split.
 	debug.Printf("Filtering %d files", len(files))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{

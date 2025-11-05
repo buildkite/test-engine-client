@@ -28,7 +28,7 @@ type TestPlanSummary struct {
 
 // This command creates a test plan via the API and returns the plan identifier
 // and parallelism of the plan in JSON format to STDOUT.
-func Plan(ctx context.Context, cfg config.Config, testFileList string) error {
+func Plan(ctx context.Context, cfg *config.Config, testFileList string) error {
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)

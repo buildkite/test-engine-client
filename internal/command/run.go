@@ -40,7 +40,7 @@ _  /_/ /  ,<  / /_ /  __/ /__
 /_.___//_/|_| \__/ \___/\___/
 `
 
-func Run(ctx context.Context, cfg config.Config, testListFilename string) error {
+func Run(ctx context.Context, cfg *config.Config, testListFilename string) error {
 	printStartUpMessage()
 
 	testRunner, err := runner.DetectRunner(cfg)
@@ -185,7 +185,7 @@ func createTimestamp() string {
 	return time.Now().Format(time.RFC3339Nano)
 }
 
-func sendMetadata(ctx context.Context, apiClient *api.Client, cfg config.Config, timeline []api.Timeline, statistics runner.RunStatistics) {
+func sendMetadata(ctx context.Context, apiClient *api.Client, cfg *config.Config, timeline []api.Timeline, statistics runner.RunStatistics) {
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
 		Timeline:   timeline,
 		Env:        cfg,
@@ -284,7 +284,7 @@ func logSignalAndExit(name string, signal syscall.Signal) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
 	debug.Println("Fetching test plan")
 
 	// Fetch the plan from the server's cache.

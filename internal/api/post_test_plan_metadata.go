@@ -16,7 +16,7 @@ type Timeline struct {
 
 type TestPlanMetadataParams struct {
 	Version    string               `json:"version"`
-	Env        config.Config        `json:"env"`
+	Env        *config.Config       `json:"env"`
 	Timeline   []Timeline           `json:"timeline"`
 	Statistics runner.RunStatistics `json:"statistics"`
 }

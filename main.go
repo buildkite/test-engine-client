@@ -268,7 +268,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
-	return command.Run(ctx, cfg, cmd.String("files"))
+	return command.Run(ctx, &cfg, cmd.String("files"))
 }
 
 func plan(ctx context.Context, cmd *cli.Command) error {
@@ -280,7 +280,7 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
-	return command.Plan(ctx, cfg, cmd.String("files"))
+	return command.Plan(ctx, &cfg, cmd.String("files"))
 }
 
 func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error {
