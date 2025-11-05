@@ -56,7 +56,7 @@ func TestPlan(t *testing.T) {
 	cfg.TestFilePattern = "testdata/rspec/spec/**/*_spec.rb"
 	cfg.ServerBaseUrl = svr.URL
 
-	if err := cfg.Validate(config.ValidationOpts{}); err != nil {
+	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
 	}
 
