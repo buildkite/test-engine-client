@@ -29,7 +29,7 @@ func TestPostTestPlanMetadata(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		Env:     cfg,
+		Env:     &cfg,
 		Timeline: []Timeline{
 			{
 				Event:     "test_start",
@@ -104,7 +104,7 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		Env:     cfg,
+		Env:     &cfg,
 		Timeline: []Timeline{
 			{
 				Event:     "test_start",

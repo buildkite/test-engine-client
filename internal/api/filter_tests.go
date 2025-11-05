@@ -11,7 +11,7 @@ import (
 
 type FilterTestsParams struct {
 	Files []plan.TestCase `json:"files"`
-	Env   config.Config   `json:"env"`
+	Env   *config.Config  `json:"env"`
 }
 
 type FilteredTest struct {

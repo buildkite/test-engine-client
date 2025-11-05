@@ -26,7 +26,7 @@ type TestRunner interface {
 	Name() string
 }
 
-func DetectRunner(cfg config.Config) (TestRunner, error) {
+func DetectRunner(cfg *config.Config) (TestRunner, error) {
 	var runnerConfig = RunnerConfig{
 		TestRunner:             cfg.TestRunner,
 		TestCommand:            cfg.TestCommand,

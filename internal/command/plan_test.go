@@ -68,7 +68,7 @@ func TestPlan(t *testing.T) {
 	command.SetPlanWriter(&buf)
 
 	// This is the method under test
-	err := command.Plan(ctx, cfg, "")
+	err := command.Plan(ctx, &cfg, "")
 
 	if err != nil {
 		t.Errorf("command.Plan(...) error = %v", err)
