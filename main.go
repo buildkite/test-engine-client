@@ -23,8 +23,14 @@ var cliCommand = &cli.Command{
 	Usage: "Buildkite Test Engine Client",
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		// This action is called when no command is given, and calls run().
-		// So running `bktec` is the same as running `bktec run`.
-		//
+		// So running `bktec` is the same as running `bktec run`. This is to
+		// provide backward compatibility and will be removed as a breaking
+		// change in version 2.x
+		const red = "\033[31m"
+		const reset = "\033[0m"
+		const deprecationWarning = "DEPRECATION WARNING: running `bktec` without a sub command is deprecated and will be removed in version 2.x. Please update your build to use `bktec run`."
+		fmt.Println(red + deprecationWarning + reset)
+
 		// Because this action is also called when no matching command is found
 		// a typo like `bktec plaan` will call run() with "plaan" in cmd.Args().
 		// We error here if any arguments are present and assume the first is a
