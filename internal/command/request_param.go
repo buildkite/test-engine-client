@@ -21,10 +21,6 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 		})
 	}
 
-	if cfg.MaxParallelism != 0 && cfg.Parallelism == 0 {
-		cfg.Parallelism = 1
-	}
-
 	// Splitting files by example is only supported for rspec runner & cucumber
 	if runner.Name() != "RSpec" && runner.Name() != "Cucumber" {
 		params := api.TestPlanParams{
