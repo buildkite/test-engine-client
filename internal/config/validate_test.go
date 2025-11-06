@@ -22,18 +22,16 @@ func createConfig() Config {
 	}
 }
 
-var opts = ValidationOpts{}
-
 func TestConfigValidate(t *testing.T) {
 	c := createConfig()
-	if err := c.Validate(opts); err != nil {
+	if err := c.validate(); err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
 }
 
 func TestConfigValidate_Empty(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
-	err := c.Validate(opts)
+	err := c.validate()
 
 	if !errors.As(err, new(InvalidConfigError)) {
 		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
@@ -45,7 +43,7 @@ func TestConfigValidate_SetsDefaults(t *testing.T) {
 
 	c.ServerBaseUrl = ""
 
-	err := c.Validate(opts)
+	err := c.validate()
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
@@ -68,21 +66,6 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		{
 			name:  "BUILDKITE_TEST_ENGINE_BASE_URL",
 			value: "foo",
-		},
-		// Node index < 0
-		{
-			name:  "BUILDKITE_PARALLEL_JOB",
-			value: -1,
-		},
-		// Node index > parallelism
-		{
-			name:  "BUILDKITE_PARALLEL_JOB",
-			value: 15,
-		},
-		// Parallelism > 1000
-		{
-			name:  "BUILDKITE_PARALLEL_JOB_COUNT",
-			value: 1341,
 		},
 		// Organization slug is missing
 		{
@@ -126,7 +109,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 				c.TestRunner = s.value.(string)
 			}
 
-			err := c.Validate(opts)
+			err := c.validate()
 
 			var invConfigError InvalidConfigError
 			if !errors.As(err, &invConfigError) {
@@ -143,41 +126,10 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		})
 	}
 
-	t.Run("Parallelism is less than 1", func(t *testing.T) {
-		c := createConfig()
-		c.Parallelism = 0
-		err := c.Validate(opts)
-
-		var invConfigError InvalidConfigError
-		if !errors.As(err, &invConfigError) {
-			t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
-			return
-		}
-
-		// When parallelism less than 1, node index will always be invalid because it cannot be greater than parallelism and less than 0.
-		// So, we expect 2 validation errors.
-		if len(invConfigError) != 2 {
-			t.Errorf("config.validate() error length = %d, want 2", len(invConfigError))
-		}
-	})
-
-	t.Run("opts.SkipParallelism is true", func(t *testing.T) {
-		c := createConfig()
-
-		// Normally these 2 field values would fail validation. When
-		// SkipParallelism is true we want them to pass.
-		c.Parallelism = 0
-		c.NodeIndex = 0
-		err := c.Validate(ValidationOpts{SkipParallelism: true})
-		if err != nil {
-			t.Errorf("config.validate() err = %v, want nil", err)
-		}
-	})
-
 	t.Run("MaxRetries is less than 0", func(t *testing.T) {
 		c := createConfig()
 		c.MaxRetries = -1
-		err := c.Validate(opts)
+		err := c.validate()
 
 		var invConfigError InvalidConfigError
 		if !errors.As(err, &invConfigError) {
@@ -195,7 +147,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 		c.BuildId = ""
 		c.StepId = ""
 		c.Identifier = ""
-		err := c.Validate(opts)
+		err := c.validate()
 
 		var invConfigError InvalidConfigError
 		if !errors.As(err, &invConfigError) {
@@ -220,7 +172,7 @@ func TestConfigValidate_IdentifierPresentBuildIdStepIdMissing(t *testing.T) {
 	c.BuildId = ""
 	c.StepId = ""
 
-	if err := c.Validate(opts); err != nil {
+	if err := c.validate(); err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
 }
@@ -230,7 +182,7 @@ func TestConfigValidate_ResultPathOptionalWithCypress(t *testing.T) {
 	c.ResultPath = ""
 	c.TestRunner = "cypress"
 
-	err := c.Validate(opts)
+	err := c.validate()
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
@@ -241,33 +193,77 @@ func TestConfigValidate_ResultPathOptionalWithPytest(t *testing.T) {
 	c.ResultPath = ""
 	c.TestRunner = "pytest"
 
-	err := c.Validate(opts)
+	err := c.validate()
 	if err != nil {
 		t.Errorf("config.validate() error = %v", err)
 	}
 }
 
-func TestTargetTimeParsing(t *testing.T) {
+// Validation specific to `bktec run`
+func TestConfigValidateForRun_NodeIndexLessThanZero(t *testing.T) {
 	c := createConfig()
-	c.TargetTime, _ = time.ParseDuration("1.5s")
-	c.MaxParallelism = 10
+	c.NodeIndex = -1
 
-	err := c.Validate(opts)
-	if err != nil {
-		t.Errorf("config.validate() error = %v", err)
-	}
-	expected := 1500 * time.Millisecond
+	err := c.ValidateForRun()
 
-	if c.TargetTime != expected {
-		t.Errorf("c.TargetTime = %v, want %v", c.TargetTime, expected)
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+		return
 	}
 }
 
+func TestConfigValidateForRun_NodeIndexGreaterThanParallelism(t *testing.T) {
+	c := createConfig()
+	c.Parallelism = 1
+	c.NodeIndex = 2
+
+	err := c.ValidateForRun()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+		return
+	}
+}
+
+func TestConfigValidateForRun_ParallelismGreaterThanOneThousand(t *testing.T) {
+	c := createConfig()
+	c.Parallelism = 1001
+
+	err := c.ValidateForRun()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+		return
+	}
+}
+
+func TestConfigValidateForRun_ParallelismIsLessThanOne(t *testing.T) {
+	c := createConfig()
+	c.Parallelism = 0
+	err := c.ValidateForRun()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+		return
+	}
+
+	// When parallelism less than 1, node index will always be invalid because it cannot be greater than parallelism and less than 0.
+	// So, we expect 2 validation errors.
+	if len(invConfigError) != 2 {
+		t.Errorf("config.validate() error length = %d, want 2", len(invConfigError))
+	}
+}
+
+// Validation specific to `bktec plan`
 func TestTargetTimeInvalid(t *testing.T) {
 	c := createConfig()
 	c.TargetTime, _ = time.ParseDuration("-5s")
 	c.MaxParallelism = 10
-	err := c.Validate(opts)
+	err := c.ValidateForPlan()
 	if err == nil {
 		t.Errorf("config.validate() error = nil, want InvalidConfigError")
 	}
@@ -286,7 +282,7 @@ func TestTargetTimeExceedsMax(t *testing.T) {
 	c := createConfig()
 	c.TargetTime, _ = time.ParseDuration("24h1s")
 	c.MaxParallelism = 10
-	err := c.Validate(opts)
+	err := c.ValidateForPlan()
 	if err == nil {
 		t.Errorf("config.validate() error = nil, want InvalidConfigError")
 	}
@@ -304,7 +300,7 @@ func TestTargetTimeExceedsMax(t *testing.T) {
 func TestTargeTimeWithZeroParallelism(t *testing.T) {
 	c := createConfig()
 	c.TargetTime, _ = time.ParseDuration("5m")
-	err := c.Validate(opts)
+	err := c.ValidateForPlan()
 	if err == nil {
 		t.Errorf("config.validate() error = nil, want InvalidConfigError")
 	}
@@ -322,7 +318,7 @@ func TestTargeTimeWithZeroParallelism(t *testing.T) {
 func TestMaxParallelismOutOfRange(t *testing.T) {
 	c := createConfig()
 	c.MaxParallelism = 1500
-	err := c.Validate(opts)
+	err := c.ValidateForPlan()
 	if err == nil {
 		t.Errorf("config.validate() error = nil, want InvalidConfigError")
 	}
@@ -334,5 +330,17 @@ func TestMaxParallelismOutOfRange(t *testing.T) {
 
 	if invConfigError["max-parallelism"][0].Error() != "was 1500, must be between 0 and 1000" {
 		t.Errorf("config.validate() error for max-parallelism = %v, want 'was 1500, must be between 0 and 1000'", invConfigError["max-parallelism"][0])
+	}
+}
+
+func ValidateForPlan_SkipsParallelismAndNodeIndexValidation(t *testing.T) {
+	c := createConfig()
+
+	// These 2 fields are only required on ValidateForRun
+	c.Parallelism = 0
+	c.NodeIndex = 0
+	err := c.ValidateForPlan()
+	if err != nil {
+		t.Errorf("config.validate() err = %v, want nil", err)
 	}
 }
