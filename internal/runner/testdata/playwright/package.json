@@ -8,7 +8,7 @@
     "@playwright/test": "^1.48.0"
   },
   "scripts": {
-    "start": "yarn run http-server -p 8080",
+    "start": "yarn run http-server -p 8987",
     "test": "yarn run playwright test"
   }
 }
