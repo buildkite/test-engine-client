@@ -53,6 +53,12 @@ var cliCommand = &cli.Command{
 			Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"),
 			Destination: &cfg.DebugEnabled,
 		},
+		&cli.BoolFlag{
+			Name:        "fail-on-no-tests",
+			Usage:       "Exit with an error if no tests are assigned to this node",
+			Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS"),
+			Destination: &cfg.FailOnNoTests,
+		},
 
 		// Values from the Buildkite build env
 		&cli.StringFlag{
