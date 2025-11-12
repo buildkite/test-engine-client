@@ -233,6 +233,7 @@ var cliCommand = &cli.Command{
 					Value:       "",
 					Usage:       "run the tests from a plan previously generated matching the provided plan-identifier",
 					Destination: &cfg.Identifier,
+					Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"),
 				},
 			},
 		},
@@ -254,6 +255,26 @@ var cliCommand = &cli.Command{
 					Usage:       "the desired target time (e.g. 4m30s) for the entire test suite to complete. When 0 this flag is ignored and the test plan will not consider target time when deriving parallelism. Must be used in conjunction with --max-parallelism",
 					Destination: &cfg.TargetTime,
 					Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TARGET_TIME"),
+				},
+			},
+			MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+				{
+					Required: true,
+					Category: "PLAN OUTPUT",
+					Flags: [][]cli.Flag{
+						{
+							&cli.BoolFlag{
+								Name:  "json",
+								Usage: "JSON format output",
+							},
+						},
+						{
+							&cli.StringFlag{
+								Name:  "pipeline-upload",
+								Usage: "buildkite-agent pipeline upload will be executed with the provided `template.yml`. The additional enviroment variables BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER and BUILDKITE_TEST_ENGINE_PARALLELISM from the generated plan will be available to the template.",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -284,7 +305,11 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
-	return command.Plan(ctx, &cfg, cmd.String("files"))
+	if cmd.Bool("json") {
+		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputJSON, "")
+	} else {
+		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputPipelineUpload, cmd.String("pipeline-upload"))
+	}
 }
 
 func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error {
