@@ -72,7 +72,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	// execute tests
 	var timeline []api.Timeline
-	runResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest)
+	runResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
 
 	// Handle errors that prevent the runner from finishing.
 	// By finishing, it means that the runner has completed with a readable result.
@@ -206,11 +206,20 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg *config.Config
 // For next reader, there is a small caveat with current implementation:
 // - testCases and timeline are both expected to be mutated.
 // - testCases in this case serve both as input and output -> we should probably change it.
-func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest bool) (runner.RunResult, error) {
+func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest bool, failOnNoTests bool) (runner.RunResult, error) {
 	attemptCount := 0
 
 	// Create a new run result with muted tests to keep track of the results.
 	runResult := runner.NewRunResult(mutedTests)
+
+	// If there are no test cases to run, skip invoking the test runner
+	if len(*testsCases) == 0 {
+		if failOnNoTests {
+			return *runResult, fmt.Errorf("no tests assigned to this node")
+		}
+		fmt.Printf("+++ Buildkite Test Engine Client: No tests to run on this node\n")
+		return *runResult, nil
+	}
 
 	for attemptCount <= maxRetries {
 		if attemptCount == 0 {

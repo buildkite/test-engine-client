@@ -50,6 +50,8 @@ type Config struct {
 	JobRetryCount int `json:"BUILDKITE_RETRY_COUNT"`
 	// Enable debug output
 	DebugEnabled bool `json:"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"`
+	// FailOnNoTests causes the client to exit with an error if no tests are assigned to the node
+	FailOnNoTests bool `json:"BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS"`
 	// errs is a map of environment variables name and the validation errors associated with them.
 	errs InvalidConfigError
 }
