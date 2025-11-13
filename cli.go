@@ -201,21 +201,62 @@ var retryCommandFlag = &cli.StringFlag{
 	Destination: &cfg.RetryCommand,
 }
 
+// Global Flags
+var versionFlag = &cli.BoolFlag{
+	Name:   "version",
+	Usage:  "print version information and exit",
+	Action: printVersion,
+}
+
+var debugFlag = &cli.BoolFlag{
+	Name:        "debug",
+	Usage:       "Enable debug output",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"),
+	Destination: &cfg.DebugEnabled,
+}
+
+// `run` command flags
+var planIdentifierFlag = &cli.StringFlag{
+	Name:        "plan-identifier",
+	Value:       "",
+	Usage:       "run the tests from a plan previously generated matching the provided plan-identifier",
+	Destination: &cfg.Identifier,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"),
+}
+
+// `plan` command flags
+var maxParallelismFlag = &cli.IntFlag{
+	Name:        "max-parallelism",
+	Value:       0,
+	Usage:       "instruct the test planner to calculate optimal parallelism for the build, not to exceed the provided value. When 0 this flag is ignored and the test plan parallelism will be derived from the BUILDKITE_PARALLEL_JOB_COUNT environment variable",
+	Destination: &cfg.MaxParallelism,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_MAX_PARALLELISM"),
+}
+
+var targetTimeFlag = &cli.DurationFlag{
+	Name:        "target-time",
+	Value:       0,
+	Usage:       "the desired target time (e.g. 4m30s) for the entire test suite to complete. When 0 this flag is ignored and the test plan will not consider target time when deriving parallelism. Must be used in conjunction with --max-parallelism",
+	Destination: &cfg.TargetTime,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TARGET_TIME"),
+}
+
+var jsonFlag = &cli.BoolFlag{
+	Name:  "json",
+	Usage: "JSON format output",
+}
+
+var pipelineUploadFlag = &cli.StringFlag{
+	Name:  "pipeline-upload",
+	Usage: "buildkite-agent pipeline upload will be executed with the provided `template.yml`. The additional enviroment variables BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER and BUILDKITE_TEST_ENGINE_PARALLELISM from the generated plan will be available to the template.",
+}
+
 var cliCommand = &cli.Command{
 	Name:  "bktec",
 	Usage: "Buildkite Test Engine Client",
 	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:   "version",
-			Usage:  "print version information and exit",
-			Action: printVersion,
-		},
-		&cli.BoolFlag{
-			Name:        "debug",
-			Usage:       "Enable debug output",
-			Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"),
-			Destination: &cfg.DebugEnabled,
-		},
+		versionFlag,
+		debugFlag,
 	},
 	Commands: []*cli.Command{
 		{
@@ -223,6 +264,8 @@ var cliCommand = &cli.Command{
 			Usage:  "Run tests (default)",
 			Action: run,
 			Flags: []cli.Flag{
+				filesFlag,
+				planIdentifierFlag,
 				// Build Environment Flags
 				organizationSlugFlag,
 				buildIDFlag,
@@ -248,15 +291,6 @@ var cliCommand = &cli.Command{
 				disableRetryMutedFlag,
 				retryCommandFlag,
 				testEngineRetryCountFlag,
-				// Other Flags
-				filesFlag,
-				&cli.StringFlag{
-					Name:        "plan-identifier",
-					Value:       "",
-					Usage:       "run the tests from a plan previously generated matching the provided plan-identifier",
-					Destination: &cfg.Identifier,
-					Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"),
-				},
 			},
 		},
 		{
@@ -267,6 +301,10 @@ var cliCommand = &cli.Command{
 				// Some of these flags are not strictly required for planning,
 				// we will remove these in future iterations.
 
+				filesFlag,
+				// Dynamic Parallelism Flags
+				maxParallelismFlag,
+				targetTimeFlag,
 				// Build Environment Flags
 				organizationSlugFlag,
 				buildIDFlag,
@@ -290,40 +328,14 @@ var cliCommand = &cli.Command{
 				disableRetryMutedFlag,
 				retryCommandFlag,
 				testEngineRetryCountFlag,
-				// Other Flags
-				filesFlag,
-				&cli.IntFlag{
-					Name:        "max-parallelism",
-					Value:       0,
-					Usage:       "instruct the test planner to calculate optimal parallelism for the build, not to exceed the provided value. When 0 this flag is ignored and the test plan parallelism will be derived from the BUILDKITE_PARALLEL_JOB_COUNT environment variable",
-					Destination: &cfg.MaxParallelism,
-					Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_MAX_PARALLELISM"),
-				},
-				&cli.DurationFlag{
-					Name:        "target-time",
-					Value:       0,
-					Usage:       "the desired target time (e.g. 4m30s) for the entire test suite to complete. When 0 this flag is ignored and the test plan will not consider target time when deriving parallelism. Must be used in conjunction with --max-parallelism",
-					Destination: &cfg.TargetTime,
-					Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TARGET_TIME"),
-				},
 			},
 			MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
 				{
 					Required: true,
 					Category: "PLAN OUTPUT",
 					Flags: [][]cli.Flag{
-						{
-							&cli.BoolFlag{
-								Name:  "json",
-								Usage: "JSON format output",
-							},
-						},
-						{
-							&cli.StringFlag{
-								Name:  "pipeline-upload",
-								Usage: "buildkite-agent pipeline upload will be executed with the provided `template.yml`. The additional enviroment variables BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER and BUILDKITE_TEST_ENGINE_PARALLELISM from the generated plan will be available to the template.",
-							},
-						},
+						{jsonFlag},
+						{pipelineUploadFlag},
 					},
 				},
 			},
