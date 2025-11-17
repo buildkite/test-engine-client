@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
+	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
 )
@@ -24,12 +26,13 @@ const (
 
 var planWriter io.Writer = os.Stdout
 
-var pipelineUploadCommand = "buildkite-agent"
-var pipelineUploadArgs = []string{"pipeline", "upload"}
+var (
+	pipelineUploadCommand = "buildkite-agent"
+	pipelineUploadArgs    = []string{"pipeline", "upload"}
+)
 
 // This command creates a test plan via the API
 func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFormat PlanOutput, template string) error {
-
 	fmt.Fprintln(os.Stderr, "+++ Buildkite Test Engine Client: bktec "+version.Version+"\n")
 
 	testRunner, err := runner.DetectRunner(cfg)
@@ -48,14 +51,11 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
-	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
+	testPlan, err := createTestPlan(ctx, cfg, files, apiClient, testRunner)
 	if err != nil {
-		return err
-	}
-
-	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
-	if err != nil {
-		return fmt.Errorf("create test plan failed: %w", err)
+		if handledErr := handleError(err); handledErr != nil {
+			return fmt.Errorf("create test plan failed: %w", err)
+		}
 	}
 
 	switch outputFormat {
@@ -88,7 +88,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		env = append(env, identifierEnv, parallelismEnv)
 		cmd.Env = env
 
-		fmt.Println("Executing buildkite-agent pipeline upload with", identifierEnv, parallelismEnv)
+		fmt.Fprintf(planWriter, "Executing buildkite-agent pipeline upload with %s %s\n", identifierEnv, parallelismEnv)
 
 		if err := cmd.Run(); err != nil {
 			return err
@@ -107,4 +107,39 @@ func makePipelineUploadCommand(template string) *exec.Cmd {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = planWriter
 	return cmd
+}
+
+func createTestPlan(ctx context.Context, cfg *config.Config, files []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
+	fallbackPlan := plan.TestPlan{
+		Identifier:  cfg.Identifier,
+		Parallelism: cfg.MaxParallelism,
+		Fallback:    true,
+	}
+
+	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
+	if err != nil {
+		return fallbackPlan, err
+	}
+
+	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+	if err != nil {
+		return fallbackPlan, err
+	}
+
+	return testPlan, nil
+}
+
+func handleError(err error) error {
+	if errors.Is(err, api.ErrRetryTimeout) {
+		fmt.Fprintln(os.Stderr, "⚠️ Could not fetch or create plan from server, falling back to non-intelligent splitting. Your build may take longer than usual.")
+		return nil
+	}
+
+	if billingError := new(api.BillingError); errors.As(err, &billingError) {
+		fmt.Fprintln(os.Stderr, billingError.Message+"\n")
+		fmt.Fprintln(os.Stderr, "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual.")
+		return nil
+	}
+
+	return err
 }
