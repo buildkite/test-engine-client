@@ -22,6 +22,8 @@ YAML
     # - 0.7.6-rc.1
     # - 0.8.0
     # - 0.8.0-rc.1
+    # - 1.0.0
+    # - 1.0.0-rc.1
     cat <<YAML
         - label: $(svu patch)
           value: $(svu patch)
@@ -31,6 +33,10 @@ YAML
           value: $(svu minor)
         - label: $(svu minor --pre-release rc).1
           value: $(svu minor --pre-release rc).1
+        - label: $(svu major)
+          value: $(svu major)
+        - label: $(svu major --pre-release rc).1
+          value: $(svu major --pre-release rc).1
 YAML
   fi
 }
