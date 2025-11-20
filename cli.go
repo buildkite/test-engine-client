@@ -261,7 +261,7 @@ var cliCommand = &cli.Command{
 	Commands: []*cli.Command{
 		{
 			Name:   "run",
-			Usage:  "Run tests (default)",
+			Usage:  "Run tests",
 			Action: run,
 			Flags: []cli.Flag{
 				filesFlag,
