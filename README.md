@@ -8,7 +8,7 @@ bktec supports multiple test runners and offers various features to enhance your
 | -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: | :------------: | :-----: | :------: |
 | Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    |
 | Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |
-| Split tests by file                                |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ✅       |   ✅    |    ✅    |
+| Split tests by file                                |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ✅    |    ✅    |
 | [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)        |   ✅  |   ❌  |    ❌      |    ❌   |   ❌   |       ❌       |   ❌    |    ✅    |
 | Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |
 | Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |   ❌   |       ❌       |   ❌    |    ✅    |
