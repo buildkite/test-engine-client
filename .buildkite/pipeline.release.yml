@@ -12,6 +12,7 @@ steps:
   - name: ":rocket: Release"
     artifact_paths: "dist/**/*"
     plugins:
+      # IAM role to access SSM
       - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-engine-client-release
           session-tags:
@@ -23,6 +24,14 @@ steps:
             GITHUB_TOKEN: /pipelines/buildkite/test-engine-client-release/GH_TOKEN
             DOCKERHUB_USER: /pipelines/buildkite/test-engine-client-release/dockerhub-user
             DOCKERHUB_PASSWORD: /pipelines/buildkite/test-engine-client-release/dockerhub-password
+      # IAM role to access ECR
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-buildkite-test-engine-client-release
+          credential-name-prefix: ECR_
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
       - docker#v5.13.0:
           image: goreleaser/goreleaser:v2.8.1
           entrypoint: ""
@@ -34,3 +43,6 @@ steps:
             - GITHUB_TOKEN
             - DOCKERHUB_USER
             - DOCKERHUB_PASSWORD
+            - ECR_AWS_ACCESS_KEY_ID
+            - ECR_AWS_SECRET_ACCESS_KEY
+            - ECR_AWS_SESSION_TOKEN
