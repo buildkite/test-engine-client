@@ -32,11 +32,12 @@ steps:
             - organization_slug
             - organization_id
             - pipeline_slug
-      - docker#v5.13.0:
-          image: goreleaser/goreleaser:v2.8.1
-          entrypoint: ""
-          command: [".buildkite/steps/release.sh"]
+      - docker-compose#v5.12.0:
+          config: .buildkite/docker-compose.yml
+          run: release
+          command: ["/bin/sh", ".buildkite/steps/release.sh"]
           mount-buildkite-agent: true
+          mount-checkout: true
           volumes:
             - "/var/run/docker.sock:/var/run/docker.sock"
           environment:

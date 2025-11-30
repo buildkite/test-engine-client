@@ -15,3 +15,7 @@ services:
       - BUILDKITE_JOB_ID
       - GOCACHE=/gocache
       - GOMODCACHE=/gomodcache
+  release:
+    build:
+      context: .
+      dockerfile: Dockerfile.release
