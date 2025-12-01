@@ -70,6 +70,21 @@ dockers:
     dockerfile: "packaging/Dockerfile"
     build_flag_templates:
       - "--platform=linux/arm64"
+  - image_templates:
+      - "public.ecr.aws/buildkite/test-engine-client:v{{ .Version }}-amd64"
+    # skip pushing image to AWS ECR if it's a prerelease
+    skip_push: auto
+    dockerfile: "packaging/Dockerfile"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+  - image_templates:
+      - "public.ecr.aws/buildkite/test-engine-client:v{{ .Version }}-arm64"
+    # skip pushing image to AWS ECR if it's a prerelease
+    skip_push: auto
+    goarch: arm64
+    dockerfile: "packaging/Dockerfile"
+    build_flag_templates:
+      - "--platform=linux/arm64"
 docker_manifests:
   - name_template: "packages.buildkite.com/buildkite/test-engine-client-docker/test-engine-client:v{{ .Version }}"
     image_templates:
@@ -90,6 +105,18 @@ docker_manifests:
       - "buildkite/test-engine-client:v{{ .Version }}-amd64"
       - "buildkite/test-engine-client:v{{ .Version }}-arm64"
     # skip pushing manifest to Dockerhub if it's a prerelease
+    skip_push: auto
+  - name_template: "public.ecr.aws/buildkite/test-engine-client:v{{ .Version }}"
+    image_templates:
+      - "public.ecr.aws/buildkite/test-engine-client:v{{ .Version }}-amd64"
+      - "public.ecr.aws/buildkite/test-engine-client:v{{ .Version }}-arm64"
+    # skip pushing manifest to AWS ECR if it's a prerelease
+    skip_push: auto
+  - name_template: "public.ecr.aws/buildkite/test-engine-client:latest"
+    image_templates:
+      - "public.ecr.aws/buildkite/test-engine-client:v{{ .Version }}-amd64"
+      - "public.ecr.aws/buildkite/test-engine-client:v{{ .Version }}-arm64"
+    # skip pushing manifest to AWS ECR if it's a prerelease
     skip_push: auto
 
 nfpms:

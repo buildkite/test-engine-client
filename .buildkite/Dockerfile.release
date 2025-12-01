@@ -1,0 +1,7 @@
+FROM goreleaser/goreleaser:v2.8.1 AS goreleaser
+
+# Install AWS CLI
+RUN apk add aws-cli
+RUN aws --version
+
+ENTRYPOINT []
