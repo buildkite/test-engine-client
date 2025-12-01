@@ -72,7 +72,7 @@ To parallelize your tests in your Buildkite build, you can amend your pipeline s
 ```
 steps:
   - name: "Rspec"
-    command: ./bktec
+    command: ./bktec run
     parallelism: 10
     env:
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite

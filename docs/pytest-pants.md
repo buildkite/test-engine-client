@@ -31,7 +31,7 @@ Only running `pants test` with `python_test` targets is supported at this time.
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=pytest-pants
 export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test --changed-since=HEAD~1 test -- --json={{resultPath}} --merge-json"
-bktec
+bktec run
 ```
 
 ## Configure test command
