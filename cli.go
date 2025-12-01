@@ -111,6 +111,7 @@ var filesFlag = &cli.StringFlag{
 	Category: "TEST RUNNER",
 	Value:    "",
 	Usage:    "Override the default test file discovery by providing a path to a file containing a list of test files (one per line)",
+	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_FILES"),
 }
 
 var testCommandFlag = &cli.StringFlag{
