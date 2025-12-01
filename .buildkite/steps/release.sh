@@ -40,4 +40,4 @@ echo "--- :key: :aws: Login to AWS ECR Public"
 )
 
 echo "+++ :rocket: Creating Release"
-goreleaser release --clean --snapshot
+goreleaser release --clean
