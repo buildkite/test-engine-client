@@ -15,7 +15,7 @@ export BUILDKITE_TEST_ENGINE_SUITE_SLUG=your-suite-slug
 export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN=your-token
 
 # Run the test engine client
-bktec
+bktec run
 ```
 
 > [!IMPORTANT]
@@ -51,7 +51,7 @@ Using `bktec` allows you to manage test states, such as muting flaky tests, dire
 ```yaml
   - name: "Go test :golang:"
     commands:
-      - bktec
+      - bktec run
     env:
       ...
     parallelism: 2 # This activate test splitting!
@@ -75,7 +75,7 @@ export BUILDKITE_TEST_ENGINE_RETRY_COUNT=1
 ```yaml
 - name: "Go test :golang:"
   commands:
-    - bktec
+    - bktec run
   env:
     BUILDKITE_ANALYTICS_TOKEN: your-suite-token # For test collector
     BUILDKITE_TEST_ENGINE_SUITE_SLUG: your-suite-slug
