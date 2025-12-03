@@ -245,3 +245,13 @@ func TestRunStatus_Error(t *testing.T) {
 		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusError)
 	}
 }
+
+func TestParseTestEngineTestResult(t *testing.T) {
+	results, err := parseTestEngineTestResult("testdata/test-engine-result.json")
+	if err != nil {
+		t.Errorf("parseTestEngineTestResult() error = %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("len(results) = %d, want 2", len(results))
+	}
+}
