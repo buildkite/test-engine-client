@@ -182,6 +182,10 @@ func TestCustom_Run_WithResult(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err = custom.Run(result, testCases, false)
 
+	if err != nil {
+		t.Errorf("Custom.Run() error = %v", err)
+	}
+
 	// See test-result.json for expected results
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Custom.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
