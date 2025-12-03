@@ -8,7 +8,8 @@ bktec supports multiple test runners and offers various features to enhance your
 | -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: | :------------: | :-----: | :------: |
 | Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    |
 | Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |
-| Split slow files by individual test example        |   ✅  |   ❌  |    ❌      |    ❌   |   ❌   |       ❌       |   ❌    |    ✅    |
+| Split tests by file[^1]                                |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    |
+| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)        |   ✅  |   ❌  |    ❌      |    ❌   |   ❌   |       ❌       |   ❌    |    ✅    |
 | Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |
 | Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |   ❌   |       ❌       |   ❌    |    ✅    |
 
@@ -116,3 +117,5 @@ To test, run:
 ```sh
 ./bin/test
 ```
+
+[^1]: NB: Test splitting is not supported for Pants, because Pants will decide which tests to run. For go test, test splitting is by package and not by file.
