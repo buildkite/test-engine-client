@@ -73,8 +73,38 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	cmd := exec.Command(cmdName, cmdArgs...)
 
 	err = runAndForwardSignal(cmd)
+	// We don't want to return error all them time here because it maybe due to test failures.
+	// If the result path is not set, we should bubble up the error.
+	// Otherwise, we will try to parse the result file and determine whether to fail the run based on the test results.
+	if r.ResultPath == "" {
+		return err
+	}
 
-	return err
+	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
+		return err
+	}
+
+	tests, parseErr := parseTestEngineTestResult(r.ResultPath)
+
+	if parseErr != nil {
+		fmt.Printf("Buildkite Test Engine Client: Failed to read json output: %v", parseErr)
+		return err
+	}
+
+	for _, test := range tests {
+
+		result.RecordTestResult(plan.TestCase{
+			Identifier: test.Id,
+			Format:     plan.TestCaseFormatExample,
+			Scope:      test.Scope,
+			Name:       test.Name,
+			// We don't support retry for custom runner because each runner may have different way to target individual test cases.
+			// Therefore, we just use file name and line number as the test path for now.
+			Path: fmt.Sprintf("%s:%s", test.FileName, test.Location),
+		}, test.Result)
+	}
+
+	return nil
 }
 
 func (r Custom) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {

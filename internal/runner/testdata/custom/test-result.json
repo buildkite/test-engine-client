@@ -1,0 +1,34 @@
+[
+  {
+    "id": "db2c4ffa-efee-4b6a-b293-a4c4168aa353",
+    "scope": "My test",
+    "name": "test a",
+    "location": "./tests/test_a.sh:1",
+    "file_name": "./tests/test_a.sh",
+    "result": "passed",
+    "failure_reason": "",
+    "failure_expanded": [],
+    "history": {
+      "start_at": 347611.724809,
+      "end_at": 347612.451041,
+      "duration": 0.726232000044547,
+      "children": []
+    }
+  },
+  {
+    "id": "95f7e024-9e0a-450f-bc64-9edb62d43fa9",
+    "scope": "My test",
+    "name": "failed test",
+    "location": "./tests/fail_test.sh:1",
+    "file_name": "./tests/fail_test.sh",
+    "result": "failed",
+    "failure_reason": "Failure/Error: expect(true).to eq false",
+    "failure_expanded": [],
+    "history": {
+      "start_at": 347611.724809,
+      "end_at": 347612.451041,
+      "duration": 0.726232000044547,
+      "children": []
+    }
+  }
+]

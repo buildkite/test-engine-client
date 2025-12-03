@@ -77,7 +77,7 @@ func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry boo
 		return err
 	}
 
-	tests, parseErr := ParsePytestCollectorResult(p.ResultPath)
+	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
 
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried: %v", parseErr)

@@ -161,3 +161,33 @@ func TestCustom_Run_FailingTest(t *testing.T) {
 		t.Errorf("Custom.Run() error type = %T (%v), want *exec.ExitError", err, err)
 	}
 }
+
+func TestCustom_Run_WithResult(t *testing.T) {
+	changeCwd(t, "./testdata/custom")
+	custom, err := NewCustom(RunnerConfig{
+		TestCommand:     "./test {{testExamples}}",
+		TestFilePattern: "./tests/**/test_*.sh",
+		ResultPath:      "./test-result.json",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to create Custom runner: %v", err)
+	}
+
+	// no need to care about actual test files here, just testing result parsing
+	testCases := []plan.TestCase{
+		{Path: "./tests/test_a.sh"},
+		{Path: "./tests/fail_test.sh"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err = custom.Run(result, testCases, false)
+
+	// See test-result.json for expected results
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Custom.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
+	}
+
+	if len(result.tests) != 2 {
+		t.Errorf("Custom.Run() len(RunResult.tests) = %d, want %d", len(result.tests), 2)
+	}
+}
