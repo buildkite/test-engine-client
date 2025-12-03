@@ -45,12 +45,27 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
-	if c.ResultPath == "" && c.TestRunner != "cypress" && c.TestRunner != "pytest" && c.TestRunner != "pytest-pants" {
+	runnersWithoutResultPath := map[string]bool{
+		"cypress":      true,
+		"pytest":       true,
+		"pytest-pants": true,
+		"custom":       true,
+	}
+	if c.ResultPath == "" && !runnersWithoutResultPath[c.TestRunner] {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 
 	if c.TestRunner == "" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "must not be blank")
+	}
+
+	if c.TestRunner == "custom" {
+		if c.TestCommand == "" {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_CMD", "must not be blank when using the custom test runner")
+		}
+		if c.TestFilePattern == "" {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN", "must not be blank when using the custom test runner")
+		}
 	}
 
 	if len(c.errs) > 0 {
