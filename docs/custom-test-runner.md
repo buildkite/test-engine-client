@@ -9,8 +9,8 @@ export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="tests/**/test_*.js"
 bktec run
 ```
 
-`{{testExamples}}` in the `BUILDKITE_TEST_ENGINE_TEST_CMD` variable will be replaced by bktec with the list of test files to run on each node.
-In the above example, bktec will run `bin/test` followed by the space separated list of test files matching the `tests/**/test_*.js` pattern.
+`{{testExamples}}` in the `BUILDKITE_TEST_ENGINE_TEST_CMD` variable will be replaced by bktec with space-separated list of test files matching the `tests/**/test_*.js` pattern.
+In the above example, bktec will run `bin/test` followed by list of test files that need to be run on each node.
 The actual command that bktec will run on each node will look like this:
 
 ```sh
@@ -36,6 +36,7 @@ To configure test muting, your test runner must output a json file containing th
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=custom
 export BUILDKITE_TEST_ENGINE_TEST_CMD="bin/test {{testExamples}}"
 export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="tests/**/test_*.js"
+export BUILDKITE_TEST_ENGINE_RESULT_PATH="path/to/test-result.json"
 bktec run
 ```
 

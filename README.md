@@ -65,6 +65,7 @@ To configure the test runner for bktec, please refer to the detailed guides prov
 - [go test](./docs/gotest.md)
 - [RSpec](./docs/rspec.md)
 - [Cucumber](./docs/cucumber.md)
+- [Custom Test Runner](./docs/custom-test-runner.md)
 
 
 ### Running bktec
