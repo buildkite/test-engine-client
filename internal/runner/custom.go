@@ -87,7 +87,7 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	tests, parseErr := parseTestEngineTestResult(r.ResultPath)
 
 	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read json output: %v", parseErr)
+		fmt.Printf("Buildkite Test Engine Client: Failed to read json output: %v\n", parseErr)
 		return err
 	}
 
