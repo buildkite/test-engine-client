@@ -230,13 +230,3 @@ func TestPytestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 		t.Errorf("commandNameAndArgs() error = %v, want %v", err, shellquote.UnterminatedSingleQuoteError)
 	}
 }
-
-func TestParseBuildkitePytestCollectorResult(t *testing.T) {
-	results, err := ParsePytestCollectorResult("testdata/pytest/pytest-collector-result.json")
-	if err != nil {
-		t.Errorf("ParseBuildkitePytestCollectorResult() error = %v", err)
-	}
-	if len(results) != 2 {
-		t.Errorf("len(results) = %d, want 2", len(results))
-	}
-}

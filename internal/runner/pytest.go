@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -77,7 +76,7 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return err
 	}
 
-	tests, parseErr := ParsePytestCollectorResult(p.ResultPath)
+	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
 
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried: %v", parseErr)
@@ -138,34 +137,6 @@ func (p Pytest) commandNameAndArgs(cmd string, testCases []string) (string, []st
 	}
 
 	return args[0], args[1:], nil
-}
-
-// TestEngineTest represents a Test Engine test result object.
-// Some attributes such as `history` and `failure_reason` are omitted as they are not needed by bktec.
-// Ref: https://buildkite.com/docs/test-engine/importing-json#json-test-results-data-reference-test-result-objects
-//
-// Currently, only pytest uses result from test collector. If we use this somewhere else in the future, we may want to extract this struct.
-type TestEngineTest struct {
-	Id       string
-	Name     string
-	Scope    string
-	Location string
-	FileName string `json:"file_name,omitempty"`
-	Result   TestStatus
-}
-
-func ParsePytestCollectorResult(path string) ([]TestEngineTest, error) {
-	var results []TestEngineTest
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read json: %v", err)
-	}
-
-	if err := json.Unmarshal(data, &results); err != nil {
-		return nil, fmt.Errorf("failed to parse json: %v", err)
-	}
-
-	return results, nil
 }
 
 func getRandomTempFilename() string {

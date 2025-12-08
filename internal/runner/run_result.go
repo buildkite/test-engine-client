@@ -1,6 +1,10 @@
 package runner
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+
 	"github.com/buildkite/test-engine-client/internal/plan"
 )
 
@@ -182,4 +186,32 @@ func (r *RunResult) Statistics() RunStatistics {
 	stat.Total = len(r.tests)
 
 	return *stat
+}
+
+// TestEngineTest represents a Test Engine test result object.
+// Some attributes such as `history` and `failure_reason` are omitted as they are not needed by bktec.
+// Ref: https://buildkite.com/docs/test-engine/importing-json#json-test-results-data-reference-test-result-objects
+//
+// Currently, only pytest and custom runner uses result from test collector.
+type TestEngineTest struct {
+	Id       string
+	Name     string
+	Scope    string
+	Location string
+	FileName string `json:"file_name,omitempty"`
+	Result   TestStatus
+}
+
+func parseTestEngineTestResult(path string) ([]TestEngineTest, error) {
+	var results []TestEngineTest
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read json: %v", err)
+	}
+
+	if err := json.Unmarshal(data, &results); err != nil {
+		return nil, fmt.Errorf("failed to parse json: %v", err)
+	}
+
+	return results, nil
 }
