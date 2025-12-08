@@ -112,11 +112,6 @@ func printStartUpMessage() {
 }
 
 func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {
-	// If the run result is unknown, don't print the report.
-	if runResult.Status() == runner.RunStatusUnknown {
-		return
-	}
-
 	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
 
 	switch runResult.Status() {
