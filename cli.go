@@ -344,7 +344,12 @@ var cliCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		cli.ShowRootCommandHelp(cmd)
+		err := cli.ShowRootCommandHelp(cmd)
+		// This is unlikely to ever error, but if it does, we want to know.
+		if err != nil {
+			return cli.Exit(fmt.Sprintf("failed to show help: %v", err), 16)
+		}
+
 		fmt.Println("")
 
 		if cmd.NArg() > 0 {
