@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/urfave/cli/v3"
 )
@@ -341,5 +342,15 @@ var cliCommand = &cli.Command{
 				},
 			},
 		},
+	},
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		cli.ShowRootCommandHelp(cmd)
+		fmt.Println("")
+
+		if cmd.NArg() > 0 {
+			return cli.Exit(fmt.Sprintf("invalid command: %q", cmd.Args().Get(0)), 16)
+		}
+
+		return cli.Exit("command is required", 16)
 	},
 }
