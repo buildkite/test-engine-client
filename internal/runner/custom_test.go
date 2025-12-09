@@ -80,31 +80,48 @@ func TestCustom_GetFiles(t *testing.T) {
 }
 
 func TestCustom_CommandNameAndArgs(t *testing.T) {
-	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "bin/test -- {{testExamples}}",
-		TestFilePattern: "tests/**/test_*.sh",
-	})
-
-	if err != nil {
-		t.Fatalf("Failed to create Custom runner: %v", err)
-	}
-
 	testCases := []string{"tests/test_a.sh", "tests/test_b.sh"}
 
-	gotName, gotArgs, err := custom.commandNameAndArgs(custom.TestCommand, testCases)
-	if err != nil {
-		t.Errorf("Custom.cmdNameAndArgs() error = %v", err)
+	commands := []struct {
+		command  string
+		wantName string
+		wantArgs []string
+	}{
+		{
+			command:  "bin/test -- {{testExamples}}",
+			wantName: "bin/test",
+			wantArgs: []string{"--", "tests/test_a.sh", "tests/test_b.sh"},
+		},
+		{
+			command:  "rake test TEST_FILES='{{testExamples}}'",
+			wantName: "rake",
+			wantArgs: []string{"test", "TEST_FILES=tests/test_a.sh tests/test_b.sh"},
+		},
 	}
 
-	wantName := "bin/test"
-	wantArgs := []string{"--", "tests/test_a.sh", "tests/test_b.sh"}
+	for _, tc := range commands {
 
-	if gotName != wantName {
-		t.Errorf("Custom.cmdNameAndArgs() name = %v, want %v", gotName, wantName)
-	}
+		custom, err := NewCustom(RunnerConfig{
+			TestCommand:     tc.command,
+			TestFilePattern: "tests/**/test_*.sh",
+		})
 
-	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("Custom.cmdNameAndArgs() args diff (-got +want):\n%s", diff)
+		if err != nil {
+			t.Fatalf("Failed to create Custom runner: %v", err)
+		}
+
+		gotName, gotArgs, err := custom.commandNameAndArgs(custom.TestCommand, testCases)
+		if err != nil {
+			t.Errorf("Custom.cmdNameAndArgs(%q, testCases) error = %v", tc.command, err)
+		}
+
+		if gotName != tc.wantName {
+			t.Errorf("Custom.cmdNameAndArgs(%q, testCases) name = %v, want %v", tc.command, gotName, tc.wantName)
+		}
+
+		if diff := cmp.Diff(gotArgs, tc.wantArgs); diff != "" {
+			t.Errorf("Custom.cmdNameAndArgs(%q, testCases) args diff (-got +want):\n%s", tc.command, diff)
+		}
 	}
 }
 

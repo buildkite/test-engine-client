@@ -79,7 +79,7 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
 
 	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried: %v", parseErr)
+		fmt.Println("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried:", parseErr)
 		return err
 	}
 

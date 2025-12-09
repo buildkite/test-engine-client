@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"slices"
+	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -87,7 +87,7 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	tests, parseErr := parseTestEngineTestResult(r.ResultPath)
 
 	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read json output: %v", parseErr)
+		fmt.Println("Buildkite Test Engine Client: Failed to read json output:", parseErr)
 		return err
 	}
 
@@ -108,14 +108,11 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 }
 
 func (r Custom) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+	cmd = strings.Replace(cmd, "{{testExamples}}", strings.Join(testCases, " "), 1)
+
 	words, err := shellquote.Split(cmd)
 	if err != nil {
 		return "", []string{}, err
-	}
-	idx := slices.Index(words, "{{testExamples}}")
-
-	if idx >= 0 {
-		words = slices.Replace(words, idx, idx+1, testCases...)
 	}
 
 	return words[0], words[1:], nil

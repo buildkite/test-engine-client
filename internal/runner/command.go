@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 )
 
@@ -18,7 +17,7 @@ func runAndForwardSignal(cmd *exec.Cmd) error {
 	finishCh := make(chan struct{})
 	defer close(finishCh)
 
-	fmt.Println(strings.Join(cmd.Args, " "))
+	fmt.Println(cmd.String())
 	fmt.Println("")
 
 	if err := cmd.Start(); err != nil {
