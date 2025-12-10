@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/urfave/cli/v3"
 )
@@ -341,5 +342,20 @@ var cliCommand = &cli.Command{
 				},
 			},
 		},
+	},
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		err := cli.ShowRootCommandHelp(cmd)
+		// This is unlikely to ever error, but if it does, we want to know.
+		if err != nil {
+			return cli.Exit(fmt.Sprintf("failed to show help: %v", err), 16)
+		}
+
+		fmt.Println("")
+
+		if cmd.NArg() > 0 {
+			return cli.Exit(fmt.Sprintf("invalid command: %q", cmd.Args().Get(0)), 16)
+		}
+
+		return cli.Exit("command is required", 16)
 	},
 }
