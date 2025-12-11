@@ -359,6 +359,7 @@ func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	}
 
 	wantName := "jest"
+	// Paths with parentheses and brackets are escaped for regex since Jest interprets them as patterns
 	wantArgs := []string{"spec/user.spec.js", "spec/billing.spec.js", "--outputFile", "jest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
@@ -384,6 +385,7 @@ func TestJestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	}
 
 	wantName := "jest"
+	// Paths with parentheses and brackets are escaped for regex since Jest interprets them as patterns
 	wantArgs := []string{"--json", "--outputFile", "jest.json", "spec/user.spec.js", "spec/billing.spec.js"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
@@ -415,6 +417,42 @@ func TestJestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	}
 	if !errors.Is(err, shellquote.UnterminatedSingleQuoteError) {
 		t.Errorf("commandNameAndArgs() error = %v, want %v", err, shellquote.UnterminatedSingleQuoteError)
+	}
+}
+
+func TestJestCommandNameAndArgs_WithSpecialCharactersInPath(t *testing.T) {
+	// Test paths with special regex characters like parentheses (Next.js route groups)
+	// and square brackets (Next.js dynamic routes)
+	testCases := []string{
+		"src/app/(main)/page.test.tsx",
+		"src/app/(main)/[catalogId]/product.test.tsx",
+	}
+	testCommand := "jest {{testExamples}} --outputFile {{resultPath}}"
+
+	jest := NewJest(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "jest.json",
+	})
+
+	gotName, gotArgs, err := jest.commandNameAndArgs(testCommand, testCases)
+	if err != nil {
+		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+	}
+
+	wantName := "jest"
+	// Parentheses and brackets should be escaped for regex (Next.js App Router conventions)
+	wantArgs := []string{
+		`src/app/\(main\)/page.test.tsx`,
+		`src/app/\(main\)/\[catalogId\]/product.test.tsx`,
+		"--outputFile",
+		"jest.json",
+	}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
