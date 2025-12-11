@@ -187,11 +187,23 @@ func (j Jest) commandNameAndArgs(cmd string, testCases []string) (string, []stri
 	if err != nil {
 		return "", []string{}, err
 	}
+
+	// Escape parentheses and brackets in test file paths since Jest
+	// interprets CLI arguments as regex patterns. These characters are
+	// commonly used in Next.js App Router paths (e.g., (main) for route
+	// groups, [id] for dynamic routes) and cause regex matching issues.
+	// We don't escape all regex metacharacters (like dots) because they
+	// work fine in practice and escaping them breaks existing behavior.
+	escapedTestCases := make([]string, len(testCases))
+	for i, testCase := range testCases {
+		escapedTestCases[i] = escapeJestPathPattern(testCase)
+	}
+
 	idx := slices.Index(words, "{{testExamples}}")
 	if idx < 0 {
-		words = append(words, testCases...)
+		words = append(words, escapedTestCases...)
 	} else {
-		words = slices.Replace(words, idx, idx+1, testCases...)
+		words = slices.Replace(words, idx, idx+1, escapedTestCases...)
 	}
 
 	outputIdx := slices.Index(words, "{{resultPath}}")
@@ -242,4 +254,17 @@ func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string, testPaths 
 
 func (j Jest) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in Jest")
+}
+
+// escapeJestPathPattern escapes characters in file paths that cause issues
+// when Jest interprets them as regex patterns. This specifically targets
+// parentheses and brackets used in Next.js App Router conventions.
+func escapeJestPathPattern(path string) string {
+	replacer := strings.NewReplacer(
+		"(", "\\(",
+		")", "\\)",
+		"[", "\\[",
+		"]", "\\]",
+	)
+	return replacer.Replace(path)
 }
