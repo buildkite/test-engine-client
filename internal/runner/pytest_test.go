@@ -150,6 +150,7 @@ func TestPytestGetFiles(t *testing.T) {
 
 	want := []string{
 		"failed_test.py",
+		"spells/test_expelliarmus.py",
 		"test_sample.py",
 	}
 
@@ -228,5 +229,73 @@ func TestPytestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	}
 	if !errors.Is(err, shellquote.UnterminatedSingleQuoteError) {
 		t.Errorf("commandNameAndArgs() error = %v, want %v", err, shellquote.UnterminatedSingleQuoteError)
+	}
+}
+
+func TestPytestGetExamples(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
+	pytest := NewPytest(RunnerConfig{})
+	files := []string{"spells/test_expelliarmus.py"}
+	got, err := pytest.GetExamples(files)
+
+	if err != nil {
+		t.Fatalf("Pytest.GetExamples(%q) error = %v", files, err)
+	}
+
+	want := []plan.TestCase{
+		{
+			Identifier: "spells/test_expelliarmus.py::TestExpelliarmus::test_disarms_opponent",
+			Name:       "TestExpelliarmus::test_disarms_opponent",
+			Path:       "spells/test_expelliarmus.py::TestExpelliarmus::test_disarms_opponent",
+			Scope:      "spells/test_expelliarmus.py",
+			Format:     plan.TestCaseFormatExample,
+		},
+		{
+			Identifier: "spells/test_expelliarmus.py::TestExpelliarmus::test_knocks_wand_out",
+			Name:       "TestExpelliarmus::test_knocks_wand_out",
+			Path:       "spells/test_expelliarmus.py::TestExpelliarmus::test_knocks_wand_out",
+			Scope:      "spells/test_expelliarmus.py",
+			Format:     plan.TestCaseFormatExample,
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Pytest.GetExamples(%q) diff (-got +want):\n%s", files, diff)
+	}
+}
+
+func TestPytestGetExamples_EmptyFiles(t *testing.T) {
+	pytest := NewPytest(RunnerConfig{})
+	got, err := pytest.GetExamples([]string{})
+
+	if err != nil {
+		t.Errorf("Pytest.GetExamples([]) error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("Pytest.GetExamples([]) = %v, want empty slice", got)
+	}
+}
+
+func TestParsePytestCollectOutput(t *testing.T) {
+	output := `test_sample.py::test_happy
+test_auth.py::TestLogin::test_success
+test_auth.py::test_param[value1]
+
+3 tests collected in 0.05s`
+
+	got, err := parsePytestCollectOutput(output)
+	if err != nil {
+		t.Fatalf("parsePytestCollectOutput() error = %v", err)
+	}
+
+	want := []plan.TestCase{
+		{Identifier: "test_sample.py::test_happy", Path: "test_sample.py::test_happy", Scope: "test_sample.py", Name: "test_happy", Format: plan.TestCaseFormatExample},
+		{Identifier: "test_auth.py::TestLogin::test_success", Path: "test_auth.py::TestLogin::test_success", Scope: "test_auth.py", Name: "TestLogin::test_success", Format: plan.TestCaseFormatExample},
+		{Identifier: "test_auth.py::test_param[value1]", Path: "test_auth.py::test_param[value1]", Scope: "test_auth.py", Name: "test_param[value1]", Format: plan.TestCaseFormatExample},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsePytestCollectOutput() diff (-got +want):\n%s", diff)
 	}
 }

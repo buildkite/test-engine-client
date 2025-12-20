@@ -115,8 +115,74 @@ func (p Pytest) GetFiles() ([]string, error) {
 	return files, nil
 }
 
+// GetExamples returns an array of test examples within the given files.
+// It uses `pytest --collect-only -q` to enumerate individual tests.
 func (p Pytest) GetExamples(files []string) ([]plan.TestCase, error) {
-	return nil, fmt.Errorf("not supported in pytest")
+	if len(files) == 0 {
+		return []plan.TestCase{}, nil
+	}
+
+	args := append([]string{"--collect-only", "-q"}, files...)
+	cmd := exec.Command("pytest", args...)
+
+	output, err := cmd.Output()
+	if err != nil {
+		// Include stderr in error message for debugging
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("pytest collection failed: %s", exitErr.Stderr)
+		}
+		return nil, fmt.Errorf("pytest collection failed: %w", err)
+	}
+
+	return parsePytestCollectOutput(string(output))
+}
+
+// parsePytestCollectOutput parses the output of `pytest --collect-only -q`
+// and returns a list of test cases.
+//
+// Example output:
+//
+//	test_sample.py::test_happy
+//	test_auth.py::TestLogin::test_success
+//	test_auth.py::test_param[value1]
+//
+//	3 tests collected in 0.05s
+func parsePytestCollectOutput(output string) ([]plan.TestCase, error) {
+	var testCases []plan.TestCase
+
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and summary lines (lines without ::)
+		if line == "" || !strings.Contains(line, "::") {
+			continue
+		}
+
+		// Parse node ID: "file.py::TestClass::test_method" or "file.py::test_func"
+		testCases = append(testCases, mapNodeIdToTestCase(line))
+	}
+
+	return testCases, nil
+}
+
+// mapNodeIdToTestCase converts a pytest node ID to a TestCase.
+// Node ID format: file_path::class::method or file_path::function
+// Must match the format used by buildkite-test-collector for pytest.
+func mapNodeIdToTestCase(nodeId string) plan.TestCase {
+	parts := strings.SplitN(nodeId, "::", 2)
+	scope := parts[0] // file path
+	name := ""
+	if len(parts) > 1 {
+		name = parts[1] // everything after first ::
+	}
+
+	return plan.TestCase{
+		Identifier: nodeId,
+		Path:       nodeId,
+		Scope:      scope,
+		Name:       name,
+		Format:     plan.TestCaseFormatExample,
+	}
 }
 
 func (p Pytest) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
