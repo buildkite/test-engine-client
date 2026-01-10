@@ -168,12 +168,15 @@ func parsePytestCollectOutput(output string) ([]plan.TestCase, error) {
 // mapNodeIdToTestCase converts a pytest node ID to a TestCase.
 // Node ID format: file_path::class::method or file_path::function
 // Must match the format used by buildkite-test-collector for pytest.
+// Scope is everything except the final component, Name is the last component.
 func mapNodeIdToTestCase(nodeId string) plan.TestCase {
-	parts := strings.SplitN(nodeId, "::", 2)
-	scope := parts[0] // file path
-	name := ""
-	if len(parts) > 1 {
-		name = parts[1] // everything after first ::
+	// Split on the last :: to get scope (everything before) and name (last component)
+	lastIdx := strings.LastIndex(nodeId, "::")
+	scope := ""
+	name := nodeId
+	if lastIdx != -1 {
+		scope = nodeId[:lastIdx]
+		name = nodeId[lastIdx+2:]
 	}
 
 	return plan.TestCase{

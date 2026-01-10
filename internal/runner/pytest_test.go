@@ -246,16 +246,16 @@ func TestPytestGetExamples(t *testing.T) {
 	want := []plan.TestCase{
 		{
 			Identifier: "spells/test_expelliarmus.py::TestExpelliarmus::test_disarms_opponent",
-			Name:       "TestExpelliarmus::test_disarms_opponent",
+			Name:       "test_disarms_opponent",
 			Path:       "spells/test_expelliarmus.py::TestExpelliarmus::test_disarms_opponent",
-			Scope:      "spells/test_expelliarmus.py",
+			Scope:      "spells/test_expelliarmus.py::TestExpelliarmus",
 			Format:     plan.TestCaseFormatExample,
 		},
 		{
 			Identifier: "spells/test_expelliarmus.py::TestExpelliarmus::test_knocks_wand_out",
-			Name:       "TestExpelliarmus::test_knocks_wand_out",
+			Name:       "test_knocks_wand_out",
 			Path:       "spells/test_expelliarmus.py::TestExpelliarmus::test_knocks_wand_out",
-			Scope:      "spells/test_expelliarmus.py",
+			Scope:      "spells/test_expelliarmus.py::TestExpelliarmus",
 			Format:     plan.TestCaseFormatExample,
 		},
 	}
@@ -291,7 +291,7 @@ test_auth.py::test_param[value1]
 
 	want := []plan.TestCase{
 		{Identifier: "test_sample.py::test_happy", Path: "test_sample.py::test_happy", Scope: "test_sample.py", Name: "test_happy", Format: plan.TestCaseFormatExample},
-		{Identifier: "test_auth.py::TestLogin::test_success", Path: "test_auth.py::TestLogin::test_success", Scope: "test_auth.py", Name: "TestLogin::test_success", Format: plan.TestCaseFormatExample},
+		{Identifier: "test_auth.py::TestLogin::test_success", Path: "test_auth.py::TestLogin::test_success", Scope: "test_auth.py::TestLogin", Name: "test_success", Format: plan.TestCaseFormatExample},
 		{Identifier: "test_auth.py::test_param[value1]", Path: "test_auth.py::test_param[value1]", Scope: "test_auth.py", Name: "test_param[value1]", Format: plan.TestCaseFormatExample},
 	}
 
