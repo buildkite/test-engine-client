@@ -232,6 +232,41 @@ func TestPytestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	}
 }
 
+func TestPytestCommandNameAndArgs_WithSpacesInTestCase(t *testing.T) {
+	testCases := []string{
+		"foo/bar.py::TestFoo::test_foo[min-WeightedScalar-valid_reduce_ops0-only sum or avg are supported-2]",
+		"test_sample.py::test_simple",
+	}
+	testCommand := "pytest {{testExamples}} --json={{resultPath}}"
+
+	// Create Pytest struct directly to avoid NewPytest's Python package check
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: testCommand,
+			ResultPath:  "result.json",
+		},
+	}
+
+	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	if err != nil {
+		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+	}
+
+	wantName := "pytest"
+	wantArgs := []string{
+		"foo/bar.py::TestFoo::test_foo[min-WeightedScalar-valid_reduce_ops0-only sum or avg are supported-2]",
+		"test_sample.py::test_simple",
+		"--json=result.json",
+	}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) name diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) args diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+}
+
 func TestPytestGetExamples(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 

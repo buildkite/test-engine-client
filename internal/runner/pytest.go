@@ -189,7 +189,7 @@ func mapNodeIdToTestCase(nodeId string) plan.TestCase {
 }
 
 func (p Pytest) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
-	testExamples := strings.Join(testCases, " ")
+	testExamples := shellquote.Join(testCases...)
 
 	if strings.Contains(cmd, "{{testExamples}}") {
 		cmd = strings.Replace(cmd, "{{testExamples}}", testExamples, 1)
