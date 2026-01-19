@@ -1,4 +1,4 @@
-FROM goreleaser/goreleaser:v2.13.2 AS goreleaser
+FROM goreleaser/goreleaser:v2.13.3 AS goreleaser
 
 # Install AWS CLI
 RUN apk add aws-cli
