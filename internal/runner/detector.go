@@ -13,6 +13,7 @@ type RunnerConfig struct {
 	TestFilePattern        string
 	TestFileExcludePattern string
 	RetryTestCommand       string
+	TagFilters             string
 	// ResultPath is used internally so bktec can read result from Test Runner.
 	// User typically don't need to worry about setting this except in in RSpec and playwright.
 	// In playwright, for example, it can only be configured via a config file, therefore it's mandatory for user to set.
@@ -27,13 +28,14 @@ type TestRunner interface {
 }
 
 func DetectRunner(cfg *config.Config) (TestRunner, error) {
-	var runnerConfig = RunnerConfig{
+	runnerConfig := RunnerConfig{
 		TestRunner:             cfg.TestRunner,
 		TestCommand:            cfg.TestCommand,
 		TestFilePattern:        cfg.TestFilePattern,
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		RetryTestCommand:       cfg.RetryCommand,
 		ResultPath:             cfg.ResultPath,
+		TagFilters:             cfg.TagFilters,
 	}
 
 	switch testRunner := cfg.TestRunner; testRunner {

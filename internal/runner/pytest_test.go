@@ -312,6 +312,31 @@ func TestPytestGetExamples_EmptyFiles(t *testing.T) {
 	}
 }
 
+func TestPytestGetExamples_TagFilter(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
+	pytest := NewPytest(
+		RunnerConfig{
+			TagFilters: "test_execution",
+		},
+	)
+
+	files, _ := pytest.GetFiles()
+
+	got, err := pytest.GetExamples(files)
+	if err != nil {
+		t.Fatalf("Pytest.GetExamples(%q) error = %v", files, err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("Pytest.GetExamples(%q) with tag filter 'test_execution' returned %d tests, want 1", files, len(got))
+	}
+
+	if got[0].Name != "test_happy" {
+		t.Errorf("got[0].Name = %q, want %q", got[0].Name, "test_happy")
+	}
+}
+
 func TestParsePytestCollectOutput(t *testing.T) {
 	output := `test_sample.py::test_happy
 test_auth.py::TestLogin::test_success

@@ -122,7 +122,13 @@ func (p Pytest) GetExamples(files []string) ([]plan.TestCase, error) {
 		return []plan.TestCase{}, nil
 	}
 
-	args := append([]string{"--collect-only", "-q"}, files...)
+	args := []string{"--collect-only", "-q"}
+	// TODO: Update with custom filter for test_executions with key/value tags
+	// Ref: https://github.com/buildkite/test-collector-python/pull/83
+	if p.TagFilters != "" {
+		args = append(args, "-m", p.TagFilters)
+	}
+	args = append(args, files...)
 	cmd := exec.Command("pytest", args...)
 
 	output, err := cmd.Output()

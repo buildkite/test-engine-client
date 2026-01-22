@@ -115,12 +115,20 @@ var filesFlag = &cli.StringFlag{
 	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_FILES"),
 }
 
-var testCommandFlag = &cli.StringFlag{
-	Name:        "test-command",
+var tagFiltersFlag = &cli.StringFlag{
+	Name:        "tag-filters",
 	Category:    "TEST RUNNER",
-	Usage:       "Test command",
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TEST_CMD"),
-	Destination: &cfg.TestCommand,
+	Usage:       "Tag filters to apply when selecting tests to run (currently only Pytest is supported)",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TAG_FILTERS"),
+	Destination: &cfg.TagFilters,
+	// splitByExampleFlag must be set to true
+}
+
+var testCommandFlag = &cli.StringFlag{
+	Name:     "test-command",
+	Category: "TEST RUNNER",
+	Usage:    "Test command",
+	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_TEST_CMD"),
 }
 
 var testFilePatternFlag = &cli.StringFlag{
@@ -267,6 +275,7 @@ var cliCommand = &cli.Command{
 			Action: run,
 			Flags: []cli.Flag{
 				filesFlag,
+				tagFiltersFlag,
 				planIdentifierFlag,
 				// Build Environment Flags
 				organizationSlugFlag,
@@ -304,6 +313,7 @@ var cliCommand = &cli.Command{
 				// we will remove these in future iterations.
 
 				filesFlag,
+				tagFiltersFlag,
 				// Dynamic Parallelism Flags
 				maxParallelismFlag,
 				targetTimeFlag,
