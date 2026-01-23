@@ -121,7 +121,6 @@ var tagFiltersFlag = &cli.StringFlag{
 	Usage:       "Tag filters to apply when selecting tests to run (currently only Pytest is supported)",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TAG_FILTERS"),
 	Destination: &cfg.TagFilters,
-	// splitByExampleFlag must be set to true
 }
 
 var testCommandFlag = &cli.StringFlag{

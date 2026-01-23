@@ -11,8 +11,10 @@ import (
 )
 
 // createRequestParam generates the parameters needed for a test plan request.
-// For runners other than "rspec", it constructs the test plan parameters with all test files.
-// For the "rspec" runner, it filters the test files through the Test Engine API and splits the filtered files into examples.
+//
+// For the Rspec, Cucumber and Pytest runner, it fetches test files through the Test Engine API
+// that are slow or contain skipped tests. These files are then split into examples
+// The remaining files are sent as is.
 func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	testFiles := []plan.TestCase{}
 	for _, file := range files {
