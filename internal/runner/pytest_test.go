@@ -20,7 +20,6 @@ func TestPytestRun(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
 	}
@@ -44,7 +43,6 @@ func TestPytestRun_RetryCommand(t *testing.T) {
 
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, true)
-
 	if err != nil {
 		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
 	}
@@ -62,7 +60,6 @@ func TestPytestRun_TestFailed(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
 	}
@@ -273,7 +270,6 @@ func TestPytestGetExamples(t *testing.T) {
 	pytest := NewPytest(RunnerConfig{})
 	files := []string{"spells/test_expelliarmus.py"}
 	got, err := pytest.GetExamples(files)
-
 	if err != nil {
 		t.Fatalf("Pytest.GetExamples(%q) error = %v", files, err)
 	}
@@ -303,7 +299,6 @@ func TestPytestGetExamples(t *testing.T) {
 func TestPytestGetExamples_EmptyFiles(t *testing.T) {
 	pytest := NewPytest(RunnerConfig{})
 	got, err := pytest.GetExamples([]string{})
-
 	if err != nil {
 		t.Errorf("Pytest.GetExamples([]) error = %v", err)
 	}
@@ -328,11 +323,15 @@ func TestPytestGetExamples_TagFilter(t *testing.T) {
 		t.Fatalf("Pytest.GetExamples(%q) error = %v", files, err)
 	}
 
-	if len(got) != 1 {
-		t.Fatalf("Pytest.GetExamples(%q) with tag filter 'test_execution' returned %d tests, want 1", files, len(got))
+	if len(got) != 2 {
+		t.Fatalf("Pytest.GetExamples(%q) with tag filter 'test_execution' returned %d tests, want 2", files, len(got))
 	}
 
-	if got[0].Name != "test_happy" {
+	if got[0].Name != "test_knocks_wand_out" {
+		t.Errorf("got[0].Name = %q, want %q", got[0].Name, "test_knocks_wand_out")
+	}
+
+	if got[1].Name != "test_happy" {
 		t.Errorf("got[0].Name = %q, want %q", got[0].Name, "test_happy")
 	}
 }

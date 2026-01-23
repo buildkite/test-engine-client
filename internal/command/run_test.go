@@ -693,7 +693,6 @@ func TestCreateRequestParams(t *testing.T) {
 			TestCommand: "rspec",
 		},
 	})
-
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
 	}
@@ -778,7 +777,6 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 			}
 
 			got, err := createRequestParam(context.Background(), &cfg, files, *client, r)
-
 			if err != nil {
 				t.Errorf("createRequestParam() error = %v", err)
 			}
@@ -838,7 +836,6 @@ func TestCreateRequestParams_PytestPants(t *testing.T) {
 		}
 
 		got, err := createRequestParam(context.Background(), &cfg, files, *client, runner)
-
 		if err != nil {
 			t.Errorf("createRequestParam() error = %v", err)
 		}
@@ -935,7 +932,6 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 			TestCommand: "rspec",
 		},
 	})
-
 	if err != nil {
 		t.Errorf("createRequestParam() error = %v", err)
 	}
@@ -953,6 +949,122 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 				{Path: "testdata/rspec/spec/fruits/elderberry_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/fig_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/grape_spec.rb"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_WithTagFilters(t *testing.T) {
+	cfg := config.Config{
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "pytest",
+		TagFilters:       "test_execution",
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: "example.com",
+	})
+
+	files := []string{
+		"../runner/testdata/pytest/failed_test.py",
+		"../runner/testdata/pytest/test_sample.py",
+		"../runner/testdata/pytest/spells/test_expelliarmus.py",
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, runner.Pytest{
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand: "pytest",
+			TagFilters:  "test_execution",
+		},
+	})
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "pytest",
+		Tests: api.TestPlanParamsTest{
+			Examples: []plan.TestCase{
+				{
+					Format:     "example",
+					Identifier: "runner/testdata/pytest/test_sample.py::test_happy",
+					Name:       "test_happy",
+					Path:       "runner/testdata/pytest/test_sample.py::test_happy",
+					Scope:      "runner/testdata/pytest/test_sample.py",
+				},
+				{
+					Format:     "example",
+					Identifier: "runner/testdata/pytest/spells/test_expelliarmus.py::TestExpelliarmus::test_knocks_wand_out",
+					Name:       "test_knocks_wand_out",
+					Path:       "runner/testdata/pytest/spells/test_expelliarmus.py::TestExpelliarmus::test_knocks_wand_out",
+					Scope:      "runner/testdata/pytest/spells/test_expelliarmus.py::TestExpelliarmus",
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_WithTagFilters_NonPytest(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `
+{
+	"tests": []
+}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "rspec",
+		TagFilters:       "test_execution",
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: svr.URL,
+	})
+
+	files := []string{
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, runner.Rspec{
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand: "rspec",
+		},
+	})
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "rspec",
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
 			},
 		},
 	}
@@ -1019,7 +1131,6 @@ func TestSendMetadata(t *testing.T) {
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
-
 	}))
 	defer svr.Close()
 
@@ -1070,7 +1181,6 @@ func TestRunTestsWithRetry_NoTestCases_Success(t *testing.T) {
 	failOnNoTests := false
 
 	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, failOnNoTests)
-
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v, want nil", err)
 	}
