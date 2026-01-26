@@ -966,7 +966,7 @@ func TestCreateRequestParams_WithTagFilters(t *testing.T) {
 		Parallelism:      2,
 		Branch:           "main",
 		TestRunner:       "pytest",
-		TagFilters:       "test_execution",
+		TagFilters:       "team:frontend",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -982,7 +982,7 @@ func TestCreateRequestParams_WithTagFilters(t *testing.T) {
 	got, err := createRequestParam(context.Background(), &cfg, files, *client, runner.Pytest{
 		RunnerConfig: runner.RunnerConfig{
 			TestCommand: "pytest",
-			TagFilters:  "test_execution",
+			TagFilters:  "team:frontend",
 		},
 	})
 	if err != nil {
@@ -1035,7 +1035,7 @@ func TestCreateRequestParams_WithTagFilters_NonPytest(t *testing.T) {
 		Parallelism:      2,
 		Branch:           "main",
 		TestRunner:       "rspec",
-		TagFilters:       "test_execution",
+		TagFilters:       "team:frontend",
 	}
 
 	client := api.NewClient(api.ClientConfig{

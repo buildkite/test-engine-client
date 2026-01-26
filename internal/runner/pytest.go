@@ -84,7 +84,6 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 
 	for _, test := range tests {
-
 		result.RecordTestResult(plan.TestCase{
 			Identifier: test.Id,
 			Format:     plan.TestCaseFormatExample,
@@ -117,16 +116,21 @@ func (p Pytest) GetFiles() ([]string, error) {
 
 // GetExamples returns an array of test examples within the given files.
 // It uses `pytest --collect-only -q` to enumerate individual tests.
+//
+// --tag-filters can be used to filter tests by markers if specified.
+// e.g. --tag-fitlers team:frontend matches markers:
+// with @pytest.mark.execution_tag('team', 'frontend')
+//
+// The --tag-filters feature also assumes Python Test Collector plugin
+// version >1.2.0 is installed.
 func (p Pytest) GetExamples(files []string) ([]plan.TestCase, error) {
 	if len(files) == 0 {
 		return []plan.TestCase{}, nil
 	}
 
 	args := []string{"--collect-only", "-q"}
-	// TODO: Update with custom filter for test_executions with key/value tags
-	// Ref: https://github.com/buildkite/test-collector-python/pull/83
 	if p.TagFilters != "" {
-		args = append(args, "-m", p.TagFilters)
+		args = append(args, "--tag-filters", p.TagFilters)
 	}
 	args = append(args, files...)
 	cmd := exec.Command("pytest", args...)
@@ -206,7 +210,6 @@ func (p Pytest) commandNameAndArgs(cmd string, testCases []string) (string, []st
 	cmd = strings.Replace(cmd, "{{resultPath}}", p.ResultPath, 1)
 
 	args, err := shellquote.Split(cmd)
-
 	if err != nil {
 		return "", []string{}, err
 	}

@@ -1,5 +1,6 @@
 import pytest
 
-@pytest.mark.test_execution("key", "value")
+@pytest.mark.execution_tag("priority", "high")
+@pytest.mark.execution_tag("team", "frontend")
 def test_happy():
     assert 3 == 3

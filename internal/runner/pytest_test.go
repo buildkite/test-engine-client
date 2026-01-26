@@ -312,7 +312,7 @@ func TestPytestGetExamples_TagFilter(t *testing.T) {
 
 	pytest := NewPytest(
 		RunnerConfig{
-			TagFilters: "test_execution",
+			TagFilters: "team:frontend",
 		},
 	)
 
@@ -324,7 +324,7 @@ func TestPytestGetExamples_TagFilter(t *testing.T) {
 	}
 
 	if len(got) != 2 {
-		t.Fatalf("Pytest.GetExamples(%q) with tag filter 'test_execution' returned %d tests, want 2", files, len(got))
+		t.Fatalf("Pytest.GetExamples(%q) with tag filter 'team:frontend' returned %d tests, want 2", files, len(got))
 	}
 
 	if got[0].Name != "test_knocks_wand_out" {
