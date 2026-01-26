@@ -1,3 +1,4 @@
 golang 1.25.2
 nodejs 24.9.0
 python 3.13.2
+uv     0.9.26
