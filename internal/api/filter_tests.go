@@ -22,8 +22,15 @@ type FilteredTestResponse struct {
 	Tests []FilteredTest `json:"tests"`
 }
 
-// FilterTests filters tests from the server. It returns a list of tests that need to be split by example.
-// Currently, it only filters tests that are slow.
+// FilterTests fetches test files from the server. It returns a list of test files that
+// need to be split by example.
+//
+// Currently, it only fetches tests file that are slow and test files that have tests
+// marked for skipping.
+//
+// The splitByExample flag is passed through to the server, which is false will only
+// return test files that contain skipped tests, while true will also return slow test
+// files.
 func (c Client) FilterTests(ctx context.Context, suiteSlug string, params FilterTestsParams) ([]FilteredTest, error) {
 	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan/filter_tests", c.ServerBaseUrl, c.OrganizationSlug, suiteSlug)
 
@@ -33,7 +40,6 @@ func (c Client) FilterTests(ctx context.Context, suiteSlug string, params Filter
 		URL:    url,
 		Body:   params,
 	}, &response)
-
 	if err != nil {
 		return []FilteredTest{}, err
 	}

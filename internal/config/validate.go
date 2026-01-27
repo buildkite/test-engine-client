@@ -68,6 +68,13 @@ func (c *Config) validate() error {
 		}
 	}
 
+	if c.TagFilters != "" && c.TestRunner != "pytest" {
+		c.errs.appendFieldError(
+			"BUILDKITE_TEST_ENGINE_TAG_FILTERS",
+			"tag filtering is only supported for the pytest test runner",
+		)
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}

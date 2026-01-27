@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/kballard/go-shellquote"
+	"golang.org/x/mod/semver"
 )
 
 type Pytest struct {
@@ -26,6 +27,15 @@ func NewPytest(c RunnerConfig) Pytest {
 		fmt.Fprintln(os.Stderr, "Error: Required Python package 'buildkite-test-collector' is not installed.")
 		fmt.Fprintln(os.Stderr, "Please install it with: pip install buildkite-test-collector.")
 		os.Exit(1)
+	}
+
+	// Ensure buildkite-test-collector version is >1.2.0 for --tag-filters support
+	if c.TagFilters != "" {
+		if err := checkBuildkiteTestCollectorVersion("1.2.0"); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			fmt.Fprintln(os.Stderr, "Please upgrade with: pip install --upgrade buildkite-test-collector")
+			os.Exit(1)
+		}
 	}
 
 	if c.TestCommand == "" {
@@ -84,7 +94,6 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 
 	for _, test := range tests {
-
 		result.RecordTestResult(plan.TestCase{
 			Identifier: test.Id,
 			Format:     plan.TestCaseFormatExample,
@@ -117,12 +126,23 @@ func (p Pytest) GetFiles() ([]string, error) {
 
 // GetExamples returns an array of test examples within the given files.
 // It uses `pytest --collect-only -q` to enumerate individual tests.
+//
+// --tag-filters can be used to filter tests by markers if specified.
+// e.g. --tag-fitlers team:frontend matches markers:
+// with @pytest.mark.execution_tag('team', 'frontend')
+//
+// The --tag-filters feature also assumes Python Test Collector plugin
+// version >1.2.0 is installed.
 func (p Pytest) GetExamples(files []string) ([]plan.TestCase, error) {
 	if len(files) == 0 {
 		return []plan.TestCase{}, nil
 	}
 
-	args := append([]string{"--collect-only", "-q"}, files...)
+	args := []string{"--collect-only", "-q"}
+	if p.TagFilters != "" {
+		args = append(args, "--tag-filters", p.TagFilters)
+	}
+	args = append(args, files...)
 	cmd := exec.Command("pytest", args...)
 
 	output, err := cmd.Output()
@@ -200,7 +220,6 @@ func (p Pytest) commandNameAndArgs(cmd string, testCases []string) (string, []st
 	cmd = strings.Replace(cmd, "{{resultPath}}", p.ResultPath, 1)
 
 	args, err := shellquote.Split(cmd)
-
 	if err != nil {
 		return "", []string{}, err
 	}
@@ -214,6 +233,47 @@ func getRandomTempFilename() string {
 		panic(err)
 	}
 	return filepath.Join(tempDir, "pytest-results.json")
+}
+
+// getPythonPackageVersion retrieves the version of a Python package using importlib.metadata.
+// The pkgName should use hyphens (e.g., "buildkite-test-collector") as that's the package name in metadata.
+func getPythonPackageVersion(pkgName string) (string, error) {
+	pythonCmd := exec.Command("python", "-c", "import importlib.metadata, sys; print(importlib.metadata.version(sys.argv[1]))", pkgName)
+	output, err := pythonCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("could not determine %s version: %w", pkgName, err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+// checkBuildkiteTestCollectorVersion verifies that the installed buildkite-test-collector
+// version is greater than the specified required version.
+func checkBuildkiteTestCollectorVersion(requiredVersion string) error {
+	installedVersionStr, err := getPythonPackageVersion("buildkite-test-collector")
+	if err != nil {
+		return err
+	}
+
+	// semver package requires versions to be prefixed with "v"
+	installedVersionCanonical := "v" + installedVersionStr
+	requiredVersionCanonical := "v" + requiredVersion
+
+	if !semver.IsValid(installedVersionCanonical) {
+		return fmt.Errorf("could not parse installed buildkite-test-collector version %q", installedVersionStr)
+	}
+
+	if !semver.IsValid(requiredVersionCanonical) {
+		return fmt.Errorf("could not parse required version %q", requiredVersion)
+	}
+
+	// semver.Compare returns -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+	// We want installed > required, so compare should return 1
+	if semver.Compare(installedVersionCanonical, requiredVersionCanonical) <= 0 {
+		return fmt.Errorf("buildkite-test-collector version %s is installed, but version >%s is required for --tag-filters support", installedVersionStr, requiredVersion)
+	}
+
+	return nil
 }
 
 func checkPythonPackageInstalled(pkgName string) bool {

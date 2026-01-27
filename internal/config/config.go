@@ -52,6 +52,8 @@ type Config struct {
 	DebugEnabled bool `json:"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"`
 	// FailOnNoTests causes the client to exit with an error if no tests are assigned to the node
 	FailOnNoTests bool `json:"BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS"`
+	// TagFilters filters test examples by execution tags.
+	TagFilters string `json:"BUILDKITE_TEST_ENGINE_TAG_FILTERS"`
 	// errs is a map of environment variables name and the validation errors associated with them.
 	errs InvalidConfigError
 }

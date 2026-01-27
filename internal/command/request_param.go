@@ -11,8 +11,13 @@ import (
 )
 
 // createRequestParam generates the parameters needed for a test plan request.
-// For runners other than "rspec", it constructs the test plan parameters with all test files.
-// For the "rspec" runner, it filters the test files through the Test Engine API and splits the filtered files into examples.
+//
+// For the Rspec, Cucumber and Pytest runner, it fetches test files through the Test Engine API
+// that are slow or contain skipped tests. These files are then split into examples
+// The remaining files are sent as is.
+//
+// If tag filtering is enabled, all files are split into examples to support filtering.
+// Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	testFiles := []plan.TestCase{}
 	for _, file := range files {
@@ -50,10 +55,21 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 		debug.Println("Splitting by example")
 	}
 
-	// The SplitByExample flag indicates whether to filter slow files for splitting by example.
-	// Regardless of the flag's state, the API will still filter other files that need to be split by example, such as those containing skipped tests.
-	// Therefore, we must filter and split files even when SplitByExample is disabled.
-	testParams, err := filterAndSplitFiles(ctx, cfg, client, testFiles, runner)
+	var testParams api.TestPlanParamsTest
+	var err error
+
+	// If tag filtering is enabled, we must split all files to allow to enable filtering.
+	// Tag filtering is currently only supported for pytest.
+	if cfg.TagFilters != "" && runner.Name() == "pytest" {
+		testParams, err = splitAllFiles(testFiles, runner)
+	} else {
+		// The SplitByExample flag indicates whether to split slow files into examples.
+		// Regardless of the flag's state, the API will still return other test files that need to
+		// be split by example, such as those containing skipped tests.
+		// Therefore, we must fetch and split files even when SplitByExample is disabled.
+		testParams, err = filterAndSplitFiles(ctx, cfg, client, testFiles, runner)
+	}
+
 	if err != nil {
 		return api.TestPlanParams{}, err
 	}
@@ -66,6 +82,26 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 		Branch:         cfg.Branch,
 		Runner:         cfg.TestRunner,
 		Tests:          testParams,
+	}, nil
+}
+
+// Splits all the test files into examples to support tag filtering.
+func splitAllFiles(files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
+	debug.Printf("Splitting all %d files", len(files))
+	filePaths := make([]string, 0, len(files))
+	for _, file := range files {
+		filePaths = append(filePaths, file.Path)
+	}
+
+	examples, err := runner.GetExamples(filePaths)
+	if err != nil {
+		return api.TestPlanParamsTest{}, fmt.Errorf("get examples: %w", err)
+	}
+
+	debug.Printf("Got %d examples from all files", len(examples))
+
+	return api.TestPlanParamsTest{
+		Examples: examples,
 	}, nil
 }
 

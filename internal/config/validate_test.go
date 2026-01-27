@@ -344,3 +344,39 @@ func ValidateForPlan_SkipsParallelismAndNodeIndexValidation(t *testing.T) {
 		t.Errorf("config.validate() err = %v, want nil", err)
 	}
 }
+
+func TestConfigValidate_TagFiltersOnlyWorksWithPytest(t *testing.T) {
+	t.Run("TagFilters with pytest runner should be valid", func(t *testing.T) {
+		c := createConfig()
+		c.TestRunner = "pytest"
+		c.TagFilters = "speed=slow"
+
+		err := c.validate()
+		if err != nil {
+			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("TagFilters with non-pytest runner should fail", func(t *testing.T) {
+		c := createConfig()
+		c.TestRunner = "rspec"
+		c.TagFilters = "speed=slow"
+
+		err := c.validate()
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+			return
+		}
+
+		if len(invConfigError["BUILDKITE_TEST_ENGINE_TAG_FILTERS"]) != 1 {
+			t.Errorf("config.validate() error for BUILDKITE_TEST_ENGINE_TAG_FILTERS length = %d, want 1", len(invConfigError["BUILDKITE_TEST_ENGINE_TAG_FILTERS"]))
+		}
+
+		expectedMsg := "tag filtering is only supported for the pytest test runner"
+		if invConfigError["BUILDKITE_TEST_ENGINE_TAG_FILTERS"][0].Error() != expectedMsg {
+			t.Errorf("config.validate() error message = %q, want %q", invConfigError["BUILDKITE_TEST_ENGINE_TAG_FILTERS"][0].Error(), expectedMsg)
+		}
+	})
+}
