@@ -9,14 +9,14 @@ go install github.com/pact-foundation/pact-go/v2
 go install gotest.tools/gotestsum@v1.8.0
 
 # Check if asdf is installed and being used for Go
-if command -v asdf &> /dev/null && asdf current golang &> /dev/null; then
+if command -v asdf &>/dev/null && asdf current golang &>/dev/null; then
   echo "🔄 Reshimming asdf golang..."
   asdf reshim golang
 fi
 
 # download and install the required libraries.
 # TODO if pact-go check return non- zero then install it
-if ! pact-go check &> /dev/null; then
+if ! pact-go check &>/dev/null; then
   echo "🔄 Installing pact-go dependencies..."
   sudo pact-go -l DEBUG install
 else
@@ -28,8 +28,7 @@ echo "🛠️ Installing dependencies for sample projects..."
 pushd ./internal/runner/testdata || exit 1
 # if yarn is available, use it to install dependencies
 # otherwise, use npm
-if command -v yarn &> /dev/null
-then
+if command -v yarn &>/dev/null; then
   yarn install
 else
   npm install
@@ -68,7 +67,7 @@ else
   python -m venv .venv && source .venv/bin/activate
 fi
 pip install pytest
-pip install buildkite-test-collector==0.2.0
+pip install "buildkite-test-collector>=1.3.0"
 curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash
 
 echo "💖 Everything is fantastic!"

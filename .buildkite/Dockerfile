@@ -12,7 +12,7 @@ RUN gem install rspec cucumber base64
 RUN gem install bigdecimal -v 3.2.0
 RUN yarn global add jest
 RUN pip install pytest
-RUN pip install buildkite-test-collector==0.2.0
+RUN pip install buildkite-test-collector>=1.3.0
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash -s -- --bin-dir /usr/local/bin
 
 # Install curl, download bktec binary, make it executable, place it, and cleanup
