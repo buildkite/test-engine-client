@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.0 - 2026-01-30
+- Add custom test runner to support any test framework by specifying the command to run tests.
+- Add support to split slow files for pytest.
+- Add `--tag-filters` option to filter tests by tags when using pytest.
+
+## 2.0.1 - 2025-12-10
+- Fix issue where CI job would pass when running bktec without subcommands.
+
+## 2.0.0 - 2025-12-02
+- ⚠️ **BREAKING** Running bktec without arguments is no longer supported. Build steps should be updated to call `bktec run` instead of `bktec`.
+- New `--files` flag to specify a list of test files to be run.
+- Support for [dynamic parallelism](https://buildkite.com/docs/test-engine/bktec/configuring#dynamic-parallelism).
+
 ## 1.6.1 - 2025-10-24
 - Improve compatibility with Vitest (unofficial support) by updating the `jest` runner to correctly handle file-level runtime errors.
 
