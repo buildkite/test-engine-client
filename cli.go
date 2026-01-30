@@ -124,10 +124,11 @@ var tagFiltersFlag = &cli.StringFlag{
 }
 
 var testCommandFlag = &cli.StringFlag{
-	Name:     "test-command",
-	Category: "TEST RUNNER",
-	Usage:    "Test command",
-	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_TEST_CMD"),
+	Name:        "test-command",
+	Category:    "TEST RUNNER",
+	Usage:       "Test command",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TEST_CMD"),
+	Destination: &cfg.TestCommand,
 }
 
 var testFilePatternFlag = &cli.StringFlag{
