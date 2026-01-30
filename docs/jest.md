@@ -50,22 +50,38 @@ export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=src/components
 You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using the following command:
 
 ```sh
-npx yarn --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}
+npx jest {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}
 ```
 
-In this command, `{{testNamePattern}}` is replaced by bktec with the list of failed tests to run, and `{{resultPath}}` is replaced with the value set in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. You can customize this command using the `BUILDKITE_TEST_ENGINE_RETRY_CMD` environment variable.
+In this command:
+- `{{testExamples}}` is replaced by bktec with the specific test files containing failed tests
+- `{{testNamePattern}}` is replaced by bktec with the pattern matching the failed test names
+- `{{resultPath}}` is replaced with the value set in `BUILDKITE_TEST_ENGINE_RESULT_PATH`
 
-To enable automatic retry and customize the retry command, set the following environment variable:
+You can customize this command using the `BUILDKITE_TEST_ENGINE_RETRY_CMD` environment variable.
+
+### Recommended retry configuration
+
+To enable automatic retry and customize the retry command, set the following environment variables:
+
+```sh
+export BUILDKITE_TEST_ENGINE_RETRY_CMD="yarn test {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
+export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
+```
+
+> [!TIP]
+> Including `{{testExamples}}` tells Jest to only parse the files containing failed tests, rather than scanning all test files in your project. This significantly improves retry performance, especially in projects with many test files.
+
+### Alternative configuration (not recommended)
+
+If you need to omit the `{{testExamples}}` placeholder for compatibility with rare edge cases (such as custom global setup that depends on discovering all test files), you can use:
+
 ```sh
 export BUILDKITE_TEST_ENGINE_RETRY_CMD="yarn test --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
 
-To limit the number of files that Jest parses when retrying tests, you can also include a `{{testExamples}}` placeholder to specify the filenames of retried tests:
-```sh
-export BUILDKITE_TEST_ENGINE_RETRY_CMD="yarn test {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
-export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
-```
+Note that this will cause Jest to parse all test files on every retry, which may slow down your retry process.
 
 > [!IMPORTANT]
 > Make sure to append `--testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}` in your custom retry command.
