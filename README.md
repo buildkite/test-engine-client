@@ -7,7 +7,7 @@ bktec supports multiple test runners and offers various features to enhance your
 | Feature                                            | RSpec | Jest | Playwright | Cypress | pytest | pants (pytest) | Go test | Cucumber | Custom |
 | -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: | :------------: | :-----: | :------: | :-----: |
 | Split tests by file[^1]                                |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    | ✅      |
-| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)        |   ✅  |   ❌  |    ❌      |    ❌   |   ❌   |       ❌       |   ❌    |    ✅    |    ❌   |
+| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)        |   ✅  |   ❌  |    ❌      |    ❌   |   ✅   |       ❌       |   ❌    |    ✅    |    ❌   |
 | Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    |    ✅   |
 | Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |    ❌   |
 | Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |    ✅   |
