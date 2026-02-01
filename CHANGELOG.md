@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.1 - 2026-02-02
+- Fix an issue where the custom test command specified via the `BUILDKITE_TEST_ENGINE_TEST_CMD` environment variable or `--test-command` command-line flag was not being used.
+
 ## 2.1.0 - 2026-01-30
 - Add custom test runner to support any test framework by specifying the command to run tests.
 - Add support to split slow files for pytest.
