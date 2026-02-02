@@ -8,8 +8,43 @@ import (
 	"drjosh.dev/zzglob"
 )
 
+// splitPatterns splits a comma-separated pattern string while respecting
+// brace groupings. For example, "**/*.{js,ts},spec/**" returns
+// ["**/*.{js,ts}", "spec/**"] rather than splitting inside the braces.
+func splitPatterns(pattern string) []string {
+	var patterns []string
+	var current strings.Builder
+	braceDepth := 0
+
+	for _, ch := range pattern {
+		switch ch {
+		case '{':
+			braceDepth++
+			current.WriteRune(ch)
+		case '}':
+			braceDepth--
+			current.WriteRune(ch)
+		case ',':
+			if braceDepth > 0 {
+				current.WriteRune(ch)
+			} else {
+				patterns = append(patterns, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(ch)
+		}
+	}
+
+	if current.Len() > 0 {
+		patterns = append(patterns, current.String())
+	}
+
+	return patterns
+}
+
 func discoverTestFiles(pattern string, excludePattern string) ([]string, error) {
-	patterns := strings.Split(pattern, ",")
+	patterns := splitPatterns(pattern)
 
 	parsedExcludePattern, err := zzglob.Parse(excludePattern)
 	if err != nil {

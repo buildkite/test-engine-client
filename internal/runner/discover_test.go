@@ -159,3 +159,26 @@ func TestDiscoverTestFiles_CommaSeparatedWithExclude(t *testing.T) {
 		t.Errorf("discoverTestFiles(%q, %q) diff (-got +want):\n%s", pattern, excludePattern, diff)
 	}
 }
+
+func TestSplitPatterns(t *testing.T) {
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"**/*.js", []string{"**/*.js"}},
+		{"**/*.{js,ts}", []string{"**/*.{js,ts}"}},
+		{"**/*.cy.{js,jsx,ts,tsx}", []string{"**/*.cy.{js,jsx,ts,tsx}"}},
+		{"spec/**,test/**", []string{"spec/**", "test/**"}},
+		{"**/*.{js,ts},spec/**/*.rb", []string{"**/*.{js,ts}", "spec/**/*.rb"}},
+		{"a/{b,c},d/{e,f}", []string{"a/{b,c}", "d/{e,f}"}},
+		{"", nil},
+		{" a , b ", []string{" a ", " b "}},
+	}
+
+	for _, tt := range tests {
+		got := splitPatterns(tt.input)
+		if diff := cmp.Diff(got, tt.want); diff != "" {
+			t.Errorf("splitPatterns(%q) diff (-got +want):\n%s", tt.input, diff)
+		}
+	}
+}
