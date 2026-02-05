@@ -120,18 +120,24 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 		result.RecordTestResult(mapExampleToTestCase(example), status)
 	}
 
-	if report.Summary.ErrorsOutsideOfExamplesCount > 0 {
-		result.error = fmt.Errorf("RSpec failed with errors outside of examples")
-	}
-
 	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-		if report.Summary.FailureCount == 0 && report.Summary.ErrorsOutsideOfExamplesCount == 0 {
-			// If Rspec exits with a non-zero exit code, but the report is parsed successfully and contains no failures or errors,
-			// it may mean that the process was terminated by an explicit call to `exit` in the code or specs.
-			// Rspec does not report this as a test failure or error, but instead exits with the same exit code that terminated the process.
-			// In this case, we should mark the result as an error.
-			result.error = fmt.Errorf("RSpec exited with code %d, but no failed tests were reported. This may be caused by an explicit call to `exit` in the code or specs", exitError.ExitCode())
+		// If rspec exits with a non-zero status and reported test failures,
+		// we can ignore the error. The test failures are handled by the *RunResult.
+		if report.Summary.FailureCount > 0 {
+			return nil
 		}
+
+		// If rspec exits with a non-zero status and reported errors outside of examples,
+		// set the error in *RunResult to fail the job.
+		if report.Summary.ErrorsOutsideOfExamplesCount > 0 {
+			result.error = fmt.Errorf("RSpec failed with errors outside of examples")
+			return nil
+		}
+
+		// Otherwise, the non-zero exit code is unexpected
+		// and we should set the error in *RunResult to fail the job and surface the exit code.
+		result.error = fmt.Errorf("RSpec exited with code %d", exitError.ExitCode())
+		return nil
 	}
 
 	return nil

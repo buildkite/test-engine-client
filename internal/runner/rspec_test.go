@@ -232,7 +232,7 @@ func TestRspecRun_TestExit(t *testing.T) {
 		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
-	wantError := "RSpec exited with code 7, but no failed tests were reported. This may be caused by an explicit call to `exit` in the code or specs"
+	wantError := "RSpec exited with code 7"
 	if diff := cmp.Diff(result.error.Error(), wantError); diff != "" {
 		t.Errorf("Rspec.Run(%q) RunResult.error diff (-got +want):\n%s", testCases, diff)
 	}
