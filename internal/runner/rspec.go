@@ -124,6 +124,16 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 		result.error = fmt.Errorf("RSpec failed with errors outside of examples")
 	}
 
+	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
+		if report.Summary.FailureCount == 0 && report.Summary.ErrorsOutsideOfExamplesCount == 0 {
+			// If Rspec exits with a non-zero exit code, but the report is parsed successfully and contains no failures or errors,
+			// it may mean that the process was terminated by an explicit call to `exit` in the code or specs.
+			// Rspec does not report this as a test failure or error, but instead exits with the same exit code that terminated the process.
+			// In this case, we should mark the result as an error.
+			result.error = fmt.Errorf("RSpec exited with code %d, but no failed tests were reported. This may be caused by an explicit call to `exit` in the code or specs", exitError.ExitCode())
+		}
+	}
+
 	return nil
 }
 
