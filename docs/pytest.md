@@ -3,7 +3,7 @@ To integrate bktec with pytest, you need to [install and configure Buildkite Tes
 
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=pytest
-bktec
+bktec run
 ```
 
 ## Configure test command
@@ -45,6 +45,28 @@ export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=tests/api
 
 > [!TIP]
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.
+
+## Filter test by tags
+You can filter tests to run based on `execution_tag` markers using the `BUILDKITE_TEST_ENGINE_TAG_FILTERS` environment variable or `--tag-filters` CLI option. 
+
+```py
+import pytest
+
+@pytest.mark.execution_tag('gpu_allocation', '2')
+def test_my_test():
+    ...
+```
+
+To run tests tagged with `gpu_allocation` of `2`:
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER=pytest
+export BUILDKITE_TEST_ENGINE_TAG_FILTERS="gpu_allocation:2"
+bktec run
+```
+
+> [!NOTE]
+> `execution_tag` is a custom marker added by Buildkite Test Collector for pytest. You can add multiple tags to a test, however the tag filters only support single `key:value` pairs.
 
 ## Automatically retry failed tests
 You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using either the default test command or the command specified in `BUILDKITE_TEST_ENGINE_TEST_CMD`.
