@@ -50,6 +50,17 @@ func NewPytestPants(c RunnerConfig) PytestPants {
 	}
 }
 
+func (p PytestPants) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     false,
+		SplitByExample:  false,
+		FilterTestFiles: false,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	testPaths := make([]string, len(testCases))
 	for i, tc := range testCases {
