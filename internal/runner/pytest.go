@@ -59,6 +59,18 @@ func NewPytest(c RunnerConfig) Pytest {
 	}
 }
 
+func (p Pytest) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  true,
+		FilterTestFiles: true,
+		FilterTestByTag: true,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	cmd, err := buildCommand(p, testCases, retry)
 	if err != nil {

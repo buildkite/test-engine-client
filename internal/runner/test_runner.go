@@ -9,5 +9,6 @@ type TestRunner interface {
 	Name() string
 	CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error)
 	LocationPrefix() string
+	SupportedFeatures() SupportedFeatures
 	UploadToken() string
 }

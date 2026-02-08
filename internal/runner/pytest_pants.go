@@ -50,6 +50,18 @@ func NewPytestPants(c RunnerConfig) PytestPants {
 	}
 }
 
+func (p PytestPants) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     false,
+		SplitByExample:  false,
+		FilterTestFiles: false,
+		FilterTestByTag: false,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	cmd, err := buildCommand(p, testCases, retry)
 	if err != nil {

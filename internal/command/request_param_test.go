@@ -357,6 +357,12 @@ type metadataTestRunner struct {
 	examples []plan.TestCase
 }
 
+func (r metadataTestRunner) SupportedFeatures() runner.SupportedFeatures {
+	return runner.SupportedFeatures{
+		SplitByExample: true,
+	}
+}
+
 func (r metadataTestRunner) Name() string {
 	return r.name
 }

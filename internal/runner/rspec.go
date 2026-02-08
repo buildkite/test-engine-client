@@ -42,6 +42,18 @@ func NewRspec(r RunnerConfig) Rspec {
 	}
 }
 
+func (r Rspec) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  true,
+		FilterTestFiles: true,
+		FilterTestByTag: false,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            true,
+	}
+}
+
 func (r Rspec) Name() string {
 	return "RSpec"
 }

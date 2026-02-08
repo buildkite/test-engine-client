@@ -17,6 +17,18 @@ type NUnit struct {
 // Compile-time check that NUnit implements TestRunner
 var _ TestRunner = (*NUnit)(nil)
 
+func (n NUnit) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  false,
+		FilterTestFiles: true,
+		FilterTestByTag: false,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func NewNUnit(c RunnerConfig) NUnit {
 	if c.TestCommand == "" {
 		c.TestCommand = "dotnet test --no-build --filter {{testFilter}} --logger junit;LogFilePath={{resultPath}}"
