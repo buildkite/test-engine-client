@@ -208,6 +208,36 @@ func TestRspecRun_TestSkipped(t *testing.T) {
 	}
 }
 
+func TestRspecRun_TestExit(t *testing.T) {
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}} --format progress",
+		ResultPath:  "tmp/rspec.json",
+	})
+
+	t.Cleanup(func() {
+		os.Remove(rspec.ResultPath)
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/exit_spec.rb"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := rspec.Run(result, testCases, false)
+
+	if err != nil {
+		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusError {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	}
+
+	wantError := "RSpec exited with code 7"
+	if diff := cmp.Diff(result.error.Error(), wantError); diff != "" {
+		t.Errorf("Rspec.Run(%q) RunResult.error diff (-got +want):\n%s", testCases, diff)
+	}
+}
+
 func TestRspecRun_ErrorOutsideOfExamples(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec --format json --out {{resultPath}} --format documentation",
