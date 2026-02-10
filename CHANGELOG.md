@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.2 - 2026-02-11
+- Improve RSpec error handling to properly report errors when RSpec exits with a non-zero status code but has no test failures.
+
 ## 2.1.1 - 2026-02-02
 - Fix an issue where the custom test command specified via the `BUILDKITE_TEST_ENGINE_TEST_CMD` environment variable or `--test-command` command-line flag was not being used.
 
