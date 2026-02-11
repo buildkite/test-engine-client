@@ -38,6 +38,17 @@ func NewJest(j RunnerConfig) Jest {
 	}
 }
 
+func (j Jest) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  false,
+		FilterTestFiles: true,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (j Jest) Name() string {
 	return "Jest"
 }

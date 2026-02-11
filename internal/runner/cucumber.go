@@ -45,6 +45,17 @@ func NewCucumber(c RunnerConfig) Cucumber {
 	}
 }
 
+func (c Cucumber) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  true,
+		FilterTestFiles: true,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            true,
+	}
+}
+
 func (c Cucumber) Name() string {
 	return "Cucumber"
 }

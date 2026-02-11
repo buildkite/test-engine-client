@@ -64,6 +64,17 @@ func (r Rspec) GetFiles() ([]string, error) {
 	return files, nil
 }
 
+func (r Rspec) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  true,
+		FilterTestFiles: true,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            true,
+	}
+}
+
 // Run executes the test command with the given test cases.
 // If retry is true, it will run the command using the retry test command,
 // otherwise it will use the test command.
