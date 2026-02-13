@@ -266,3 +266,69 @@ func TestPlaywrightGetFiles(t *testing.T) {
 		t.Errorf("Playwright.GetFiles() diff (-got +want):\n%s", diff)
 	}
 }
+
+func TestPlaywrightGetExamples(t *testing.T) {
+	changeCwd(t, "./testdata/playwright")
+
+	playwright := NewPlaywright(RunnerConfig{
+		// Use npx directly because yarn adds prefix output to stdout that corrupts JSON parsing
+		TestCommand: "npx playwright test",
+	})
+
+	files := []string{"tests/example.spec.js"}
+	got, err := playwright.GetExamples(files)
+	if err != nil {
+		t.Fatalf("Playwright.GetExamples(%v) error = %v", files, err)
+	}
+
+	// example.spec.js has 2 tests in a "home page" describe block.
+	// With 2 projects (chromium, firefox), we expect 4 test cases.
+	want := []plan.TestCase{
+		{
+			Name:  "has title",
+			Path:  "example.spec.js:4",
+			Scope: " chromium example.spec.js home page has title",
+		},
+		{
+			Name:  "has title",
+			Path:  "example.spec.js:4",
+			Scope: " firefox example.spec.js home page has title",
+		},
+		{
+			Name:  "says hello",
+			Path:  "example.spec.js:10",
+			Scope: " chromium example.spec.js home page says hello",
+		},
+		{
+			Name:  "says hello",
+			Path:  "example.spec.js:10",
+			Scope: " firefox example.spec.js home page says hello",
+		},
+	}
+
+	// Sort both slices by scope for consistent comparison
+	sorter := cmp.Transformer("Sort", func(in []plan.TestCase) []plan.TestCase {
+		out := append([]plan.TestCase(nil), in...)
+		slices.SortFunc(out, func(a, b plan.TestCase) int {
+			return strings.Compare(a.Scope, b.Scope)
+		})
+		return out
+	})
+
+	if diff := cmp.Diff(got, want, sorter); diff != "" {
+		t.Errorf("Playwright.GetExamples(%v) diff (-got +want):\n%s", files, diff)
+	}
+}
+
+func TestPlaywrightGetExamples_EmptyFiles(t *testing.T) {
+	playwright := NewPlaywright(RunnerConfig{})
+
+	got, err := playwright.GetExamples([]string{})
+	if err != nil {
+		t.Errorf("Playwright.GetExamples([]) error = %v", err)
+	}
+
+	if len(got) != 0 {
+		t.Errorf("Playwright.GetExamples([]) = %v, want empty slice", got)
+	}
+}
