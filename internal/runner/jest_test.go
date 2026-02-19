@@ -22,7 +22,7 @@ func TestNewJest(t *testing.T) {
 		{
 			input: RunnerConfig{},
 			want: RunnerConfig{
-				TestCommand:            "npx jest {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}",
+				TestCommand:            "npx jest --runTestsByPath {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}",
 				TestFilePattern:        "**/{__tests__/**/*,*.spec,*.test}.{ts,js,tsx,jsx}",
 				TestFileExcludePattern: "",
 				RetryTestCommand:       "npx jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
@@ -359,7 +359,6 @@ func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	}
 
 	wantName := "jest"
-	// Paths with parentheses and brackets are escaped for regex since Jest interprets them as patterns
 	wantArgs := []string{"spec/user.spec.js", "spec/billing.spec.js", "--outputFile", "jest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
@@ -385,7 +384,6 @@ func TestJestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 	}
 
 	wantName := "jest"
-	// Paths with parentheses and brackets are escaped for regex since Jest interprets them as patterns
 	wantArgs := []string{"--json", "--outputFile", "jest.json", "spec/user.spec.js", "spec/billing.spec.js"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
@@ -422,12 +420,13 @@ func TestJestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 
 func TestJestCommandNameAndArgs_WithSpecialCharactersInPath(t *testing.T) {
 	// Test paths with special regex characters like parentheses (Next.js route groups)
-	// and square brackets (Next.js dynamic routes)
+	// and square brackets (Next.js dynamic routes). These are passed as-is because
+	// the default TestCommand uses --runTestsByPath which treats args as literal paths.
 	testCases := []string{
 		"src/app/(main)/page.test.tsx",
 		"src/app/(main)/[catalogId]/product.test.tsx",
 	}
-	testCommand := "jest {{testExamples}} --outputFile {{resultPath}}"
+	testCommand := "jest --runTestsByPath {{testExamples}} --outputFile {{resultPath}}"
 
 	jest := NewJest(RunnerConfig{
 		TestCommand: testCommand,
@@ -440,10 +439,10 @@ func TestJestCommandNameAndArgs_WithSpecialCharactersInPath(t *testing.T) {
 	}
 
 	wantName := "jest"
-	// Parentheses and brackets should be escaped for regex (Next.js App Router conventions)
 	wantArgs := []string{
-		`src/app/\(main\)/page.test.tsx`,
-		`src/app/\(main\)/\[catalogId\]/product.test.tsx`,
+		"--runTestsByPath",
+		"src/app/(main)/page.test.tsx",
+		"src/app/(main)/[catalogId]/product.test.tsx",
 		"--outputFile",
 		"jest.json",
 	}
