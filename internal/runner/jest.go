@@ -22,7 +22,7 @@ type Jest struct {
 
 func NewJest(j RunnerConfig) Jest {
 	if j.TestCommand == "" {
-		j.TestCommand = "npx jest {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}"
+		j.TestCommand = "npx jest --runTestsByPath {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}"
 	}
 
 	if j.TestFilePattern == "" {
@@ -187,6 +187,7 @@ func (j Jest) commandNameAndArgs(cmd string, testCases []string) (string, []stri
 	if err != nil {
 		return "", []string{}, err
 	}
+
 	idx := slices.Index(words, "{{testExamples}}")
 	if idx < 0 {
 		words = append(words, testCases...)
