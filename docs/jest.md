@@ -10,7 +10,7 @@ export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/jest-result.json
 By default, bktec runs Jest with the following command:
 
 ```sh
-npx jest {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}
+npx jest --runTestsByPath {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}
 ```
 
 In this command, `{{testExamples}}` is replaced by bktec with the list of test files or tests to run, and `{{resultPath}}` is replaced with the value set in `BUILDKITE_TEST_ENGINE_RESULT_PATH`. You can customize this command using the `BUILDKITE_TEST_ENGINE_TEST_CMD` environment variable.
