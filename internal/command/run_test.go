@@ -860,6 +860,159 @@ func TestCreateRequestParams_PytestPants(t *testing.T) {
 	})
 }
 
+func TestCreateRequestParams_WithSelectionAndMetadata_NonRSpec(t *testing.T) {
+	cfg := config.Config{
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "jest",
+		SelectionStrategy: "least-reliable",
+		SelectionParams: map[string]string{
+			"top": "100",
+		},
+		Metadata: map[string]string{
+			"git_diff": "line1\nline2",
+			"source":   "cli",
+		},
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: "http://example.com",
+	})
+
+	files := []string{
+		"testdata/fruits/apple.spec.js",
+		"testdata/fruits/banana.spec.js",
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, runner.Jest{})
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "jest",
+		Selection: &api.SelectionParams{
+			Strategy: "least-reliable",
+			Params: map[string]string{
+				"top": "100",
+			},
+		},
+		Metadata: map[string]string{
+			"git_diff": "line1\nline2",
+			"source":   "cli",
+		},
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "testdata/fruits/apple.spec.js"},
+				{Path: "testdata/fruits/banana.spec.js"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_WithSelectionAndMetadata_SplitAllFilesBranch(t *testing.T) {
+	cfg := config.Config{
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "pytest",
+		TagFilters:        "team:frontend",
+		SelectionStrategy: "percent",
+		SelectionParams: map[string]string{
+			"percent": "40",
+		},
+		Metadata: map[string]string{
+			"git_diff": "line1\nline2",
+		},
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: "http://example.com",
+	})
+
+	files := []string{
+		"test_sample.py",
+	}
+
+	stubRunner := metadataTestRunner{
+		name: "pytest",
+		examples: []plan.TestCase{
+			{
+				Identifier: "test_sample.py::test_happy",
+				Path:       "test_sample.py::test_happy",
+				Scope:      "test_sample.py",
+				Name:       "test_happy",
+				Format:     plan.TestCaseFormatExample,
+			},
+		},
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, stubRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "pytest",
+		Selection: &api.SelectionParams{
+			Strategy: "percent",
+			Params: map[string]string{
+				"percent": "40",
+			},
+		},
+		Metadata: map[string]string{
+			"git_diff": "line1\nline2",
+		},
+		Tests: api.TestPlanParamsTest{
+			Examples: []plan.TestCase{
+				{
+					Identifier: "test_sample.py::test_happy",
+					Path:       "test_sample.py::test_happy",
+					Scope:      "test_sample.py",
+					Name:       "test_happy",
+					Format:     plan.TestCaseFormatExample,
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+type metadataTestRunner struct {
+	name     string
+	examples []plan.TestCase
+}
+
+func (r metadataTestRunner) Name() string {
+	return r.name
+}
+
+func (r metadataTestRunner) GetExamples(files []string) ([]plan.TestCase, error) {
+	return r.examples, nil
+}
+
+func (r metadataTestRunner) GetFiles() ([]string, error) {
+	return nil, nil
+}
+
+func (r metadataTestRunner) Run(result *runner.RunResult, testCases []plan.TestCase, retry bool) error {
+	return nil
+}
+
 func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{ "message": "forbidden" }`, http.StatusForbidden)

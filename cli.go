@@ -2,10 +2,128 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 )
+
+const (
+	previewSelectionEnvVar = "BKTEC_PREVIEW_SELECTION"
+	metadataEnvVar         = "BUILDKITE_TEST_ENGINE_METADATA"
+	selectionParamsEnvVar  = "BUILDKITE_TEST_ENGINE_SELECTION_PARAMS"
+)
+
+func previewSelectionEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(previewSelectionEnvVar))) {
+	case "1", "t", "true", "y", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func applyPlanRequestContext(cmd *cli.Command) error {
+	if !previewSelectionEnabled() {
+		cfg.SelectionStrategy = ""
+		cfg.SelectionParams = nil
+		cfg.Metadata = nil
+		return nil
+	}
+
+	selectionParams, err := buildStringMap(
+		os.Getenv(selectionParamsEnvVar),
+		cmd.StringSlice("selection-param"),
+		selectionParamsEnvVar,
+		"selection parameter",
+	)
+	if err != nil {
+		return fmt.Errorf("invalid selection params: %w", err)
+	}
+
+	metadata, err := buildStringMap(
+		os.Getenv(metadataEnvVar),
+		cmd.StringSlice("metadata"),
+		metadataEnvVar,
+		"metadata",
+	)
+	if err != nil {
+		return fmt.Errorf("invalid metadata: %w", err)
+	}
+
+	if err := validateSelectionConfig(cfg.SelectionStrategy, selectionParams); err != nil {
+		return err
+	}
+
+	cfg.SelectionParams = selectionParams
+	cfg.Metadata = metadata
+	return nil
+}
+
+func validateSelectionConfig(strategy string, params map[string]string) error {
+	if strategy == "" && len(params) > 0 {
+		return fmt.Errorf("invalid selection params: selection strategy must be set when selection params are provided")
+	}
+
+	return nil
+}
+
+func buildStringMap(envValue string, entries []string, envVar string, fieldName string) (map[string]string, error) {
+	result := map[string]string{}
+
+	fromEnv, err := parseStringMapJSON(envValue, envVar)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range fromEnv {
+		result[key] = value
+	}
+
+	fromFlags, err := parseKeyValueEntries(entries, fieldName)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range fromFlags {
+		result[key] = value
+	}
+
+	return result, nil
+}
+
+func parseStringMapJSON(raw string, envVar string) (map[string]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return map[string]string{}, nil
+	}
+
+	result := map[string]string{}
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		return nil, fmt.Errorf("%s must be a JSON object of string values: %w", envVar, err)
+	}
+
+	return result, nil
+}
+
+func parseKeyValueEntries(entries []string, fieldName string) (map[string]string, error) {
+	result := map[string]string{}
+
+	for _, entry := range entries {
+		splitAt := strings.Index(entry, "=")
+		if splitAt < 0 {
+			return nil, fmt.Errorf("%s %q must use key=value format", fieldName, entry)
+		}
+
+		key := entry[:splitAt]
+		if key == "" {
+			return nil, fmt.Errorf("%s %q has empty key", fieldName, entry)
+		}
+
+		result[key] = entry[splitAt+1:]
+	}
+
+	return result, nil
+}
 
 // Values from the Buildkite build environment
 var organizationSlugFlag = &cli.StringFlag{
@@ -94,6 +212,26 @@ var suiteSlugFlag = &cli.StringFlag{
 	Usage:       "Buildkite suite slug",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SUITE_SLUG"),
 	Destination: &cfg.SuiteSlug,
+}
+
+var selectionStrategyFlag = &cli.StringFlag{
+	Name:        "selection-strategy",
+	Category:    "PREVIEW: TEST SELECTION",
+	Usage:       "Selection strategy sent to the test plan API",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"),
+	Destination: &cfg.SelectionStrategy,
+}
+
+var selectionParamFlag = &cli.StringSliceFlag{
+	Name:     "selection-param",
+	Category: "PREVIEW: TEST SELECTION",
+	Usage:    "Additional selection strategy parameter key=value sent to the test plan API. Repeat for multiple entries.",
+}
+
+var metadataFlag = &cli.StringSliceFlag{
+	Name:     "metadata",
+	Category: "PREVIEW: TEST SELECTION",
+	Usage:    "Additional metadata key=value sent to the test plan API. Repeat for multiple entries.",
 }
 
 var baseURLFlag = &cli.StringFlag{
@@ -261,6 +399,93 @@ var pipelineUploadFlag = &cli.StringFlag{
 	Usage: "buildkite-agent pipeline upload will be executed with the provided `template.yml`. The additional enviroment variables BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER and BUILDKITE_TEST_ENGINE_PARALLELISM from the generated plan will be available to the template.",
 }
 
+func previewSelectionFlags() []cli.Flag {
+	if !previewSelectionEnabled() {
+		return []cli.Flag{}
+	}
+	return []cli.Flag{
+		selectionStrategyFlag,
+		selectionParamFlag,
+		metadataFlag,
+	}
+}
+
+func runCommandFlags() []cli.Flag {
+	flags := []cli.Flag{
+		filesFlag,
+		tagFiltersFlag,
+		planIdentifierFlag,
+		// Build Environment Flags
+		organizationSlugFlag,
+		buildIDFlag,
+		jobIDFlag,
+		stepIDFlag,
+		branchFlag,
+		retryCountFlag,
+		parallelJobFlag,
+		parallelismFlag,
+		// Test Engine Flags
+		accessTokenFlag,
+		suiteSlugFlag,
+	}
+	flags = append(flags, previewSelectionFlags()...)
+	flags = append(flags,
+		baseURLFlag,
+		// Runner Environment Flags
+		testCommandFlag,
+		testFilePatternFlag,
+		testFileExcludePatternFlag,
+		testRunnerFlag,
+		resultPathFlag,
+		splitByExampleFlag,
+		failOnNoTestsFlag,
+		// Runner Retry Flags
+		disableRetryMutedFlag,
+		retryCommandFlag,
+		testEngineRetryCountFlag,
+	)
+	return flags
+}
+
+func planCommandFlags() []cli.Flag {
+	flags := []cli.Flag{
+		// Some of these flags are not strictly required for planning,
+		// we will remove these in future iterations.
+		filesFlag,
+		tagFiltersFlag,
+		// Dynamic Parallelism Flags
+		maxParallelismFlag,
+		targetTimeFlag,
+		// Build Environment Flags
+		organizationSlugFlag,
+		buildIDFlag,
+		jobIDFlag,
+		stepIDFlag,
+		branchFlag,
+		retryCountFlag,
+		parallelJobFlag,
+		// Test Engine Flags
+		accessTokenFlag,
+		suiteSlugFlag,
+	}
+	flags = append(flags, previewSelectionFlags()...)
+	flags = append(flags,
+		baseURLFlag,
+		// Runner Environment Flags
+		testCommandFlag,
+		testFilePatternFlag,
+		testFileExcludePatternFlag,
+		testRunnerFlag,
+		resultPathFlag,
+		splitByExampleFlag,
+		// Runner Retry Flags
+		disableRetryMutedFlag,
+		retryCommandFlag,
+		testEngineRetryCountFlag,
+	)
+	return flags
+}
+
 var cliCommand = &cli.Command{
 	Name:  "bktec",
 	Usage: "Buildkite Test Engine Client",
@@ -270,77 +495,18 @@ var cliCommand = &cli.Command{
 	},
 	Commands: []*cli.Command{
 		{
-			Name:   "run",
-			Usage:  "Run tests",
-			Action: run,
-			Flags: []cli.Flag{
-				filesFlag,
-				tagFiltersFlag,
-				planIdentifierFlag,
-				// Build Environment Flags
-				organizationSlugFlag,
-				buildIDFlag,
-				jobIDFlag,
-				stepIDFlag,
-				branchFlag,
-				retryCountFlag,
-				parallelJobFlag,
-				parallelismFlag,
-				// Test Engine Flags
-				accessTokenFlag,
-				suiteSlugFlag,
-				baseURLFlag,
-				// Runner Environment Flags
-				testCommandFlag,
-				testFilePatternFlag,
-				testFileExcludePatternFlag,
-				testRunnerFlag,
-				resultPathFlag,
-				splitByExampleFlag,
-				failOnNoTestsFlag,
-				// Runner Retry Flags
-				disableRetryMutedFlag,
-				retryCommandFlag,
-				testEngineRetryCountFlag,
-			},
+			Name:                      "run",
+			Usage:                     "Run tests",
+			Action:                    run,
+			DisableSliceFlagSeparator: true,
+			Flags:                     runCommandFlags(),
 		},
 		{
-			Name:   "plan",
-			Usage:  "Generate test plan without running tests",
-			Action: plan,
-			Flags: []cli.Flag{
-				// Some of these flags are not strictly required for planning,
-				// we will remove these in future iterations.
-
-				filesFlag,
-				tagFiltersFlag,
-				// Dynamic Parallelism Flags
-				maxParallelismFlag,
-				targetTimeFlag,
-				// Build Environment Flags
-				organizationSlugFlag,
-				buildIDFlag,
-				jobIDFlag,
-				stepIDFlag,
-				branchFlag,
-				retryCountFlag,
-				parallelJobFlag,
-				// Test Engine Flags
-				accessTokenFlag,
-				suiteSlugFlag,
-				baseURLFlag,
-				// Runner Environment Flags
-				testCommandFlag,
-				testFilePatternFlag,
-				testFileExcludePatternFlag,
-				testRunnerFlag,
-				resultPathFlag,
-				splitByExampleFlag,
-				// Runner Retry Flags
-				disableRetryMutedFlag,
-				retryCommandFlag,
-				testEngineRetryCountFlag,
-			},
+			Name:                      "plan",
+			Usage:                     "Generate test plan without running tests",
+			Action:                    plan,
+			DisableSliceFlagSeparator: true,
+			Flags:                     planCommandFlags(),
 			MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
 				{
 					Required: true,

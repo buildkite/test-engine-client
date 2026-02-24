@@ -56,6 +56,30 @@ To use bktec, you need to configure the `BUILDKITE_TEST_ENGINE_SUITE_SLUG` envir
 export BUILDKITE_TEST_ENGINE_SUITE_SLUG=my-slug
 ```
 
+### Preview: Test Selection
+You can pass test selection strategy configuration and additional change context to the test plan API request.
+This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).
+This functionality is under development, and these flags currently have undefined behavior.
+
+Environment variables:
+```sh
+export BKTEC_PREVIEW_SELECTION=true
+export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=percent
+export BUILDKITE_TEST_ENGINE_SELECTION_PARAMS='{"percent":"40"}'
+export BUILDKITE_TEST_ENGINE_METADATA='{"commit_message":"fix flaky tests","git_diff":"..."}'
+```
+
+Command-line flags:
+```sh
+BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
+  --selection-param percent=40 \
+  --metadata commit_message="fix flaky tests" \
+  --metadata git_diff="$(git diff --no-color)"
+```
+
+Use repeated `--selection-param key=value` and `--metadata key=value` to pass multiple entries. Values can be large and multiline.  
+For environment variables, multiple key/value pairs are provided as JSON objects in `BUILDKITE_TEST_ENGINE_SELECTION_PARAMS` and `BUILDKITE_TEST_ENGINE_METADATA`.
+
 ### Configure the test runner
 To configure the test runner for bktec, please refer to the detailed guides provided for each supported test runner. You can find the guides at the following links:
 - [Jest](./docs/jest.md)

@@ -34,6 +34,8 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 			MaxParallelism: cfg.MaxParallelism,
 			TargetTime:     cfg.TargetTime.Seconds(),
 			Branch:         cfg.Branch,
+			Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
+			Metadata:       cfg.Metadata,
 			Runner:         cfg.TestRunner,
 			Tests: api.TestPlanParamsTest{
 				Files: testFiles,
@@ -80,9 +82,22 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 		MaxParallelism: cfg.MaxParallelism,
 		TargetTime:     cfg.TargetTime.Seconds(),
 		Branch:         cfg.Branch,
+		Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
+		Metadata:       cfg.Metadata,
 		Runner:         cfg.TestRunner,
 		Tests:          testParams,
 	}, nil
+}
+
+func buildSelectionParams(strategy string, params map[string]string) *api.SelectionParams {
+	if strategy == "" {
+		return nil
+	}
+
+	return &api.SelectionParams{
+		Strategy: strategy,
+		Params:   params,
+	}
 }
 
 // Splits all the test files into examples to support tag filtering.

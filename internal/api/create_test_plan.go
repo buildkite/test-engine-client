@@ -13,6 +13,11 @@ type TestPlanParamsTest struct {
 	Examples []plan.TestCase `json:"examples,omitempty"`
 }
 
+type SelectionParams struct {
+	Strategy string            `json:"strategy"`
+	Params   map[string]string `json:"params,omitempty"`
+}
+
 // TestPlanParams represents the config params sent when fetching a test plan.
 type TestPlanParams struct {
 	Runner         string             `json:"runner"`
@@ -22,6 +27,8 @@ type TestPlanParams struct {
 	TargetTime     float64            `json:"target_time,omitempty"`
 	Branch         string             `json:"branch"`
 	Tests          TestPlanParamsTest `json:"tests"`
+	Selection      *SelectionParams   `json:"selection,omitempty"`
+	Metadata       map[string]string  `json:"metadata,omitempty"`
 }
 
 // CreateTestPlan creates a test plan from the server.
