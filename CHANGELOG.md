@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.3 - 2026-02-24
+- Run Jest with `--runTestsByPath` by default so that file path arguments are treated as literal paths instead of regex patterns.
+
 ## 2.1.2 - 2026-02-11
 - Improve RSpec error handling to properly report errors when RSpec exits with a non-zero status code but has no test failures.
 
