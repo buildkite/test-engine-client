@@ -427,9 +427,6 @@ func runCommandFlags() []cli.Flag {
 		// Test Engine Flags
 		accessTokenFlag,
 		suiteSlugFlag,
-	}
-	flags = append(flags, previewSelectionFlags()...)
-	flags = append(flags,
 		baseURLFlag,
 		// Runner Environment Flags
 		testCommandFlag,
@@ -443,7 +440,8 @@ func runCommandFlags() []cli.Flag {
 		disableRetryMutedFlag,
 		retryCommandFlag,
 		testEngineRetryCountFlag,
-	)
+	}
+	flags = append(flags, previewSelectionFlags()...)
 	return flags
 }
 
@@ -467,9 +465,6 @@ func planCommandFlags() []cli.Flag {
 		// Test Engine Flags
 		accessTokenFlag,
 		suiteSlugFlag,
-	}
-	flags = append(flags, previewSelectionFlags()...)
-	flags = append(flags,
 		baseURLFlag,
 		// Runner Environment Flags
 		testCommandFlag,
@@ -482,7 +477,8 @@ func planCommandFlags() []cli.Flag {
 		disableRetryMutedFlag,
 		retryCommandFlag,
 		testEngineRetryCountFlag,
-	)
+	}
+	flags = append(flags, previewSelectionFlags()...)
 	return flags
 }
 
