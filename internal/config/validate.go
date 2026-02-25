@@ -76,7 +76,7 @@ func (c *Config) validate() error {
 	}
 
 	if c.SelectionStrategy == "" && len(c.SelectionParams) > 0 {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SELECTION_PARAMS", "selection strategy must be set when selection params are provided")
+		c.errs.appendFieldError("selection-param", "selection strategy must be set when selection params are provided")
 	}
 
 	if len(c.errs) > 0 {

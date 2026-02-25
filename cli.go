@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -12,8 +11,6 @@ import (
 
 const (
 	previewSelectionEnvVar = "BKTEC_PREVIEW_SELECTION"
-	metadataEnvVar         = "BUILDKITE_TEST_ENGINE_METADATA"
-	selectionParamsEnvVar  = "BUILDKITE_TEST_ENGINE_SELECTION_PARAMS"
 )
 
 func previewSelectionEnabled() bool {
@@ -33,22 +30,12 @@ func applyPlanRequestContext(cmd *cli.Command) error {
 		return nil
 	}
 
-	selectionParams, err := buildStringMap(
-		os.Getenv(selectionParamsEnvVar),
-		cmd.StringSlice("selection-param"),
-		selectionParamsEnvVar,
-		"selection parameter",
-	)
+	selectionParams, err := parseKeyValueEntries(cmd.StringSlice("selection-param"), "selection parameter")
 	if err != nil {
 		return fmt.Errorf("invalid selection params: %w", err)
 	}
 
-	metadata, err := buildStringMap(
-		os.Getenv(metadataEnvVar),
-		cmd.StringSlice("metadata"),
-		metadataEnvVar,
-		"metadata",
-	)
+	metadata, err := parseKeyValueEntries(cmd.StringSlice("metadata"), "metadata")
 	if err != nil {
 		return fmt.Errorf("invalid metadata: %w", err)
 	}
@@ -56,41 +43,6 @@ func applyPlanRequestContext(cmd *cli.Command) error {
 	cfg.SelectionParams = selectionParams
 	cfg.Metadata = metadata
 	return nil
-}
-
-func buildStringMap(envValue string, entries []string, envVar string, fieldName string) (map[string]string, error) {
-	result := map[string]string{}
-
-	fromEnv, err := parseStringMapJSON(envValue, envVar)
-	if err != nil {
-		return nil, err
-	}
-	for key, value := range fromEnv {
-		result[key] = value
-	}
-
-	fromFlags, err := parseKeyValueEntries(entries, fieldName)
-	if err != nil {
-		return nil, err
-	}
-	for key, value := range fromFlags {
-		result[key] = value
-	}
-
-	return result, nil
-}
-
-func parseStringMapJSON(raw string, envVar string) (map[string]string, error) {
-	if strings.TrimSpace(raw) == "" {
-		return map[string]string{}, nil
-	}
-
-	result := map[string]string{}
-	if err := json.Unmarshal([]byte(raw), &result); err != nil {
-		return nil, fmt.Errorf("%s must be a JSON object of string values: %w", envVar, err)
-	}
-
-	return result, nil
 }
 
 func parseKeyValueEntries(entries []string, fieldName string) (map[string]string, error) {

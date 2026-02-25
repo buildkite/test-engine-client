@@ -358,8 +358,8 @@ func TestConfigValidate_SelectionParamsRequireStrategy(t *testing.T) {
 			return
 		}
 
-		if len(invConfigError["BUILDKITE_TEST_ENGINE_SELECTION_PARAMS"]) != 1 {
-			t.Errorf("config.validate() error for BUILDKITE_TEST_ENGINE_SELECTION_PARAMS length = %d, want 1", len(invConfigError["BUILDKITE_TEST_ENGINE_SELECTION_PARAMS"]))
+		if len(invConfigError["selection-param"]) != 1 {
+			t.Errorf("config.validate() error for selection-param length = %d, want 1", len(invConfigError["selection-param"]))
 		}
 	})
 

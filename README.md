@@ -65,8 +65,6 @@ Environment variables:
 ```sh
 export BKTEC_PREVIEW_SELECTION=true
 export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=percent
-export BUILDKITE_TEST_ENGINE_SELECTION_PARAMS='{"percent":"40"}'
-export BUILDKITE_TEST_ENGINE_METADATA='{"commit_message":"fix flaky tests","git_diff":"..."}'
 ```
 
 Command-line flags:
@@ -78,7 +76,7 @@ BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
 ```
 
 Use repeated `--selection-param key=value` and `--metadata key=value` to pass multiple entries. Values can be large and multiline.  
-For environment variables, multiple key/value pairs are provided as JSON objects in `BUILDKITE_TEST_ENGINE_SELECTION_PARAMS` and `BUILDKITE_TEST_ENGINE_METADATA`.
+`--selection-param` and `--metadata` are only supported as repeatable CLI flags.
 
 ### Configure the test runner
 To configure the test runner for bktec, please refer to the detailed guides provided for each supported test runner. You can find the guides at the following links:
