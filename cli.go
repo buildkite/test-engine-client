@@ -53,20 +53,8 @@ func applyPlanRequestContext(cmd *cli.Command) error {
 		return fmt.Errorf("invalid metadata: %w", err)
 	}
 
-	if err := validateSelectionConfig(cfg.SelectionStrategy, selectionParams); err != nil {
-		return err
-	}
-
 	cfg.SelectionParams = selectionParams
 	cfg.Metadata = metadata
-	return nil
-}
-
-func validateSelectionConfig(strategy string, params map[string]string) error {
-	if strategy == "" && len(params) > 0 {
-		return fmt.Errorf("invalid selection params: selection strategy must be set when selection params are provided")
-	}
-
 	return nil
 }
 

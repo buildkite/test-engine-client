@@ -122,18 +122,3 @@ func TestBuildSelectionParams(t *testing.T) {
 	}
 }
 
-func TestValidateSelectionConfig(t *testing.T) {
-	t.Run("strategy required when params provided", func(t *testing.T) {
-		err := validateSelectionConfig("", map[string]string{"top": "100"})
-		if err == nil {
-			t.Fatalf("validateSelectionConfig() error = nil, want non-nil")
-		}
-	})
-
-	t.Run("strategy without params is valid", func(t *testing.T) {
-		err := validateSelectionConfig("least-reliable", map[string]string{})
-		if err != nil {
-			t.Fatalf("validateSelectionConfig() error = %v, want nil", err)
-		}
-	})
-}
