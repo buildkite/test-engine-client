@@ -36,6 +36,12 @@ type Config struct {
 	SplitByExample bool `json:"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE"`
 	// SuiteSlug is the slug of the suite.
 	SuiteSlug string `json:"BUILDKITE_TEST_ENGINE_SUITE_SLUG"`
+	// SelectionStrategy is the selection strategy sent to the test plan API.
+	SelectionStrategy string `json:"BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"`
+	// SelectionParams are additional key/value parameters for the strategy.
+	SelectionParams map[string]string `json:"-"`
+	// Metadata is additional key/value data sent to the test plan API.
+	Metadata map[string]string `json:"-"`
 	// TestCommand is the command to run the tests.
 	TestCommand string `json:"BUILDKITE_TEST_ENGINE_TEST_CMD"`
 	// TestFilePattern is the pattern to match the test files.

@@ -30,6 +30,15 @@ func TestCreateTestPlan(t *testing.T) {
 		Branch:      "tet-123-add-branch-name",
 		Identifier:  "abc123",
 		Parallelism: 3,
+		Selection: &SelectionParams{
+			Strategy: "least-reliable",
+			Params: map[string]string{
+				"top": "100",
+			},
+		},
+		Metadata: map[string]string{
+			"git_diff": "line1\nline2",
+		},
 		Tests: TestPlanParamsTest{
 			Files: []plan.TestCase{
 				{Path: "sky_spec.rb"},
@@ -132,6 +141,15 @@ func TestCreateTestPlan_SplitByExample(t *testing.T) {
 	params := TestPlanParams{
 		Identifier:  "abc123",
 		Parallelism: 3,
+		Selection: &SelectionParams{
+			Strategy: "percent",
+			Params: map[string]string{
+				"percent": "40",
+			},
+		},
+		Metadata: map[string]string{
+			"source": "cli",
+		},
 		Tests: TestPlanParamsTest{
 			Files: []plan.TestCase{
 				{Path: "sky_spec.rb"},

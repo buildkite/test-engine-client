@@ -27,6 +27,10 @@ func main() {
 func run(ctx context.Context, cmd *cli.Command) error {
 	debug.SetDebug(cmd.Bool("debug"))
 
+	if err := applyPlanRequestContext(cmd); err != nil {
+		return err
+	}
+
 	if err := cfg.ValidateForRun(); err != nil {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
@@ -37,6 +41,10 @@ func run(ctx context.Context, cmd *cli.Command) error {
 func plan(ctx context.Context, cmd *cli.Command) error {
 	debug.SetDebug(cmd.Bool("debug"))
 	debug.SetOutput(os.Stderr)
+
+	if err := applyPlanRequestContext(cmd); err != nil {
+		return err
+	}
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		return fmt.Errorf("invalid configuration...\n%w", err)

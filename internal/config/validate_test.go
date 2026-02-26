@@ -345,6 +345,35 @@ func ValidateForPlan_SkipsParallelismAndNodeIndexValidation(t *testing.T) {
 	}
 }
 
+func TestConfigValidate_SelectionParamsRequireStrategy(t *testing.T) {
+	t.Run("strategy required when params provided", func(t *testing.T) {
+		c := createConfig()
+		c.SelectionParams = map[string]string{"top": "100"}
+
+		err := c.validate()
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Errorf("config.validate() error = %v, want InvalidConfigError", err)
+			return
+		}
+
+		if len(invConfigError["selection-param"]) != 1 {
+			t.Errorf("config.validate() error for selection-param length = %d, want 1", len(invConfigError["selection-param"]))
+		}
+	})
+
+	t.Run("strategy without params is valid", func(t *testing.T) {
+		c := createConfig()
+		c.SelectionStrategy = "least-reliable"
+
+		err := c.validate()
+		if err != nil {
+			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+}
+
 func TestConfigValidate_TagFiltersOnlyWorksWithPytest(t *testing.T) {
 	t.Run("TagFilters with pytest runner should be valid", func(t *testing.T) {
 		c := createConfig()
