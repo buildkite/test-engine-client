@@ -31,6 +31,13 @@ func NewRspec(r RunnerConfig) Rspec {
 		r.RetryTestCommand = r.TestCommand
 	}
 
+	if r.LocationPrefix == "" {
+		// rspec test in Test Engine is stored with leading "./"
+		// therefore, we need to add "./" to the file path
+		// to match the test path in Test Engine
+		r.LocationPrefix = "./"
+	}
+
 	return Rspec{
 		RunnerConfig: r,
 	}
@@ -45,13 +52,6 @@ func (r Rspec) GetFiles() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
 	files, err := discoverTestFiles(r.TestFilePattern, r.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
-
-	// rspec test in Test Engine is stored with leading "./"
-	// therefore, we need to add "./" to the file path
-	// to match the test path in Test Engine
-	for i, file := range files {
-		files[i] = "./" + file
-	}
 
 	if err != nil {
 		return nil, err

@@ -8,16 +8,22 @@ import (
 )
 
 type RunnerConfig struct {
-	TestRunner             string
-	TestCommand            string
-	TestFilePattern        string
-	TestFileExcludePattern string
-	RetryTestCommand       string
-	TagFilters             string
+	TestRunner string
+
+	LocationPrefix string
 	// ResultPath is used internally so bktec can read result from Test Runner.
 	// User typically don't need to worry about setting this except in in RSpec and playwright.
 	// In playwright, for example, it can only be configured via a config file, therefore it's mandatory for user to set.
-	ResultPath string
+	ResultPath             string
+	RetryTestCommand       string
+	TagFilters             string
+	TestCommand            string
+	TestFileExcludePattern string
+	TestFilePattern        string
+}
+
+func (c RunnerConfig) GetLocationPrefix() string {
+	return c.LocationPrefix
 }
 
 type TestRunner interface {
@@ -25,17 +31,20 @@ type TestRunner interface {
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string
+	GetLocationPrefix() string
 }
 
 func DetectRunner(cfg *config.Config) (TestRunner, error) {
 	runnerConfig := RunnerConfig{
-		TestRunner:             cfg.TestRunner,
-		TestCommand:            cfg.TestCommand,
-		TestFilePattern:        cfg.TestFilePattern,
-		TestFileExcludePattern: cfg.TestFileExcludePattern,
-		RetryTestCommand:       cfg.RetryCommand,
+		TestRunner: cfg.TestRunner,
+
+		LocationPrefix:         cfg.LocationPrefix,
 		ResultPath:             cfg.ResultPath,
+		RetryTestCommand:       cfg.RetryCommand,
 		TagFilters:             cfg.TagFilters,
+		TestCommand:            cfg.TestCommand,
+		TestFileExcludePattern: cfg.TestFileExcludePattern,
+		TestFilePattern:        cfg.TestFilePattern,
 	}
 
 	switch testRunner := cfg.TestRunner; testRunner {

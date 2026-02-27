@@ -30,6 +30,7 @@ type TestRunner interface {
 	// This is also used to obtain a fallback non-intelligent test splitting mechanism.
 	GetFiles() ([]string, error)
 	Name() string
+	GetLocationPrefix() string
 }
 
 const Logo = `

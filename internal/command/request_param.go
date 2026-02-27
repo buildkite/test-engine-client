@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
@@ -20,7 +21,16 @@ import (
 // Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	testFiles := []plan.TestCase{}
+	prefix := runner.GetLocationPrefix()
+
 	for _, file := range files {
+		// Some test collectors (e.g. Rspec) report file paths with a "./".
+		// Since `filepath.Join` ignore "./", we need to handle this case separately to avoid losing the "./" prefix.
+		if prefix == "./" {
+			file = prefix + file
+		} else if prefix != "" {
+			file = filepath.Join(prefix, file)
+		}
 		testFiles = append(testFiles, plan.TestCase{
 			Path: file,
 		})
