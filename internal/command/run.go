@@ -19,19 +19,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-type TestRunner interface {
-	// Run takes testCases as input, executes the test against the test cases, and mutates the runner.RunResult with the test results.
-	Run(result *runner.RunResult, testCases []plan.TestCase, retry bool) error
-	// GetExamples discovers all tests within given files.
-	// This function is only used for split by example use case. Currently only supported by RSpec.
-	GetExamples(files []string) ([]plan.TestCase, error)
-	// GetFiles discover all test files that the runner should execute.
-	// This is sent to server-side when creating test plan.
-	// This is also used to obtain a fallback non-intelligent test splitting mechanism.
-	GetFiles() ([]string, error)
-	Name() string
-}
-
 const Logo = `
 ______ ______ _____
 ___  /____  /___  /____________
@@ -206,7 +193,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg *config.Config
 // For next reader, there is a small caveat with current implementation:
 // - testCases and timeline are both expected to be mutated.
 // - testCases in this case serve both as input and output -> we should probably change it.
-func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest bool, failOnNoTests bool) (runner.RunResult, error) {
+func runTestsWithRetry(testRunner runner.TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest bool, failOnNoTests bool) (runner.RunResult, error) {
 	attemptCount := 0
 
 	// Create a new run result with muted tests to keep track of the results.
@@ -293,7 +280,7 @@ func logSignalAndExit(name string, signal syscall.Signal) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, files []string, testRunner TestRunner) (plan.TestPlan, error) {
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, files []string, testRunner runner.TestRunner) (plan.TestPlan, error) {
 	debug.Println("Fetching test plan")
 
 	// Fetch the plan from the server's cache.

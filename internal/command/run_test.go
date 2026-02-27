@@ -752,7 +752,7 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	runners := []TestRunner{
+	runners := []runner.TestRunner{
 		runner.Jest{}, runner.Playwright{}, runner.Cypress{},
 	}
 
