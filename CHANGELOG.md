@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.2.0
+- Add preview test selection flags to `plan` and `run`, including repeatable `key=value` CLI handling without JSON-in-env encoding. These may not be supported by the API yet.
+
 ## 2.1.3 - 2026-02-24
 - Run Jest with `--runTestsByPath` by default so that file path arguments are treated as literal paths instead of regex patterns.
 
