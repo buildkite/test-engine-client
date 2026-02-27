@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -70,6 +71,20 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
+
+	locationPrefix := testRunner.GetLocationPrefix()
+	if locationPrefix != "" {
+		for i, test := range thisNodeTask.Tests {
+			if test.Format == plan.TestCaseFormatFile {
+				relPath, err := filepath.Rel(locationPrefix, test.Path)
+				if err != nil {
+					debug.Printf("Failed to get relative path for %s with location prefix %s: %v. Using original path.", test.Path, locationPrefix, err)
+				} else {
+					thisNodeTask.Tests[i].Path = relPath
+				}
+			}
+		}
+	}
 
 	// execute tests
 	var timeline []api.Timeline
