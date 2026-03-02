@@ -258,6 +258,14 @@ var failOnNoTestsFlag = &cli.BoolFlag{
 	Destination: &cfg.FailOnNoTests,
 }
 
+var locationPrefixFlag = &cli.StringFlag{
+	Name:        "location-prefix",
+	Category:    "TEST RUNNER",
+	Usage:       "Prefix to prepend to test file paths when requesting a test plan, used to match the test files reported by the test collector",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX"),
+	Destination: &cfg.LocationPrefix,
+}
+
 // Test Runner Retry Flags
 var testEngineRetryCountFlag = &cli.IntFlag{
 	Name:        "test-engine-retry-count",
@@ -376,6 +384,7 @@ func runCommandFlags() []cli.Flag {
 		resultPathFlag,
 		splitByExampleFlag,
 		failOnNoTestsFlag,
+		locationPrefixFlag,
 		// Runner Retry Flags
 		disableRetryMutedFlag,
 		retryCommandFlag,
@@ -413,6 +422,7 @@ func planCommandFlags() []cli.Flag {
 		testRunnerFlag,
 		resultPathFlag,
 		splitByExampleFlag,
+		locationPrefixFlag,
 		// Runner Retry Flags
 		disableRetryMutedFlag,
 		retryCommandFlag,
