@@ -30,6 +30,7 @@ type TestRunner interface {
 	// This is also used to obtain a fallback non-intelligent test splitting mechanism.
 	GetFiles() ([]string, error)
 	Name() string
+	LocationPrefix() string
 }
 
 const Logo = `
@@ -69,6 +70,19 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
+
+	// File paths sent to the API for test plan creation include the location prefix to match Test Engine records.
+	// However, the test runner expects file paths without the prefix, so we need to remove it before running the tests.
+	locationPrefix := testRunner.LocationPrefix()
+	if locationPrefix != "" {
+		for i, test := range thisNodeTask.Tests {
+			path, err := trimFilePathPrefix(test.Path, locationPrefix)
+			if err != nil {
+				return fmt.Errorf("failed to trim path prefix: %w", err)
+			}
+			thisNodeTask.Tests[i].Path = path
+		}
+	}
 
 	// execute tests
 	var timeline []api.Timeline

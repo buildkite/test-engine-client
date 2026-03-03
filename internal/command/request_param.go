@@ -20,9 +20,10 @@ import (
 // Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
 	testFiles := []plan.TestCase{}
+
 	for _, file := range files {
 		testFiles = append(testFiles, plan.TestCase{
-			Path: file,
+			Path: prefixPath(file, runner.LocationPrefix()),
 		})
 	}
 
@@ -147,9 +148,17 @@ func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Cli
 
 	filteredFilesMap := make(map[string]bool, len(filteredFiles))
 	filteredFilesPath := make([]string, 0, len(filteredFiles))
+	prefix := runner.LocationPrefix()
 	for _, file := range filteredFiles {
 		filteredFilesMap[file.Path] = true
-		filteredFilesPath = append(filteredFilesPath, file.Path)
+		// File paths sent to the API for filtering tests include the location prefix to match Test Engine records.
+		// However, the test runner expects file paths without the prefix, so we need to remove it before running the tests.
+		trimmedPath, err := trimFilePathPrefix(file.Path, prefix)
+		if err != nil {
+			return api.TestPlanParamsTest{}, fmt.Errorf("trim file path prefix: %w", err)
+		}
+
+		filteredFilesPath = append(filteredFilesPath, trimmedPath)
 	}
 
 	examples, err := runner.GetExamples(filteredFilesPath)
