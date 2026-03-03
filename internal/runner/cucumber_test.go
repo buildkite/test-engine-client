@@ -45,7 +45,7 @@ func TestNewCucumber(t *testing.T) {
 
 	for _, c := range cases {
 		got := NewCucumber(c.input)
-		if diff := cmp.Diff(got.RunnerConfig, c.want); diff != "" {
+		if diff := cmp.Diff(got.RunnerConfig, c.want, cmp.AllowUnexported(RunnerConfig{})); diff != "" {
 			t.Errorf("NewCucumber(%v) diff (-got +want):\n%s", c.input, diff)
 		}
 	}
