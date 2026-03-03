@@ -262,7 +262,7 @@ var locationPrefixFlag = &cli.StringFlag{
 	Name:        "location-prefix",
 	Category:    "TEST RUNNER",
 	Usage:       "Prefix to prepend to test file paths when requesting a test plan, used to match the test files reported by the test collector",
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX"),
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "BUILDKITE_ANALYTICS_LOCATION_PREFIX"),
 	Destination: &cfg.LocationPrefix,
 }
 
