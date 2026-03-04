@@ -168,6 +168,63 @@ func TestPlanJSON_InternalServerError(t *testing.T) {
 	}
 }
 
+func TestPlanJSON_Parallelism0(t *testing.T) {
+	svr := getZeroParallelismServer()
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseUrl = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	// Capture stderr
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	origStderr := os.Stderr
+	os.Stderr = stderrW
+	t.Cleanup(func() {
+		os.Stderr = origStderr
+	})
+
+	// This is the method under test
+	planErr := Plan(ctx, cfg, "", PlanOutputJSON, "")
+
+	// Close the write end so we can read
+	stderrW.Close()
+	var stderrBuf bytes.Buffer
+	io.Copy(&stderrBuf, stderrR)
+	stderrR.Close()
+
+	// Verify command exits successfully
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	// Verify JSON output on stdout still contains the expected keys
+	want := `{"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER":"facecafe","BUILDKITE_TEST_ENGINE_PARALLELISM":"0"}
+`
+	got := buf.String()
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("command.Plan(...) JSON output diff = %s", diff)
+	}
+
+	// Verify warning was logged to stderr
+	stderrOutput := stderrBuf.String()
+	if !strings.Contains(stderrOutput, "Parallelism is 0") {
+		t.Errorf("expected stderr to contain parallelism warning, got: %s", stderrOutput)
+	}
+}
+
 func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	svr := getZeroParallelismServer()
 	defer svr.Close()
