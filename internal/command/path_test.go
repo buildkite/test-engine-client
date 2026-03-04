@@ -60,7 +60,7 @@ func TestTrimFilePathPrefix(t *testing.T) {
 		{
 			filePath: "./spec/models/user_spec.rb",
 			prefix:   "./",
-			expected: "./spec/models/user_spec.rb",
+			expected: "spec/models/user_spec.rb",
 		},
 	}
 

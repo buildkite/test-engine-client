@@ -23,8 +23,7 @@ func prefixPath(path string, prefix string) string {
 }
 
 func trimFilePathPrefix(path string, prefix string) (string, error) {
-	// If the prefix is empty or "./", we can skip trimming as these are not actual prefixes in the file paths.
-	if prefix == "" || prefix == "./" {
+	if prefix == "" {
 		return path, nil
 	}
 
