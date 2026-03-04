@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
+	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
@@ -51,6 +52,8 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
+	debug.Println("Creating test plan via API")
+
 	testPlan, err := createTestPlan(ctx, cfg, files, apiClient, testRunner)
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
@@ -58,9 +61,19 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		}
 	}
 
+	if testPlan.Fallback {
+		debug.Printf("Using fallback plan. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
+	} else {
+		debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
+	}
+
 	switch outputFormat {
 
 	case PlanOutputJSON:
+		if testPlan.Parallelism == 0 {
+			fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
+		}
+
 		summary := struct {
 			Identifier string `json:"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"`
 
@@ -80,6 +93,11 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		}
 
 	case PlanOutputPipelineUpload:
+		if testPlan.Parallelism == 0 {
+			fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
+			return nil
+		}
+
 		cmd := makePipelineUploadCommand(template)
 
 		env := os.Environ()
