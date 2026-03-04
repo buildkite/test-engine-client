@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
+	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 )
@@ -421,4 +422,171 @@ func setPipelineUploadCommand(t *testing.T, cmd string, args ...string) {
 		pipelineUploadCommand = origCommand
 		pipelineUploadArgs = origArgs
 	})
+}
+
+// setDebugEnabled enables debug mode and directs debug output to the given writer.
+// It restores the original state on test cleanup.
+func setDebugEnabled(t *testing.T, w io.Writer) {
+	t.Helper()
+	origEnabled := debug.Enabled
+	debug.SetDebug(true)
+	debug.SetOutput(w)
+
+	t.Cleanup(func() {
+		debug.SetDebug(origEnabled)
+		debug.SetOutput(os.Stdout) // default output
+	})
+}
+
+func TestPlanJSON_DebugLogging(t *testing.T) {
+	svr := getHttptestServer()
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseUrl = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Capture stdout (plan data)
+	var stdoutBuf bytes.Buffer
+	setPlanWriter(t, &stdoutBuf)
+
+	// Capture stderr (warnings + debug output)
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	origStderr := os.Stderr
+	os.Stderr = stderrW
+	t.Cleanup(func() {
+		os.Stderr = origStderr
+	})
+
+	// Enable debug and direct debug output to stderr (same as main.go does)
+	setDebugEnabled(t, stderrW)
+
+	// This is the method under test
+	planErr := Plan(ctx, cfg, "", PlanOutputJSON, "")
+
+	// Close the write end so we can read
+	stderrW.Close()
+	var stderrBuf bytes.Buffer
+	io.Copy(&stderrBuf, stderrR)
+	stderrR.Close()
+
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	stderrOutput := stderrBuf.String()
+	stdoutOutput := stdoutBuf.String()
+
+	// Verify debug output includes message before API call
+	if !strings.Contains(stderrOutput, "Creating test plan via API") {
+		t.Errorf("expected stderr to contain 'Creating test plan via API', got: %s", stderrOutput)
+	}
+
+	// Verify debug output includes the returned plan identifier and parallelism
+	if !strings.Contains(stderrOutput, `"facecafe"`) {
+		t.Errorf("expected stderr to contain plan identifier 'facecafe', got: %s", stderrOutput)
+	}
+	if !strings.Contains(stderrOutput, "Parallelism: 42") {
+		t.Errorf("expected stderr to contain 'Parallelism: 42', got: %s", stderrOutput)
+	}
+
+	// Verify debug output indicates this is NOT a fallback plan
+	if !strings.Contains(stderrOutput, "Test plan created.") {
+		t.Errorf("expected stderr to contain 'Test plan created.', got: %s", stderrOutput)
+	}
+
+	// Verify debug output is NOT in stdout
+	if strings.Contains(stdoutOutput, "DEBUG") {
+		t.Errorf("debug output should not appear in stdout, got: %s", stdoutOutput)
+	}
+	if strings.Contains(stdoutOutput, "Creating test plan via API") {
+		t.Errorf("debug output should not appear in stdout, got: %s", stdoutOutput)
+	}
+}
+
+func TestPlanJSON_DebugLogging_Fallback(t *testing.T) {
+	// Mock server to return 500 Internal Server Error (triggers retry timeout and fallback)
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.Identifier = "hello"
+	cfg.MaxParallelism = 10
+	cfg.ServerBaseUrl = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	// Short timeout to trigger fallback quickly
+	ctx := context.Background()
+	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+	defer cancel()
+
+	// Capture stdout (plan data)
+	var stdoutBuf bytes.Buffer
+	setPlanWriter(t, &stdoutBuf)
+
+	// Capture stderr
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	origStderr := os.Stderr
+	os.Stderr = stderrW
+	t.Cleanup(func() {
+		os.Stderr = origStderr
+	})
+
+	// Enable debug and direct debug output to stderr
+	setDebugEnabled(t, stderrW)
+
+	// This is the method under test
+	planErr := Plan(fetchCtx, cfg, "", PlanOutputJSON, "")
+
+	// Close the write end so we can read
+	stderrW.Close()
+	var stderrBuf bytes.Buffer
+	io.Copy(&stderrBuf, stderrR)
+	stderrR.Close()
+
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	stderrOutput := stderrBuf.String()
+	stdoutOutput := stdoutBuf.String()
+
+	// Verify debug output includes message before API call
+	if !strings.Contains(stderrOutput, "Creating test plan via API") {
+		t.Errorf("expected stderr to contain 'Creating test plan via API', got: %s", stderrOutput)
+	}
+
+	// Verify debug output indicates fallback plan was used
+	if !strings.Contains(stderrOutput, "Using fallback plan.") {
+		t.Errorf("expected stderr to contain 'Using fallback plan.', got: %s", stderrOutput)
+	}
+
+	// Verify debug output includes the fallback plan identifier and parallelism
+	if !strings.Contains(stderrOutput, `"hello"`) {
+		t.Errorf("expected stderr to contain fallback plan identifier 'hello', got: %s", stderrOutput)
+	}
+	if !strings.Contains(stderrOutput, "Parallelism: 10") {
+		t.Errorf("expected stderr to contain 'Parallelism: 10', got: %s", stderrOutput)
+	}
+
+	// Verify debug output is NOT in stdout
+	if strings.Contains(stdoutOutput, "DEBUG") {
+		t.Errorf("debug output should not appear in stdout, got: %s", stdoutOutput)
+	}
 }
