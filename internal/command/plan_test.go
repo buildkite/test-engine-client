@@ -185,25 +185,12 @@ func TestPlanJSON_Parallelism0(t *testing.T) {
 	var buf bytes.Buffer
 	setPlanWriter(t, &buf)
 
-	// Capture stderr
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe() error = %v", err)
-	}
-	origStderr := os.Stderr
-	os.Stderr = stderrW
-	t.Cleanup(func() {
-		os.Stderr = origStderr
-	})
+	getStderr := captureStderr(t)
 
 	// This is the method under test
 	planErr := Plan(ctx, cfg, "", PlanOutputJSON, "")
 
-	// Close the write end so we can read
-	stderrW.Close()
-	var stderrBuf bytes.Buffer
-	io.Copy(&stderrBuf, stderrR)
-	stderrR.Close()
+	stderrOutput := getStderr()
 
 	// Verify command exits successfully
 	if planErr != nil {
@@ -220,7 +207,6 @@ func TestPlanJSON_Parallelism0(t *testing.T) {
 	}
 
 	// Verify warning was logged to stderr
-	stderrOutput := stderrBuf.String()
 	if !strings.Contains(stderrOutput, "Parallelism is 0") {
 		t.Errorf("expected stderr to contain parallelism warning, got: %s", stderrOutput)
 	}
@@ -246,25 +232,12 @@ func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	// If pipeline upload runs, we'll see its output in buf.
 	setPipelineUploadCommand(t, "echo", "SHOULD_NOT_RUN")
 
-	// Capture stderr
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe() error = %v", err)
-	}
-	origStderr := os.Stderr
-	os.Stderr = stderrW
-	t.Cleanup(func() {
-		os.Stderr = origStderr
-	})
+	getStderr := captureStderr(t)
 
 	// This is the method under test
 	planErr := Plan(ctx, cfg, "", PlanOutputPipelineUpload, "testtemplate.yml")
 
-	// Close the write end so we can read
-	stderrW.Close()
-	var stderrBuf bytes.Buffer
-	io.Copy(&stderrBuf, stderrR)
-	stderrR.Close()
+	stderrOutput := getStderr()
 
 	if planErr != nil {
 		t.Errorf("command.Plan(...) error = %v", planErr)
@@ -277,7 +250,6 @@ func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	}
 
 	// Verify warning was logged to stderr
-	stderrOutput := stderrBuf.String()
 	if !strings.Contains(stderrOutput, "Parallelism is 0") {
 		t.Errorf("expected stderr to contain parallelism warning, got: %s", stderrOutput)
 	}
@@ -424,6 +396,28 @@ func setPipelineUploadCommand(t *testing.T, cmd string, args ...string) {
 	})
 }
 
+// captureStderr redirects os.Stderr to a pipe and returns a function that,
+// when called, closes the write end and returns everything written to stderr.
+func captureStderr(t *testing.T) func() string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	orig := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() {
+		os.Stderr = orig
+	})
+	return func() string {
+		w.Close()
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		r.Close()
+		return buf.String()
+	}
+}
+
 // setDebugEnabled enables debug mode and directs debug output to the given writer.
 // It restores the original state on test cleanup.
 func setDebugEnabled(t *testing.T, w io.Writer) {
@@ -455,34 +449,20 @@ func TestPlanJSON_DebugLogging(t *testing.T) {
 	var stdoutBuf bytes.Buffer
 	setPlanWriter(t, &stdoutBuf)
 
-	// Capture stderr (warnings + debug output)
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe() error = %v", err)
-	}
-	origStderr := os.Stderr
-	os.Stderr = stderrW
-	t.Cleanup(func() {
-		os.Stderr = origStderr
-	})
+	getStderr := captureStderr(t)
 
 	// Enable debug and direct debug output to stderr (same as main.go does)
-	setDebugEnabled(t, stderrW)
+	setDebugEnabled(t, os.Stderr)
 
 	// This is the method under test
 	planErr := Plan(ctx, cfg, "", PlanOutputJSON, "")
 
-	// Close the write end so we can read
-	stderrW.Close()
-	var stderrBuf bytes.Buffer
-	io.Copy(&stderrBuf, stderrR)
-	stderrR.Close()
+	stderrOutput := getStderr()
 
 	if planErr != nil {
 		t.Errorf("command.Plan(...) error = %v", planErr)
 	}
 
-	stderrOutput := stderrBuf.String()
 	stdoutOutput := stdoutBuf.String()
 
 	// Verify debug output includes message before API call
@@ -537,34 +517,20 @@ func TestPlanJSON_DebugLogging_Fallback(t *testing.T) {
 	var stdoutBuf bytes.Buffer
 	setPlanWriter(t, &stdoutBuf)
 
-	// Capture stderr
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe() error = %v", err)
-	}
-	origStderr := os.Stderr
-	os.Stderr = stderrW
-	t.Cleanup(func() {
-		os.Stderr = origStderr
-	})
+	getStderr := captureStderr(t)
 
 	// Enable debug and direct debug output to stderr
-	setDebugEnabled(t, stderrW)
+	setDebugEnabled(t, os.Stderr)
 
 	// This is the method under test
 	planErr := Plan(fetchCtx, cfg, "", PlanOutputJSON, "")
 
-	// Close the write end so we can read
-	stderrW.Close()
-	var stderrBuf bytes.Buffer
-	io.Copy(&stderrBuf, stderrR)
-	stderrR.Close()
+	stderrOutput := getStderr()
 
 	if planErr != nil {
 		t.Errorf("command.Plan(...) error = %v", planErr)
 	}
 
-	stderrOutput := stderrBuf.String()
 	stdoutOutput := stdoutBuf.String()
 
 	// Verify debug output includes message before API call
