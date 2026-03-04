@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,6 +168,63 @@ func TestPlanJSON_InternalServerError(t *testing.T) {
 	}
 }
 
+func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
+	svr := getZeroParallelismServer()
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseUrl = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	// Set a dummy command that records whether it was called.
+	// If pipeline upload runs, we'll see its output in buf.
+	setPipelineUploadCommand(t, "echo", "SHOULD_NOT_RUN")
+
+	// Capture stderr
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	origStderr := os.Stderr
+	os.Stderr = stderrW
+	t.Cleanup(func() {
+		os.Stderr = origStderr
+	})
+
+	// This is the method under test
+	planErr := Plan(ctx, cfg, "", PlanOutputPipelineUpload, "testtemplate.yml")
+
+	// Close the write end so we can read
+	stderrW.Close()
+	var stderrBuf bytes.Buffer
+	io.Copy(&stderrBuf, stderrR)
+	stderrR.Close()
+
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	// Verify pipeline upload was NOT executed (stdout buffer should have no "SHOULD_NOT_RUN")
+	got := buf.String()
+	if got != "" {
+		t.Errorf("expected no pipeline upload output, got: %s", got)
+	}
+
+	// Verify warning was logged to stderr
+	stderrOutput := stderrBuf.String()
+	if !strings.Contains(stderrOutput, "Parallelism is 0") {
+		t.Errorf("expected stderr to contain parallelism warning, got: %s", stderrOutput)
+	}
+}
+
 func TestPlanPipelineUpload_InternalServerError(t *testing.T) {
 	// mock server to return 500 Internal Server Error
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -209,6 +268,33 @@ called with testtemplate.yml
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("command.Plan(...) diff = %s", diff)
 	}
+}
+
+func getZeroParallelismServer() *httptest.Server {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		enc := json.NewEncoder(w)
+
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			filteredTests := api.FilteredTestResponse{}
+			enc.Encode(filteredTests)
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			testPlan := plan.TestPlan{
+				Identifier:  "facecafe",
+				Parallelism: 0,
+				Tasks:       map[string]*plan.Task{},
+			}
+			enc.Encode(testPlan)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	return svr
 }
 
 func getHttptestServer() *httptest.Server {

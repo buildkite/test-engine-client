@@ -61,6 +61,10 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	switch outputFormat {
 
 	case PlanOutputJSON:
+		if testPlan.Parallelism == 0 {
+			fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
+		}
+
 		summary := struct {
 			Identifier string `json:"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"`
 
@@ -80,6 +84,11 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		}
 
 	case PlanOutputPipelineUpload:
+		if testPlan.Parallelism == 0 {
+			fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
+			return nil
+		}
+
 		cmd := makePipelineUploadCommand(template)
 
 		env := os.Environ()
