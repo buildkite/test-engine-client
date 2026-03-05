@@ -16,6 +16,9 @@ import (
 // that are slow or contain skipped tests. These files are then split into examples
 // The remaining files are sent as is.
 //
+// If location prefix is configured, the file paths are prefixed when making the request to the Test Engine API,
+// so that it can correctly identify the files.
+//
 // If tag filtering is enabled, all files are split into examples to support filtering.
 // Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
@@ -101,6 +104,32 @@ func buildSelectionParams(strategy string, params map[string]string) *api.Select
 	}
 }
 
+func getExamplesWithPrefix(filePaths []string, runner TestRunner) ([]plan.TestCase, error) {
+	prefix := runner.LocationPrefix()
+	trimmedPaths := make([]string, len(filePaths))
+
+	for i, filePath := range filePaths {
+		path, err := trimFilePathPrefix(filePath, prefix)
+		if err != nil {
+			return nil, fmt.Errorf("trim file path prefix: %w", err)
+		}
+		trimmedPaths[i] = path
+	}
+
+	examples, err := runner.GetExamples(trimmedPaths)
+	if err != nil {
+		return nil, fmt.Errorf("get examples: %w", err)
+	}
+
+	if prefix != "" {
+		for i := range examples {
+			examples[i].Path = prefixPath(examples[i].Path, prefix)
+		}
+	}
+
+	return examples, nil
+}
+
 // Splits all the test files into examples to support tag filtering.
 func splitAllFiles(files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
 	debug.Printf("Splitting all %d files", len(files))
@@ -109,9 +138,9 @@ func splitAllFiles(files []plan.TestCase, runner TestRunner) (api.TestPlanParams
 		filePaths = append(filePaths, file.Path)
 	}
 
-	examples, err := runner.GetExamples(filePaths)
+	examples, err := getExamplesWithPrefix(filePaths, runner)
 	if err != nil {
-		return api.TestPlanParamsTest{}, fmt.Errorf("get examples: %w", err)
+		return api.TestPlanParamsTest{}, err
 	}
 
 	debug.Printf("Got %d examples from all files", len(examples))
@@ -122,24 +151,24 @@ func splitAllFiles(files []plan.TestCase, runner TestRunner) (api.TestPlanParams
 }
 
 // filterAndSplitFiles filters the test files through the Test Engine API and splits the filtered files into examples.
-// It returns the test plan parameters with the examples from the filtered files and the remaining files.
+// It returns the test plan parameters with the examples from the filtered files and the remaining files that are not filtered.
 // An error is returned if there is a failure in any of the process.
-func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Client, files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
+func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Client, allTestFiles []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
 	// Filter files that need to be split.
-	debug.Printf("Filtering %d files", len(files))
+	debug.Printf("Filtering %d files", len(allTestFiles))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
-		Files: files,
+		Files: allTestFiles,
 		Env:   cfg,
 	})
 	if err != nil {
 		return api.TestPlanParamsTest{}, fmt.Errorf("filter tests: %w", err)
 	}
 
-	// If no files are filtered, return the all files.
+	// If no files are filtered, return all the files.
 	if len(filteredFiles) == 0 {
 		debug.Println("No filtered files found")
 		return api.TestPlanParamsTest{
-			Files: files,
+			Files: allTestFiles,
 		}, nil
 	}
 
@@ -148,29 +177,24 @@ func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Cli
 
 	filteredFilesMap := make(map[string]bool, len(filteredFiles))
 	filteredFilesPath := make([]string, 0, len(filteredFiles))
-	prefix := runner.LocationPrefix()
 	for _, file := range filteredFiles {
 		filteredFilesMap[file.Path] = true
-		// File paths sent to the API for filtering tests include the location prefix to match Test Engine records.
-		// However, the test runner expects file paths without the prefix, so we need to remove it before running the tests.
-		trimmedPath, err := trimFilePathPrefix(file.Path, prefix)
-		if err != nil {
-			return api.TestPlanParamsTest{}, fmt.Errorf("trim file path prefix: %w", err)
-		}
-
-		filteredFilesPath = append(filteredFilesPath, trimmedPath)
+		filteredFilesPath = append(filteredFilesPath, file.Path)
 	}
 
-	examples, err := runner.GetExamples(filteredFilesPath)
+	// The filtered files returned by the API include the location prefix in their paths,
+	// so we should trim the prefix before passing the file paths to the runner to get the examples,
+	// then re-apply the prefix to the example paths collected by the runner.
+	examples, err := getExamplesWithPrefix(filteredFilesPath, runner)
 	if err != nil {
-		return api.TestPlanParamsTest{}, fmt.Errorf("get examples: %w", err)
+		return api.TestPlanParamsTest{}, err
 	}
 
 	debug.Printf("Got %d examples within the filtered files", len(examples))
 
 	// Get the remaining files that are not filtered.
-	remainingFiles := make([]plan.TestCase, 0, len(files)-len(filteredFiles))
-	for _, file := range files {
+	remainingFiles := make([]plan.TestCase, 0, len(allTestFiles)-len(filteredFiles))
+	for _, file := range allTestFiles {
 		if _, ok := filteredFilesMap[file.Path]; !ok {
 			remainingFiles = append(remainingFiles, file)
 		}

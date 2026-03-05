@@ -728,13 +728,13 @@ func TestCreateRequestParams_WithLocationPrefix_SplitByExample(t *testing.T) {
 				{
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",
-					Path:       "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+					Path:       "my/project/testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Scope:      "Banana",
 				},
 				{
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:2:1]",
 					Name:       "is green",
-					Path:       "./testdata/rspec/spec/fruits/banana_spec.rb[1:2:1]",
+					Path:       "my/project/testdata/rspec/spec/fruits/banana_spec.rb[1:2:1]",
 					Scope:      "Banana when not ripe",
 				},
 			},
