@@ -47,7 +47,7 @@ func TestNewJest(t *testing.T) {
 
 	for _, c := range cases {
 		got := NewJest(c.input)
-		if diff := cmp.Diff(got.RunnerConfig, c.want); diff != "" {
+		if diff := cmp.Diff(got.RunnerConfig, c.want, cmp.AllowUnexported(RunnerConfig{})); diff != "" {
 			t.Errorf("NewJest(%v) diff (-got +want):\n%s", c.input, diff)
 		}
 	}
