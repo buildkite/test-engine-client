@@ -108,6 +108,9 @@ func getExamplesWithPrefix(filePaths []string, runner TestRunner) ([]plan.TestCa
 	prefix := runner.LocationPrefix()
 	trimmedPaths := make([]string, len(filePaths))
 
+	// runner.GetExamples will call the test runner with the file paths.
+	// Because the test runner expects the file paths without the prefix (it doesn't know about the prefix),
+	// we need to trim the prefix before passing the file paths to the runner.
 	for i, filePath := range filePaths {
 		path, err := trimFilePathPrefix(filePath, prefix)
 		if err != nil {
@@ -121,8 +124,12 @@ func getExamplesWithPrefix(filePaths []string, runner TestRunner) ([]plan.TestCa
 		return nil, fmt.Errorf("get examples: %w", err)
 	}
 
+	// After getting the examples from the runner, we need to re-apply the prefix to the example paths
+	// before sending them to the Test Engine API.
 	if prefix != "" {
 		for i := range examples {
+			// The 'Identifier' field in an example may not always be a file path.
+			// Since the Test Engine API only uses the 'Path' field, we only apply the prefix to 'Path'.
 			examples[i].Path = prefixPath(examples[i].Path, prefix)
 		}
 	}
