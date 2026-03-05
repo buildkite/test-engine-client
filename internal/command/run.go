@@ -74,7 +74,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	// File paths sent to the API for test plan creation include the location prefix to match Test Engine records.
 	// However, the test runner expects file paths without the prefix, so we need to remove it before running the tests.
 	locationPrefix := testRunner.LocationPrefix()
-	if locationPrefix != "" {
+	if locationPrefix != "" && !testPlan.Fallback {
 		for i, test := range thisNodeTask.Tests {
 			path, err := trimFilePathPrefix(test.Path, locationPrefix)
 			if err != nil {
