@@ -122,6 +122,16 @@ func (r *RunResult) FailedMutedTests() []plan.TestCase {
 	return failedTests
 }
 
+func (r *RunResult) unknownResultTestsCount() int {
+	count := 0
+	for _, test := range r.tests {
+		if test.Status == TestStatusUnknown {
+			count++
+		}
+	}
+	return count
+}
+
 // Status returns the overall status of the test run.
 // If there is an error, it returns RunStatusError.
 // If there are failed tests, it returns RunStatusFailed.
@@ -131,7 +141,7 @@ func (r *RunResult) Status() RunStatus {
 		return RunStatusError
 	}
 
-	if len(r.tests) == 0 {
+	if len(r.tests) == 0 || r.unknownResultTestsCount() > 0 {
 		return RunStatusUnknown
 	}
 

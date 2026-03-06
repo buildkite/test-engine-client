@@ -2,7 +2,6 @@ package runner
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -84,26 +83,23 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 		testPaths[i] = tc.Path
 	}
 
-	commandName, commandArgs, err := r.commandNameAndArgs(command, testPaths)
-	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+	commandName, commandArgs, cmdErr := r.commandNameAndArgs(command, testPaths)
+	if cmdErr != nil {
+		return fmt.Errorf("failed to build command: %w", cmdErr)
 	}
 
 	cmd := exec.Command(commandName, commandArgs...)
 
-	err = runAndForwardSignal(cmd)
+	cmdErr = runAndForwardSignal(cmd)
 
-	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		return err
-	}
-
+	// RSpec exits with a non-zero status code when there are test failures,
+	// so we should always attempt to parse the report even if the command returns an error.
 	report, parseErr := r.ParseReport(r.ResultPath)
 	if parseErr != nil {
-		// If we can't parse the report, it indicates a failure in the rspec command itself (as opposed to the tests failing).
-		// In this case don't try to continue manipulating the report and return the error (which may be nil)
-		// *from runAndForwardSignal*, effectively the exit code of the rspec command.
-		fmt.Printf("Buildkite Test Engine Client: Failed to read Rspec output, tests will not be retried: %v", parseErr)
-		return err
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Rspec output, tests will not be retried: %v\n", parseErr)
+		// We don't want to fail the build if we fail to parse the report,
+		// therefore we return the command error (which can be nil), instead of the parse error.
+		return cmdErr
 	}
 
 	for _, example := range report.Examples {
@@ -115,32 +111,19 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 			status = TestStatusPassed
 		case "pending":
 			status = TestStatusSkipped
+		default:
+			status = TestStatusUnknown
 		}
 
 		result.RecordTestResult(mapExampleToTestCase(example), status)
 	}
 
-	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-		// If rspec exits with a non-zero status and reported test failures,
-		// we can ignore the error. The test failures are handled by the *RunResult.
-		if report.Summary.FailureCount > 0 {
-			return nil
-		}
-
-		// If rspec exits with a non-zero status and reported errors outside of examples,
-		// set the error in *RunResult to fail the job.
-		if report.Summary.ErrorsOutsideOfExamplesCount > 0 {
-			result.error = fmt.Errorf("RSpec failed with errors outside of examples")
-			return nil
-		}
-
-		// Otherwise, the non-zero exit code is unexpected
-		// and we should set the error in *RunResult to fail the job and surface the exit code.
-		result.error = fmt.Errorf("RSpec exited with code %d", exitError.ExitCode())
-		return nil
+	if report.Summary.ErrorsOutsideOfExamplesCount > 0 {
+		result.error = fmt.Errorf("RSpec reported %d errors outside of examples", report.Summary.ErrorsOutsideOfExamplesCount)
 	}
 
-	return nil
+	// Return any command error after processing the report
+	return cmdErr
 }
 
 // RspecExample represents a single test example in an Rspec report.
