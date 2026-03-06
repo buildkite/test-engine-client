@@ -35,6 +35,17 @@ func NewPlaywright(p RunnerConfig) Playwright {
 	}
 }
 
+func (p Playwright) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  false,
+		FilterTestFiles: true,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	testPaths := make([]string, len(testCases))
 	for i, tc := range testCases {

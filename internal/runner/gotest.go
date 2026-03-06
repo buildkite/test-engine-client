@@ -32,6 +32,17 @@ func NewGoTest(c RunnerConfig) GoTest {
 	}
 }
 
+func (g GoTest) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     false,
+		SplitByExample:  false,
+		FilterTestFiles: false,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (g GoTest) Name() string {
 	return "gotest"
 }

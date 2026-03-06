@@ -4,28 +4,7 @@ import (
 	"fmt"
 
 	"github.com/buildkite/test-engine-client/internal/config"
-	"github.com/buildkite/test-engine-client/internal/plan"
 )
-
-type RunnerConfig struct {
-	TestRunner             string
-	TestCommand            string
-	TestFilePattern        string
-	TestFileExcludePattern string
-	RetryTestCommand       string
-	TagFilters             string
-	// ResultPath is used internally so bktec can read result from Test Runner.
-	// User typically don't need to worry about setting this except in in RSpec and playwright.
-	// In playwright, for example, it can only be configured via a config file, therefore it's mandatory for user to set.
-	ResultPath string
-}
-
-type TestRunner interface {
-	Run(result *RunResult, testCases []plan.TestCase, retry bool) error
-	GetExamples(files []string) ([]plan.TestCase, error)
-	GetFiles() ([]string, error)
-	Name() string
-}
 
 func DetectRunner(cfg *config.Config) (TestRunner, error) {
 	runnerConfig := RunnerConfig{

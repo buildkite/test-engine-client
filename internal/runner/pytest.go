@@ -59,6 +59,17 @@ func NewPytest(c RunnerConfig) Pytest {
 	}
 }
 
+func (p Pytest) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  true,
+		FilterTestFiles: true,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	testPaths := make([]string, len(testCases))
 	for i, tc := range testCases {

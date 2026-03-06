@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/buildkite/test-engine-client/internal/runner"
 )
 
-func getTestFiles(fileList string, testRunner TestRunner) ([]string, error) {
+func getTestFiles(fileList string, testRunner runner.TestRunner) ([]string, error) {
 	if fileList != "" {
 		return getTestFilesFromFile(fileList)
 	} else {
