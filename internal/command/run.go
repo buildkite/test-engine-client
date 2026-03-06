@@ -72,36 +72,34 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	// execute tests
 	var timeline []api.Timeline
-	runResult, err := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
+	runResult, runErr := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
 
-	// Handle errors that prevent the runner from finishing.
-	// By finishing, it means that the runner has completed with a readable result.
-	if err != nil {
-		// runner terminated by signal: exit with 128 + signal number
-		if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-			logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
-		}
-
-		// runner exited with error: exit with the exit code
-		if exitError := new(exec.ExitError); errors.As(err, &exitError) {
-			return fmt.Errorf("%s exited with error: %w", testRunner.Name(), err)
-		}
-
-		return err
-	}
-
-	// At this point, the runner is expected to have completed
-
+	printReport(runResult, testPlan.SkippedTests, testRunner.Name())
 	if !testPlan.Fallback {
 		sendMetadata(ctx, apiClient, cfg, timeline, runResult.Statistics())
 	}
 
-	printReport(runResult, testPlan.SkippedTests, testRunner.Name())
-
-	if runResult.Status() == runner.RunStatusFailed || runResult.Status() == runner.RunStatusError {
-		os.Exit(1)
+	if runErr == nil {
+		return nil
 	}
-	return nil
+
+	// If the run result status is Passed, but there is still an error,
+	// it likely means the failures were from muted tests.
+	// In this case, ignore the error to prevent the build from failing.
+	if runResult.Status() == runner.RunStatusPassed && len(runResult.MutedTests()) > 0 {
+		return nil
+	}
+
+	// The remaining error case are hard failures that should fail the build.
+	if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &ProcessSignaledError) {
+		logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
+	}
+
+	if exitError := new(exec.ExitError); errors.As(runErr, &exitError) {
+		return fmt.Errorf("%s exited with error: %w", testRunner.Name(), runErr)
+	}
+
+	return runErr
 }
 
 func printStartUpMessage() {
@@ -122,62 +120,63 @@ func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.Tes
 	case runner.RunStatusError:
 		fmt.Printf("🚨 %s\n", runResult.Error())
 	}
-	fmt.Println("")
 
 	// Print statistics
 	statistics := runResult.Statistics()
-	data := [][]string{
-		{"Passed", "first run", strconv.Itoa(statistics.PassedOnFirstRun)},
-		{"Passed", "on retry", strconv.Itoa(statistics.PassedOnRetry)},
-		{"Muted", "passed", strconv.Itoa(statistics.MutedPassed)},
-		{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
-		{"Failed", "", strconv.Itoa(statistics.Failed)},
-		{"Skipped", "", strconv.Itoa(statistics.Skipped)},
-	}
-	table := tablewriter.NewWriter(os.Stdout)
-	table.AppendBulk(data)
-	table.SetFooter([]string{"", "Total", strconv.Itoa(statistics.Total)})
-	table.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
-	table.SetAutoMergeCellsByColumnIndex([]int{0, 1})
-	table.SetRowLine(true)
-	table.Render()
-
-	// Print muted and failed tests
-	mutedTests := runResult.MutedTests()
-	if len(mutedTests) > 0 {
+	if statistics.Total > 0 {
 		fmt.Println("")
-		fmt.Println("+++ Muted Tests:")
-		for _, mutedTest := range runResult.MutedTests() {
-			fmt.Printf("- %s %s (%s)\n", mutedTest.Scope, mutedTest.Name, mutedTest.Status)
+		data := [][]string{
+			{"Passed", "first run", strconv.Itoa(statistics.PassedOnFirstRun)},
+			{"Passed", "on retry", strconv.Itoa(statistics.PassedOnRetry)},
+			{"Muted", "passed", strconv.Itoa(statistics.MutedPassed)},
+			{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
+			{"Failed", "", strconv.Itoa(statistics.Failed)},
+			{"Skipped", "", strconv.Itoa(statistics.Skipped)},
+		}
+		table := tablewriter.NewWriter(os.Stdout)
+		table.AppendBulk(data)
+		table.SetFooter([]string{"", "Total", strconv.Itoa(statistics.Total)})
+		table.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
+		table.SetAutoMergeCellsByColumnIndex([]int{0, 1})
+		table.SetRowLine(true)
+		table.Render()
+
+		// Print muted and failed tests
+		mutedTests := runResult.MutedTests()
+		if len(mutedTests) > 0 {
+			fmt.Println("")
+			fmt.Println("+++ Muted Tests:")
+			for _, mutedTest := range runResult.MutedTests() {
+				fmt.Printf("- %s %s (%s)\n", mutedTest.Scope, mutedTest.Name, mutedTest.Status)
+			}
+		}
+
+		failedTests := runResult.FailedTests()
+		if len(failedTests) > 0 {
+			fmt.Println("")
+			fmt.Println("+++ Failed Tests:")
+			for _, failedTests := range runResult.FailedTests() {
+				fmt.Printf("- %s %s\n", failedTests.Scope, failedTests.Name)
+			}
+		}
+
+		testsSkippedByRunner := runResult.SkippedTests()
+		if len(testsSkippedByRunner) > 0 {
+			fmt.Println("")
+			fmt.Printf("+++ Skipped by %s:\n", runnerName)
+			for _, skippedTest := range testsSkippedByRunner {
+				fmt.Printf("- %s %s\n", skippedTest.Scope, skippedTest.Name)
+			}
+		}
+
+		if len(testsSkippedByTestEngine) > 0 {
+			fmt.Println("")
+			fmt.Println("+++ Skipped by Test Engine:")
+			for _, skippedTest := range testsSkippedByTestEngine {
+				fmt.Printf("- %s %s\n", skippedTest.Scope, skippedTest.Name)
+			}
 		}
 	}
-
-	failedTests := runResult.FailedTests()
-	if len(failedTests) > 0 {
-		fmt.Println("")
-		fmt.Println("+++ Failed Tests:")
-		for _, failedTests := range runResult.FailedTests() {
-			fmt.Printf("- %s %s\n", failedTests.Scope, failedTests.Name)
-		}
-	}
-
-	testsSkippedByRunner := runResult.SkippedTests()
-	if len(testsSkippedByRunner) > 0 {
-		fmt.Println("")
-		fmt.Printf("+++ Skipped by %s:\n", runnerName)
-		for _, skippedTest := range testsSkippedByRunner {
-			fmt.Printf("- %s %s\n", skippedTest.Scope, skippedTest.Name)
-		}
-	}
-
-	if len(testsSkippedByTestEngine) > 0 {
-		fmt.Println("")
-		fmt.Println("+++ Skipped by Test Engine:")
-		for _, skippedTest := range testsSkippedByTestEngine {
-			fmt.Printf("- %s %s\n", skippedTest.Scope, skippedTest.Name)
-		}
-	}
-
 	fmt.Println("===================================================")
 }
 
