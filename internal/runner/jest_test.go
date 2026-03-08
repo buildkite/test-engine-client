@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewJest(t *testing.T) {
@@ -130,11 +131,7 @@ func TestJestRun_Retry_WithTestFilePattern(t *testing.T) {
 		{Scope: "this will fail", Name: "for sure", Path: "./testdata/jest/failure.spec.js"},
 	}
 	result := NewRunResult([]plan.TestCase{})
-	err := jest.Run(result, testCases, true)
-
-	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
-	}
+	jest.Run(result, testCases, true)
 
 	if got := len(result.tests); got != 2 {
 		t.Errorf("Jest.Run(%q) test count = %d, want %d", testCases, got, 2)
@@ -171,9 +168,8 @@ func TestJestRun_TestFailed(t *testing.T) {
 		},
 	}
 
-	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
@@ -240,9 +236,8 @@ func TestJestRun_RuntimeError(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, false)
 
-	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	// Make sure that we capture other tests that are not affected by the runtime error (expelliarmus.spec.js)
 	if len(result.tests) != 1 {
@@ -276,9 +271,8 @@ func TestJestRun_TestTimeoutWithRetry(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, false)
 
-	if err != nil {
-		t.Errorf("Jest.Run() error = %v", err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Jest.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
@@ -315,9 +309,7 @@ func TestJestRun_CommandFailed(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Jest.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
 func TestJestRun_SignaledError(t *testing.T) {

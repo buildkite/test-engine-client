@@ -1,12 +1,12 @@
 package runner
 
 import (
-	"errors"
 	"os/exec"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCustom_NewCustom_MissingTestCommand(t *testing.T) {
@@ -152,7 +152,7 @@ func TestCustom_Run(t *testing.T) {
 	}
 }
 
-func TestCustom_Run_FailingTest(t *testing.T) {
+func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "./test {{testExamples}}",
@@ -174,12 +174,10 @@ func TestCustom_Run_FailingTest(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Custom.Run() error type = %T (%v), want *exec.ExitError", err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
-func TestCustom_Run_WithResult(t *testing.T) {
+func TestCustom_Run_TestFailedWithResult(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "./test {{testExamples}}",
@@ -199,9 +197,8 @@ func TestCustom_Run_WithResult(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err = custom.Run(result, testCases, false)
 
-	if err != nil {
-		t.Errorf("Custom.Run() error = %v", err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	// See test-result.json for expected results
 	if result.Status() != RunStatusFailed {

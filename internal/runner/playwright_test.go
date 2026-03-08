@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPlaywrightRun(t *testing.T) {
@@ -80,9 +81,8 @@ func TestPlaywrightRun_TestFailed(t *testing.T) {
 		},
 	}
 
-	if err != nil {
-		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
@@ -144,9 +144,8 @@ func TestPlaywrightRun_Error(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := playwright.Run(result, testCases, false)
 
-	if err != nil {
-		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusError {
 		t.Errorf("Playwright.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
@@ -169,9 +168,7 @@ func TestPlaywrightRun_CommandFailed(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Playwright.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
 func TestPlaywrightRun_SignaledError(t *testing.T) {

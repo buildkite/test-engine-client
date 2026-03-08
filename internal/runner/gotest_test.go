@@ -3,6 +3,7 @@ package runner
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -48,7 +49,9 @@ func TestGotestRun_TestFailed(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := gotest.Run(result, testCases, false)
 
-	assert.NoError(t, err)
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
@@ -67,7 +70,9 @@ func TestGotestRun_CommandFailed(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := gotest.Run(result, testCases, false)
 
-	assert.NoError(t, err) // sadly we don't have a way to reliably differentiate test fail vs build fail (yet).
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}

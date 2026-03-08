@@ -8,6 +8,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
+	"github.com/stretchr/testify/assert"
 )
 
 // Testing happy path where all configurtions are auto configured.
@@ -35,6 +36,7 @@ func TestPytestRun_RetryCommand(t *testing.T) {
 	pytest := NewPytest(RunnerConfig{
 		TestCommand:      "pytest failed_test.py",
 		RetryTestCommand: "pytest",
+		ResultPath:       "result-passed.json",
 	})
 
 	testCases := []plan.TestCase{
@@ -60,9 +62,9 @@ func TestPytestRun_TestFailed(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, false)
-	if err != nil {
-		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
-	}
+
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
@@ -107,9 +109,7 @@ func TestPytestRun_TestFailedWithoutResultFile(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Pytest.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
 func TestPytestRun_CommandFailed(t *testing.T) {
@@ -130,9 +130,7 @@ func TestPytestRun_CommandFailed(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Pytest.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
 func TestPytestGetFiles(t *testing.T) {
