@@ -2,7 +2,6 @@ package runner
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -85,15 +84,16 @@ func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) 
 
 	cmd := exec.Command(commandName, commandArgs...)
 
-	err = runAndForwardSignal(cmd)
-	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		return err
-	}
+	cmdErr := runAndForwardSignal(cmd)
 
+	// Cucumber exits with a non-zero status code when there are test failures,
+	// so we should always attempt to parse the report even if the command returns an error.
 	report, parseErr := c.ParseReport(c.ResultPath)
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read Cucumber JSON output, tests will not be retried: %v", parseErr)
-		return err
+		// We don't want to fail the build if we fail to parse the report,
+		// therefore we return the command error (which can be nil), instead of the parse error.
+		return cmdErr
 	}
 
 	// Iterate scenarios.
@@ -112,7 +112,7 @@ func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) 
 			case "pending", "skipped" /* cucumber-js uses skipped */ :
 				testStatus = TestStatusSkipped
 			default:
-				testStatus = TestStatusSkipped
+				testStatus = TestStatusUnknown
 			}
 
 			fileLinePath := fmt.Sprintf("%s:%d", feature.URI, scenario.Line)
@@ -127,10 +127,8 @@ func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) 
 		}
 	}
 
-	// Determine if there were any errors outside of scenarios. Cucumber does not
-	// provide such count – we rely on process exit status already handled above.
-
-	return nil
+	// Return any command error after processing the report
+	return cmdErr
 }
 
 // CucumberFeature and CucumberElement structs would be defined, likely in a separate parser file.

@@ -2,7 +2,6 @@ package runner
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,16 +47,16 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 
 	cmd := exec.Command(cmdName, cmdArgs...)
 
-	err = runAndForwardSignal(cmd)
+	cmdErr := runAndForwardSignal(cmd)
 
-	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		return err
-	}
-
+	// Playwright exits with a non-zero status code when there are test failures,
+	// so we should always attempt to parse the report even if the command returns an error.
 	report, parseErr := p.parseReport(p.ResultPath)
 	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read Playwright output, tests will not be retried: %v", parseErr)
-		return err
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Playwright output, tests will not be retried: %v\n", parseErr)
+		// We don't want to fail the build if we fail to parse the report,
+		// therefore we return the command error (which can be nil), instead of the parse error.
+		return cmdErr
 	}
 
 	for _, suite := range report.Suites {
@@ -71,7 +70,8 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 		result.error = fmt.Errorf("Playwright failed with errors")
 	}
 
-	return nil
+	// Return any command error after processing the report
+	return cmdErr
 
 }
 

@@ -48,18 +48,21 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 
 	cmd := exec.Command(cmdName, cmdArgs...)
-	err = runAndForwardSignal(cmd)
+	cmdErr := runAndForwardSignal(cmd)
+
 	// go test output does not differentiate build fail or test fail. They both return 1
-	// What is even more bizarre is that even when go test failed on compliation, it will still generate an output xml
+	// What is even more bizarre is that even when go test failed on compilation, it will still generate an output xml
 	// file that says "TestMain" failed..
 	if exitError := new(exec.ExitError); errors.As(err, &exitError) && exitError.ExitCode() != 1 {
 		return err
 	}
 
-	testResults, err := loadAndParseGotestJUnitXmlResult(g.ResultPath)
-
-	if err != nil {
-		return fmt.Errorf("failed to load and parse test result: %w", err)
+	testResults, parseErr := loadAndParseGotestJUnitXmlResult(g.ResultPath)
+	if parseErr != nil {
+		fmt.Printf("Buildkite Test Engine Client: Failed to read gotestsum output, tests will not be retried: %v\n", parseErr)
+		// We don't want to fail the build if we fail to parse the report,
+		// therefore we return the command error (which can be nil), instead of the parse error.
+		return cmdErr
 	}
 
 	for _, test := range testResults {
@@ -72,7 +75,8 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		}, test.Result)
 	}
 
-	return nil // Success
+	// Return any command error after processing the report
+	return cmdErr
 }
 
 // GetFiles discovers Go packages using `go list ./...`.
