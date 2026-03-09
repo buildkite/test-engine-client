@@ -106,9 +106,14 @@ func printStartUpMessage() {
 }
 
 func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {
+	status := runResult.Status()
+	if status == runner.RunStatusUnknown {
+		return
+	}
+
 	fmt.Println("+++ ========== Buildkite Test Engine Report  ==========")
 
-	switch runResult.Status() {
+	switch status {
 	case runner.RunStatusPassed:
 		fmt.Println("✅ All tests passed.")
 	case runner.RunStatusFailed:
