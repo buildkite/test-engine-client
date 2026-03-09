@@ -79,10 +79,10 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		sendMetadata(ctx, apiClient, cfg, timeline, runResult.Statistics())
 	}
 
-	// If the run result status is Passed, but there is still an error,
-	// it likely means the failures were from muted tests.
-	// In this case, ignore the error to prevent the build from failing.
-	if runResult.Status() == runner.RunStatusPassed && len(runResult.MutedTests()) > 0 {
+	// If the run result status is Passed but there are failed muted tests,
+	// the failures were suppressed due to muting.
+	// Therefore, we should ignore the error to prevent the build from failing.
+	if runResult.Status() == runner.RunStatusPassed && len(runResult.FailedMutedTests()) > 0 {
 		return nil
 	}
 
@@ -115,7 +115,11 @@ func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.Tes
 
 	switch status {
 	case runner.RunStatusPassed:
-		fmt.Println("✅ All tests passed.")
+		if len(runResult.FailedMutedTests()) > 0 {
+			fmt.Println("✅ Build passed. Some muted tests failed.")
+		} else {
+			fmt.Println("✅ All tests passed.")
+		}
 	case runner.RunStatusFailed:
 		fmt.Println("❌ Some tests failed.")
 	case runner.RunStatusError:
