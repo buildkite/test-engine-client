@@ -79,10 +79,6 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		sendMetadata(ctx, apiClient, cfg, timeline, runResult.Statistics())
 	}
 
-	if runErr == nil {
-		return nil
-	}
-
 	// If the run result status is Passed, but there is still an error,
 	// it likely means the failures were from muted tests.
 	// In this case, ignore the error to prevent the build from failing.
@@ -249,14 +245,9 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 			})
 		}
 
-		// Don't retry if there is an error that is not a test failure.
-		if err != nil {
-			return *runResult, err
-		}
-
 		// Don't retry if we've reached max retries.
 		if attemptCount == maxRetries {
-			return *runResult, nil
+			return *runResult, err
 		}
 
 		failedTests := runResult.FailedTests()
@@ -275,7 +266,7 @@ func runTestsWithRetry(testRunner TestRunner, testsCases *[]plan.TestCase, maxRe
 
 			attemptCount++
 		} else {
-			return *runResult, nil
+			return *runResult, err
 		}
 	}
 

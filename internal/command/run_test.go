@@ -141,9 +141,8 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		os.Remove(testRunner.ResultPath)
 	})
 
-	if err != nil {
-		t.Errorf("runTestsWithRetry(...) error = %v", err)
-	}
+	exitErr := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitErr)
 
 	if testResult.Status() != runner.RunStatusFailed {
 		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusFailed)
@@ -206,9 +205,8 @@ func TestRunTestsWithRetry_NoRetryForMutedTest(t *testing.T) {
 		os.Remove(testRunner.ResultPath)
 	})
 
-	if err != nil {
-		t.Errorf("runTestsWithRetry(...) error = %v", err)
-	}
+	exitErr := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitErr)
 
 	if testResult.Status() != runner.RunStatusPassed {
 		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusPassed)
@@ -253,7 +251,7 @@ func TestRunTestsWithRetry_RetryForMutedTest(t *testing.T) {
 		os.Remove(testRunner.ResultPath)
 	})
 
-	assert.NoError(t, err)
+	assert.Error(t, err)
 
 	if testResult.Status() != runner.RunStatusPassed {
 		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusPassed)
@@ -364,9 +362,8 @@ func TestRunTestsWithRetry_RunResultError(t *testing.T) {
 		os.Remove(testRunner.ResultPath)
 	})
 
-	if err != nil {
-		t.Errorf("runTestsWithRetry(...) error = %v", err)
-	}
+	exitErr := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitErr)
 
 	if testResult.Status() != runner.RunStatusError {
 		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusError)
