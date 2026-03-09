@@ -53,8 +53,8 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	// go test output does not differentiate build fail or test fail. They both return 1
 	// What is even more bizarre is that even when go test failed on compilation, it will still generate an output xml
 	// file that says "TestMain" failed..
-	if exitError := new(exec.ExitError); errors.As(err, &exitError) && exitError.ExitCode() != 1 {
-		return err
+	if exitError := new(exec.ExitError); errors.As(cmdErr, &exitError) && exitError.ExitCode() != 1 {
+		return cmdErr
 	}
 
 	testResults, parseErr := loadAndParseGotestJUnitXmlResult(g.ResultPath)
