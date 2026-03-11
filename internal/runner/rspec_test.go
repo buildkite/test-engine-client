@@ -25,6 +25,7 @@ func TestNewRspec(t *testing.T) {
 				TestFilePattern:        "spec/**/*_spec.rb",
 				TestFileExcludePattern: "",
 				RetryTestCommand:       "bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}",
+				locationPrefix:         "./",
 			},
 		},
 		// custom
@@ -34,12 +35,14 @@ func TestNewRspec(t *testing.T) {
 				TestFilePattern:        "spec/models/**/*_spec.rb",
 				TestFileExcludePattern: "spec/features/**/*_spec.rb",
 				RetryTestCommand:       "bin/rspec --fail-fast {{testExamples}}",
+				locationPrefix:         "my/project",
 			},
 			want: RunnerConfig{
 				TestCommand:            "bin/rspec --format documentation {{testExamples}} --format json --out {{resultPath}}",
 				TestFilePattern:        "spec/models/**/*_spec.rb",
 				TestFileExcludePattern: "spec/features/**/*_spec.rb",
 				RetryTestCommand:       "bin/rspec --fail-fast {{testExamples}}",
+				locationPrefix:         "my/project",
 			},
 		},
 		// RetryTestCommand fallback to TestCommand
@@ -52,13 +55,14 @@ func TestNewRspec(t *testing.T) {
 				TestFilePattern:        "spec/**/*_spec.rb",
 				TestFileExcludePattern: "",
 				RetryTestCommand:       "bundle exec --format json --out out.json {{testExamples}}",
+				locationPrefix:         "./",
 			},
 		},
 	}
 
 	for _, c := range cases {
 		got := NewRspec(c.input)
-		if diff := cmp.Diff(got.RunnerConfig, c.want); diff != "" {
+		if diff := cmp.Diff(got.RunnerConfig, c.want, cmp.AllowUnexported(RunnerConfig{})); diff != "" {
 			t.Errorf("NewRspec(%v) diff (-got +want):\n%s", c.input, diff)
 		}
 	}
