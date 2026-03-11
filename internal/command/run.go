@@ -74,24 +74,25 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	var timeline []api.Timeline
 	runResult, runErr := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
 
+	// Abort immediately and propagate the error if the process was terminated by a signal,
+	// since the test results may be unreliable and cannot be trusted.
+	if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &ProcessSignaledError) {
+		logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
+	}
+
 	printReport(runResult, testPlan.SkippedTests, testRunner.Name())
 	if !testPlan.Fallback {
 		sendMetadata(ctx, apiClient, cfg, timeline, runResult.Statistics())
 	}
 
-	// If the run result status is Passed but there are failed muted tests,
-	// the failures were suppressed due to muting.
-	// Therefore, we should ignore the error to prevent the build from failing.
-	if runResult.Status() == runner.RunStatusPassed && len(runResult.FailedMutedTests()) > 0 {
-		return nil
-	}
-
-	// The remaining error case are hard failures that should fail the build.
-	if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &ProcessSignaledError) {
-		logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
-	}
-
 	if exitError := new(exec.ExitError); errors.As(runErr, &exitError) {
+		if exitError.ExitCode() == 1 && runResult.Status() == runner.RunStatusPassed && len(runResult.FailedMutedTests()) > 0 {
+			// We can't definitively confirm the non-zero exit was caused by muted test failures,
+			// since runners like rspec or jest can exit with code 1 for non-test-failure reasons too.
+			// However, checking for exit code 1 alongside a passing report is a best-effort approximation
+			// to reduce the risk of incorrectly suppressing a real error.
+			return nil
+		}
 		return fmt.Errorf("%s exited with error: %w", testRunner.Name(), runErr)
 	}
 
