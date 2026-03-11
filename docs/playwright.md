@@ -69,9 +69,6 @@ Or using the environment variable:
 export BUILDKITE_TEST_ENGINE_LOCATION_PREFIX=my/prefix/
 ```
 
-> [!TIP]
-> If your test collector is configured using the `BUILDKITE_ANALYTICS_LOCATION_PREFIX` environment variable, bktec will automatically read the same value and you don't need to set `BUILDKITE_TEST_ENGINE_LOCATION_PREFIX`.
-
 ## Automatically retry failed tests
 You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using either the default test command or the command specified in `BUILDKITE_TEST_ENGINE_TEST_CMD`.
 
