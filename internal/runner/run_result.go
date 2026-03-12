@@ -122,14 +122,33 @@ func (r *RunResult) FailedMutedTests() []plan.TestCase {
 	return failedTests
 }
 
-func (r *RunResult) unknownResultTestsCount() int {
+func (r *RunResult) passedTestsCount() int {
 	count := 0
 	for _, test := range r.tests {
-		if test.Status == TestStatusUnknown {
+		if test.Status == TestStatusPassed {
 			count++
 		}
 	}
 	return count
+}
+
+func (r *RunResult) skippedTestsCount() int {
+	count := 0
+	for _, test := range r.tests {
+		if test.Status == TestStatusSkipped {
+			count++
+		}
+	}
+	return count
+}
+
+func (r *RunResult) OnlyMutedFailures() bool {
+	for _, test := range r.tests {
+		if test.Status == TestStatusFailed && !test.Muted {
+			return false
+		}
+	}
+	return true
 }
 
 // Status returns the overall status of the test run.
@@ -141,7 +160,7 @@ func (r *RunResult) Status() RunStatus {
 		return RunStatusError
 	}
 
-	if len(r.tests) == 0 || r.unknownResultTestsCount() > 0 {
+	if len(r.tests) == 0 {
 		return RunStatusUnknown
 	}
 
@@ -149,7 +168,11 @@ func (r *RunResult) Status() RunStatus {
 		return RunStatusFailed
 	}
 
-	return RunStatusPassed
+	if r.passedTestsCount()+r.skippedTestsCount()+len(r.FailedMutedTests()) == len(r.tests) {
+		return RunStatusPassed
+	}
+
+	return RunStatusUnknown
 }
 
 func (r *RunResult) Error() error {

@@ -86,11 +86,11 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	}
 
 	if exitError := new(exec.ExitError); errors.As(runErr, &exitError) {
-		if exitError.ExitCode() == 1 && runResult.Status() == runner.RunStatusPassed && len(runResult.FailedMutedTests()) > 0 {
-			// We can't definitively confirm the non-zero exit was caused by muted test failures,
-			// since runners like rspec or jest can exit with code 1 for non-test-failure reasons too.
-			// However, checking for exit code 1 alongside a passing report is a best-effort approximation
-			// to reduce the risk of incorrectly suppressing a real error.
+		// We can't definitively confirm the non-zero exit was caused by muted test failures,
+		// since runners like rspec or jest can exit with code 1 for non-test-failure reasons too.
+		// However, checking for exit code 1 alongside a passing report is a best-effort approximation
+		// to reduce the risk of incorrectly suppressing a real error.
+		if exitError.ExitCode() == 1 && runResult.OnlyMutedFailures() {
 			return nil
 		}
 		return fmt.Errorf("%s exited with error: %w", testRunner.Name(), runErr)
