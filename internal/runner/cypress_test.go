@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCypressRun(t *testing.T) {
@@ -52,9 +53,7 @@ func TestCypressRun_TestFailed(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
 func TestCypressRun_CommandFailed(t *testing.T) {
@@ -71,9 +70,7 @@ func TestCypressRun_CommandFailed(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
 func TestCypressRun_SignaledError(t *testing.T) {

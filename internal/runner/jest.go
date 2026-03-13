@@ -2,7 +2,6 @@ package runner
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -61,7 +60,6 @@ func (j Jest) GetFiles() ([]string, error) {
 
 func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	var cmd *exec.Cmd
-	var err error
 
 	testPaths := make([]string, len(testCases))
 	for i, testCase := range testCases {
@@ -91,16 +89,16 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		cmd = exec.Command(commandName, commandArgs...)
 	}
 
-	err = runAndForwardSignal(cmd)
+	cmdErr := runAndForwardSignal(cmd)
 
-	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		return err
-	}
-
+	// Jest exits with a non-zero status code when there are test failures,
+	// so we should always attempt to parse the report even if the command returns an error.
 	report, parseErr := j.ParseReport(j.ResultPath)
 	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read Jest output, tests will not be retried: %v", parseErr)
-		return err
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Jest output, tests will not be retried: %v\n", parseErr)
+		// We don't want to fail the build if we fail to parse the report,
+		// therefore we return the command error (which can be nil), instead of the parse error.
+		return cmdErr
 	}
 
 	for _, testResult := range report.TestResults {
@@ -121,6 +119,8 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 				status = TestStatusSkipped
 			case "todo":
 				status = TestStatusSkipped
+			default:
+				status = TestStatusUnknown
 			}
 
 			wordDir, err := os.Getwd()
@@ -145,7 +145,8 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 		}
 	}
 
-	return nil
+	// Return any command error after processing the report
+	return cmdErr
 }
 
 type JestExample struct {

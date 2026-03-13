@@ -78,19 +78,21 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 
 	cmd := exec.Command(cmdName, cmdArgs...)
 
-	err = runAndForwardSignal(cmd)
+	cmdErr := runAndForwardSignal(cmd)
 
 	// Only rescue exit code 1 because it indicates a test failures.
 	// Ref: https://docs.pytest.org/en/7.1.x/reference/exit-codes.html
-	if exitError := new(exec.ExitError); errors.As(err, &exitError) && exitError.ExitCode() != 1 {
-		return err
+	if exitError := new(exec.ExitError); errors.As(cmdErr, &exitError) && exitError.ExitCode() != 1 {
+		return cmdErr
 	}
 
 	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
 
 	if parseErr != nil {
-		fmt.Println("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried:", parseErr)
-		return err
+		fmt.Printf("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried: %v\n", parseErr)
+		// We don't want to fail the build if we fail to parse the report,
+		// therefore we return the command error (which can be nil), instead of the parse error.
+		return cmdErr
 	}
 
 	for _, test := range tests {
@@ -105,7 +107,8 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		}, test.Result)
 	}
 
-	return nil
+	// Return any command error after processing the report
+	return cmdErr
 }
 
 func (p Pytest) GetFiles() ([]string, error) {

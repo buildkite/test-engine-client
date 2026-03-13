@@ -221,10 +221,16 @@ func TestRunStatistics(t *testing.T) {
 	}
 }
 
-func TestRunStatus(t *testing.T) {
-	r := NewRunResult([]plan.TestCase{})
+func TestRunStatus_Passed(t *testing.T) {
+	r := NewRunResult([]plan.TestCase{
+		{Scope: "watermelon", Name: "is juicy"},
+	})
 	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusPassed)
+	// skipped test should not affect the run status
 	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is red"}, TestStatusSkipped)
+	// muted test should not affect the run status even if it's failed
+	r.RecordTestResult(plan.TestCase{Scope: "watermelon", Name: "is juicy"}, TestStatusFailed)
+
 	if r.Status() != RunStatusPassed {
 		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusPassed)
 	}
@@ -233,6 +239,11 @@ func TestRunStatus(t *testing.T) {
 func TestRunStatus_Failed(t *testing.T) {
 	r := NewRunResult([]plan.TestCase{})
 	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusFailed)
+	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is red"}, TestStatusPassed)
+	r.RecordTestResult(plan.TestCase{Scope: "watermelon", Name: "is juicy"}, TestStatusUnknown)
+	r.RecordTestResult(plan.TestCase{Scope: "banana", Name: "is yellow"}, TestStatusSkipped)
+
+	// doesn't matter if there are tests with other status, if there's at least one failed test the status should be "failed"
 	if r.Status() != RunStatusFailed {
 		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusFailed)
 	}
@@ -241,8 +252,45 @@ func TestRunStatus_Failed(t *testing.T) {
 func TestRunStatus_Error(t *testing.T) {
 	r := NewRunResult([]plan.TestCase{})
 	r.error = fmt.Errorf("error")
+
+	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusFailed)
+	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is red"}, TestStatusPassed)
+	r.RecordTestResult(plan.TestCase{Scope: "watermelon", Name: "is juicy"}, TestStatusUnknown)
+
+	// doesn't matter what individual test results are, if there's an error the status should be "error"
 	if r.Status() != RunStatusError {
 		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusError)
+	}
+}
+
+func TestRunStatus_Unknown(t *testing.T) {
+	r := NewRunResult([]plan.TestCase{})
+	// when there are no tests, the status should be "unknown"
+	if r.Status() != RunStatusUnknown {
+		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusUnknown)
+	}
+
+	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusUnknown)
+	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is red"}, TestStatusPassed)
+	// even if the rest of the tests are passed, if there's at least one test with unknown status, the overall status should be "unknown"
+	if r.Status() != RunStatusUnknown {
+		t.Errorf("Status() is %s, want %s", r.Status(), RunStatusUnknown)
+	}
+}
+
+func TestOnlyMutedFailures(t *testing.T) {
+	r := NewRunResult([]plan.TestCase{
+		{Scope: "mango", Name: "is sour"},
+	})
+
+	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusFailed)
+	if r.OnlyMutedFailures() != true {
+		t.Errorf("OnlyMutedFailures() is %v, want %v", r.OnlyMutedFailures(), true)
+	}
+
+	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is red"}, TestStatusFailed)
+	if r.OnlyMutedFailures() != false {
+		t.Errorf("OnlyMutedFailures() is %v, want %v", r.OnlyMutedFailures(), false)
 	}
 }
 

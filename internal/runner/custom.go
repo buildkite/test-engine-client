@@ -72,27 +72,22 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 
 	cmd := exec.Command(cmdName, cmdArgs...)
 
-	err = runAndForwardSignal(cmd)
-	// We don't want to return error all them time here because it maybe due to test failures.
-	// If the result path is not set, we should bubble up the error.
-	// Otherwise, we will try to parse the result file and determine whether to fail the run based on the test results.
-	if r.ResultPath == "" {
-		return err
-	}
+	cmdErr := runAndForwardSignal(cmd)
 
-	if ProcessSignaledError := new(ProcessSignaledError); errors.As(err, &ProcessSignaledError) {
-		return err
+	// If the result path is not set, bubble up the error directly.
+	if r.ResultPath == "" {
+		return cmdErr
 	}
 
 	tests, parseErr := parseTestEngineTestResult(r.ResultPath)
-
 	if parseErr != nil {
-		fmt.Println("Buildkite Test Engine Client: Failed to read json output:", parseErr)
-		return err
+		fmt.Printf("Buildkite Test Engine Client: Failed to read json output: %v\n", parseErr)
+		// We don't want to fail the build if we fail to parse the report,
+		// therefore we return the command error (which can be nil), instead of the parse error.
+		return cmdErr
 	}
 
 	for _, test := range tests {
-
 		result.RecordTestResult(plan.TestCase{
 			Identifier: test.Id,
 			Format:     plan.TestCaseFormatExample,
@@ -104,7 +99,8 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		}, test.Result)
 	}
 
-	return nil
+	// Return any command error after processing the report
+	return cmdErr
 }
 
 func (r Custom) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {

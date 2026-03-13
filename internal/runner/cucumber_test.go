@@ -3,12 +3,14 @@ package runner
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"sort"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewCucumber(t *testing.T) {
@@ -113,9 +115,8 @@ func TestCucumberRun_TestFailed(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := cucumber.Run(result, testCases, false)
 
-	if err != nil {
-		t.Errorf("Cucumber.Run(%q) error = %v", testCases, err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Cucumber.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)

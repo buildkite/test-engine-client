@@ -10,6 +10,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewRspec(t *testing.T) {
@@ -144,9 +145,8 @@ func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 		},
 	}
 
-	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
@@ -177,9 +177,7 @@ func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
 func TestRspecRun_TestSkipped(t *testing.T) {
@@ -228,17 +226,11 @@ func TestRspecRun_TestExit(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, false)
 
-	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
-	if result.Status() != RunStatusError {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
-	}
-
-	wantError := "RSpec exited with code 7"
-	if diff := cmp.Diff(result.error.Error(), wantError); diff != "" {
-		t.Errorf("Rspec.Run(%q) RunResult.error diff (-got +want):\n%s", testCases, diff)
+	if result.Status() != RunStatusUnknown {
+		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 }
 
@@ -258,9 +250,8 @@ func TestRspecRun_ErrorOutsideOfExamples(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, false)
 
-	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
-	}
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusError {
 		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
@@ -280,9 +271,7 @@ func TestRspecRun_CommandFailed(t *testing.T) {
 	}
 
 	exitError := new(exec.ExitError)
-	if !errors.As(err, &exitError) {
-		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *exec.ExitError", testCases, err, err)
-	}
+	assert.ErrorAs(t, err, &exitError)
 }
 
 func TestRspecRun_SignaledError(t *testing.T) {

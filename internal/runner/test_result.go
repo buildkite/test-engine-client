@@ -8,6 +8,7 @@ const (
 	TestStatusPassed  TestStatus = "passed"
 	TestStatusFailed  TestStatus = "failed"
 	TestStatusSkipped TestStatus = "skipped"
+	TestStatusUnknown TestStatus = "unknown"
 )
 
 // TestResult is a struct to keep track the result of an individual test case.
