@@ -143,6 +143,10 @@ func (r *RunResult) skippedTestsCount() int {
 }
 
 func (r *RunResult) OnlyMutedFailures() bool {
+	if r.Status() == RunStatusError || r.Status() == RunStatusUnknown {
+		return false
+	}
+
 	failed, mutedFailed := 0, 0
 
 	for _, test := range r.tests {
