@@ -283,6 +283,12 @@ func TestOnlyMutedFailures(t *testing.T) {
 		{Scope: "mango", Name: "is sour"},
 	})
 
+	// when there are no failed tests, it should return false
+	r.RecordTestResult(plan.TestCase{Scope: "banana", Name: "is yellow"}, TestStatusPassed)
+	if r.OnlyMutedFailures() != false {
+		t.Errorf("OnlyMutedFailures() is %v, want %v", r.OnlyMutedFailures(), false)
+	}
+
 	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is sour"}, TestStatusFailed)
 	if r.OnlyMutedFailures() != true {
 		t.Errorf("OnlyMutedFailures() is %v, want %v", r.OnlyMutedFailures(), true)
