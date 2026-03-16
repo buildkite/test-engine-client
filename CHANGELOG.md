@@ -1,6 +1,11 @@
 # Changelog
 
-## 2.2.0
+## 2.3.0 - 2026-03-16
+- Add support for test file location prefix for [RSpec](./docs/rspec.md#location-prefix), [Jest](./docs/jest.md#location-prefix), and [Playwright](./docs/playwright.md#location-prefix).
+- Improve test runner error handling. Exit codes are now propagated by default, except when the runner exits with code 1 and all failures are from muted tests.
+- Skip pipeline upload when dynamic parallelism returns 0.
+
+## 2.2.0 - 2026-02-27
 - Add preview test selection flags to `plan` and `run`, including repeatable `key=value` CLI handling without JSON-in-env encoding. These may not be supported by the API yet.
 
 ## 2.1.3 - 2026-02-24
