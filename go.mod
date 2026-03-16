@@ -1,8 +1,6 @@
 module github.com/buildkite/test-engine-client
 
-go 1.24.0
-
-toolchain go1.24.1
+go 1.25.0
 
 require (
 	github.com/buildkite/roko v1.4.0
@@ -16,7 +14,7 @@ require (
 	github.com/pact-foundation/pact-go/v2 v2.4.2
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v3 v3.7.0
-	golang.org/x/mod v0.33.0
+	golang.org/x/mod v0.34.0
 )
 
 require (
