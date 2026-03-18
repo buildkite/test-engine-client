@@ -3,12 +3,13 @@
 > [!WARNING]
 > Pants support is currently experimental and has limited feature support. Only the following features are supported:
 >
+> - Intelligent test splitting with `{{testExamples}}` and `--files`
 > - Automatically retry failed tests
 > - Mute tests (ignore test failures)
 >
 > The following features are not supported:
 >
-> - Filter test files
+> - Filter test files (via glob patterns)
 > - Split slow files by individual test example
 > - Skip tests
 
@@ -42,7 +43,7 @@ Below are a few recommendations for specific scenarios:
 ---
 
 ```sh
-export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test test //:: -- --json={{resultPath}} --merge-json""
+export BUILDKITE_TEST_ENGINE_TEST_CMD="pants --filter-target-type=python_test test //:: -- --json={{resultPath}} --merge-json"
 ```
 
 This command is a good option if you want to run all python tests in your repository.
@@ -65,9 +66,75 @@ In both commands, `{{resultPath}}` is replaced with a unique temporary path crea
 > [!IMPORTANT]
 > Make sure to append `-- --json={{resultPath}} --merge-json` in your custom pants test command, as bktec requires these options to read the test results for retries and verification purposes.
 
+## Intelligent test splitting with `{{testExamples}}`
+
+You can use `{{testExamples}}` in your test command to have bktec inject intelligently-sharded test file paths into the pants command. This enables bktec to distribute tests across parallel nodes using historical timing data for balanced shards, while pants handles the actual test execution (building pex files, caching, etc.).
+
+When `{{testExamples}}` is included, bktec replaces it with the subset of test files assigned to the current node. For example:
+
+```sh
+pants test {{testExamples}} -- --json={{resultPath}} --merge-json
+```
+
+becomes (for a given node):
+
+```sh
+pants test tests/test_a.py tests/test_b.py tests/test_c.py -- --json=/tmp/bktec-xxx/result.json --merge-json
+```
+
+### Using `--files` with `{{testExamples}}`
+
+Because the `pytest-pants` runner does not support bktec's glob-based file discovery, use the `--files` flag (or `BUILDKITE_TEST_ENGINE_FILES` env var) to provide an explicit list of test files. This is especially useful when an external tool like pants determines which tests need to run (e.g., based on changed files and transitive dependencies).
+
+Create a file with one test file path per line:
+
+```
+tests/test_auth.py
+tests/test_api.py
+tests/models/test_user.py
+```
+
+### Example: Two-step plan + run pipeline
+
+This example shows a common workflow where pants determines which tests to run, bktec creates an intelligent plan, and each parallel node executes its shard via pants:
+
+```yaml
+steps:
+  - name: "Plan Tests"
+    command: |
+      # Step 1: Use pants to determine which test files need to run
+      pants filter --target-type=python_test :: > test_files.txt
+
+      # Step 2: bktec creates a balanced plan using historical timing data
+      PLAN_OUTPUT=$$(bktec plan --json --files test_files.txt)
+      echo "$$PLAN_OUTPUT" | buildkite-agent env set --input-format=json -
+
+      # Step 3: Upload the file list as an artifact for parallel nodes
+      buildkite-agent artifact upload test_files.txt
+    env:
+      BUILDKITE_TEST_ENGINE_TEST_RUNNER: pytest-pants
+      BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
+      BUILDKITE_TEST_ENGINE_MAX_PARALLELISM: "10"
+      BUILDKITE_TEST_ENGINE_TARGET_TIME: "5m"
+
+  - name: "Run Tests"
+    depends_on: "Plan Tests"
+    parallelism: 10
+    command: |
+      buildkite-agent artifact download test_files.txt .
+      bktec run --files test_files.txt
+    env:
+      BUILDKITE_TEST_ENGINE_TEST_RUNNER: pytest-pants
+      BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
+      BUILDKITE_TEST_ENGINE_TEST_CMD: "pants test {{testExamples}} -- --json={{resultPath}} --merge-json"
+```
+
+> [!NOTE]
+> When `{{testExamples}}` is **not** present in the test command, bktec runs the command as-is without injecting test file paths. This preserves the original behavior where pants handles test selection (e.g., via `--changed-since` or `//::` target specs).
+
 ## Filter test files
 
-There is not support for filtering test files at this time.
+There is no support for filtering test files via glob patterns at this time. Use the `--files` flag to provide an explicit list of test files, or use pants' own filtering mechanisms in the test command.
 
 ## Automatically retry failed tests
 

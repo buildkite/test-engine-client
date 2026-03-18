@@ -11,10 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// test cases are not supported in pytest pants at this time. It's required to
-// have all tests cases passed to the test command.
-// TODO: add support for test cases in pytest pants. This is a temporary
-// workaround to allow bktec to run pytest pants.
+// When {{testExamples}} is included in the test command, bktec injects
+// intelligently-sharded test file paths into the pants command, enabling
+// test splitting with pants as the test executor.
 
 func TestPytestPantsRun(t *testing.T) {
 	changeCwd(t, "./testdata/pytest_pants")
@@ -242,6 +241,146 @@ func TestPytestPantsCommandNameAndArgs_ValidCommand(t *testing.T) {
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
 		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_WithTestExamples(t *testing.T) {
+	testCases := []string{"tests/test_a.py", "tests/test_b.py"}
+	testCommand := "pants test {{testExamples}} -- --json={{resultPath}} --merge-json"
+
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "result.json",
+	})
+
+	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	if err != nil {
+		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+	}
+
+	wantName := "pants"
+	wantArgs := []string{"test", "tests/test_a.py", "tests/test_b.py", "--", "--json=result.json", "--merge-json"}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_WithTestExamplesPathsWithSpaces(t *testing.T) {
+	testCases := []string{"tests/test a.py", "tests/test b.py"}
+	testCommand := "pants test {{testExamples}} -- --json={{resultPath}} --merge-json"
+
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "result.json",
+	})
+
+	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	if err != nil {
+		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+	}
+
+	wantName := "pants"
+	wantArgs := []string{"test", "tests/test a.py", "tests/test b.py", "--", "--json=result.json", "--merge-json"}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_WithTestExamplesSingleFile(t *testing.T) {
+	testCases := []string{"tests/test_a.py"}
+	testCommand := "pants test {{testExamples}} -- --json={{resultPath}} --merge-json"
+
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "result.json",
+	})
+
+	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	if err != nil {
+		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+	}
+
+	wantName := "pants"
+	wantArgs := []string{"test", "tests/test_a.py", "--", "--json=result.json", "--merge-json"}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_WithTestExamplesAndExtraFlags(t *testing.T) {
+	testCases := []string{"tests/test_a.py", "tests/test_b.py"}
+	testCommand := "pants --filter-target-type=python_test test {{testExamples}} -- --json={{resultPath}} --merge-json"
+
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "result.json",
+	})
+
+	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	if err != nil {
+		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+	}
+
+	wantName := "pants"
+	wantArgs := []string{"--filter-target-type=python_test", "test", "tests/test_a.py", "tests/test_b.py", "--", "--json=result.json", "--merge-json"}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_WithTestExamplesEmptyTestCases(t *testing.T) {
+	testCases := []string{}
+	testCommand := "pants test {{testExamples}} -- --json={{resultPath}} --merge-json"
+
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "result.json",
+	})
+
+	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	if err != nil {
+		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+	}
+
+	wantName := "pants"
+	wantArgs := []string{"test", "--", "--json=result.json", "--merge-json"}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_WithTestExamplesNoDashSeparator(t *testing.T) {
+	testCases := []string{"tests/test_a.py"}
+	testCommand := "pants test {{testExamples}} --json={{resultPath}} --merge-json"
+
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: testCommand,
+		ResultPath:  "result.json",
+	})
+
+	_, _, err := pytest.commandNameAndArgs(testCommand, testCases)
+	if err == nil {
+		t.Error("commandNameAndArgs() error = nil, want error about -- separator")
 	}
 }
 
