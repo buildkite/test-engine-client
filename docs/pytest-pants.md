@@ -96,7 +96,7 @@ tests/models/test_user.py
 
 ### Example: Replacing `--test-shard` with intelligent splitting
 
-A common pants CI pattern is to use `pants filter` with `--changed-since` and `--changed-dependents=transitive` to resolve the affected test targets for a PR, then shard them across parallel agents using pants' built-in `--test-shard`. While this works, the native sharding distributes tests without considering execution time, which often leads to unbalanced shards — some agents finish in seconds while others run for minutes.
+A common pants CI pattern is to use `pants filter` with `--changed-since` and `--changed-dependents=transitive` to resolve the affected test targets for a PR, then shard them across parallel agents using pants' built-in `--test-shard`. While this works, the native sharding distributes tests without considering execution time, which often leads to significantly unbalanced shards — for example, some agents finishing in 10 minutes while others run for 25 minutes.
 
 By replacing `--test-shard` with bktec's test splitting, you get shards balanced by historical timing data. Here's how the workflow changes:
 
