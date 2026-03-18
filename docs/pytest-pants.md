@@ -84,9 +84,9 @@ pants test tests/test_a.py tests/test_b.py tests/test_c.py -- --json=/tmp/bktec-
 
 ### Using `--files` with `{{testExamples}}`
 
-Because the `pytest-pants` runner does not support bktec's glob-based file discovery, use the `--files` flag (or `BUILDKITE_TEST_ENGINE_FILES` env var) to provide an explicit list of test files. This is especially useful when an external tool like pants determines which tests need to run (e.g., based on changed files and transitive dependencies).
+Because the `pytest-pants` runner does not support bktec's glob-based file discovery, use the `--files` flag (or `BUILDKITE_TEST_ENGINE_FILES` env var) to provide an explicit list of test files. This is especially useful when pants determines which tests need to run based on changed files and their transitive dependencies.
 
-Create a file with one test file path per line:
+Create a file with one test target per line:
 
 ```
 tests/test_auth.py
@@ -94,40 +94,69 @@ tests/test_api.py
 tests/models/test_user.py
 ```
 
-### Example: Two-step plan + run pipeline
+### Example: Replacing `--test-shard` with intelligent splitting
 
-This example shows a common workflow where pants determines which tests to run, bktec creates an intelligent plan, and each parallel node executes its shard via pants:
+A common pants CI pattern is to use `pants filter` with `--changed-since` and `--changed-dependents=transitive` to resolve the affected test targets for a PR, then shard them across parallel agents using pants' built-in `--test-shard`. While this works, the native sharding distributes tests without considering execution time, which often leads to unbalanced shards — some agents finish in seconds while others run for minutes.
+
+By replacing `--test-shard` with bktec's test splitting, you get shards balanced by historical timing data. Here's how the workflow changes:
+
+**Step 1: Resolve affected targets and create a plan**
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve affected test targets using pants' dependency-aware filtering
+CHANGED_SINCE="origin/${BUILDKITE_PULL_REQUEST_BASE_BRANCH:-main}"
+
+pants \
+    --changed-since="${CHANGED_SINCE}" \
+    --changed-dependents=transitive \
+    --filter-target-type="+python_test" \
+    filter > affected_tests.txt
+
+# Create a balanced test plan using historical timing data
+PLAN_OUTPUT=$(bktec plan --json --files affected_tests.txt)
+echo "${PLAN_OUTPUT}" | buildkite-agent env set --input-format=json -
+
+# Upload the target list for parallel nodes to download
+buildkite-agent artifact upload affected_tests.txt
+```
+
+**Step 2: Each parallel node runs its assigned shard**
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Download the target list from the resolve step
+buildkite-agent artifact download affected_tests.txt .
+
+# bktec fetches the plan and runs only this node's assigned tests via pants
+bktec run --files affected_tests.txt
+```
+
+**Pipeline configuration:**
 
 ```yaml
 steps:
-  - name: "Plan Tests"
-    command: |
-      # Step 1: Use pants to determine which test files need to run
-      pants filter --target-type=python_test :: > test_files.txt
-
-      # Step 2: bktec creates a balanced plan using historical timing data
-      PLAN_OUTPUT=$$(bktec plan --json --files test_files.txt)
-      echo "$$PLAN_OUTPUT" | buildkite-agent env set --input-format=json -
-
-      # Step 3: Upload the file list as an artifact for parallel nodes
-      buildkite-agent artifact upload test_files.txt
+  - label: "Resolve targets & plan"
+    command: ".buildkite/scripts/plan_tests.sh"
     env:
       BUILDKITE_TEST_ENGINE_TEST_RUNNER: pytest-pants
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
-      BUILDKITE_TEST_ENGINE_MAX_PARALLELISM: "10"
-      BUILDKITE_TEST_ENGINE_TARGET_TIME: "5m"
 
-  - name: "Run Tests"
-    depends_on: "Plan Tests"
+  - label: "Test"
+    depends_on: "Resolve targets & plan"
     parallelism: 10
-    command: |
-      buildkite-agent artifact download test_files.txt .
-      bktec run --files test_files.txt
+    command: ".buildkite/scripts/run_tests.sh"
     env:
       BUILDKITE_TEST_ENGINE_TEST_RUNNER: pytest-pants
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
       BUILDKITE_TEST_ENGINE_TEST_CMD: "pants test {{testExamples}} -- --json={{resultPath}} --merge-json"
 ```
+
+This replaces pants' `--test-shard=i/N` with bktec's timing-aware distribution. Pants still handles everything it's good at — resolving dependencies, building PEX files, caching — while bktec ensures each node gets a balanced share of the work.
 
 > [!NOTE]
 > When `{{testExamples}}` is **not** present in the test command, bktec runs the command as-is without injecting test file paths. This preserves the original behavior where pants handles test selection (e.g., via `--changed-since` or `//::` target specs).
