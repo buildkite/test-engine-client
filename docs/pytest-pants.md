@@ -98,63 +98,39 @@ tests/models/test_user.py
 
 A common pants CI pattern is to use `pants filter` with `--changed-since` and `--changed-dependents=transitive` to resolve the affected test targets for a PR, then shard them across parallel agents using pants' built-in `--test-shard`. While this works, the native sharding distributes tests without considering execution time, which often leads to significantly unbalanced shards — for example, some agents finishing in 10 minutes while others run for 25 minutes.
 
-By replacing `--test-shard` with bktec's test splitting, you get shards balanced by historical timing data. Here's how the workflow changes:
+By replacing `--test-shard` with bktec's test splitting, you get shards balanced by historical timing data. The general workflow is:
 
-**Step 1: Resolve affected targets and create a plan**
+1. **Resolve affected targets** — use `pants filter` to determine which tests need to run:
 
-```sh
-#!/usr/bin/env bash
-set -euo pipefail
+   ```sh
+   pants \
+       --changed-since="origin/main" \
+       --changed-dependents=transitive \
+       --filter-target-type="+python_test" \
+       filter > affected_tests.txt
+   ```
 
-# Resolve affected test targets using pants' dependency-aware filtering
-CHANGED_SINCE="origin/${BUILDKITE_PULL_REQUEST_BASE_BRANCH:-main}"
+2. **Create a balanced plan** — pass the target list to bktec:
 
-pants \
-    --changed-since="${CHANGED_SINCE}" \
-    --changed-dependents=transitive \
-    --filter-target-type="+python_test" \
-    filter > affected_tests.txt
+   ```sh
+   bktec plan --json --files affected_tests.txt
+   ```
 
-# Create a balanced test plan using historical timing data
-PLAN_OUTPUT=$(bktec plan --json --files affected_tests.txt)
-echo "${PLAN_OUTPUT}" | buildkite-agent env set --input-format=json -
+   This sends the file list to the Buildkite Test Engine API, which uses historical timing data to distribute tests across nodes. The output includes a `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER` that subsequent steps use to fetch the plan.
 
-# Upload the target list for parallel nodes to download
-buildkite-agent artifact upload affected_tests.txt
-```
+3. **Run shards in parallel** — each node downloads the target list and runs its assigned shard:
 
-**Step 2: Each parallel node runs its assigned shard**
+   ```sh
+   bktec run --files affected_tests.txt
+   ```
 
-```sh
-#!/usr/bin/env bash
-set -euo pipefail
+   With `BUILDKITE_TEST_ENGINE_TEST_CMD` set to:
 
-# Download the target list from the resolve step
-buildkite-agent artifact download affected_tests.txt .
+   ```sh
+   pants test {{testExamples}} -- --json={{resultPath}} --merge-json
+   ```
 
-# bktec fetches the plan and runs only this node's assigned tests via pants
-bktec run --files affected_tests.txt
-```
-
-**Pipeline configuration:**
-
-```yaml
-steps:
-  - label: "Resolve targets & plan"
-    command: ".buildkite/scripts/plan_tests.sh"
-    env:
-      BUILDKITE_TEST_ENGINE_TEST_RUNNER: pytest-pants
-      BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
-
-  - label: "Test"
-    depends_on: "Resolve targets & plan"
-    parallelism: 10
-    command: ".buildkite/scripts/run_tests.sh"
-    env:
-      BUILDKITE_TEST_ENGINE_TEST_RUNNER: pytest-pants
-      BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
-      BUILDKITE_TEST_ENGINE_TEST_CMD: "pants test {{testExamples}} -- --json={{resultPath}} --merge-json"
-```
+   bktec fetches the plan, determines which tests belong to this node, and substitutes `{{testExamples}}` with those test paths before invoking pants.
 
 This replaces pants' `--test-shard=i/N` with bktec's timing-aware distribution. Pants still handles everything it's good at — resolving dependencies, building PEX files, caching — while bktec ensures each node gets a balanced share of the work.
 
