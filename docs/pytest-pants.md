@@ -96,11 +96,11 @@ tests/models/test_user.py
 
 ### Example: Replacing `--test-shard` with intelligent splitting
 
-A common pants CI pattern is to use `pants filter` with `--changed-since` and `--changed-dependents=transitive` to resolve the affected test targets for a PR, then shard them across parallel agents using pants' built-in `--test-shard`. While this works, the native sharding distributes tests without considering execution time, which often leads to significantly unbalanced shards — for example, some agents finishing in 10 minutes while others run for 25 minutes.
+It's common to use `pants test` with `--changed-since` and `--changed-dependents=transitive` to run only the tests affected by a change, and then distribute them across parallel agents using pants' built-in `--test-shard`. While this works, the native sharding distributes tests without considering execution time, which often leads to significantly unbalanced shards — for example, some agents finishing in 10 minutes while others run for 25 minutes.
 
-By replacing `--test-shard` with bktec's test splitting, you get shards balanced by historical timing data. The general workflow is:
+By separating target resolution (`pants filter`) from test execution (`pants test`), you can use bktec to create balanced shards from the resolved target list. The general workflow is:
 
-1. **Resolve affected targets** — use `pants filter` to determine which tests need to run:
+1. **Resolve affected targets** — use `pants filter` instead of relying on `pants test --changed-since` directly, so you get an explicit list of targets that bktec can plan against:
 
    ```sh
    pants \
