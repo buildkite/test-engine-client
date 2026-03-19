@@ -126,7 +126,7 @@ func (p PytestPants) commandNameAndArgs(cmd string, testCases []string) (string,
 		return "", []string{}, fmt.Errorf("please ensure the test command in BUILDKITE_TEST_ENGINE_TEST_CMD includes a -- separator")
 	}
 
-	// Check that both required flags are after the --
+	// Check that required flags are after the --
 	afterDash := parts[1]
 	if !strings.Contains(afterDash, "--json={{resultPath}}") {
 		return "", []string{}, fmt.Errorf("please ensure the test command in BUILDKITE_TEST_ENGINE_TEST_CMD includes --json={{resultPath}} after the -- separator")
