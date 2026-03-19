@@ -111,8 +111,13 @@ func (p PytestPants) GetExamples(files []string) ([]plan.TestCase, error) {
 }
 
 func (p PytestPants) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+	// If {{testExamples}} is present, substitute with the shard's test file paths.
+	// This enables bktec to inject intelligently-sharded test files into the pants command,
+	// e.g. "pants test {{testExamples}} -- --json={{resultPath}} --merge-json"
+	// becomes "pants test tests/test_a.py tests/test_b.py -- --json=/tmp/result.json --merge-json"
 	if strings.Contains(cmd, "{{testExamples}}") {
-		return "", []string{}, fmt.Errorf("currently, bktec does not support dynamically injecting {{testExamples}}. Please ensure the test command in BUILDKITE_TEST_ENGINE_TEST_CMD does *not* include {{testExamples}}")
+		testExamples := shellquote.Join(testCases...)
+		cmd = strings.Replace(cmd, "{{testExamples}}", testExamples, 1)
 	}
 
 	// Split command into parts before and after the first --
@@ -121,7 +126,7 @@ func (p PytestPants) commandNameAndArgs(cmd string, testCases []string) (string,
 		return "", []string{}, fmt.Errorf("please ensure the test command in BUILDKITE_TEST_ENGINE_TEST_CMD includes a -- separator")
 	}
 
-	// Check that both required flags are after the --
+	// Check that required flags are after the --
 	afterDash := parts[1]
 	if !strings.Contains(afterDash, "--json={{resultPath}}") {
 		return "", []string{}, fmt.Errorf("please ensure the test command in BUILDKITE_TEST_ENGINE_TEST_CMD includes --json={{resultPath}} after the -- separator")
