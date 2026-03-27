@@ -4,15 +4,15 @@ Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your 
 
 bktec supports multiple test runners and offers various features to enhance your testing workflow. Below is a comparison of the features supported by each test runner:
 
-| Feature                                            | RSpec | Jest | Playwright | Cypress | pytest | pants (pytest) | Go test | Cucumber | Custom |
-| -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: | :------------: | :-----: | :------: | :-----: |
-| Split tests by file[^1]                                |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    | ✅      |
-| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)        |   ✅  |   ❌  |    ❌      |    ❌   |   ✅   |       ❌       |   ❌    |    ✅    |    ❌   |
-| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    |    ✅   |
-| Filter test by tags                               |   ❌  |   ❌  |    ❌      |    ❌   |   ✅   |       ❌       |   ❌    |    ❌    |    ❌  |
-| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |    ❌   |
-| Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |    ✅   |
-| Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |   ❌   |       ❌       |   ❌    |    ✅    |    ❌   |
+| Feature                                            | RSpec | Jest | Playwright | Cypress | pytest | pants (pytest) | Go test | Cucumber | NUnit | Custom |
+| -------------------------------------------------- | :---: | :--: | :--------: | :-----: | :----: | :------------: | :-----: | :------: | :---: | :-----: |
+| Split tests by file[^1]                                |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    |  ✅   | ✅      |
+| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)        |   ✅  |   ❌  |    ❌      |    ❌   |   ✅   |       ❌       |   ❌    |    ✅    |  ❌   |    ❌   |
+| Filter test files                                  |   ✅  |   ✅  |    ✅      |    ✅   |   ✅   |       ❌       |   ❌    |    ✅    |  ✅   |    ✅   |
+| Filter test by tags                               |   ❌  |   ❌  |    ❌      |    ❌   |   ✅   |       ❌       |   ❌    |    ❌    |  ❌   |    ❌  |
+| Automatically retry failed test                    |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |  ✅   |    ❌   |
+| Mute tests (ignore test failures)                  |   ✅  |   ✅  |    ✅      |    ❌   |   ✅   |       ✅       |   ✅    |    ✅    |  ✅   |    ✅   |
+| Skip tests                                         |   ✅  |   ❌  |    ❌      |    ❌   |   ❌   |       ❌       |   ❌    |    ✅    |  ❌   |    ❌   |
 
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
@@ -88,6 +88,7 @@ To configure the test runner for bktec, please refer to the detailed guides prov
 - [go test](./docs/gotest.md)
 - [RSpec](./docs/rspec.md)
 - [Cucumber](./docs/cucumber.md)
+- [NUnit](./docs/nunit.md)
 - [Custom Test Runner](./docs/custom-test-runner.md)
 
 
