@@ -9,6 +9,8 @@ type Config struct {
 	// Branch is the string value of the git branch name, used by Buildkite only.
 	Branch  string `json:"BUILDKITE_BRANCH"`
 	BuildId string `json:"BUILDKITE_BUILD_ID"`
+	// Days is the lookback window in days for the commit list API (1-90, default 90).
+	Days int `json:"-"`
 	// Enable debug output
 	DebugEnabled bool `json:"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"`
 	// FailOnNoTests causes the client to exit with an error if no tests are assigned to the node
@@ -32,6 +34,8 @@ type Config struct {
 	NodeIndex int `json:"BUILDKITE_PARALLEL_JOB"`
 	// OrganizationSlug is the slug of the organization.
 	OrganizationSlug string `json:"BUILDKITE_ORGANIZATION_SLUG"`
+	// Output is the local file path for the export tarball. If set, skip S3 upload.
+	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"BUILDKITE_PARALLEL_JOB_COUNT"`
 	// ResultPath is the path to the result file.
@@ -47,6 +51,8 @@ type Config struct {
 	SelectionStrategy string `json:"BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"`
 	// ServerBaseUrl is the base URL of the test plan server.
 	ServerBaseUrl string `json:"-"`
+	// SkipDiffs omits git_diff and git_diff_raw from the export to reduce upload size.
+	SkipDiffs bool `json:"-"`
 	// SplitByExample is the flag to enable split the test by example.
 	SplitByExample bool   `json:"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE"`
 	StepId         string `json:"BUILDKITE_STEP_ID"`
