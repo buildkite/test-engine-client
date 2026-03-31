@@ -12,12 +12,12 @@ changelog:
   use: github-native
   
 archives:
-  - format: binary
+  - formats: [binary]
 
 builds:
   - env:
       - CGO_ENABLED=0
-    goos: [linux, darwin]
+    goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ldflags: "-X 'github.com/buildkite/test-engine-client/internal/version.Version=v{{ .Version }}'"
     binary: bktec

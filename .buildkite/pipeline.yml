@@ -51,7 +51,7 @@ steps:
       artifact_paths: "dist/**/*"
       plugins:
         docker#v5.13.0:
-          image: goreleaser/goreleaser:v2.8.1
+          image: goreleaser/goreleaser:v2.15.1
           mount-buildkite-agent: true
           environment:
             - GOOS={{matrix.os}}
