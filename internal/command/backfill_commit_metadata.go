@@ -147,11 +147,8 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 
 	// 11. Upload or write locally
 	if cfg.Output != "" {
-		if err := os.Rename(tarPath, cfg.Output); err != nil {
-			// Rename fails across filesystems; fall back to copy
-			if err := copyFile(tarPath, cfg.Output); err != nil {
-				return fmt.Errorf("writing output file: %w", err)
-			}
+		if err := copyFile(tarPath, cfg.Output); err != nil {
+			return fmt.Errorf("writing output file: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Wrote %s\n", cfg.Output)
 	} else {
