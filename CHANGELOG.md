@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.3.1 - 2026-04-01
+- Add Windows (amd64, arm64) binary builds to releases.
+
 ## 2.3.0 - 2026-03-16
 - Add support for test file location prefix for [RSpec](./docs/rspec.md#location-prefix), [Jest](./docs/jest.md#location-prefix), and [Playwright](./docs/playwright.md#location-prefix).
 - Improve test runner error handling. Exit codes are now propagated by default, except when the runner exits with code 1 and all failures are from muted tests.
