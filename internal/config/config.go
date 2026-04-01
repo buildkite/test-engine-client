@@ -38,6 +38,8 @@ type Config struct {
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"BUILDKITE_PARALLEL_JOB_COUNT"`
+	// Remote is the git remote name for fetching missing commits and detecting default branch (default "origin").
+	Remote string `json:"-"`
 	// ResultPath is the path to the result file.
 	ResultPath string `json:"-"`
 	// RetryCommand is the command to run the retry tests.

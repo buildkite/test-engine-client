@@ -383,6 +383,15 @@ var daysFlag = &cli.IntFlag{
 	Destination: &cfg.Days,
 }
 
+var remoteFlag = &cli.StringFlag{
+	Name:        "remote",
+	Category:    "BACKFILL",
+	Usage:       "Git remote name for fetching missing commits and detecting default branch",
+	Value:       "origin",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_REMOTE"),
+	Destination: &cfg.Remote,
+}
+
 func backfillCommitMetadataFlags() []cli.Flag {
 	return []cli.Flag{
 		organizationSlugFlag,
@@ -392,6 +401,7 @@ func backfillCommitMetadataFlags() []cli.Flag {
 		skipDiffsFlag,
 		outputFlag,
 		daysFlag,
+		remoteFlag,
 	}
 }
 
