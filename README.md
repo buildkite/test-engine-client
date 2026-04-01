@@ -18,13 +18,15 @@ bktec supports multiple test runners and offers various features to enhance your
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
 
 ### Supported OS/Architecture
-ARM and AMD architecture for linux and darwin
+ARM and AMD architecture for linux, darwin, and windows
 
 The available Go binaries
 - bktec-darwin-amd64
 - bktec-darwin-arm64
 - bktec-linux-amd64
 - bktec-linux-arm64
+- bktec-windows-amd64.exe
+- bktec-windows-arm64.exe
 
 ## Using bktec
 
