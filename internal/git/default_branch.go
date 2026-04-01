@@ -7,10 +7,10 @@ import (
 )
 
 // DetectDefaultBranch returns the remote default branch reference.
-// Tries origin/HEAD, then falls back to origin/main, then origin/master.
-func DetectDefaultBranch(ctx context.Context, runner GitRunner) (string, error) {
+// Tries <remote>/HEAD, then falls back to <remote>/main, then <remote>/master.
+func DetectDefaultBranch(ctx context.Context, runner GitRunner, remote string) (string, error) {
 	// Try symbolic-ref (same as reporummage)
-	output, err := runner.Output(ctx, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	output, err := runner.Output(ctx, "symbolic-ref", "--short", fmt.Sprintf("refs/remotes/%s/HEAD", remote))
 	if err == nil {
 		branch := strings.TrimSpace(output)
 		if branch != "" {
@@ -18,15 +18,17 @@ func DetectDefaultBranch(ctx context.Context, runner GitRunner) (string, error) 
 		}
 	}
 
-	// Fallback: check if origin/main exists
-	if _, err := runner.Output(ctx, "rev-parse", "--verify", "origin/main"); err == nil {
-		return "origin/main", nil
+	// Fallback: check if <remote>/main exists
+	ref := fmt.Sprintf("%s/main", remote)
+	if _, err := runner.Output(ctx, "rev-parse", "--verify", ref); err == nil {
+		return ref, nil
 	}
 
-	// Fallback: check if origin/master exists
-	if _, err := runner.Output(ctx, "rev-parse", "--verify", "origin/master"); err == nil {
-		return "origin/master", nil
+	// Fallback: check if <remote>/master exists
+	ref = fmt.Sprintf("%s/master", remote)
+	if _, err := runner.Output(ctx, "rev-parse", "--verify", ref); err == nil {
+		return ref, nil
 	}
 
-	return "", fmt.Errorf("could not detect default branch: origin/HEAD not set and neither origin/main nor origin/master exist")
+	return "", fmt.Errorf("could not detect default branch: %s/HEAD not set and neither %s/main nor %s/master exist", remote, remote, remote)
 }

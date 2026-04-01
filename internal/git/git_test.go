@@ -47,7 +47,7 @@ func TestDetectDefaultBranch_SymbolicRef(t *testing.T) {
 			"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
 		},
 	}
-	branch, err := DetectDefaultBranch(context.Background(), runner)
+	branch, err := DetectDefaultBranch(context.Background(), runner, "origin")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestDetectDefaultBranch_FallbackMain(t *testing.T) {
 			"rev-parse --verify origin/main": "abc123\n",
 		},
 	}
-	branch, err := DetectDefaultBranch(context.Background(), runner)
+	branch, err := DetectDefaultBranch(context.Background(), runner, "origin")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestDetectDefaultBranch_FallbackMaster(t *testing.T) {
 			"rev-parse --verify origin/master": "abc123\n",
 		},
 	}
-	branch, err := DetectDefaultBranch(context.Background(), runner)
+	branch, err := DetectDefaultBranch(context.Background(), runner, "origin")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,11 +86,26 @@ func TestDetectDefaultBranch_FallbackMaster(t *testing.T) {
 	}
 }
 
+func TestDetectDefaultBranch_CustomRemote(t *testing.T) {
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"symbolic-ref --short refs/remotes/upstream/HEAD": "upstream/develop\n",
+		},
+	}
+	branch, err := DetectDefaultBranch(context.Background(), runner, "upstream")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if branch != "upstream/develop" {
+		t.Errorf("got %q, want %q", branch, "upstream/develop")
+	}
+}
+
 func TestDetectDefaultBranch_NotFound(t *testing.T) {
 	runner := &FakeGitRunner{
 		Responses: map[string]string{},
 	}
-	_, err := DetectDefaultBranch(context.Background(), runner)
+	_, err := DetectDefaultBranch(context.Background(), runner, "origin")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -192,8 +207,8 @@ func TestFilterExistingCommits(t *testing.T) {
 	if diff := cmp.Diff([]string{"abc123", "ghi789"}, existing); diff != "" {
 		t.Errorf("existing diff: %s", diff)
 	}
-	if missing != 1 {
-		t.Errorf("missingCount: got %d, want 1", missing)
+	if diff := cmp.Diff([]string{"def456"}, missing); diff != "" {
+		t.Errorf("missing diff: %s", diff)
 	}
 }
 
@@ -213,8 +228,8 @@ func TestFilterExistingCommits_AllMissing(t *testing.T) {
 	if len(existing) != 0 {
 		t.Errorf("expected no existing commits, got %d", len(existing))
 	}
-	if missing != 2 {
-		t.Errorf("missingCount: got %d, want 2", missing)
+	if diff := cmp.Diff([]string{"abc123", "def456"}, missing); diff != "" {
+		t.Errorf("missing diff: %s", diff)
 	}
 }
 
@@ -234,8 +249,8 @@ func TestFilterExistingCommits_AllExist(t *testing.T) {
 	if diff := cmp.Diff([]string{"abc123", "def456"}, existing); diff != "" {
 		t.Errorf("existing diff: %s", diff)
 	}
-	if missing != 0 {
-		t.Errorf("missingCount: got %d, want 0", missing)
+	if len(missing) != 0 {
+		t.Errorf("expected no missing commits, got %v", missing)
 	}
 }
 
@@ -387,5 +402,69 @@ func TestCollectDiffs_ErrorSkipsCommit(t *testing.T) {
 	}
 	if diffs[2].FilesChanged != "c.go" {
 		t.Errorf("diffs[2].FilesChanged: got %q, want %q", diffs[2].FilesChanged, "c.go")
+	}
+}
+
+func TestFetchMissingCommits_AllSucceed(t *testing.T) {
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"fetch --no-tags --no-write-fetch-head origin aaa bbb ccc": "",
+		},
+	}
+
+	unfetchable, err := FetchMissingCommits(context.Background(), runner, "origin", []string{"aaa", "bbb", "ccc"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if unfetchable != 0 {
+		t.Errorf("unfetchable: got %d, want 0", unfetchable)
+	}
+}
+
+func TestFetchMissingCommits_BisectOnError(t *testing.T) {
+	// Batch of 3 fails (no response), bisects into [aaa] (ok) + [bbb, ccc].
+	// [bbb, ccc] fails (no response), bisects into [bbb] (fails=unfetchable) + [ccc] (ok).
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"fetch --no-tags --no-write-fetch-head origin aaa": "",
+			"fetch --no-tags --no-write-fetch-head origin ccc": "",
+		},
+	}
+
+	unfetchable, err := FetchMissingCommits(context.Background(), runner, "origin", []string{"aaa", "bbb", "ccc"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if unfetchable != 1 {
+		t.Errorf("unfetchable: got %d, want 1", unfetchable)
+	}
+}
+
+func TestFetchMissingCommits_AllUnfetchable(t *testing.T) {
+	// No responses means everything fails
+	runner := &FakeGitRunner{
+		Responses: map[string]string{},
+	}
+
+	unfetchable, err := FetchMissingCommits(context.Background(), runner, "origin", []string{"aaa", "bbb"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if unfetchable != 2 {
+		t.Errorf("unfetchable: got %d, want 2", unfetchable)
+	}
+}
+
+func TestFetchMissingCommits_EmptyList(t *testing.T) {
+	runner := &FakeGitRunner{
+		Responses: map[string]string{},
+	}
+
+	unfetchable, err := FetchMissingCommits(context.Background(), runner, "origin", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if unfetchable != 0 {
+		t.Errorf("unfetchable: got %d, want 0", unfetchable)
 	}
 }
