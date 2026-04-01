@@ -65,6 +65,7 @@ func getBackfillConfig(serverURL string) *config.Config {
 	cfg.SuiteSlug = "my-suite"
 	cfg.ServerBaseUrl = serverURL
 	cfg.Days = 90
+	cfg.Remote = "origin"
 	return &cfg
 }
 

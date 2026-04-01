@@ -50,27 +50,38 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	runner := gitRunnerFactory()
 
 	// 4. Detect default branch
-	defaultBranch, err := git.DetectDefaultBranch(ctx, runner)
+	defaultBranch, err := git.DetectDefaultBranch(ctx, runner, cfg.Remote)
 	if err != nil {
 		return fmt.Errorf("detecting default branch: %w", err)
 	}
 	debug.Printf("Default branch: %s", defaultBranch)
 
-	// 5. Build mainline cache
-	fmt.Fprintln(os.Stderr, "Building mainline cache...")
-	mc, err := git.BuildMainlineCache(ctx, runner, defaultBranch)
-	if err != nil {
-		return fmt.Errorf("building mainline cache: %w", err)
-	}
-	debug.Printf("Mainline cache: %d commits", mc.Size())
-
-	// 6. Filter commits that exist locally
-	existingCommits, missingCount, err := git.FilterExistingCommits(ctx, runner, commits)
+	// 5. Filter commits that exist locally
+	existingCommits, missingCommits, err := git.FilterExistingCommits(ctx, runner, commits)
 	if err != nil {
 		return fmt.Errorf("filtering commits: %w", err)
 	}
-	if missingCount > 0 {
-		fmt.Fprintf(os.Stderr, "Warning: %d commits not found in local repo (skipped)\n", missingCount)
+
+	// 6. Fetch missing commits from remote
+	if len(missingCommits) > 0 {
+		fmt.Fprintf(os.Stderr, "Fetching %d missing commits from %s...\n", len(missingCommits), cfg.Remote)
+		unfetchable, err := git.FetchMissingCommits(ctx, runner, cfg.Remote, missingCommits)
+		if err != nil {
+			return fmt.Errorf("fetching missing commits: %w", err)
+		}
+		if unfetchable > 0 {
+			fmt.Fprintf(os.Stderr, "Warning: %d commits could not be fetched (skipped)\n", unfetchable)
+		}
+
+		// Re-filter: some previously missing commits may now be available
+		existingCommits, missingCommits, err = git.FilterExistingCommits(ctx, runner, commits)
+		if err != nil {
+			return fmt.Errorf("re-filtering commits: %w", err)
+		}
+	}
+
+	if len(missingCommits) > 0 {
+		fmt.Fprintf(os.Stderr, "Warning: %d commits not available locally (skipped)\n", len(missingCommits))
 	}
 	fmt.Fprintf(os.Stderr, "Processing %d commits\n", len(existingCommits))
 
@@ -79,14 +90,22 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		return nil
 	}
 
-	// 7. Bulk-fetch commit metadata
+	// 7. Build mainline cache
+	fmt.Fprintln(os.Stderr, "Building mainline cache...")
+	mc, err := git.BuildMainlineCache(ctx, runner, defaultBranch)
+	if err != nil {
+		return fmt.Errorf("building mainline cache: %w", err)
+	}
+	debug.Printf("Mainline cache: %d commits", mc.Size())
+
+	// 8. Bulk-fetch commit metadata
 	fmt.Fprintln(os.Stderr, "Fetching commit metadata...")
 	metadataMap, err := git.FetchBulkMetadata(ctx, runner, existingCommits)
 	if err != nil {
 		return fmt.Errorf("fetching metadata: %w", err)
 	}
 
-	// 8. Collect diffs (concurrent worker pool)
+	// 9. Collect diffs (concurrent worker pool)
 	fmt.Fprintln(os.Stderr, "Collecting diffs...")
 	diffs, err := git.CollectDiffs(ctx, runner, existingCommits, defaultBranch, mc, cfg.SkipDiffs,
 		func(done, total int) {
@@ -99,7 +118,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 	fmt.Fprintln(os.Stderr) // newline after progress
 
-	// 9. Assemble records
+	// 10. Assemble records
 	var records []packaging.CommitRecord
 	for i, commit := range existingCommits {
 		meta, ok := metadataMap[commit]
@@ -126,7 +145,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		records = append(records, record)
 	}
 
-	// 10. Package as tar.gz
+	// 11. Package as tar.gz
 	fmt.Fprintln(os.Stderr, "Packaging tarball...")
 	archiveMeta := packaging.ArchiveMetadata{
 		SchemaVersion:    1,
@@ -136,7 +155,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		OrganizationSlug: cfg.OrganizationSlug,
 		SuiteSlug:        cfg.SuiteSlug,
 		CommitCount:      len(records),
-		SkippedCommits:   missingCount,
+		SkippedCommits:   len(missingCommits),
 		SkippedDiffs:     cfg.SkipDiffs,
 	}
 	tarPath, err := packaging.CreateTarball(records, archiveMeta)
@@ -145,7 +164,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 	defer os.Remove(tarPath)
 
-	// 11. Upload or write locally
+	// 12. Upload or write locally
 	if cfg.Output != "" {
 		if err := copyFile(tarPath, cfg.Output); err != nil {
 			return fmt.Errorf("writing output file: %w", err)
@@ -165,8 +184,8 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "Done. %d commits exported", len(records))
-	if missingCount > 0 {
-		fmt.Fprintf(os.Stderr, ", %d skipped", missingCount)
+	if len(missingCommits) > 0 {
+		fmt.Fprintf(os.Stderr, ", %d skipped", len(missingCommits))
 	}
 	fmt.Fprintln(os.Stderr, ".")
 
