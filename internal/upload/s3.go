@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -29,62 +30,48 @@ type PresignedUploadForm struct {
 // The form data fields must be sent BEFORE the file field. S3 requires this
 // ordering for presigned POSTs.
 //
-// Uses an io.Pipe to stream the multipart body without buffering the entire
-// file in memory.
+// The multipart body is buffered in memory so the HTTP client can set the
+// Content-Length header, which S3 requires for presigned POST uploads.
 func UploadToS3(filePath string, form PresignedUploadForm) error {
 	debug.Printf("Uploading %s to %s", filePath, form.URL)
 
-	pr, pw := io.Pipe()
-	writer := multipart.NewWriter(pw)
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
 
-	// Write the multipart form in a goroutine so the pipe reader can
-	// stream directly to the HTTP request body.
-	errCh := make(chan error, 1)
-	go func() {
-		defer pw.Close()
+	// Write form data fields in deterministic order for testability.
+	keys := make([]string, 0, len(form.Data))
+	for k := range form.Data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 
-		// Write form data fields in deterministic order for testability.
-		keys := make([]string, 0, len(form.Data))
-		for k := range form.Data {
-			keys = append(keys, k)
+	for _, k := range keys {
+		if err := writer.WriteField(k, form.Data[k]); err != nil {
+			return fmt.Errorf("writing form field %s: %w", k, err)
 		}
-		sort.Strings(keys)
+	}
 
-		for _, k := range keys {
-			if err := writer.WriteField(k, form.Data[k]); err != nil {
-				errCh <- fmt.Errorf("writing form field %s: %w", k, err)
-				return
-			}
-		}
+	// Attach the file
+	fw, err := writer.CreateFormFile(form.FileInput, filepath.Base(filePath))
+	if err != nil {
+		return fmt.Errorf("creating form file: %w", err)
+	}
 
-		// Attach the file
-		fw, err := writer.CreateFormFile(form.FileInput, filepath.Base(filePath))
-		if err != nil {
-			errCh <- fmt.Errorf("creating form file: %w", err)
-			return
-		}
+	f, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("opening file %s: %w", filePath, err)
+	}
+	defer f.Close()
 
-		f, err := os.Open(filePath)
-		if err != nil {
-			errCh <- fmt.Errorf("opening file %s: %w", filePath, err)
-			return
-		}
-		defer f.Close()
+	if _, err := io.Copy(fw, f); err != nil {
+		return fmt.Errorf("copying file content: %w", err)
+	}
 
-		if _, err := io.Copy(fw, f); err != nil {
-			errCh <- fmt.Errorf("copying file content: %w", err)
-			return
-		}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("closing multipart writer: %w", err)
+	}
 
-		if err := writer.Close(); err != nil {
-			errCh <- fmt.Errorf("closing multipart writer: %w", err)
-			return
-		}
-
-		errCh <- nil
-	}()
-
-	req, err := http.NewRequest(form.Method, form.URL, pr)
+	req, err := http.NewRequest(form.Method, form.URL, &buf)
 	if err != nil {
 		return fmt.Errorf("creating upload request: %w", err)
 	}
@@ -95,11 +82,6 @@ func UploadToS3(filePath string, form PresignedUploadForm) error {
 		return fmt.Errorf("uploading to S3: %w", err)
 	}
 	defer resp.Body.Close()
-
-	// Check for write goroutine errors
-	if writeErr := <-errCh; writeErr != nil {
-		return writeErr
-	}
 
 	// S3 returns 204 No Content on success for presigned POSTs
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
