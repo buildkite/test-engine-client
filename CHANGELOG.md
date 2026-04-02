@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.3.2 - 2026-04-02
+- Add built-in NUnit test runner for .NET test splitting
+
 ## 2.3.1 - 2026-04-01
 - Add Windows (amd64, arm64) binary builds to releases.
 
