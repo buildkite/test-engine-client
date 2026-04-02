@@ -20,35 +20,6 @@ import (
 	"github.com/buildkite/test-engine-client/internal/packaging"
 )
 
-// fakeGitRunner returns canned responses for the backfill test.
-type fakeGitRunner struct {
-	responses      map[string]string
-	stdinResponses map[string]func(string) string
-}
-
-func (f *fakeGitRunner) key(args []string) string {
-	return strings.Join(args, " ")
-}
-
-func (f *fakeGitRunner) Output(ctx context.Context, args ...string) (string, error) {
-	k := f.key(args)
-	if resp, ok := f.responses[k]; ok {
-		return resp, nil
-	}
-	return "", fmt.Errorf("fakeGitRunner: no response for %q", k)
-}
-
-func (f *fakeGitRunner) OutputWithStdin(ctx context.Context, stdin string, args ...string) (string, error) {
-	k := f.key(args)
-	if fn, ok := f.stdinResponses[k]; ok {
-		return fn(stdin), nil
-	}
-	if resp, ok := f.responses[k]; ok {
-		return resp, nil
-	}
-	return "", fmt.Errorf("fakeGitRunner: no response for %q (with stdin)", k)
-}
-
 func setGitRunnerFactory(t *testing.T, runner git.GitRunner) {
 	t.Helper()
 	orig := gitRunnerFactory
@@ -73,12 +44,12 @@ func getBackfillConfig(serverURL string) *config.Config {
 // metadataFormat matches the constant in internal/git/metadata.go
 const testMetadataFormat = "%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI%x1f%B%x1e"
 
-func newFakeGitRunner() *fakeGitRunner {
+func newFakeGitRunner() *git.FakeGitRunner {
 	record := "abc123\x1fdef456\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fGitHub\x1fnoreply@github.com\x1f2026-03-15T10:00:00+00:00\x1fFix the thing"
 	gitLogOutput := record + "\x1e"
 
-	return &fakeGitRunner{
-		responses: map[string]string{
+	return &git.FakeGitRunner{
+		Responses: map[string]string{
 			// Default branch detection
 			"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
 			// Mainline cache
@@ -90,7 +61,7 @@ func newFakeGitRunner() *fakeGitRunner {
 			"diff --no-ext-diff def456 abc123":             "diff --git a/file1.go...\n",
 			"diff --no-ext-diff --raw def456 abc123":       ":100644 100644 aaa bbb M\tfile1.go\n",
 		},
-		stdinResponses: map[string]func(string) string{
+		StdinResponses: map[string]func(string) string{
 			// cat-file: abc123 exists
 			"cat-file --batch-check": func(_ string) string {
 				return "abc123 commit 271\n"
@@ -272,12 +243,12 @@ func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 
 	cfg := getBackfillConfig(svr.URL)
 
-	runner := &fakeGitRunner{
-		responses: map[string]string{
+	runner := &git.FakeGitRunner{
+		Responses: map[string]string{
 			"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
 			"log --first-parent --format=%H %P origin/main": "abc123 def456\n",
 		},
-		stdinResponses: map[string]func(string) string{
+		StdinResponses: map[string]func(string) string{
 			"cat-file --batch-check": func(_ string) string {
 				return "missing111 missing\n"
 			},
