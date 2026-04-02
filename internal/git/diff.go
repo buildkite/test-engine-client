@@ -18,7 +18,8 @@ type CommitDiffs struct {
 	GitDiffRaw   string `json:"git_diff_raw,omitempty"`
 }
 
-const workerCount = 10
+// DefaultWorkerCount is the default number of concurrent goroutines for diff collection.
+const DefaultWorkerCount = 10
 
 type indexedResult struct {
 	idx  int
@@ -26,9 +27,10 @@ type indexedResult struct {
 	err  error
 }
 
-// CollectDiffs collects diff information for each commit concurrently using a
-// 10-goroutine worker pool. Results are returned in the same order as the input
-// commits slice.
+// CollectDiffs collects diff information for each commit concurrently.
+// workerCount controls the number of concurrent goroutines (use
+// DefaultWorkerCount for the standard 10-goroutine pool). Results are returned
+// in the same order as the input commits slice.
 //
 // For each commit it finds the fork-point and runs:
 //   - git diff --no-ext-diff --name-only <base> <commit>  -> FilesChanged
@@ -45,6 +47,7 @@ func CollectDiffs(
 	mainBranch string,
 	mc *MainlineCache,
 	skipDiffs bool,
+	workerCount int,
 	onProgress func(done, total int),
 ) ([]CommitDiffs, error) {
 	if len(commits) == 0 {

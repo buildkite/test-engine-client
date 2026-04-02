@@ -9,6 +9,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+// feedback - the fakegitrunner is duplicated in another test file.
+//
 // FakeGitRunner returns canned responses based on the git arguments.
 type FakeGitRunner struct {
 	// Responses maps a key derived from args to the output string.
@@ -271,7 +273,7 @@ func TestCollectDiffs_Basic(t *testing.T) {
 		parents:    make(map[string]string),
 	}
 
-	diffs, err := CollectDiffs(context.Background(), runner, []string{"abc123"}, "origin/main", mc, false, nil)
+	diffs, err := CollectDiffs(context.Background(), runner, []string{"abc123"}, "origin/main", mc, false, DefaultWorkerCount, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -308,7 +310,7 @@ func TestCollectDiffs_SkipDiffs(t *testing.T) {
 		parents:    make(map[string]string),
 	}
 
-	diffs, err := CollectDiffs(context.Background(), runner, []string{"abc123"}, "origin/main", mc, true, nil)
+	diffs, err := CollectDiffs(context.Background(), runner, []string{"abc123"}, "origin/main", mc, true, DefaultWorkerCount, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -351,7 +353,7 @@ func TestCollectDiffs_OrderPreserved(t *testing.T) {
 		parents:    make(map[string]string),
 	}
 
-	diffs, err := CollectDiffs(context.Background(), runner, []string{"aaa", "bbb", "ccc"}, "origin/main", mc, false, nil)
+	diffs, err := CollectDiffs(context.Background(), runner, []string{"aaa", "bbb", "ccc"}, "origin/main", mc, false, DefaultWorkerCount, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -388,7 +390,7 @@ func TestCollectDiffs_ErrorSkipsCommit(t *testing.T) {
 		parents:    make(map[string]string),
 	}
 
-	diffs, err := CollectDiffs(context.Background(), runner, []string{"aaa", "bbb", "ccc"}, "origin/main", mc, false, nil)
+	diffs, err := CollectDiffs(context.Background(), runner, []string{"aaa", "bbb", "ccc"}, "origin/main", mc, false, DefaultWorkerCount, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
