@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -46,6 +47,8 @@ type ArchiveMetadata struct {
 //   - metadata.json (archive metadata)
 //
 // Returns the path to the temp file. Caller is responsible for cleanup.
+// The temp file is renamed to include a timestamp on success for easier
+// identification if cleanup is skipped.
 func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error) {
 	// Create temp file
 	tmpFile, err := os.CreateTemp("", "bktec-commit-metadata-*.tar.gz")
@@ -81,7 +84,7 @@ func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error)
 	if err := tarWriter.WriteHeader(&tar.Header{
 		Name:    "commit-metadata.jsonl",
 		Size:    int64(jsonlBuf.Len()),
-		Mode:    0644,
+		Mode:    0o644,
 		ModTime: now,
 	}); err != nil {
 		tmpFile.Close()
@@ -103,7 +106,7 @@ func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error)
 	if err := tarWriter.WriteHeader(&tar.Header{
 		Name:    "metadata.json",
 		Size:    int64(len(metaBytes)),
-		Mode:    0644,
+		Mode:    0o644,
 		ModTime: now,
 	}); err != nil {
 		tmpFile.Close()
@@ -127,6 +130,16 @@ func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error)
 		return "", fmt.Errorf("closing temp file: %w", err)
 	}
 
+	// Rename to include a timestamp for easier identification
+	dir := filepath.Dir(tmpPath)
+	ts := time.Now().UTC().Format("20060102T150405Z")
+	finalPath := filepath.Join(dir, fmt.Sprintf("bktec-commit-metadata-%s.tar.gz", ts))
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		// Rename can fail (e.g. permissions); fall back to the original path
+		success = true
+		return tmpPath, nil
+	}
+
 	success = true
-	return tmpPath, nil
+	return finalPath, nil
 }
