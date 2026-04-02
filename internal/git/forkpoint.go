@@ -17,7 +17,7 @@ type ForkPointResult struct {
 // directly on the main branch (e.g. direct pushes or merge commits).
 type MainlineCache struct {
 	onMainline map[string]bool
-	parents    map[string]string // commit -> first parent
+	parent     map[string]string // commit -> first parent
 }
 
 // Size returns the number of commits in the mainline cache.
@@ -35,7 +35,7 @@ func BuildMainlineCache(ctx context.Context, runner GitRunner, mainBranch string
 	}
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
 		if line == "" {
@@ -47,7 +47,7 @@ func BuildMainlineCache(ctx context.Context, runner GitRunner, mainBranch string
 		}
 		mc.onMainline[fields[0]] = true
 		if len(fields) >= 2 {
-			mc.parents[fields[0]] = fields[1]
+			mc.parent[fields[0]] = fields[1]
 		}
 	}
 	return mc, nil
@@ -70,7 +70,7 @@ func FindForkPoint(ctx context.Context, runner GitRunner, mainBranch, commit str
 	// Strategy 2: Mainline parent fallback -- commit is on the first-parent
 	// chain of main (direct push or merge commit on main itself).
 	if mc != nil && mc.onMainline[commit] {
-		if parent, ok := mc.parents[commit]; ok {
+		if parent, ok := mc.parent[commit]; ok {
 			return ForkPointResult{Base: parent, Strategy: "parent-fallback"}, nil
 		}
 	}

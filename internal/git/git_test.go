@@ -270,7 +270,7 @@ func TestCollectDiffs_Basic(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 
 	diffs, err := CollectDiffs(context.Background(), runner, []string{"abc123"}, "origin/main", mc, false, DefaultWorkerCount, nil)
@@ -307,7 +307,7 @@ func TestCollectDiffs_SkipDiffs(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 
 	diffs, err := CollectDiffs(context.Background(), runner, []string{"abc123"}, "origin/main", mc, true, DefaultWorkerCount, nil)
@@ -350,7 +350,7 @@ func TestCollectDiffs_OrderPreserved(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 
 	diffs, err := CollectDiffs(context.Background(), runner, []string{"aaa", "bbb", "ccc"}, "origin/main", mc, false, DefaultWorkerCount, nil)
@@ -387,7 +387,7 @@ func TestCollectDiffs_ErrorSkipsCommit(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 
 	diffs, err := CollectDiffs(context.Background(), runner, []string{"aaa", "bbb", "ccc"}, "origin/main", mc, false, DefaultWorkerCount, nil)

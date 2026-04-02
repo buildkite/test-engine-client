@@ -15,7 +15,7 @@ func TestFindForkPoint_Strategy1_ForkPoint(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 
 	result, err := FindForkPoint(context.Background(), runner, "origin/main", "abc123", mc)
@@ -39,7 +39,7 @@ func TestFindForkPoint_Strategy2_MainlineParent(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: map[string]bool{"abc123": true},
-		parents:    map[string]string{"abc123": "parent111"},
+		parent:     map[string]string{"abc123": "parent111"},
 	}
 
 	result, err := FindForkPoint(context.Background(), runner, "origin/main", "abc123", mc)
@@ -64,7 +64,7 @@ func TestFindForkPoint_Strategy3_MergeBase(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 
 	result, err := FindForkPoint(context.Background(), runner, "origin/main", "abc123", mc)
@@ -86,7 +86,7 @@ func TestFindForkPoint_AllStrategiesFail(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 
 	_, err := FindForkPoint(context.Background(), runner, "origin/main", "abc123", mc)
@@ -110,7 +110,7 @@ func TestFindForkPoint_SkipsWhenForkPointEqualsSelf(t *testing.T) {
 
 	mc := &MainlineCache{
 		onMainline: make(map[string]bool),
-		parents:    make(map[string]string),
+		parent:     make(map[string]string),
 	}
 
 	result, err := FindForkPoint(context.Background(), runner, "origin/main", "abc123", mc)
@@ -151,14 +151,14 @@ func TestBuildMainlineCache(t *testing.T) {
 		t.Error("expected ccc to be on mainline")
 	}
 
-	if mc.parents["aaa"] != "parent1" {
-		t.Errorf("parents[aaa]: got %q, want %q", mc.parents["aaa"], "parent1")
+	if mc.parent["aaa"] != "parent1" {
+		t.Errorf("parent[aaa]: got %q, want %q", mc.parent["aaa"], "parent1")
 	}
-	if mc.parents["bbb"] != "parent2" {
-		t.Errorf("parents[bbb]: got %q, want %q", mc.parents["bbb"], "parent2")
+	if mc.parent["bbb"] != "parent2" {
+		t.Errorf("parent[bbb]: got %q, want %q", mc.parent["bbb"], "parent2")
 	}
 	// ccc has no parent (initial commit)
-	if _, ok := mc.parents["ccc"]; ok {
+	if _, ok := mc.parent["ccc"]; ok {
 		t.Error("expected ccc to have no parent entry")
 	}
 }
