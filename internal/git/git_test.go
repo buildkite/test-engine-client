@@ -90,7 +90,7 @@ func TestFetchBulkMetadata(t *testing.T) {
 
 	runner := &FakeGitRunner{
 		StdinResponses: map[string]func(string) string{
-			fmt.Sprintf("log --no-walk --stdin --format=%s", metadataFormat): func(_ string) string {
+			fmt.Sprintf("log --no-walk --stdin --format=%s", MetadataFormat): func(_ string) string {
 				return gitOutput
 			},
 		},
@@ -131,7 +131,7 @@ func TestFetchBulkMetadata_MultilineMessage(t *testing.T) {
 
 	runner := &FakeGitRunner{
 		StdinResponses: map[string]func(string) string{
-			fmt.Sprintf("log --no-walk --stdin --format=%s", metadataFormat): func(_ string) string {
+			fmt.Sprintf("log --no-walk --stdin --format=%s", MetadataFormat): func(_ string) string {
 				return gitOutput
 			},
 		},

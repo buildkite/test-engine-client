@@ -39,11 +39,11 @@ const (
 	metadataFields = 9 // number of fields in metadataFormat
 )
 
-// metadataFormat is the git log format string for bulk metadata extraction.
+// MetadataFormat is the git log format string for bulk metadata extraction.
 // Fields are separated by ASCII unit separator (%x1f), records by ASCII
 // record separator (%x1e). These control characters are purpose-built for
 // structured data and won't appear in normal git fields.
-var metadataFormat = strings.Join([]string{
+var MetadataFormat = strings.Join([]string{
 	fmtHash, fmtParents,
 	fmtAuthorN, fmtAuthorE, fmtAuthorD,
 	fmtCommitN, fmtCommitE, fmtCommitD,
@@ -60,7 +60,7 @@ func FetchBulkMetadata(ctx context.Context, runner GitRunner, commits []string) 
 
 	stdin := strings.Join(commits, "\n")
 	output, err := runner.OutputWithStdin(ctx, stdin,
-		"log", "--no-walk", "--stdin", fmt.Sprintf("--format=%s", metadataFormat))
+		"log", "--no-walk", "--stdin", fmt.Sprintf("--format=%s", MetadataFormat))
 	if err != nil {
 		return nil, fmt.Errorf("fetching bulk metadata: %w", err)
 	}
