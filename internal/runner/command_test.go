@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -19,6 +20,9 @@ func TestRunAndForwardSignal(t *testing.T) {
 }
 
 func TestRunAndForwardSignal_CommandExitsWithNonZero(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: requires Unix 'false' command")
+	}
 	cmd := exec.Command("false")
 
 	err := runAndForwardSignal(cmd)
@@ -32,6 +36,9 @@ func TestRunAndForwardSignal_CommandExitsWithNonZero(t *testing.T) {
 }
 
 func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: requires Unix signals")
+	}
 	cmd := exec.Command("sleep", "10")
 
 	// Send a SIGTERM signal to the main process.
@@ -57,6 +64,9 @@ func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
 }
 
 func TestRunAndForwardSignal_SignalReceivedInSubProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: requires Unix signals")
+	}
 	cmd := exec.Command("./testdata/segv.sh")
 
 	err := runAndForwardSignal(cmd)

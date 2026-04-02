@@ -2,6 +2,7 @@ package runner
 
 import (
 	"os/exec"
+	"runtime"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/plan"
@@ -54,6 +55,9 @@ func TestCustom_GetExamples(t *testing.T) {
 }
 
 func TestCustom_GetFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: test fixture requires bash")
+	}
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "./test {{testExamples}}",
@@ -126,6 +130,9 @@ func TestCustom_CommandNameAndArgs(t *testing.T) {
 }
 
 func TestCustom_Run(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: test fixture requires bash")
+	}
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "./test {{testExamples}}",
@@ -153,6 +160,9 @@ func TestCustom_Run(t *testing.T) {
 }
 
 func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: test fixture requires bash")
+	}
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "./test {{testExamples}}",
@@ -178,6 +188,9 @@ func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
 }
 
 func TestCustom_Run_TestFailedWithResult(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: test fixture requires bash")
+	}
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "./test {{testExamples}}",
