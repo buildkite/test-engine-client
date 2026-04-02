@@ -41,9 +41,6 @@ func getBackfillConfig(serverURL string) *config.Config {
 	return &cfg
 }
 
-// metadataFormat matches the constant in internal/git/metadata.go
-const testMetadataFormat = "%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI%x1f%B%x1e"
-
 func newFakeGitRunner() *git.FakeGitRunner {
 	record := "abc123\x1fdef456\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fGitHub\x1fnoreply@github.com\x1f2026-03-15T10:00:00+00:00\x1fFix the thing"
 	gitLogOutput := record + "\x1e"
@@ -67,7 +64,7 @@ func newFakeGitRunner() *git.FakeGitRunner {
 				return "abc123 commit 271\n"
 			},
 			// Bulk metadata
-			fmt.Sprintf("log --no-walk --stdin --format=%s", testMetadataFormat): func(_ string) string {
+			fmt.Sprintf("log --no-walk --stdin --format=%s", git.MetadataFormat): func(_ string) string {
 				return gitLogOutput
 			},
 		},
