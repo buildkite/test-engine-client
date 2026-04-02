@@ -392,6 +392,15 @@ var remoteFlag = &cli.StringFlag{
 	Destination: &cfg.Remote,
 }
 
+var concurrencyFlag = &cli.IntFlag{
+	Name:        "concurrency",
+	Category:    "BACKFILL",
+	Usage:       "Number of concurrent git operations for diff collection",
+	Value:       10,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_CONCURRENCY"),
+	Destination: &cfg.Concurrency,
+}
+
 func backfillCommitMetadataFlags() []cli.Flag {
 	return []cli.Flag{
 		organizationSlugFlag,
@@ -402,6 +411,7 @@ func backfillCommitMetadataFlags() []cli.Flag {
 		outputFlag,
 		daysFlag,
 		remoteFlag,
+		concurrencyFlag,
 	}
 }
 

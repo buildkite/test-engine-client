@@ -64,6 +64,7 @@ func getBackfillConfig(serverURL string) *config.Config {
 	cfg.OrganizationSlug = "my-org"
 	cfg.SuiteSlug = "my-suite"
 	cfg.ServerBaseUrl = serverURL
+	cfg.Concurrency = 10
 	cfg.Days = 90
 	cfg.Remote = "origin"
 	return &cfg
