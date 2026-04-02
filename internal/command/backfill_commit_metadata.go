@@ -108,7 +108,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	// 9. Collect diffs (concurrent worker pool)
 	fmt.Fprintln(os.Stderr, "Collecting diffs...")
 	diffs, err := git.CollectDiffs(ctx, runner, existingCommits, defaultBranch, mc, cfg.SkipDiffs,
-		func(done, total int) {
+		git.DefaultWorkerCount, func(done, total int) {
 			if done%100 == 0 || done == total {
 				fmt.Fprintf(os.Stderr, "\rProcessed %d/%d commits", done, total)
 			}
