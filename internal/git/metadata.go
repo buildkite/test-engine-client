@@ -19,20 +19,36 @@ type CommitMetadata struct {
 	Message        string   `json:"message"`
 }
 
-// metadataFormat is the git log format string for bulk metadata extraction.
-// Fields are separated by unit separator (%x1f), records by record separator (%x1e).
-// These ASCII control characters are purpose-built for structured data and won't
-// appear in normal git fields (names, emails, messages).
-//
-// Field order: hash, parents, author name, author email, author date (ISO),
-// committer name, committer email, committer date (ISO), full message body.
-const metadataFormat = "%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI%x1f%B%x1e"
-
 const (
 	fieldSeparator  = "\x1f"
 	recordSeparator = "\x1e"
-	metadataFields  = 9 // number of fields in metadataFormat
+
+	// Git format placeholders for each metadata field.
+	fmtFieldSep  = "%x1f" // ASCII unit separator between fields
+	fmtRecordSep = "%x1e" // ASCII record separator between commits
+	fmtHash      = "%H"   // full commit hash
+	fmtParents   = "%P"   // parent hashes (space-separated)
+	fmtAuthorN   = "%an"  // author name
+	fmtAuthorE   = "%ae"  // author email
+	fmtAuthorD   = "%aI"  // author date (ISO 8601)
+	fmtCommitN   = "%cn"  // committer name
+	fmtCommitE   = "%ce"  // committer email
+	fmtCommitD   = "%cI"  // committer date (ISO 8601)
+	fmtBody      = "%B"   // full commit message
+
+	metadataFields = 9 // number of fields in metadataFormat
 )
+
+// metadataFormat is the git log format string for bulk metadata extraction.
+// Fields are separated by ASCII unit separator (%x1f), records by ASCII
+// record separator (%x1e). These control characters are purpose-built for
+// structured data and won't appear in normal git fields.
+var metadataFormat = strings.Join([]string{
+	fmtHash, fmtParents,
+	fmtAuthorN, fmtAuthorE, fmtAuthorD,
+	fmtCommitN, fmtCommitE, fmtCommitD,
+	fmtBody,
+}, fmtFieldSep) + fmtRecordSep
 
 // FetchBulkMetadata fetches metadata for all given commits in a single git call.
 // Uses --no-walk with --stdin to process only the specified commits (not ancestors).
