@@ -11,10 +11,20 @@ import (
 
 const (
 	previewSelectionEnvVar = "BKTEC_PREVIEW_SELECTION"
+	backfillEnvVar         = "BKTEC_ENABLE_BACKFILL"
 )
 
 func previewSelectionEnabled() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(previewSelectionEnvVar))) {
+	case "1", "t", "true", "y", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func backfillEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(backfillEnvVar))) {
 	case "1", "t", "true", "y", "yes", "on":
 		return true
 	default:
@@ -347,6 +357,64 @@ var pipelineUploadFlag = &cli.StringFlag{
 	Usage: "buildkite-agent pipeline upload will be executed with the provided `template.yml`. The additional enviroment variables BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER and BUILDKITE_TEST_ENGINE_PARALLELISM from the generated plan will be available to the template.",
 }
 
+// backfill-commit-metadata flags
+var skipDiffsFlag = &cli.BoolFlag{
+	Name:        "skip-diffs",
+	Category:    "BACKFILL",
+	Usage:       "Omit full git diffs from export to reduce upload size",
+	Value:       false,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SKIP_DIFFS"),
+	Destination: &cfg.SkipDiffs,
+}
+
+var outputFlag = &cli.StringFlag{
+	Name:        "output",
+	Category:    "BACKFILL",
+	Usage:       "Write tarball to a local file instead of uploading to Buildkite",
+	Destination: &cfg.Output,
+}
+
+var daysFlag = &cli.IntFlag{
+	Name:        "days",
+	Category:    "BACKFILL",
+	Usage:       "Number of days of commit history to export (1-90)",
+	Value:       90,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_DAYS"),
+	Destination: &cfg.Days,
+}
+
+var remoteFlag = &cli.StringFlag{
+	Name:        "remote",
+	Category:    "BACKFILL",
+	Usage:       "Git remote name for fetching missing commits and detecting default branch",
+	Value:       "origin",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_REMOTE"),
+	Destination: &cfg.Remote,
+}
+
+var concurrencyFlag = &cli.IntFlag{
+	Name:        "concurrency",
+	Category:    "BACKFILL",
+	Usage:       "Number of concurrent git operations for diff collection",
+	Value:       10,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_CONCURRENCY"),
+	Destination: &cfg.Concurrency,
+}
+
+func backfillCommitMetadataFlags() []cli.Flag {
+	return []cli.Flag{
+		organizationSlugFlag,
+		accessTokenFlag,
+		suiteSlugFlag,
+		baseURLFlag,
+		skipDiffsFlag,
+		outputFlag,
+		daysFlag,
+		remoteFlag,
+		concurrencyFlag,
+	}
+}
+
 func previewSelectionFlags() []cli.Flag {
 	if !previewSelectionEnabled() {
 		return []cli.Flag{}
@@ -432,14 +500,8 @@ func planCommandFlags() []cli.Flag {
 	return flags
 }
 
-var cliCommand = &cli.Command{
-	Name:  "bktec",
-	Usage: "Buildkite Test Engine Client",
-	Flags: []cli.Flag{
-		versionFlag,
-		debugFlag,
-	},
-	Commands: []*cli.Command{
+func buildCommands() []*cli.Command {
+	commands := []*cli.Command{
 		{
 			Name:                      "run",
 			Usage:                     "Run tests",
@@ -464,7 +526,23 @@ var cliCommand = &cli.Command{
 				},
 			},
 		},
-	},
+	}
+	if backfillEnabled() {
+		commands = append(commands, &cli.Command{
+			Name:   "backfill-commit-metadata",
+			Usage:  "Collect historical git commit metadata and upload to Buildkite",
+			Action: backfillCommitMetadata,
+			Flags:  backfillCommitMetadataFlags(),
+		})
+	}
+	return commands
+}
+
+var cliCommand = &cli.Command{
+	Name:     "bktec",
+	Usage:    "Buildkite Test Engine Client",
+	Flags:    []cli.Flag{versionFlag, debugFlag},
+	Commands: buildCommands(),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		err := cli.ShowRootCommandHelp(cmd)
 		// This is unlikely to ever error, but if it does, we want to know.
