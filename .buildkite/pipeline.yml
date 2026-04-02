@@ -1,5 +1,6 @@
 env:
   AWS_DEFAULT_REGION: us-east-1
+  BKTEC_RUNNERS_WINDOWS_QUEUE: "${BKTEC_RUNNERS_WINDOWS_QUEUE:-agent-runners-windows-amd64}"
 
 steps:
   - name: ":golangci-lint: Lint"
@@ -41,6 +42,19 @@ steps:
           format: "junit"
           # This is to prevent the test runner as part of our test fixture trigger test collection
           # such as pytest + python test collector
+          api-token-env-name: "BUILDKITE_TEST_ENGINE_SUITE_TOKEN"
+
+  - name: ":windows: Windows AMD64 Tests"
+    command: "bash .buildkite\\steps\\tests.sh"
+    parallelism: 2
+    artifact_paths:
+      - junit-*.xml
+    agents:
+      queue: $BKTEC_RUNNERS_WINDOWS_QUEUE
+    plugins:
+      - test-collector#v1.11.0:
+          files: "junit-*.xml"
+          format: "junit"
           api-token-env-name: "BUILDKITE_TEST_ENGINE_SUITE_TOKEN"
 
   - wait
