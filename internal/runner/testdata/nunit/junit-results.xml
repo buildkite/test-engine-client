@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites tests="5" failures="1" disabled="0" time="0.123">
+  <testsuite tests="3" time="0.079" errors="0" failures="1" skipped="0" timestamp="2026-03-27T00:00:00Z" name="MyLib.Tests.CalculatorTests">
+    <testcase name="AddTwoNumbers" assertions="1" time="0.007" status="Passed" classname="MyLib.Tests.CalculatorTests" />
+    <testcase name="SubtractTwoNumbers" assertions="1" time="0.001" status="Passed" classname="MyLib.Tests.CalculatorTests" />
+    <testcase name="DivideByZero" assertions="1" time="0.070" status="Failed" classname="MyLib.Tests.CalculatorTests">
+      <failure message="Expected: throws DivideByZeroException">at MyLib.Tests.CalculatorTests.DivideByZero()</failure>
+    </testcase>
+  </testsuite>
+  <testsuite tests="2" time="0.002" errors="0" failures="0" skipped="1" timestamp="2026-03-27T00:00:00Z" name="MyLib.Tests.StringUtilsTests">
+    <testcase name="ReverseString" assertions="1" time="0.001" status="Passed" classname="MyLib.Tests.StringUtilsTests" />
+    <testcase name="SkippedTest" classname="MyLib.Tests.StringUtilsTests">
+      <skipped message="Not implemented yet" />
+    </testcase>
+  </testsuite>
+</testsuites>
