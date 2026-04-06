@@ -71,9 +71,19 @@ func newFakeGitRunner() *git.FakeGitRunner {
 	}
 }
 
+// writeTokenScopes writes a JSON response for GET /v2/access-token with the given scopes.
+func writeTokenScopes(w http.ResponseWriter, scopes ...string) {
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"uuid":   "token-uuid",
+		"scopes": scopes,
+	})
+}
+
 func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
@@ -155,12 +165,15 @@ func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 
 func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v2/analytics/organizations/my-org/suites/my-suite/commits" {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
-			return
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer svr.Close()
 
@@ -210,12 +223,15 @@ func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 
 func TestBackfillCommitMetadata_NoCommits(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v2/analytics/organizations/my-org/suites/my-suite/commits" {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte(""))
-			return
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer svr.Close()
 
@@ -229,12 +245,15 @@ func TestBackfillCommitMetadata_NoCommits(t *testing.T) {
 
 func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v2/analytics/organizations/my-org/suites/my-suite/commits" {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("missing111\n"))
-			return
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer svr.Close()
 
@@ -261,8 +280,13 @@ func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 
 func TestBackfillCommitMetadata_APIError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal server error"))
+		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("internal server error"))
+		}
 	}))
 	defer svr.Close()
 
@@ -280,13 +304,16 @@ func TestBackfillCommitMetadata_APIError(t *testing.T) {
 func TestBackfillCommitMetadata_DaysParam(t *testing.T) {
 	var receivedDays string
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v2/analytics/organizations/my-org/suites/my-suite/commits" {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			receivedDays = r.URL.Query().Get("days")
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte(""))
-			return
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer svr.Close()
 
@@ -341,6 +368,9 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	// API server
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
+
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
@@ -378,5 +408,90 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	}
 	if uploadedFileContent == "" {
 		t.Error("uploaded file content was empty")
+	}
+}
+
+func TestBackfillCommitMetadata_ScopeCheckFails(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			// Token has read_suites but missing write_suites
+			writeTokenScopes(w, "read_suites")
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getBackfillConfig(svr.URL)
+	// No --output, so write_suites is required
+
+	err := BackfillCommitMetadata(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error for missing write_suites scope, got nil")
+	}
+	if !strings.Contains(err.Error(), "token scope check failed") {
+		t.Errorf("expected scope check error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "write_suites") {
+		t.Errorf("expected write_suites in error, got: %v", err)
+	}
+}
+
+func TestBackfillCommitMetadata_ScopeCheckWarnsWithOutput(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			// Token only has read_suites (no write_suites)
+			writeTokenScopes(w, "read_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("abc123\n"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getBackfillConfig(svr.URL)
+	cfg.Output = t.TempDir() + "/output.tar.gz"
+
+	runner := newFakeGitRunner()
+	setGitRunnerFactory(t, runner)
+
+	// With --output set, missing write_suites should warn, not error
+	err := BackfillCommitMetadata(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("expected no error with --output (warn only), got: %v", err)
+	}
+
+	// Verify the output file was still created
+	if _, err := os.Stat(cfg.Output); err != nil {
+		t.Errorf("expected output file to exist: %v", err)
+	}
+}
+
+func TestBackfillCommitMetadata_ScopeCheckFailsWithOutputMissingReadSuites(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			// Token has write_suites but NOT read_suites
+			writeTokenScopes(w, "write_suites")
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getBackfillConfig(svr.URL)
+	cfg.Output = t.TempDir() + "/output.tar.gz"
+
+	// Even with --output, missing read_suites is a hard error
+	err := BackfillCommitMetadata(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error for missing read_suites scope, got nil")
+	}
+	if !strings.Contains(err.Error(), "token scope check failed") {
+		t.Errorf("expected scope check error, got: %v", err)
 	}
 }

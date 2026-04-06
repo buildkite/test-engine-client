@@ -33,7 +33,33 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 	})
 
-	// 2. Fetch commit list from server
+	// 2. Verify token scopes (fast-fail before expensive git work)
+	// Always check both scopes so we can warn about missing write_suites
+	// even when --output is set (the user may intend to upload later).
+	tokenInfo, scopeErr := apiClient.VerifyTokenScopes(ctx, []string{"read_suites", "write_suites"})
+	if scopeErr != nil {
+		// Check if read_suites is present -- it's always required
+		hasReadSuites := false
+		if tokenInfo != nil {
+			for _, s := range tokenInfo.Scopes {
+				if s == "read_suites" {
+					hasReadSuites = true
+					break
+				}
+			}
+		}
+
+		if cfg.Output != "" && hasReadSuites {
+			// write_suites not needed for local output, warn only
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", scopeErr)
+		} else {
+			fmt.Fprintln(os.Stderr, "The token needs read_suites and write_suites scopes.")
+			return fmt.Errorf("token scope check failed: %w", scopeErr)
+		}
+	}
+	debug.Println("Token scopes verified")
+
+	// 3. Fetch commit list from server
 	fmt.Fprintf(os.Stderr, "Fetching commit list for suite %q (last %d days)...\n", cfg.SuiteSlug, cfg.Days)
 	commits, err := apiClient.FetchCommitList(ctx, cfg.SuiteSlug, cfg.Days)
 	if err != nil {
@@ -46,23 +72,23 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		return nil
 	}
 
-	// 3. Set up git runner
+	// 4. Set up git runner
 	runner := gitRunnerFactory()
 
-	// 4. Detect default branch
+	// 5. Detect default branch
 	defaultBranch, err := git.DetectDefaultBranch(ctx, runner, cfg.Remote)
 	if err != nil {
 		return fmt.Errorf("detecting default branch: %w", err)
 	}
 	debug.Printf("Default branch: %s", defaultBranch)
 
-	// 5. Filter commits that exist locally
+	// 6. Filter commits that exist locally
 	existingCommits, missingCommits, err := git.FilterExistingCommits(ctx, runner, commits)
 	if err != nil {
 		return fmt.Errorf("filtering commits: %w", err)
 	}
 
-	// 6. Fetch missing commits from remote
+	// 7. Fetch missing commits from remote
 	if len(missingCommits) > 0 {
 		fmt.Fprintf(os.Stderr, "Fetching %d missing commits from %s...\n", len(missingCommits), cfg.Remote)
 		unfetchable, err := git.FetchMissingCommits(ctx, runner, cfg.Remote, missingCommits)
@@ -90,7 +116,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		return nil
 	}
 
-	// 7. Build mainline cache
+	// 8. Build mainline cache
 	fmt.Fprintln(os.Stderr, "Building mainline cache...")
 	mc, err := git.BuildMainlineCache(ctx, runner, defaultBranch)
 	if err != nil {
@@ -98,14 +124,14 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 	debug.Printf("Mainline cache: %d commits", mc.Size())
 
-	// 8. Bulk-fetch commit metadata
+	// 9. Bulk-fetch commit metadata
 	fmt.Fprintln(os.Stderr, "Fetching commit metadata...")
 	metadataMap, err := git.FetchBulkMetadata(ctx, runner, existingCommits)
 	if err != nil {
 		return fmt.Errorf("fetching metadata: %w", err)
 	}
 
-	// 9. Collect diffs (concurrent worker pool)
+	// 10. Collect diffs (concurrent worker pool)
 	fmt.Fprintln(os.Stderr, "Collecting diffs...")
 	diffs, err := git.CollectDiffs(ctx, runner, existingCommits, defaultBranch, mc, cfg.SkipDiffs,
 		cfg.Concurrency, func(done, total int) {
@@ -118,7 +144,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 	fmt.Fprintln(os.Stderr) // newline after progress
 
-	// 10. Assemble records and compute commit date range
+	// 11. Assemble records and compute commit date range
 	var records []packaging.CommitRecord
 	var minDate, maxDate string
 	for i, commit := range existingCommits {
@@ -154,7 +180,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	// 11. Package as tar.gz
+	// 12. Package as tar.gz
 	fmt.Fprintln(os.Stderr, "Packaging tarball...")
 	archiveMeta := packaging.ArchiveMetadata{
 		SchemaVersion:    1,
@@ -177,7 +203,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 	defer os.Remove(tarPath)
 
-	// 12. Upload or write locally
+	// 13. Upload or write locally
 	if cfg.Output != "" {
 		if err := copyFile(tarPath, cfg.Output); err != nil {
 			return fmt.Errorf("writing output file: %w", err)
