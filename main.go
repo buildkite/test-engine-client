@@ -68,6 +68,17 @@ func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 	return command.BackfillCommitMetadata(ctx, &cfg)
 }
 
+func uploadCommitMetadata(ctx context.Context, cmd *cli.Command) error {
+	debug.SetDebug(cmd.Root().Bool("debug"))
+	debug.SetOutput(os.Stderr)
+
+	if err := cfg.ValidateForUploadCommitMetadata(); err != nil {
+		return fmt.Errorf("invalid configuration...\n%w", err)
+	}
+
+	return command.UploadCommitMetadata(ctx, &cfg)
+}
+
 func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error {
 	// Flag will be true if called with `bktec [...] --version`
 	if !versionFlag {

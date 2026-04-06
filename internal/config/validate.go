@@ -122,6 +122,35 @@ func (c *Config) ValidateForRun() error {
 	return nil
 }
 
+// ValidateForUploadCommitMetadata validates config for the upload-commit-metadata command.
+// Requires API connection fields and the --file path.
+func (c *Config) ValidateForUploadCommitMetadata() error {
+	if c.ServerBaseUrl == "" {
+		c.ServerBaseUrl = "https://api.buildkite.com"
+	} else {
+		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
+		}
+	}
+
+	if c.AccessToken == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "must not be blank")
+	}
+
+	if c.OrganizationSlug == "" {
+		c.errs.appendFieldError("BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
+	}
+
+	if c.UploadFile == "" {
+		c.errs.appendFieldError("--file", "must not be blank")
+	}
+
+	if len(c.errs) > 0 {
+		return c.errs
+	}
+	return nil
+}
+
 // ValidateForBackfillCommitMetadata validates config for the backfill-commit-metadata command.
 // Only requires API connection fields -- no runner, parallelism, or build environment.
 func (c *Config) ValidateForBackfillCommitMetadata() error {

@@ -405,6 +405,24 @@ func backfillCommitMetadataFlags() []cli.Flag {
 	}
 }
 
+// upload-commit-metadata flags
+var uploadFileFlag = &cli.StringFlag{
+	Name:        "file",
+	Category:    "UPLOAD",
+	Usage:       "Path to a previously generated commit metadata tarball",
+	Required:    true,
+	Destination: &cfg.UploadFile,
+}
+
+func uploadCommitMetadataFlags() []cli.Flag {
+	return []cli.Flag{
+		organizationSlugFlag,
+		accessTokenFlag,
+		baseURLFlag,
+		uploadFileFlag,
+	}
+}
+
 func previewSelectionFlags() []cli.Flag {
 	if !previewSelectionEnabled() {
 		return []cli.Flag{}
@@ -529,6 +547,12 @@ var cliCommand = &cli.Command{
 					Usage:  "Collect historical git commit metadata and upload to Buildkite",
 					Action: backfillCommitMetadata,
 					Flags:  backfillCommitMetadataFlags(),
+				},
+				{
+					Name:   "upload-commit-metadata",
+					Usage:  "Upload a previously generated commit metadata tarball to Buildkite",
+					Action: uploadCommitMetadata,
+					Flags:  uploadCommitMetadataFlags(),
 				},
 			},
 		},
