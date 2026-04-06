@@ -11,20 +11,10 @@ import (
 
 const (
 	previewSelectionEnvVar = "BKTEC_PREVIEW_SELECTION"
-	backfillEnvVar         = "BKTEC_ENABLE_BACKFILL"
 )
 
 func previewSelectionEnabled() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(previewSelectionEnvVar))) {
-	case "1", "t", "true", "y", "yes", "on":
-		return true
-	default:
-		return false
-	}
-}
-
-func backfillEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(backfillEnvVar))) {
 	case "1", "t", "true", "y", "yes", "on":
 		return true
 	default:
@@ -500,8 +490,11 @@ func planCommandFlags() []cli.Flag {
 	return flags
 }
 
-func buildCommands() []*cli.Command {
-	commands := []*cli.Command{
+var cliCommand = &cli.Command{
+	Name:  "bktec",
+	Usage: "Buildkite Test Engine Client",
+	Flags: []cli.Flag{versionFlag, debugFlag},
+	Commands: []*cli.Command{
 		{
 			Name:                      "run",
 			Usage:                     "Run tests",
@@ -526,23 +519,14 @@ func buildCommands() []*cli.Command {
 				},
 			},
 		},
-	}
-	if backfillEnabled() {
-		commands = append(commands, &cli.Command{
+		{
 			Name:   "backfill-commit-metadata",
 			Usage:  "Collect historical git commit metadata and upload to Buildkite",
 			Action: backfillCommitMetadata,
 			Flags:  backfillCommitMetadataFlags(),
-		})
-	}
-	return commands
-}
-
-var cliCommand = &cli.Command{
-	Name:     "bktec",
-	Usage:    "Buildkite Test Engine Client",
-	Flags:    []cli.Flag{versionFlag, debugFlag},
-	Commands: buildCommands(),
+			Hidden: !previewSelectionEnabled(),
+		},
+	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		err := cli.ShowRootCommandHelp(cmd)
 		// This is unlikely to ever error, but if it does, we want to know.
