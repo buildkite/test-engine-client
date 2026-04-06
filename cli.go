@@ -520,11 +520,17 @@ var cliCommand = &cli.Command{
 			},
 		},
 		{
-			Name:   "backfill-commit-metadata",
-			Usage:  "Collect historical git commit metadata and upload to Buildkite",
-			Action: backfillCommitMetadata,
-			Flags:  backfillCommitMetadataFlags(),
+			Name:   "tools",
+			Usage:  "Utility tools",
 			Hidden: !previewSelectionEnabled(),
+			Commands: []*cli.Command{
+				{
+					Name:   "backfill-commit-metadata",
+					Usage:  "Collect historical git commit metadata and upload to Buildkite",
+					Action: backfillCommitMetadata,
+					Flags:  backfillCommitMetadataFlags(),
+				},
+			},
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {

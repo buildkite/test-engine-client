@@ -58,7 +58,7 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 }
 
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
-	debug.SetDebug(cmd.Bool("debug"))
+	debug.SetDebug(cmd.Root().Bool("debug"))
 	debug.SetOutput(os.Stderr)
 
 	if err := cfg.ValidateForBackfillCommitMetadata(); err != nil {
