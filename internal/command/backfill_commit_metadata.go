@@ -118,8 +118,9 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 	fmt.Fprintln(os.Stderr) // newline after progress
 
-	// 10. Assemble records
+	// 10. Assemble records and compute commit date range
 	var records []packaging.CommitRecord
+	var minDate, maxDate string
 	for i, commit := range existingCommits {
 		meta, ok := metadataMap[commit]
 		if !ok {
@@ -143,6 +144,14 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 			GitDiffRaw:     diffs[i].GitDiffRaw,
 		}
 		records = append(records, record)
+
+		// ISO 8601 strings are lexicographically sortable
+		if minDate == "" || meta.CommitterDate < minDate {
+			minDate = meta.CommitterDate
+		}
+		if maxDate == "" || meta.CommitterDate > maxDate {
+			maxDate = meta.CommitterDate
+		}
 	}
 
 	// 11. Package as tar.gz
@@ -156,7 +165,11 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		SuiteSlug:        cfg.SuiteSlug,
 		CommitCount:      len(records),
 		SkippedCommits:   len(missingCommits),
+		Days:             cfg.Days,
+		Remote:           cfg.Remote,
 		SkippedDiffs:     cfg.SkipDiffs,
+		MinCommitDate:    minDate,
+		MaxCommitDate:    maxDate,
 	}
 	tarPath, err := packaging.CreateTarball(records, archiveMeta)
 	if err != nil {

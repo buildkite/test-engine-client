@@ -39,7 +39,13 @@ type ArchiveMetadata struct {
 	SuiteSlug        string `json:"suite_slug"`
 	CommitCount      int    `json:"commit_count"`
 	SkippedCommits   int    `json:"skipped_commits"`
-	SkippedDiffs     bool   `json:"skipped_diffs"`
+	// Config options used for this export
+	Days         int    `json:"days"`
+	Remote       string `json:"remote"`
+	SkippedDiffs bool   `json:"skipped_diffs"`
+	// Date range of commits in the archive (ISO 8601, from CommitterDate)
+	MinCommitDate string `json:"min_commit_date,omitempty"`
+	MaxCommitDate string `json:"max_commit_date,omitempty"`
 }
 
 // CreateTarball writes a tar.gz to a temp file containing:

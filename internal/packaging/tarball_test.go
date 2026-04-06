@@ -57,7 +57,11 @@ func sampleMetadata() ArchiveMetadata {
 		SuiteSlug:        "my-suite",
 		CommitCount:      2,
 		SkippedCommits:   1,
+		Days:             90,
+		Remote:           "origin",
 		SkippedDiffs:     false,
+		MinCommitDate:    "2026-03-14T09:00:00Z",
+		MaxCommitDate:    "2026-03-15T10:00:00Z",
 	}
 }
 
