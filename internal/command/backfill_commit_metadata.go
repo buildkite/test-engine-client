@@ -201,7 +201,12 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("creating tarball: %w", err)
 	}
-	defer os.Remove(tarPath)
+	removeTarball := true
+	defer func() {
+		if removeTarball {
+			os.Remove(tarPath)
+		}
+	}()
 
 	// 13. Upload or write locally
 	if cfg.Output != "" {
@@ -213,10 +218,14 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
 		presigned, err := apiClient.PresignUpload(ctx)
 		if err != nil {
+			removeTarball = false
+			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
 			return fmt.Errorf("presigning upload: %w", err)
 		}
 		fmt.Fprintln(os.Stderr, "Uploading to S3...")
 		if err := upload.UploadToS3(tarPath, presigned.Form); err != nil {
+			removeTarball = false
+			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
 			return fmt.Errorf("uploading to S3: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Uploaded to %s\n", presigned.URI)
