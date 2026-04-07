@@ -16,9 +16,13 @@ import (
 // Endpoint: GET /v2/analytics/organizations/:org/suites/:suite/commits?days=N
 // Uses Accept: text/plain to receive newline-delimited SHAs for simpler parsing.
 //
-// This method bypasses DoWithRetry because it needs a custom Accept header and
-// text response parsing. It still uses the client's httpClient which has the
-// authTransport middleware (Bearer token + User-Agent).
+// This method does not use DoWithRetry because DoWithRetry assumes JSON
+// responses and sets Content-Type: application/json. This endpoint requires a
+// custom Accept: text/plain header and returns a plain-text body. Adding retry
+// support would require refactoring DoWithRetry to support custom headers and
+// non-JSON response parsing, which isn't warranted for this single call site.
+// The authTransport middleware (Bearer token + User-Agent) is still applied
+// via the client's httpClient.
 func (c Client) FetchCommitList(ctx context.Context, suiteSlug string, days int) ([]string, error) {
 	url := fmt.Sprintf(
 		"%s/v2/analytics/organizations/%s/suites/%s/commits?days=%d",
