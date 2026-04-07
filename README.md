@@ -80,6 +80,32 @@ BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
 Use repeated `--selection-param key=value` and `--metadata key=value` to pass multiple entries. Values can be large and multiline.  
 `--selection-param` and `--metadata` are only supported as repeatable CLI flags.
 
+### Preview: Commit Metadata Backfill
+bktec can collect historical git commit metadata from your repository and upload it to Buildkite for use by the test prediction training pipeline. This is useful for bootstrapping test selection models with historical changeset data.
+
+This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`). The `tools` subcommands are hidden from `bktec --help` unless this environment variable is set, but they can always be invoked directly.
+
+Two commands are available under `bktec tools`:
+
+**Collect and upload commit metadata:**
+```sh
+export BKTEC_PREVIEW_SELECTION=true
+export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN="bkua_..."
+export BUILDKITE_TEST_ENGINE_SUITE_SLUG="my-suite"
+export BUILDKITE_ORGANIZATION_SLUG="my-org"
+
+bktec tools backfill-commit-metadata
+```
+
+**Upload a previously generated tarball:**
+```sh
+bktec tools upload-commit-metadata --file commit-metadata.tar.gz
+```
+
+The API access token requires `read_suites` and `write_suites` scopes.
+
+For detailed usage, flags, and configuration options, see the [Commit Metadata Backfill](./docs/commit-metadata-backfill.md) guide.
+
 ### Configure the test runner
 To configure the test runner for bktec, please refer to the detailed guides provided for each supported test runner. You can find the guides at the following links:
 - [Jest](./docs/jest.md)
