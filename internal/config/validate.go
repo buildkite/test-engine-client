@@ -178,6 +178,10 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 		c.errs.appendFieldError("--days", "was %d, must be greater than or equal to %d", got, min)
 	}
 
+	if got, min := c.Concurrency, 1; got < min {
+		c.errs.appendFieldError("--concurrency", "was %d, must be greater than or equal to %d", got, min)
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}

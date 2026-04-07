@@ -419,6 +419,37 @@ func TestConfigValidateForBackfill_DaysValid(t *testing.T) {
 	}
 }
 
+func TestConfigValidateForBackfill_ConcurrencyLessThanOne(t *testing.T) {
+	c := createBackfillConfig()
+	c.Concurrency = 0
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+		return
+	}
+
+	if len(invConfigError["--concurrency"]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for --concurrency length = %d, want 1", len(invConfigError["--concurrency"]))
+		return
+	}
+
+	expectedMsg := "was 0, must be greater than or equal to 1"
+	if invConfigError["--concurrency"][0].Error() != expectedMsg {
+		t.Errorf("ValidateForBackfillCommitMetadata() error message = %q, want %q", invConfigError["--concurrency"][0].Error(), expectedMsg)
+	}
+}
+
+func TestConfigValidateForBackfill_ConcurrencyValid(t *testing.T) {
+	c := createBackfillConfig()
+	c.Concurrency = 1
+	err := c.ValidateForBackfillCommitMetadata()
+	if err != nil {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil", err)
+	}
+}
+
 func TestConfigValidate_TagFiltersOnlyWorksWithPytest(t *testing.T) {
 	t.Run("TagFilters with pytest runner should be valid", func(t *testing.T) {
 		c := createConfig()
