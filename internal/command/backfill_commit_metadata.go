@@ -201,6 +201,18 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("creating tarball: %w", err)
 	}
+	tarInfo, err := os.Stat(tarPath)
+	if err != nil {
+		return fmt.Errorf("stat tarball: %w", err)
+	}
+	switch size := tarInfo.Size(); {
+	case size >= 1024*1024:
+		fmt.Fprintf(os.Stderr, "%.2f MiB\n", float64(size)/(1024*1024))
+	case size >= 1024:
+		fmt.Fprintf(os.Stderr, "%.2f KiB\n", float64(size)/1024)
+	default:
+		fmt.Fprintf(os.Stderr, "%d bytes\n", size)
+	}
 	removeTarball := true
 	defer func() {
 		if removeTarball {
