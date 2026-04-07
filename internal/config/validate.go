@@ -174,6 +174,10 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
+	if got, min := c.Days, 1; got < min {
+		c.errs.appendFieldError("--days", "was %d, must be greater than or equal to %d", got, min)
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}
