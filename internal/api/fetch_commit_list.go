@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
@@ -26,7 +27,7 @@ import (
 func (c Client) FetchCommitList(ctx context.Context, suiteSlug string, days int) ([]string, error) {
 	url := fmt.Sprintf(
 		"%s/v2/analytics/organizations/%s/suites/%s/commits?days=%d",
-		c.ServerBaseUrl, c.OrganizationSlug, suiteSlug, days)
+		c.ServerBaseUrl, url.PathEscape(c.OrganizationSlug), url.PathEscape(suiteSlug), days)
 
 	debug.Printf("Fetching commit list: GET %s", url)
 

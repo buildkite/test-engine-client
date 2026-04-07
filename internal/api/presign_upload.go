@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/buildkite/test-engine-client/internal/upload"
 )
@@ -19,12 +20,12 @@ type PresignedUploadResponse struct {
 // Endpoint: POST /v2/analytics/organizations/:org/commit-metadata-backfill/presigned-upload
 // This is org-scoped (not suite-scoped) because git data applies across suites.
 func (c Client) PresignUpload(ctx context.Context) (PresignedUploadResponse, error) {
-	url := fmt.Sprintf(
+	reqURL := fmt.Sprintf(
 		"%s/v2/analytics/organizations/%s/commit-metadata-backfill/presigned-upload",
-		c.ServerBaseUrl, c.OrganizationSlug)
+		c.ServerBaseUrl, url.PathEscape(c.OrganizationSlug))
 
 	var resp PresignedUploadResponse
-	_, err := c.DoWithRetry(ctx, httpRequest{Method: http.MethodPost, URL: url}, &resp)
+	_, err := c.DoWithRetry(ctx, httpRequest{Method: http.MethodPost, URL: reqURL}, &resp)
 	if err != nil {
 		return PresignedUploadResponse{}, fmt.Errorf("presigning upload: %w", err)
 	}
