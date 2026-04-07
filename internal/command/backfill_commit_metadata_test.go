@@ -49,8 +49,8 @@ func newFakeGitRunner() *git.FakeGitRunner {
 		Responses: map[string]string{
 			// Default branch detection
 			"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
-			// Mainline cache
-			"log --first-parent --format=%H %P origin/main": "abc123 def456\ndef456\n",
+			// Mainline cache (--since matches default Days=90)
+			"log --first-parent --since=90 days ago --format=%H %P origin/main": "abc123 def456\ndef456\n",
 			// Fork-point + diffs for abc123
 			"merge-base origin/main abc123":                "def456\n",
 			"diff --no-ext-diff --name-only def456 abc123": "file1.go\n",
@@ -261,8 +261,8 @@ func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 
 	runner := &git.FakeGitRunner{
 		Responses: map[string]string{
-			"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
-			"log --first-parent --format=%H %P origin/main": "abc123 def456\n",
+			"symbolic-ref --short refs/remotes/origin/HEAD":                     "origin/main\n",
+			"log --first-parent --since=90 days ago --format=%H %P origin/main": "abc123 def456\n",
 		},
 		StdinResponses: map[string]func(string) string{
 			"cat-file --batch-check": func(_ string) string {

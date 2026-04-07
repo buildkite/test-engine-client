@@ -27,9 +27,12 @@ func (mc *MainlineCache) Size() int {
 
 // BuildMainlineCache builds a cache of the first-parent chain from the given branch.
 // Uses `git log --first-parent --format=%H %P` to enumerate all commits on the
-// mainline and their first parents.
-func BuildMainlineCache(ctx context.Context, runner GitRunner, mainBranch string) (*MainlineCache, error) {
-	output, err := runner.Output(ctx, "log", "--first-parent", "--format=%H %P", mainBranch)
+// mainline and their first parents. The days parameter scopes the cache to the
+// same lookback window as the commit list API, avoiding unbounded history for
+// repos with very long mainline histories.
+func BuildMainlineCache(ctx context.Context, runner GitRunner, mainBranch string, days int) (*MainlineCache, error) {
+	since := fmt.Sprintf("--since=%d days ago", days)
+	output, err := runner.Output(ctx, "log", "--first-parent", since, "--format=%H %P", mainBranch)
 	if err != nil {
 		return nil, fmt.Errorf("building mainline cache: %w", err)
 	}

@@ -128,11 +128,11 @@ func TestFindForkPoint_SkipsWhenForkPointEqualsSelf(t *testing.T) {
 func TestBuildMainlineCache(t *testing.T) {
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
-			"log --first-parent --format=%H %P origin/main": "aaa parent1\nbbb parent2\nccc\n",
+			"log --first-parent --since=90 days ago --format=%H %P origin/main": "aaa parent1\nbbb parent2\nccc\n",
 		},
 	}
 
-	mc, err := BuildMainlineCache(context.Background(), runner, "origin/main")
+	mc, err := BuildMainlineCache(context.Background(), runner, "origin/main", 90)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

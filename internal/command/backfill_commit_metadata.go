@@ -118,7 +118,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 
 	// 8. Build mainline cache
 	fmt.Fprintln(os.Stderr, "Building mainline cache...")
-	mc, err := git.BuildMainlineCache(ctx, runner, defaultBranch)
+	mc, err := git.BuildMainlineCache(ctx, runner, defaultBranch, cfg.Days)
 	if err != nil {
 		return fmt.Errorf("building mainline cache: %w", err)
 	}
