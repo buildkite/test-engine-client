@@ -71,6 +71,11 @@ func CollectDiffs(
 		go func() {
 			defer wg.Done()
 			for idx := range jobs {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
 				diff, err := extractCommitDiffs(ctx, runner, commits[idx], mainBranch, mc, skipDiffs)
 				resultCh <- indexedResult{idx: idx, diff: diff, err: err}
 			}
