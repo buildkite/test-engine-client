@@ -138,7 +138,7 @@ func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error)
 
 	// Rename to include a timestamp for easier identification
 	dir := filepath.Dir(tmpPath)
-	ts := time.Now().UTC().Format("20060102T150405Z")
+	ts := time.Now().UTC().Format("20060102T150405.000Z")
 	finalPath := filepath.Join(dir, fmt.Sprintf("bktec-commit-metadata-%s.tar.gz", ts))
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		// Rename can fail (e.g. permissions); fall back to the original path
