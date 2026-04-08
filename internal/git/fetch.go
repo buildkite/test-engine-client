@@ -79,10 +79,9 @@ func fetchCommits(ctx context.Context, runner GitRunner, remote string, commits 
 	args = append(args, commits...)
 
 	debug.Printf("Fetching %d commits from %s", len(commits), remote)
-	output, err := runner.Output(ctx, args...)
+	_, err := runner.Output(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("git fetch: %w", err)
 	}
-	_ = output
 	return nil
 }
