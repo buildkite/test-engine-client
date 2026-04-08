@@ -20,15 +20,6 @@ import (
 	"github.com/buildkite/test-engine-client/internal/packaging"
 )
 
-func setGitRunnerFactory(t *testing.T, runner git.GitRunner) {
-	t.Helper()
-	orig := gitRunnerFactory
-	gitRunnerFactory = func() git.GitRunner { return runner }
-	t.Cleanup(func() {
-		gitRunnerFactory = orig
-	})
-}
-
 func getBackfillConfig(serverURL string) *config.Config {
 	cfg := config.New()
 	cfg.AccessToken = "test-token"
@@ -97,9 +88,8 @@ func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 	cfg.Output = t.TempDir() + "/output.tar.gz"
 
 	runner := newFakeGitRunner()
-	setGitRunnerFactory(t, runner)
 
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, runner)
 	if err != nil {
 		t.Fatalf("BackfillCommitMetadata error: %v", err)
 	}
@@ -182,9 +172,8 @@ func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 	cfg.SkipDiffs = true
 
 	runner := newFakeGitRunner()
-	setGitRunnerFactory(t, runner)
 
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, runner)
 	if err != nil {
 		t.Fatalf("BackfillCommitMetadata error: %v", err)
 	}
@@ -237,7 +226,7 @@ func TestBackfillCommitMetadata_NoCommits(t *testing.T) {
 
 	cfg := getBackfillConfig(svr.URL)
 
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatalf("expected no error for empty commit list, got: %v", err)
 	}
@@ -270,9 +259,7 @@ func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 			},
 		},
 	}
-	setGitRunnerFactory(t, runner)
-
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, runner)
 	if err != nil {
 		t.Fatalf("expected no error when all commits missing, got: %v", err)
 	}
@@ -292,7 +279,7 @@ func TestBackfillCommitMetadata_APIError(t *testing.T) {
 
 	cfg := getBackfillConfig(svr.URL)
 
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, nil)
 	if err == nil {
 		t.Fatal("expected error for API failure, got nil")
 	}
@@ -320,7 +307,7 @@ func TestBackfillCommitMetadata_DaysParam(t *testing.T) {
 	cfg := getBackfillConfig(svr.URL)
 	cfg.Days = 30
 
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -396,9 +383,8 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	// No Output set -- should upload to S3
 
 	runner := newFakeGitRunner()
-	setGitRunnerFactory(t, runner)
 
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, runner)
 	if err != nil {
 		t.Fatalf("BackfillCommitMetadata error: %v", err)
 	}
@@ -426,7 +412,7 @@ func TestBackfillCommitMetadata_ScopeCheckFails(t *testing.T) {
 	cfg := getBackfillConfig(svr.URL)
 	// No --output, so write_suites is required
 
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, nil)
 	if err == nil {
 		t.Fatal("expected error for missing write_suites scope, got nil")
 	}
@@ -457,10 +443,9 @@ func TestBackfillCommitMetadata_ScopeCheckWarnsWithOutput(t *testing.T) {
 	cfg.Output = t.TempDir() + "/output.tar.gz"
 
 	runner := newFakeGitRunner()
-	setGitRunnerFactory(t, runner)
 
 	// With --output set, missing write_suites should warn, not error
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, runner)
 	if err != nil {
 		t.Fatalf("expected no error with --output (warn only), got: %v", err)
 	}
@@ -487,7 +472,7 @@ func TestBackfillCommitMetadata_ScopeCheckFailsWithOutputMissingReadSuites(t *te
 	cfg.Output = t.TempDir() + "/output.tar.gz"
 
 	// Even with --output, missing read_suites is a hard error
-	err := BackfillCommitMetadata(context.Background(), cfg)
+	err := BackfillCommitMetadata(context.Background(), cfg, nil)
 	if err == nil {
 		t.Fatal("expected error for missing read_suites scope, got nil")
 	}

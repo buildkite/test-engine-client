@@ -16,14 +16,9 @@ import (
 	"github.com/buildkite/test-engine-client/internal/version"
 )
 
-// gitRunnerFactory creates a GitRunner. Tests override this to inject fakes.
-var gitRunnerFactory func() git.GitRunner = func() git.GitRunner {
-	return &git.ExecGitRunner{}
-}
-
 // BackfillCommitMetadata collects historical git commit metadata from the local
 // repo and uploads it to Buildkite via presigned S3.
-func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
+func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.GitRunner) error {
 	fmt.Fprintf(os.Stderr, "+++ Buildkite Test Engine Client: bktec %s\n\n", version.Version)
 
 	// 1. Create API client
@@ -72,23 +67,20 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		return nil
 	}
 
-	// 4. Set up git runner
-	runner := gitRunnerFactory()
-
-	// 5. Detect default branch
+	// 4. Detect default branch
 	defaultBranch, err := git.DetectDefaultBranch(ctx, runner, cfg.Remote)
 	if err != nil {
 		return fmt.Errorf("detecting default branch: %w", err)
 	}
 	debug.Printf("Default branch: %s", defaultBranch)
 
-	// 6. Filter commits that exist locally
+	// 5. Filter commits that exist locally
 	existingCommits, missingCommits, err := git.FilterExistingCommits(ctx, runner, commits)
 	if err != nil {
 		return fmt.Errorf("filtering commits: %w", err)
 	}
 
-	// 7. Fetch missing commits from remote
+	// 6. Fetch missing commits from remote
 	if len(missingCommits) > 0 {
 		fmt.Fprintf(os.Stderr, "Fetching %d missing commits from %s...\n", len(missingCommits), cfg.Remote)
 		unfetchable, err := git.FetchMissingCommits(ctx, runner, cfg.Remote, missingCommits)
@@ -116,7 +108,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		return nil
 	}
 
-	// 8. Build mainline cache
+	// 7. Build mainline cache
 	fmt.Fprintln(os.Stderr, "Building mainline cache...")
 	mc, err := git.BuildMainlineCache(ctx, runner, defaultBranch, cfg.Days)
 	if err != nil {
@@ -124,14 +116,14 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 	debug.Printf("Mainline cache: %d commits", mc.Size())
 
-	// 9. Bulk-fetch commit metadata
+	// 8. Bulk-fetch commit metadata
 	fmt.Fprintln(os.Stderr, "Fetching commit metadata...")
 	metadataMap, err := git.FetchBulkMetadata(ctx, runner, existingCommits)
 	if err != nil {
 		return fmt.Errorf("fetching metadata: %w", err)
 	}
 
-	// 10. Collect diffs (concurrent worker pool)
+	// 9. Collect diffs (concurrent worker pool)
 	fmt.Fprintln(os.Stderr, "Collecting diffs...")
 	diffs, err := git.CollectDiffs(ctx, runner, existingCommits, defaultBranch, mc, cfg.SkipDiffs,
 		cfg.Concurrency, func(done, total int) {
@@ -144,7 +136,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 	}
 	fmt.Fprintln(os.Stderr) // newline after progress
 
-	// 11. Assemble records and compute commit date range
+	// 10. Assemble records and compute commit date range
 	var records []packaging.CommitRecord
 	var minDate, maxDate string
 	for i, commit := range existingCommits {
@@ -180,7 +172,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	// 12. Package as tar.gz
+	// 11. Package as tar.gz
 	fmt.Fprintln(os.Stderr, "Packaging tarball...")
 	archiveMeta := packaging.ArchiveMetadata{
 		SchemaVersion:    1,
@@ -220,7 +212,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config) error {
 		}
 	}()
 
-	// 13. Upload or write locally
+	// 12. Upload or write locally
 	if cfg.Output != "" {
 		if err := copyFile(tarPath, cfg.Output); err != nil {
 			return fmt.Errorf("writing output file: %w", err)

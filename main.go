@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/command"
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/internal/git"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/urfave/cli/v3"
 )
@@ -65,7 +66,7 @@ func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
-	return command.BackfillCommitMetadata(ctx, &cfg)
+	return command.BackfillCommitMetadata(ctx, &cfg, &git.ExecGitRunner{})
 }
 
 func uploadCommitMetadata(ctx context.Context, cmd *cli.Command) error {
