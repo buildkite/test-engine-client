@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 )
@@ -78,7 +79,8 @@ func UploadToS3(ctx context.Context, filePath string, form PresignedUploadForm) 
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("uploading to S3: %w", err)
 	}

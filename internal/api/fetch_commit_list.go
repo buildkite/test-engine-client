@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 )
@@ -30,6 +31,9 @@ func (c Client) FetchCommitList(ctx context.Context, suiteSlug string, days int)
 		c.ServerBaseUrl, url.PathEscape(c.OrganizationSlug), url.PathEscape(suiteSlug), days)
 
 	debug.Printf("Fetching commit list: GET %s", url)
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
