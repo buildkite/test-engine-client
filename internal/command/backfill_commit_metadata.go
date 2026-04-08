@@ -18,8 +18,17 @@ import (
 
 // BackfillCommitMetadata collects historical git commit metadata from the local
 // repo and uploads it to Buildkite via presigned S3.
+//
+// When cfg.UploadFile is set (--upload flag), it skips all git work and uploads
+// the specified tarball directly. This supports workflows where generation and
+// upload happen in separate steps (e.g. air-gapped environments or retrying a
+// failed upload).
 func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.GitRunner) error {
 	fmt.Fprintf(os.Stderr, "+++ Buildkite Test Engine Client: bktec %s\n\n", version.Version)
+
+	if cfg.UploadFile != "" {
+		return uploadOnly(ctx, cfg)
+	}
 
 	// 1. Create API client
 	apiClient := api.NewClient(api.ClientConfig{
@@ -241,6 +250,45 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	}
 	fmt.Fprintln(os.Stderr, ".")
 
+	return nil
+}
+
+// uploadOnly uploads a previously generated commit metadata tarball to Buildkite
+// via presigned S3 POST. This is the upload-only path for --upload, intended for
+// cases where generation and upload happen in separate steps.
+func uploadOnly(ctx context.Context, cfg *config.Config) error {
+	// 1. Verify file exists
+	if _, err := os.Stat(cfg.UploadFile); err != nil {
+		return fmt.Errorf("file not found: %w", err)
+	}
+
+	// 2. Create API client
+	apiClient := api.NewClient(api.ClientConfig{
+		AccessToken:      cfg.AccessToken,
+		OrganizationSlug: cfg.OrganizationSlug,
+		ServerBaseUrl:    cfg.ServerBaseUrl,
+	})
+
+	// 3. Verify token scopes
+	if _, err := apiClient.VerifyTokenScopes(ctx, []string{"write_suites"}); err != nil {
+		return fmt.Errorf("token scope check failed: %w", err)
+	}
+	debug.Println("Token scopes verified")
+
+	// 4. Request presigned upload URL
+	fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
+	presigned, err := apiClient.PresignUpload(ctx)
+	if err != nil {
+		return fmt.Errorf("presigning upload: %w", err)
+	}
+
+	// 5. Upload to S3
+	fmt.Fprintln(os.Stderr, "Uploading to S3...")
+	if err := upload.UploadToS3(ctx, cfg.UploadFile, presigned.Form); err != nil {
+		return fmt.Errorf("uploading to S3: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Uploaded %s to %s\n", cfg.UploadFile, presigned.URI)
 	return nil
 }
 

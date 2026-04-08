@@ -57,7 +57,7 @@ type Config struct {
 	ServerBaseUrl string `json:"-"`
 	// SkipDiffs omits git_diff and git_diff_raw from the export to reduce upload size.
 	SkipDiffs bool `json:"-"`
-	// UploadFile is the path to a previously generated tarball for the upload-commit-metadata command.
+	// UploadFile is the path to a previously generated tarball for the --upload flag of backfill-commit-metadata.
 	UploadFile string `json:"-"`
 	// SplitByExample is the flag to enable split the test by example.
 	SplitByExample bool   `json:"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE"`

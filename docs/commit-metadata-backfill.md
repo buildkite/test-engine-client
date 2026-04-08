@@ -57,15 +57,13 @@ bktec tools backfill-commit-metadata --skip-diffs
 bktec tools backfill-commit-metadata --days 30 --concurrency 5
 ```
 
-### `bktec tools upload-commit-metadata`
-
-Uploads a previously generated commit metadata tarball to Buildkite. This is useful when you want to generate and upload in separate steps, for example in air-gapped environments or when retrying a failed upload.
+**Upload a previously generated tarball:**
 
 ```sh
-bktec tools upload-commit-metadata --file commit-metadata.tar.gz
+bktec tools backfill-commit-metadata --upload commit-metadata.tar.gz
 ```
 
-If the `backfill-commit-metadata` command fails during upload, it retains the generated tarball locally and prints its path. You can then retry the upload with this command without re-running the entire metadata collection.
+This is useful when you want to generate and upload in separate steps or when retrying a failed upload. If the command fails during upload, it retains the generated tarball locally and prints its path. You can then retry with `--upload` without re-running the entire metadata collection.
 
 ## Configuration
 
@@ -83,13 +81,13 @@ If the `backfill-commit-metadata` command fails during upload, it retains the ge
 | `BUILDKITE_TEST_ENGINE_BACKFILL_CONCURRENCY` | `--concurrency` | `10` | Number of concurrent git operations for diff collection |
 | `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` | `--debug` | `false` | Enable debug output |
 
-The `upload-commit-metadata` command requires `--access-token`, `--organization-slug`, and `--file`. It does not require `--suite-slug` because the upload endpoint is organization-scoped.
+When using `--upload`, only `--access-token` and `--organization-slug` are required. The `--suite-slug`, `--days`, and other backfill-specific flags are not needed because the upload endpoint is organization-scoped.
 
 ### API access token scopes
 
 The `backfill-commit-metadata` command requires both `read_suites` (to fetch the commit list) and `write_suites` (to upload the tarball) scopes. If you use `--output` to write locally without uploading, only `read_suites` is required; a missing `write_suites` scope is downgraded to a warning.
 
-The `upload-commit-metadata` command requires `write_suites`.
+When using `--upload`, only `write_suites` is required.
 
 Token scopes are verified before any git work begins, so you get a fast failure if the token is misconfigured.
 
