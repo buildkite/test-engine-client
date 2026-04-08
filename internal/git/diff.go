@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 )
@@ -88,8 +87,8 @@ func CollectDiffs(
 		close(resultCh)
 	}()
 
-	// Collect results
-	var processed atomic.Int32
+	// Collect results (single goroutine, no atomics needed)
+	var processed int
 	for res := range resultCh {
 		if res.err != nil {
 			debug.Printf("Warning: skipping commit %s: %v", commits[res.idx], res.err)
@@ -97,9 +96,9 @@ func CollectDiffs(
 		} else {
 			results[res.idx] = res.diff
 		}
-		count := int(processed.Add(1))
+		processed++
 		if onProgress != nil {
-			onProgress(count, len(commits))
+			onProgress(processed, len(commits))
 		}
 	}
 
