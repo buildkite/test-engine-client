@@ -2,6 +2,7 @@ package upload
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -32,7 +33,7 @@ type PresignedUploadForm struct {
 //
 // The multipart body is buffered in memory so the HTTP client can set the
 // Content-Length header, which S3 requires for presigned POST uploads.
-func UploadToS3(filePath string, form PresignedUploadForm) error {
+func UploadToS3(ctx context.Context, filePath string, form PresignedUploadForm) error {
 	debug.Printf("Uploading %s to %s", filePath, form.URL)
 
 	var buf bytes.Buffer
@@ -71,7 +72,7 @@ func UploadToS3(filePath string, form PresignedUploadForm) error {
 		return fmt.Errorf("closing multipart writer: %w", err)
 	}
 
-	req, err := http.NewRequest(form.Method, form.URL, &buf)
+	req, err := http.NewRequestWithContext(ctx, form.Method, form.URL, &buf)
 	if err != nil {
 		return fmt.Errorf("creating upload request: %w", err)
 	}

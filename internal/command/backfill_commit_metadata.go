@@ -227,7 +227,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 			return fmt.Errorf("presigning upload: %w", err)
 		}
 		fmt.Fprintln(os.Stderr, "Uploading to S3...")
-		if err := upload.UploadToS3(tarPath, presigned.Form); err != nil {
+		if err := upload.UploadToS3(ctx, tarPath, presigned.Form); err != nil {
 			removeTarball = false
 			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
 			return fmt.Errorf("uploading to S3: %w", err)

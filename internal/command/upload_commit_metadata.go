@@ -46,7 +46,7 @@ func UploadCommitMetadata(ctx context.Context, cfg *config.Config) error {
 
 	// 5. Upload to S3
 	fmt.Fprintln(os.Stderr, "Uploading to S3...")
-	if err := upload.UploadToS3(cfg.UploadFile, presigned.Form); err != nil {
+	if err := upload.UploadToS3(ctx, cfg.UploadFile, presigned.Form); err != nil {
 		return fmt.Errorf("uploading to S3: %w", err)
 	}
 

@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"context"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -66,7 +67,7 @@ func TestUploadToS3_SendsFormFields(t *testing.T) {
 		FileInput: "file",
 	}
 
-	if err := UploadToS3(tmpFile, form); err != nil {
+	if err := UploadToS3(context.Background(), tmpFile, form); err != nil {
 		t.Fatalf("UploadToS3 error: %v", err)
 	}
 
@@ -113,7 +114,7 @@ func TestUploadToS3_SendsFile(t *testing.T) {
 		FileInput: "file",
 	}
 
-	if err := UploadToS3(tmpFile, form); err != nil {
+	if err := UploadToS3(context.Background(), tmpFile, form); err != nil {
 		t.Fatalf("UploadToS3 error: %v", err)
 	}
 
@@ -160,7 +161,7 @@ func TestUploadToS3_FieldOrder(t *testing.T) {
 		FileInput: "file",
 	}
 
-	if err := UploadToS3(tmpFile, form); err != nil {
+	if err := UploadToS3(context.Background(), tmpFile, form); err != nil {
 		t.Fatalf("UploadToS3 error: %v", err)
 	}
 
@@ -196,7 +197,7 @@ func TestUploadToS3_ServerError(t *testing.T) {
 		FileInput: "file",
 	}
 
-	err := UploadToS3(tmpFile, form)
+	err := UploadToS3(context.Background(), tmpFile, form)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -218,7 +219,7 @@ func TestUploadToS3_FileNotFound(t *testing.T) {
 		FileInput: "file",
 	}
 
-	err := UploadToS3("/nonexistent/file.tar.gz", form)
+	err := UploadToS3(context.Background(), "/nonexistent/file.tar.gz", form)
 	if err == nil {
 		t.Fatal("expected error for missing file, got nil")
 	}
