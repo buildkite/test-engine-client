@@ -39,3 +39,6 @@ internal/runner/testdata/cucumber/cucumber.json
 
 # Output binary with `go build`
 test-engine-client
+
+# Output binary with `go build -o bktec`
+/bktec
