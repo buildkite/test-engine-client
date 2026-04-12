@@ -79,7 +79,7 @@ func UploadToS3(ctx context.Context, filePath string, form PresignedUploadForm) 
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	client := &http.Client{Timeout: 5 * time.Minute}
+	client := &http.Client{Timeout: 10 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("uploading to S3: %w", err)
