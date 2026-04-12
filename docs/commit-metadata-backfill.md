@@ -144,7 +144,7 @@ For best results, run from a full clone rather than a shallow clone.
 
 ### Output format
 
-The tarball contains two files:
+The tarball wraps its contents inside a directory named `backfill-<org>-<suite>-<timestamp>` (for example, `backfill-my-org-my-suite-20260402T100000.000Z/`). The directory contains two files:
 
 - `commit-metadata.jsonl` -- one JSON object per line, with fields including `commit_sha`, `parent_shas`, `author_name`, `author_email`, `author_date`, `committer_name`, `committer_email`, `committer_date`, `message`, `files_changed`, `diff_stat`, `git_diff`, and `git_diff_raw`
 - `metadata.json` -- archive metadata including the tool version, generation timestamp, commit count, configuration options used, and the date range of commits in the archive

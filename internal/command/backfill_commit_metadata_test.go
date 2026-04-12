@@ -62,6 +62,29 @@ func newFakeGitRunner() *git.FakeGitRunner {
 	}
 }
 
+// findTarBySuffix returns the content of the first tarball entry whose name
+// ends with the given suffix. Fails the test if no match is found.
+func findTarBySuffix(t *testing.T, files map[string]string, suffix string) string {
+	t.Helper()
+	for name, content := range files {
+		if strings.HasSuffix(name, suffix) {
+			return content
+		}
+	}
+	t.Fatalf("no tar entry ending with %q", suffix)
+	return ""
+}
+
+// hasTarSuffix returns true if any tarball entry name ends with the given suffix.
+func hasTarSuffix(files map[string]string, suffix string) bool {
+	for name := range files {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 // writeTokenScopes writes a JSON response for GET /v2/access-token with the given scopes.
 func writeTokenScopes(w http.ResponseWriter, scopes ...string) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -121,15 +144,15 @@ func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 		files[hdr.Name] = string(data)
 	}
 
-	if _, ok := files["commit-metadata.jsonl"]; !ok {
+	if !hasTarSuffix(files, "/commit-metadata.jsonl") {
 		t.Error("tarball missing commit-metadata.jsonl")
 	}
-	if _, ok := files["metadata.json"]; !ok {
+	if !hasTarSuffix(files, "/metadata.json") {
 		t.Error("tarball missing metadata.json")
 	}
 
 	// Verify JSONL content
-	jsonl := files["commit-metadata.jsonl"]
+	jsonl := findTarBySuffix(t, files, "/commit-metadata.jsonl")
 	lines := strings.Split(strings.TrimSpace(jsonl), "\n")
 	if len(lines) != 1 {
 		t.Fatalf("expected 1 JSONL line, got %d", len(lines))
@@ -193,7 +216,7 @@ func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if hdr.Name == "commit-metadata.jsonl" {
+		if strings.HasSuffix(hdr.Name, "/commit-metadata.jsonl") {
 			data, _ := io.ReadAll(tr)
 			line := strings.TrimSpace(string(data))
 			if strings.Contains(line, `"git_diff"`) {

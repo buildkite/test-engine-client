@@ -99,6 +99,29 @@ func readTarball(t *testing.T, path string) map[string]string {
 	return files
 }
 
+// findBySuffix returns the content of the first entry whose name ends with
+// the given suffix. Fails the test if no match is found.
+func findBySuffix(t *testing.T, files map[string]string, suffix string) string {
+	t.Helper()
+	for name, content := range files {
+		if strings.HasSuffix(name, suffix) {
+			return content
+		}
+	}
+	t.Fatalf("no tar entry ending with %q", suffix)
+	return ""
+}
+
+// hasSuffix returns true if any entry name ends with the given suffix.
+func hasSuffix(files map[string]string, suffix string) bool {
+	for name := range files {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestCreateTarball_BasicStructure(t *testing.T) {
 	path, err := CreateTarball(sampleRecords(), sampleMetadata())
 	if err != nil {
@@ -107,14 +130,15 @@ func TestCreateTarball_BasicStructure(t *testing.T) {
 	defer os.Remove(path)
 
 	files := readTarball(t, path)
-	if _, ok := files["commit-metadata.jsonl"]; !ok {
+	if !hasSuffix(files, "/commit-metadata.jsonl") {
 		t.Error("tarball missing commit-metadata.jsonl")
 	}
-	if _, ok := files["metadata.json"]; !ok {
+	if !hasSuffix(files, "/metadata.json") {
 		t.Error("tarball missing metadata.json")
 	}
-	if len(files) != 2 {
-		t.Errorf("expected 2 files in tarball, got %d", len(files))
+	// 3 entries: directory + 2 files
+	if len(files) != 3 {
+		t.Errorf("expected 3 entries in tarball (dir + 2 files), got %d", len(files))
 	}
 }
 
@@ -127,7 +151,7 @@ func TestCreateTarball_JSONLContent(t *testing.T) {
 	defer os.Remove(path)
 
 	files := readTarball(t, path)
-	jsonl := files["commit-metadata.jsonl"]
+	jsonl := findBySuffix(t, files, "/commit-metadata.jsonl")
 	lines := strings.Split(strings.TrimSpace(jsonl), "\n")
 	if len(lines) != len(records) {
 		t.Fatalf("expected %d JSONL lines, got %d", len(records), len(lines))
@@ -155,7 +179,7 @@ func TestCreateTarball_MetadataContent(t *testing.T) {
 
 	files := readTarball(t, path)
 	var got ArchiveMetadata
-	if err := json.Unmarshal([]byte(files["metadata.json"]), &got); err != nil {
+	if err := json.Unmarshal([]byte(findBySuffix(t, files, "/metadata.json")), &got); err != nil {
 		t.Fatalf("parsing metadata.json: %v", err)
 	}
 	if diff := cmp.Diff(meta, got); diff != "" {
@@ -171,7 +195,7 @@ func TestCreateTarball_EmptyRecords(t *testing.T) {
 	defer os.Remove(path)
 
 	files := readTarball(t, path)
-	jsonl := files["commit-metadata.jsonl"]
+	jsonl := findBySuffix(t, files, "/commit-metadata.jsonl")
 	if jsonl != "" {
 		t.Errorf("expected empty JSONL for nil records, got %q", jsonl)
 	}
@@ -193,7 +217,7 @@ func TestCreateTarball_OmitsEmptyDiffs(t *testing.T) {
 	defer os.Remove(path)
 
 	files := readTarball(t, path)
-	lines := strings.Split(strings.TrimSpace(files["commit-metadata.jsonl"]), "\n")
+	lines := strings.Split(strings.TrimSpace(findBySuffix(t, files, "/commit-metadata.jsonl")), "\n")
 
 	// The JSON line should not contain git_diff or git_diff_raw keys
 	if strings.Contains(lines[0], "git_diff") {
@@ -212,7 +236,7 @@ func TestCreateTarball_SchemaVersion(t *testing.T) {
 	defer os.Remove(path)
 
 	files := readTarball(t, path)
-	lines := strings.Split(strings.TrimSpace(files["commit-metadata.jsonl"]), "\n")
+	lines := strings.Split(strings.TrimSpace(findBySuffix(t, files, "/commit-metadata.jsonl")), "\n")
 
 	var got map[string]interface{}
 	if err := json.Unmarshal([]byte(lines[0]), &got); err != nil {
@@ -220,5 +244,61 @@ func TestCreateTarball_SchemaVersion(t *testing.T) {
 	}
 	if got["schema_version"] != float64(1) {
 		t.Errorf("schema_version: got %v, want 1", got["schema_version"])
+	}
+}
+
+func TestCreateTarball_DirectoryStructure(t *testing.T) {
+	path, err := CreateTarball(sampleRecords(), sampleMetadata())
+	if err != nil {
+		t.Fatalf("CreateTarball error: %v", err)
+	}
+	defer os.Remove(path)
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("opening tarball: %v", err)
+	}
+	defer f.Close()
+
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatalf("creating gzip reader: %v", err)
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+
+	// First entry should be the directory
+	hdr, err := tr.Next()
+	if err != nil {
+		t.Fatalf("reading first tar entry: %v", err)
+	}
+	if hdr.Typeflag != tar.TypeDir {
+		t.Errorf("first entry should be a directory, got typeflag %d", hdr.Typeflag)
+	}
+	if !strings.HasPrefix(hdr.Name, "backfill-my-org-my-suite-") {
+		t.Errorf("directory name should start with 'backfill-my-org-my-suite-', got %q", hdr.Name)
+	}
+	if !strings.HasSuffix(hdr.Name, "/") {
+		t.Errorf("directory name should end with '/', got %q", hdr.Name)
+	}
+	dirName := hdr.Name
+
+	// Second entry should be commit-metadata.jsonl inside the directory
+	hdr, err = tr.Next()
+	if err != nil {
+		t.Fatalf("reading second tar entry: %v", err)
+	}
+	if hdr.Name != dirName+"commit-metadata.jsonl" {
+		t.Errorf("expected %q, got %q", dirName+"commit-metadata.jsonl", hdr.Name)
+	}
+
+	// Third entry should be metadata.json inside the directory
+	hdr, err = tr.Next()
+	if err != nil {
+		t.Fatalf("reading third tar entry: %v", err)
+	}
+	if hdr.Name != dirName+"metadata.json" {
+		t.Errorf("expected %q, got %q", dirName+"metadata.json", hdr.Name)
 	}
 }
