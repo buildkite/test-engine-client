@@ -75,6 +75,18 @@ var organizationSlugFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+// backfillOrganizationSlugFlag is a non-hidden variant of organizationSlugFlag.
+// The backfill command is CLI-first (run manually outside CI), so the flag should
+// be discoverable in --help, unlike run/plan where the Buildkite agent
+// auto-populates BUILDKITE_ORGANIZATION_SLUG.
+var backfillOrganizationSlugFlag = &cli.StringFlag{
+	Name:        "organization-slug",
+	Category:    "TEST ENGINE",
+	Usage:       "Buildkite organization slug",
+	Sources:     cli.EnvVars("BUILDKITE_ORGANIZATION_SLUG"),
+	Destination: &cfg.OrganizationSlug,
+}
+
 var buildIDFlag = &cli.StringFlag{
 	Name:        "build-id",
 	Category:    "BUILD ENVIRONMENT",
@@ -393,7 +405,7 @@ var concurrencyFlag = &cli.IntFlag{
 
 func backfillCommitMetadataFlags() []cli.Flag {
 	return []cli.Flag{
-		organizationSlugFlag,
+		backfillOrganizationSlugFlag,
 		accessTokenFlag,
 		suiteSlugFlag,
 		baseURLFlag,

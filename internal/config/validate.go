@@ -130,16 +130,16 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 		c.ServerBaseUrl = "https://api.buildkite.com"
 	} else {
 		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
-			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
+			c.errs.appendFieldError("--base-url / BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
 		}
 	}
 
 	if c.AccessToken == "" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "must not be blank")
+		c.errs.appendFieldError("--access-token / BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "must not be blank")
 	}
 
 	if c.OrganizationSlug == "" {
-		c.errs.appendFieldError("BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
+		c.errs.appendFieldError("--organization-slug / BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
 	}
 
 	// Upload-only mode: only need API connection fields (no suite slug, days, etc.)
@@ -151,7 +151,7 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 	}
 
 	if c.SuiteSlug == "" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
+		c.errs.appendFieldError("--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
 	if got, min := c.Days, 1; got < min {

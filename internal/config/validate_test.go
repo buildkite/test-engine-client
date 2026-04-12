@@ -450,6 +450,64 @@ func TestConfigValidateForBackfill_ConcurrencyValid(t *testing.T) {
 	}
 }
 
+func TestConfigValidateForBackfill_MissingOrganizationSlug(t *testing.T) {
+	c := createBackfillConfig()
+	c.OrganizationSlug = ""
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--organization-slug / BUILDKITE_ORGANIZATION_SLUG"
+	if len(invConfigError[key]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for %s length = %d, want 1", key, len(invConfigError[key]))
+	}
+}
+
+func TestConfigValidateForBackfill_MissingSuiteSlug(t *testing.T) {
+	c := createBackfillConfig()
+	c.SuiteSlug = ""
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG"
+	if len(invConfigError[key]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for %s length = %d, want 1", key, len(invConfigError[key]))
+	}
+}
+
+func TestConfigValidateForBackfill_MissingAccessToken(t *testing.T) {
+	c := createBackfillConfig()
+	c.AccessToken = ""
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--access-token / BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN"
+	if len(invConfigError[key]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for %s length = %d, want 1", key, len(invConfigError[key]))
+	}
+}
+
+func TestConfigValidateForBackfill_UploadOnlySkipsSuiteSlug(t *testing.T) {
+	c := createBackfillConfig()
+	c.SuiteSlug = ""
+	c.UploadFile = "/tmp/test.tar.gz"
+	err := c.ValidateForBackfillCommitMetadata()
+	if err != nil {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil (upload mode skips suite slug)", err)
+	}
+}
+
 func TestConfigValidate_TagFiltersOnlyWorksWithPytest(t *testing.T) {
 	t.Run("TagFilters with pytest runner should be valid", func(t *testing.T) {
 		c := createConfig()

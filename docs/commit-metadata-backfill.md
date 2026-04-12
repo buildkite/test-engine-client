@@ -29,12 +29,21 @@ The command performs the following steps:
 7. Packages everything as a compressed tarball (`commit-metadata.jsonl` + `metadata.json`)
 8. Uploads the tarball to Buildkite via presigned S3
 
-**Basic usage:**
+**Basic usage (flags):**
+
+```sh
+bktec tools backfill-commit-metadata \
+  --access-token "bkua_..." \
+  --organization-slug "my-org" \
+  --suite-slug "my-suite"
+```
+
+**Or using environment variables:**
 
 ```sh
 export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN="bkua_..."
-export BUILDKITE_TEST_ENGINE_SUITE_SLUG="my-suite"
 export BUILDKITE_ORGANIZATION_SLUG="my-org"
+export BUILDKITE_TEST_ENGINE_SUITE_SLUG="my-suite"
 
 bktec tools backfill-commit-metadata
 ```

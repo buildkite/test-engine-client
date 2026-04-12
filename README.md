@@ -89,11 +89,10 @@ Two commands are available under `bktec tools`:
 
 **Collect and upload commit metadata:**
 ```sh
-export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN="bkua_..."
-export BUILDKITE_TEST_ENGINE_SUITE_SLUG="my-suite"
-export BUILDKITE_ORGANIZATION_SLUG="my-org"
-
-bktec tools backfill-commit-metadata
+bktec tools backfill-commit-metadata \
+  --access-token "bkua_..." \
+  --organization-slug "my-org" \
+  --suite-slug "my-suite"
 ```
 
 **Generate the tarball locally for inspection before uploading:**
