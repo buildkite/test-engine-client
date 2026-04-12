@@ -1,8 +1,6 @@
 package command
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -62,29 +60,6 @@ func newFakeGitRunner() *git.FakeGitRunner {
 	}
 }
 
-// findTarBySuffix returns the content of the first tarball entry whose name
-// ends with the given suffix. Fails the test if no match is found.
-func findTarBySuffix(t *testing.T, files map[string]string, suffix string) string {
-	t.Helper()
-	for name, content := range files {
-		if strings.HasSuffix(name, suffix) {
-			return content
-		}
-	}
-	t.Fatalf("no tar entry ending with %q", suffix)
-	return ""
-}
-
-// hasTarSuffix returns true if any tarball entry name ends with the given suffix.
-func hasTarSuffix(files map[string]string, suffix string) bool {
-	for name := range files {
-		if strings.HasSuffix(name, suffix) {
-			return true
-		}
-	}
-	return false
-}
-
 // writeTokenScopes writes a JSON response for GET /v2/access-token with the given scopes.
 func writeTokenScopes(w http.ResponseWriter, scopes ...string) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -118,41 +93,17 @@ func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 	}
 
 	// Verify the output file exists and is a valid tarball
-	f, err := os.Open(cfg.Output)
-	if err != nil {
-		t.Fatalf("opening output: %v", err)
-	}
-	defer f.Close()
+	files := packaging.ReadTarball(t, cfg.Output)
 
-	gzr, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatalf("gzip reader: %v", err)
-	}
-	defer gzr.Close()
-
-	tr := tar.NewReader(gzr)
-	files := make(map[string]string)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatalf("reading tar: %v", err)
-		}
-		data, _ := io.ReadAll(tr)
-		files[hdr.Name] = string(data)
-	}
-
-	if !hasTarSuffix(files, "/commit-metadata.jsonl") {
+	if !packaging.HasTarEntry(files, "/commit-metadata.jsonl") {
 		t.Error("tarball missing commit-metadata.jsonl")
 	}
-	if !hasTarSuffix(files, "/metadata.json") {
+	if !packaging.HasTarEntry(files, "/metadata.json") {
 		t.Error("tarball missing metadata.json")
 	}
 
 	// Verify JSONL content
-	jsonl := findTarBySuffix(t, files, "/commit-metadata.jsonl")
+	jsonl := packaging.FindTarEntry(t, files, "/commit-metadata.jsonl")
 	lines := strings.Split(strings.TrimSpace(jsonl), "\n")
 	if len(lines) != 1 {
 		t.Fatalf("expected 1 JSONL line, got %d", len(lines))
@@ -202,34 +153,18 @@ func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 	}
 
 	// Read and verify the output
-	f, _ := os.Open(cfg.Output)
-	defer f.Close()
-	gzr, _ := gzip.NewReader(f)
-	defer gzr.Close()
-	tr := tar.NewReader(gzr)
+	files := packaging.ReadTarball(t, cfg.Output)
+	line := strings.TrimSpace(packaging.FindTarEntry(t, files, "/commit-metadata.jsonl"))
 
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.HasSuffix(hdr.Name, "/commit-metadata.jsonl") {
-			data, _ := io.ReadAll(tr)
-			line := strings.TrimSpace(string(data))
-			if strings.Contains(line, `"git_diff"`) {
-				t.Error("expected git_diff to be omitted with --skip-diffs")
-			}
-			if strings.Contains(line, `"git_diff_raw"`) {
-				t.Error("expected git_diff_raw to be omitted with --skip-diffs")
-			}
-			// files_changed should still be present
-			if !strings.Contains(line, `"files_changed"`) {
-				t.Error("expected files_changed to still be present")
-			}
-		}
+	if strings.Contains(line, `"git_diff"`) {
+		t.Error("expected git_diff to be omitted with --skip-diffs")
+	}
+	if strings.Contains(line, `"git_diff_raw"`) {
+		t.Error("expected git_diff_raw to be omitted with --skip-diffs")
+	}
+	// files_changed should still be present
+	if !strings.Contains(line, `"files_changed"`) {
+		t.Error("expected files_changed to still be present")
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"encoding/json"
-	"io"
 	"os"
 	"strings"
 	"testing"
@@ -65,63 +64,6 @@ func sampleMetadata() ArchiveMetadata {
 	}
 }
 
-// readTarball opens and reads a tar.gz file, returning a map of filename -> content.
-func readTarball(t *testing.T, path string) map[string]string {
-	t.Helper()
-	f, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("opening tarball: %v", err)
-	}
-	defer f.Close()
-
-	gzr, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatalf("creating gzip reader: %v", err)
-	}
-	defer gzr.Close()
-
-	tr := tar.NewReader(gzr)
-	files := make(map[string]string)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatalf("reading tar entry: %v", err)
-		}
-		data, err := io.ReadAll(tr)
-		if err != nil {
-			t.Fatalf("reading tar content for %s: %v", hdr.Name, err)
-		}
-		files[hdr.Name] = string(data)
-	}
-	return files
-}
-
-// findBySuffix returns the content of the first entry whose name ends with
-// the given suffix. Fails the test if no match is found.
-func findBySuffix(t *testing.T, files map[string]string, suffix string) string {
-	t.Helper()
-	for name, content := range files {
-		if strings.HasSuffix(name, suffix) {
-			return content
-		}
-	}
-	t.Fatalf("no tar entry ending with %q", suffix)
-	return ""
-}
-
-// hasSuffix returns true if any entry name ends with the given suffix.
-func hasSuffix(files map[string]string, suffix string) bool {
-	for name := range files {
-		if strings.HasSuffix(name, suffix) {
-			return true
-		}
-	}
-	return false
-}
-
 func TestCreateTarball_BasicStructure(t *testing.T) {
 	path, err := CreateTarball(sampleRecords(), sampleMetadata())
 	if err != nil {
@@ -129,11 +71,11 @@ func TestCreateTarball_BasicStructure(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	files := readTarball(t, path)
-	if !hasSuffix(files, "/commit-metadata.jsonl") {
+	files := ReadTarball(t, path)
+	if !HasTarEntry(files, "/commit-metadata.jsonl") {
 		t.Error("tarball missing commit-metadata.jsonl")
 	}
-	if !hasSuffix(files, "/metadata.json") {
+	if !HasTarEntry(files, "/metadata.json") {
 		t.Error("tarball missing metadata.json")
 	}
 	// 3 entries: directory + 2 files
@@ -150,8 +92,8 @@ func TestCreateTarball_JSONLContent(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	files := readTarball(t, path)
-	jsonl := findBySuffix(t, files, "/commit-metadata.jsonl")
+	files := ReadTarball(t, path)
+	jsonl := FindTarEntry(t, files, "/commit-metadata.jsonl")
 	lines := strings.Split(strings.TrimSpace(jsonl), "\n")
 	if len(lines) != len(records) {
 		t.Fatalf("expected %d JSONL lines, got %d", len(records), len(lines))
@@ -177,9 +119,9 @@ func TestCreateTarball_MetadataContent(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	files := readTarball(t, path)
+	files := ReadTarball(t, path)
 	var got ArchiveMetadata
-	if err := json.Unmarshal([]byte(findBySuffix(t, files, "/metadata.json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(FindTarEntry(t, files, "/metadata.json")), &got); err != nil {
 		t.Fatalf("parsing metadata.json: %v", err)
 	}
 	if diff := cmp.Diff(meta, got); diff != "" {
@@ -194,8 +136,8 @@ func TestCreateTarball_EmptyRecords(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	files := readTarball(t, path)
-	jsonl := findBySuffix(t, files, "/commit-metadata.jsonl")
+	files := ReadTarball(t, path)
+	jsonl := FindTarEntry(t, files, "/commit-metadata.jsonl")
 	if jsonl != "" {
 		t.Errorf("expected empty JSONL for nil records, got %q", jsonl)
 	}
@@ -216,8 +158,8 @@ func TestCreateTarball_OmitsEmptyDiffs(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	files := readTarball(t, path)
-	lines := strings.Split(strings.TrimSpace(findBySuffix(t, files, "/commit-metadata.jsonl")), "\n")
+	files := ReadTarball(t, path)
+	lines := strings.Split(strings.TrimSpace(FindTarEntry(t, files, "/commit-metadata.jsonl")), "\n")
 
 	// The JSON line should not contain git_diff or git_diff_raw keys
 	if strings.Contains(lines[0], "git_diff") {
@@ -235,8 +177,8 @@ func TestCreateTarball_SchemaVersion(t *testing.T) {
 	}
 	defer os.Remove(path)
 
-	files := readTarball(t, path)
-	lines := strings.Split(strings.TrimSpace(findBySuffix(t, files, "/commit-metadata.jsonl")), "\n")
+	files := ReadTarball(t, path)
+	lines := strings.Split(strings.TrimSpace(FindTarEntry(t, files, "/commit-metadata.jsonl")), "\n")
 
 	var got map[string]interface{}
 	if err := json.Unmarshal([]byte(lines[0]), &got); err != nil {
