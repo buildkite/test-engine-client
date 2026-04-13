@@ -75,6 +75,18 @@ var organizationSlugFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+// backfillOrganizationSlugFlag is a non-hidden variant of organizationSlugFlag.
+// The backfill command is CLI-first (run manually outside CI), so the flag should
+// be discoverable in --help, unlike run/plan where the Buildkite agent
+// auto-populates BUILDKITE_ORGANIZATION_SLUG.
+var backfillOrganizationSlugFlag = &cli.StringFlag{
+	Name:        "organization-slug",
+	Category:    "TEST ENGINE",
+	Usage:       "Buildkite organization slug",
+	Sources:     cli.EnvVars("BUILDKITE_ORGANIZATION_SLUG"),
+	Destination: &cfg.OrganizationSlug,
+}
+
 var buildIDFlag = &cli.StringFlag{
 	Name:        "build-id",
 	Category:    "BUILD ENVIRONMENT",
@@ -347,6 +359,72 @@ var pipelineUploadFlag = &cli.StringFlag{
 	Usage: "buildkite-agent pipeline upload will be executed with the provided `template.yml`. The additional enviroment variables BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER and BUILDKITE_TEST_ENGINE_PARALLELISM from the generated plan will be available to the template.",
 }
 
+// backfill-commit-metadata flags
+var skipDiffsFlag = &cli.BoolFlag{
+	Name:        "skip-diffs",
+	Category:    "BACKFILL",
+	Usage:       "Omit full git diffs from export to reduce upload size",
+	Value:       false,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SKIP_DIFFS"),
+	Destination: &cfg.SkipDiffs,
+}
+
+var outputFlag = &cli.StringFlag{
+	Name:        "output",
+	Category:    "BACKFILL",
+	Usage:       "Write tarball to a local file instead of uploading to Buildkite",
+	Destination: &cfg.Output,
+}
+
+var daysFlag = &cli.IntFlag{
+	Name:        "days",
+	Category:    "BACKFILL",
+	Usage:       "Number of days of commit history to export (1-90)",
+	Value:       90,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_DAYS"),
+	Destination: &cfg.Days,
+}
+
+var remoteFlag = &cli.StringFlag{
+	Name:        "remote",
+	Category:    "BACKFILL",
+	Usage:       "Git remote name for fetching missing commits and detecting default branch",
+	Value:       "origin",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_REMOTE"),
+	Destination: &cfg.Remote,
+}
+
+var concurrencyFlag = &cli.IntFlag{
+	Name:        "concurrency",
+	Category:    "BACKFILL",
+	Usage:       "Number of concurrent git operations for diff collection",
+	Value:       10,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_CONCURRENCY"),
+	Destination: &cfg.Concurrency,
+}
+
+func backfillCommitMetadataFlags() []cli.Flag {
+	return []cli.Flag{
+		backfillOrganizationSlugFlag,
+		accessTokenFlag,
+		suiteSlugFlag,
+		baseURLFlag,
+		skipDiffsFlag,
+		outputFlag,
+		uploadFlag,
+		daysFlag,
+		remoteFlag,
+		concurrencyFlag,
+	}
+}
+
+var uploadFlag = &cli.StringFlag{
+	Name:        "upload",
+	Category:    "BACKFILL",
+	Usage:       "Upload a previously generated commit metadata tarball instead of collecting new data",
+	Destination: &cfg.UploadFile,
+}
+
 func previewSelectionFlags() []cli.Flag {
 	if !previewSelectionEnabled() {
 		return []cli.Flag{}
@@ -435,10 +513,7 @@ func planCommandFlags() []cli.Flag {
 var cliCommand = &cli.Command{
 	Name:  "bktec",
 	Usage: "Buildkite Test Engine Client",
-	Flags: []cli.Flag{
-		versionFlag,
-		debugFlag,
-	},
+	Flags: []cli.Flag{versionFlag, debugFlag},
 	Commands: []*cli.Command{
 		{
 			Name:                      "run",
@@ -461,6 +536,19 @@ var cliCommand = &cli.Command{
 						{jsonFlag},
 						{pipelineUploadFlag},
 					},
+				},
+			},
+		},
+		{
+			Name:   "tools",
+			Usage:  "Utility tools",
+			Hidden: !previewSelectionEnabled(),
+			Commands: []*cli.Command{
+				{
+					Name:   "backfill-commit-metadata",
+					Usage:  "Collect historical git commit metadata and upload to Buildkite",
+					Action: backfillCommitMetadata,
+					Flags:  backfillCommitMetadataFlags(),
 				},
 			},
 		},

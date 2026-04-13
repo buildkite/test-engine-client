@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/command"
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/internal/git"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/urfave/cli/v3"
 )
@@ -55,6 +56,17 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 	} else {
 		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputPipelineUpload, cmd.String("pipeline-upload"))
 	}
+}
+
+func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
+	debug.SetDebug(cmd.Root().Bool("debug"))
+	debug.SetOutput(os.Stderr)
+
+	if err := cfg.ValidateForBackfillCommitMetadata(); err != nil {
+		return fmt.Errorf("invalid configuration...\n%w", err)
+	}
+
+	return command.BackfillCommitMetadata(ctx, &cfg, &git.ExecGitRunner{})
 }
 
 func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error {

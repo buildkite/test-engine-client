@@ -374,6 +374,140 @@ func TestConfigValidate_SelectionParamsRequireStrategy(t *testing.T) {
 	})
 }
 
+// Validation specific to `bktec tools backfill-commit-metadata`
+
+func createBackfillConfig() Config {
+	return Config{
+		ServerBaseUrl:    "http://example.com",
+		OrganizationSlug: "my_org",
+		SuiteSlug:        "my_suite",
+		AccessToken:      "my_token",
+		Days:             30,
+		Concurrency:      10,
+		errs:             InvalidConfigError{},
+	}
+}
+
+func TestConfigValidateForBackfill_DaysLessThanOne(t *testing.T) {
+	c := createBackfillConfig()
+	c.Days = 0
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+		return
+	}
+
+	if len(invConfigError["--days"]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for --days length = %d, want 1", len(invConfigError["--days"]))
+		return
+	}
+
+	expectedMsg := "was 0, must be greater than or equal to 1"
+	if invConfigError["--days"][0].Error() != expectedMsg {
+		t.Errorf("ValidateForBackfillCommitMetadata() error message = %q, want %q", invConfigError["--days"][0].Error(), expectedMsg)
+	}
+}
+
+func TestConfigValidateForBackfill_DaysValid(t *testing.T) {
+	c := createBackfillConfig()
+	c.Days = 1
+	err := c.ValidateForBackfillCommitMetadata()
+	if err != nil {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil", err)
+	}
+}
+
+func TestConfigValidateForBackfill_ConcurrencyLessThanOne(t *testing.T) {
+	c := createBackfillConfig()
+	c.Concurrency = 0
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+		return
+	}
+
+	if len(invConfigError["--concurrency"]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for --concurrency length = %d, want 1", len(invConfigError["--concurrency"]))
+		return
+	}
+
+	expectedMsg := "was 0, must be greater than or equal to 1"
+	if invConfigError["--concurrency"][0].Error() != expectedMsg {
+		t.Errorf("ValidateForBackfillCommitMetadata() error message = %q, want %q", invConfigError["--concurrency"][0].Error(), expectedMsg)
+	}
+}
+
+func TestConfigValidateForBackfill_ConcurrencyValid(t *testing.T) {
+	c := createBackfillConfig()
+	c.Concurrency = 1
+	err := c.ValidateForBackfillCommitMetadata()
+	if err != nil {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil", err)
+	}
+}
+
+func TestConfigValidateForBackfill_MissingOrganizationSlug(t *testing.T) {
+	c := createBackfillConfig()
+	c.OrganizationSlug = ""
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--organization-slug / BUILDKITE_ORGANIZATION_SLUG"
+	if len(invConfigError[key]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for %s length = %d, want 1", key, len(invConfigError[key]))
+	}
+}
+
+func TestConfigValidateForBackfill_MissingSuiteSlug(t *testing.T) {
+	c := createBackfillConfig()
+	c.SuiteSlug = ""
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG"
+	if len(invConfigError[key]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for %s length = %d, want 1", key, len(invConfigError[key]))
+	}
+}
+
+func TestConfigValidateForBackfill_MissingAccessToken(t *testing.T) {
+	c := createBackfillConfig()
+	c.AccessToken = ""
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--access-token / BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN"
+	if len(invConfigError[key]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for %s length = %d, want 1", key, len(invConfigError[key]))
+	}
+}
+
+func TestConfigValidateForBackfill_UploadOnlySkipsSuiteSlug(t *testing.T) {
+	c := createBackfillConfig()
+	c.SuiteSlug = ""
+	c.UploadFile = "/tmp/test.tar.gz"
+	err := c.ValidateForBackfillCommitMetadata()
+	if err != nil {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil (upload mode skips suite slug)", err)
+	}
+}
+
 func TestConfigValidate_TagFiltersOnlyWorksWithPytest(t *testing.T) {
 	t.Run("TagFilters with pytest runner should be valid", func(t *testing.T) {
 		c := createConfig()
