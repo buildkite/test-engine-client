@@ -2,11 +2,13 @@ package runner
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/kballard/go-shellquote"
 	"github.com/stretchr/testify/assert"
 )
@@ -54,9 +56,14 @@ func TestPytestRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
 	pytest := NewPytest(RunnerConfig{
-		TestCommand: "pytest",
+		TestCommand: "pytest --json=result-failed.json",
 		ResultPath:  "result-failed.json",
 	})
+
+	t.Cleanup(func() {
+		os.Remove("result-failed.json")
+	})
+
 	testCases := []plan.TestCase{
 		{Path: "failed_test.py"},
 	}
@@ -78,15 +85,14 @@ func TestPytestRun_TestFailed(t *testing.T) {
 
 	wantFailedTests := []plan.TestCase{
 		{
-			Format:     "example",
-			Identifier: "a1be7e52-0dba-4018-83ce-a1598ca68807",
-			Name:       "test_failed",
-			Path:       "tests/failed_test.py::test_failed",
-			Scope:      "tests/failed_test.py",
+			Format: "example",
+			Name:   "test_failed",
+			Path:   "failed_test.py::test_failed",
+			Scope:  "failed_test.py",
 		},
 	}
 
-	if diff := cmp.Diff(failedTest, wantFailedTests); diff != "" {
+	if diff := cmp.Diff(failedTest, wantFailedTests, cmpopts.IgnoreFields(plan.TestCase{}, "Identifier")); diff != "" {
 		t.Errorf("Pytest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 }
