@@ -71,7 +71,7 @@ func autoCollectGitMetadata(ctx context.Context) {
 
 	// Check if we're in a git repo
 	if _, err := runner.Output(ctx, "rev-parse", "--git-dir"); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: not a git repository, skipping metadata auto-collection\n")
+		fmt.Fprintln(os.Stderr, "Warning: not a git repository, skipping metadata auto-collection")
 		return
 	}
 
@@ -82,7 +82,7 @@ func autoCollectGitMetadata(ctx context.Context) {
 		fmt.Fprintf(os.Stderr, "Warning: could not resolve base branch for diff metadata. "+
 			"Set --metadata base_branch=<branch> if your repo uses a non-standard default branch.\n")
 	} else {
-		fmt.Fprintf(os.Stderr, "Auto-detected base branch: %s\n", baseBranch)
+		debug.Printf("auto-detected base branch: %s", baseBranch)
 	}
 
 	autoMetadata := git.CollectPlanMetadata(ctx, runner, baseBranch)
