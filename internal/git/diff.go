@@ -142,7 +142,7 @@ func runDiffCommands(ctx context.Context, runner GitRunner, skipDiffs bool, refA
 	// diffArgs builds the full argument list for a git diff command.
 	// flags are inserted between "diff --no-ext-diff" and the ref args.
 	diffArgs := func(flags ...string) []string {
-		args := make([]string, 0, 3+len(flags)+len(refArgs))
+		args := make([]string, 0, 2+len(flags)+len(refArgs))
 		args = append(args, "diff", "--no-ext-diff")
 		args = append(args, flags...)
 		args = append(args, refArgs...)
