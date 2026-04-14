@@ -139,36 +139,38 @@ func extractCommitDiffs(
 // ["base...HEAD"] for triple-dot form). Each command is independent; failures
 // log a debug warning and leave the field empty.
 func runDiffCommands(ctx context.Context, runner GitRunner, skipDiffs bool, refArgs ...string) CommitDiffs {
+	// diffArgs builds the full argument list for a git diff command.
+	// flags are inserted between "diff --no-ext-diff" and the ref args.
+	diffArgs := func(flags ...string) []string {
+		args := make([]string, 0, 3+len(flags)+len(refArgs))
+		args = append(args, "diff", "--no-ext-diff")
+		args = append(args, flags...)
+		args = append(args, refArgs...)
+		return args
+	}
+
 	var diffs CommitDiffs
 
-	// files_changed: --name-only
-	args := append([]string{"diff", "--no-ext-diff", "--name-only"}, refArgs...)
-	if out, err := runner.Output(ctx, args...); err == nil {
+	if out, err := runner.Output(ctx, diffArgs("--name-only")...); err == nil {
 		diffs.FilesChanged = strings.TrimRight(out, "\n")
 	} else {
 		debug.Printf("Warning: diff --name-only failed: %v", err)
 	}
 
-	// diff_stat: --numstat
-	args = append([]string{"diff", "--no-ext-diff", "--numstat"}, refArgs...)
-	if out, err := runner.Output(ctx, args...); err == nil {
+	if out, err := runner.Output(ctx, diffArgs("--numstat")...); err == nil {
 		diffs.DiffStat = strings.TrimRight(out, "\n")
 	} else {
 		debug.Printf("Warning: diff --numstat failed: %v", err)
 	}
 
 	if !skipDiffs {
-		// git_diff: full diff
-		args = append([]string{"diff", "--no-ext-diff"}, refArgs...)
-		if out, err := runner.Output(ctx, args...); err == nil {
+		if out, err := runner.Output(ctx, diffArgs()...); err == nil {
 			diffs.GitDiff = strings.TrimRight(out, "\n")
 		} else {
 			debug.Printf("Warning: diff failed: %v", err)
 		}
 
-		// git_diff_raw: --raw
-		args = append([]string{"diff", "--no-ext-diff", "--raw"}, refArgs...)
-		if out, err := runner.Output(ctx, args...); err == nil {
+		if out, err := runner.Output(ctx, diffArgs("--raw")...); err == nil {
 			diffs.GitDiffRaw = strings.TrimRight(out, "\n")
 		} else {
 			debug.Printf("Warning: diff --raw failed: %v", err)
