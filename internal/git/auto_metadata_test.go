@@ -169,60 +169,30 @@ func TestCollectPlanMetadata_HappyPath(t *testing.T) {
 		},
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "origin/main")
+	got := CollectPlanMetadata(context.Background(), runner, "origin/main")
 
-	// All 17 keys should be populated
-	expectedKeys := []string{
-		"commit_sha", "parent_shas", "author_name", "author_email", "author_date",
-		"committer_name", "committer_email", "committer_date", "message",
-		"files_changed", "diff_stat", "git_diff", "git_diff_raw",
-		"branch", "base_branch", "pipeline_slug", "build_uuid",
-	}
-	for _, key := range expectedKeys {
-		if _, ok := metadata[key]; !ok {
-			t.Errorf("expected key %q in metadata, but not found", key)
-		}
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456 ghi789",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "GitHub",
+		"committer_email": "noreply@github.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Fix the thing",
+		"files_changed":   "file1.go\nfile2.go",
+		"diff_stat":       "10\t5\tfile1.go\n3\t0\tfile2.go",
+		"git_diff":        "diff --git a/file1.go b/file1.go",
+		"git_diff_raw":    ":100644 100644 aaa bbb M\tfile1.go",
+		"branch":          "feature/my-branch",
+		"base_branch":     "origin/main",
+		"pipeline_slug":   "my-pipeline",
+		"build_uuid":      "build-uuid-123",
 	}
 
-	// Spot-check values
-	if metadata["commit_sha"] != "abc123" {
-		t.Errorf("commit_sha: got %q, want %q", metadata["commit_sha"], "abc123")
-	}
-	if metadata["parent_shas"] != "def456 ghi789" {
-		t.Errorf("parent_shas: got %q, want %q", metadata["parent_shas"], "def456 ghi789")
-	}
-	if metadata["author_name"] != "Alice" {
-		t.Errorf("author_name: got %q, want %q", metadata["author_name"], "Alice")
-	}
-	if metadata["author_email"] != "alice@example.com" {
-		t.Errorf("author_email: got %q, want %q", metadata["author_email"], "alice@example.com")
-	}
-	if metadata["message"] != "Fix the thing" {
-		t.Errorf("message: got %q, want %q", metadata["message"], "Fix the thing")
-	}
-	if metadata["files_changed"] != "file1.go\nfile2.go" {
-		t.Errorf("files_changed: got %q, want %q", metadata["files_changed"], "file1.go\nfile2.go")
-	}
-	if metadata["diff_stat"] != "10\t5\tfile1.go\n3\t0\tfile2.go" {
-		t.Errorf("diff_stat: got %q", metadata["diff_stat"])
-	}
-	if metadata["git_diff"] != "diff --git a/file1.go b/file1.go" {
-		t.Errorf("git_diff: got %q", metadata["git_diff"])
-	}
-	if metadata["git_diff_raw"] != ":100644 100644 aaa bbb M\tfile1.go" {
-		t.Errorf("git_diff_raw: got %q", metadata["git_diff_raw"])
-	}
-	if metadata["branch"] != "feature/my-branch" {
-		t.Errorf("branch: got %q, want %q", metadata["branch"], "feature/my-branch")
-	}
-	if metadata["base_branch"] != "origin/main" {
-		t.Errorf("base_branch: got %q, want %q", metadata["base_branch"], "origin/main")
-	}
-	if metadata["pipeline_slug"] != "my-pipeline" {
-		t.Errorf("pipeline_slug: got %q, want %q", metadata["pipeline_slug"], "my-pipeline")
-	}
-	if metadata["build_uuid"] != "build-uuid-123" {
-		t.Errorf("build_uuid: got %q, want %q", metadata["build_uuid"], "build-uuid-123")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
