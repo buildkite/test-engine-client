@@ -244,24 +244,26 @@ func TestCollectPlanMetadata_DiffFails(t *testing.T) {
 		},
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "origin/main")
+	got := CollectPlanMetadata(context.Background(), runner, "origin/main")
 
-	// Commit metadata should be present
-	if metadata["commit_sha"] != "abc123" {
-		t.Errorf("commit_sha: got %q, want %q", metadata["commit_sha"], "abc123")
+	// Diff commands all fail (missing from FakeGitRunner), so diff fields
+	// are absent. Commit metadata and context fields should still be present.
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Some commit",
+		"branch":          "feature",
+		"base_branch":     "origin/main",
 	}
 
-	// Diff fields should be absent (empty values filtered at merge)
-	diffFields := []string{"files_changed", "diff_stat", "git_diff", "git_diff_raw"}
-	for _, key := range diffFields {
-		if _, ok := metadata[key]; ok {
-			t.Errorf("expected key %q to be absent when diff fails, but found value %q", key, metadata[key])
-		}
-	}
-
-	// base_branch should still be present (set from input, not from git)
-	if metadata["base_branch"] != "origin/main" {
-		t.Errorf("base_branch: got %q, want %q", metadata["base_branch"], "origin/main")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -281,28 +283,21 @@ func TestCollectPlanMetadata_LogFails(t *testing.T) {
 		},
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "origin/main")
+	got := CollectPlanMetadata(context.Background(), runner, "origin/main")
 
-	// Commit metadata should be absent
-	commitFields := []string{"commit_sha", "author_name", "author_email", "author_date",
-		"committer_name", "committer_email", "committer_date", "message"}
-	for _, key := range commitFields {
-		if _, ok := metadata[key]; ok {
-			t.Errorf("expected key %q to be absent when git log fails, but found value %q", key, metadata[key])
-		}
+	// Git log fails, so commit metadata is absent. Diff and context fields
+	// should still be present.
+	want := map[string]string{
+		"files_changed": "file1.go",
+		"diff_stat":     "10\t5\tfile1.go",
+		"git_diff":      "diff text",
+		"git_diff_raw":  ":100644 raw",
+		"branch":        "feature",
+		"base_branch":   "origin/main",
 	}
 
-	// Diff fields should still be present
-	if metadata["files_changed"] != "file1.go" {
-		t.Errorf("files_changed: got %q, want %q", metadata["files_changed"], "file1.go")
-	}
-
-	// Context fields should still be present
-	if metadata["branch"] != "feature" {
-		t.Errorf("branch: got %q, want %q", metadata["branch"], "feature")
-	}
-	if metadata["base_branch"] != "origin/main" {
-		t.Errorf("base_branch: got %q, want %q", metadata["base_branch"], "origin/main")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -319,16 +314,22 @@ func TestCollectPlanMetadata_DetachedHead(t *testing.T) {
 		},
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "")
+	got := CollectPlanMetadata(context.Background(), runner, "")
 
-	// branch key should be omitted when empty
-	if _, ok := metadata["branch"]; ok {
-		t.Errorf("expected branch key to be absent on detached HEAD, but found %q", metadata["branch"])
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Commit msg",
 	}
 
-	// Commit metadata should still work
-	if metadata["commit_sha"] != "abc123" {
-		t.Errorf("commit_sha: got %q, want %q", metadata["commit_sha"], "abc123")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -379,11 +380,20 @@ func TestCommitMetadata_ToMap_NoParents(t *testing.T) {
 
 	got := meta.ToMap()
 
-	if got["parent_shas"] != "" {
-		t.Errorf("parent_shas: got %q, want empty string for root commit", got["parent_shas"])
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Initial commit",
 	}
-	if got["commit_sha"] != "abc123" {
-		t.Errorf("commit_sha: got %q, want %q", got["commit_sha"], "abc123")
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToMap() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -400,11 +410,23 @@ func TestCollectPlanMetadata_MultilineMessage(t *testing.T) {
 		},
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "")
+	got := CollectPlanMetadata(context.Background(), runner, "")
 
-	want := "Fix the thing\n\nThis is a longer description\nwith multiple lines."
-	if diff := cmp.Diff(want, metadata["message"]); diff != "" {
-		t.Errorf("message mismatch (-want +got):\n%s", diff)
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Fix the thing\n\nThis is a longer description\nwith multiple lines.",
+		"branch":          "main",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -421,13 +443,24 @@ func TestCollectPlanMetadata_EnvVarsPopulated(t *testing.T) {
 		},
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "")
+	got := CollectPlanMetadata(context.Background(), runner, "")
 
-	if metadata["pipeline_slug"] != "my-org/my-pipeline" {
-		t.Errorf("pipeline_slug: got %q, want %q", metadata["pipeline_slug"], "my-org/my-pipeline")
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Msg",
+		"branch":          "main",
+		"pipeline_slug":   "my-org/my-pipeline",
+		"build_uuid":      "abc-def-123",
 	}
-	if metadata["build_uuid"] != "abc-def-123" {
-		t.Errorf("build_uuid: got %q, want %q", metadata["build_uuid"], "abc-def-123")
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -450,19 +483,26 @@ func TestCollectPlanMetadata_EmptyDiffOutput(t *testing.T) {
 		},
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "origin/main")
+	got := CollectPlanMetadata(context.Background(), runner, "origin/main")
 
-	// Empty diffs should be omitted (mergeNonEmpty skips empty values)
-	diffFields := []string{"files_changed", "diff_stat", "git_diff", "git_diff_raw"}
-	for _, key := range diffFields {
-		if _, ok := metadata[key]; ok {
-			t.Errorf("expected key %q to be absent for empty diff, but found value %q", key, metadata[key])
-		}
+	// Empty diffs are omitted by mergeNonEmpty. Commit metadata and context
+	// fields should still be present.
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Merge commit",
+		"branch":          "main",
+		"base_branch":     "origin/main",
 	}
 
-	// Commit metadata should still be fully populated
-	if metadata["commit_sha"] != "abc123" {
-		t.Errorf("commit_sha: got %q, want %q", metadata["commit_sha"], "abc123")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -479,18 +519,16 @@ func TestMergeMetadata_UserPrecedence(t *testing.T) {
 		"author_name": "Alice",
 	}
 
-	result := MergeMetadata(existing, auto)
+	got := MergeMetadata(existing, auto)
 
-	// User-provided values should win
-	if result["commit_sha"] != "user-provided-sha" {
-		t.Errorf("commit_sha: got %q, want %q", result["commit_sha"], "user-provided-sha")
+	want := map[string]string{
+		"commit_sha":  "user-provided-sha",
+		"branch":      "user-branch",
+		"author_name": "Alice",
 	}
-	if result["branch"] != "user-branch" {
-		t.Errorf("branch: got %q, want %q", result["branch"], "user-branch")
-	}
-	// Auto-collected values should fill gaps
-	if result["author_name"] != "Alice" {
-		t.Errorf("author_name: got %q, want %q", result["author_name"], "Alice")
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("MergeMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -500,13 +538,10 @@ func TestMergeMetadata_NilExisting(t *testing.T) {
 		"author_name": "Alice",
 	}
 
-	result := MergeMetadata(nil, auto)
+	got := MergeMetadata(nil, auto)
 
-	if result["commit_sha"] != "abc123" {
-		t.Errorf("commit_sha: got %q, want %q", result["commit_sha"], "abc123")
-	}
-	if result["author_name"] != "Alice" {
-		t.Errorf("author_name: got %q, want %q", result["author_name"], "Alice")
+	if diff := cmp.Diff(auto, got); diff != "" {
+		t.Errorf("MergeMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -519,12 +554,14 @@ func TestMergeMetadata_SkipsEmptyAutoValues(t *testing.T) {
 		"git_diff":   "",
 	}
 
-	result := MergeMetadata(existing, auto)
+	got := MergeMetadata(existing, auto)
 
-	if result["commit_sha"] != "abc123" {
-		t.Errorf("commit_sha: got %q, want %q", result["commit_sha"], "abc123")
+	want := map[string]string{
+		"branch":     "main",
+		"commit_sha": "abc123",
 	}
-	if _, ok := result["git_diff"]; ok {
-		t.Errorf("expected git_diff to be absent for empty auto value, got %q", result["git_diff"])
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("MergeMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
