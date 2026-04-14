@@ -71,7 +71,8 @@ func CollectPlanMetadata(ctx context.Context, runner GitRunner, baseBranch strin
 }
 
 // collectCommitMetadata extracts commit metadata for HEAD using a single
-// git log call with the same format as FetchBulkMetadata.
+// git log call with the same format as FetchBulkMetadata, parses it into
+// a CommitMetadata struct, and flattens it into the metadata map via ToMap.
 func collectCommitMetadata(ctx context.Context, runner GitRunner, metadata map[string]string) {
 	output, err := runner.Output(ctx, "log", "-1", fmt.Sprintf("--format=%s", MetadataFormat))
 	if err != nil {
@@ -79,31 +80,53 @@ func collectCommitMetadata(ctx context.Context, runner GitRunner, metadata map[s
 		return
 	}
 
-	// Strip the trailing record separator and any whitespace
+	meta, ok := parseCommitRecord(output)
+	if !ok {
+		return
+	}
+
+	for k, v := range meta.ToMap() {
+		metadata[k] = v
+	}
+}
+
+// parseCommitRecord parses a single git log record (using MetadataFormat
+// separators) into a CommitMetadata struct. Returns false if the record
+// is empty or has too few fields. Reuses the same parsing logic as
+// FetchBulkMetadata.
+func parseCommitRecord(output string) (CommitMetadata, bool) {
 	record := strings.TrimRight(output, recordSeparator+"\n ")
 	if record == "" {
-		return
+		return CommitMetadata{}, false
 	}
 
 	fields := strings.SplitN(record, fieldSeparator, metadataFields)
 	if len(fields) < metadataFields {
 		debug.Printf("Warning: git log returned %d fields, expected %d; skipping commit metadata", len(fields), metadataFields)
-		return
+		return CommitMetadata{}, false
 	}
 
-	metadata["commit_sha"] = strings.TrimSpace(fields[0])
+	sha := strings.TrimSpace(fields[0])
+	if sha == "" {
+		return CommitMetadata{}, false
+	}
 
+	var parentSHAs []string
 	if parents := strings.TrimSpace(fields[1]); parents != "" {
-		metadata["parent_shas"] = parents
+		parentSHAs = strings.Fields(parents)
 	}
 
-	metadata["author_name"] = strings.TrimSpace(fields[2])
-	metadata["author_email"] = strings.TrimSpace(fields[3])
-	metadata["author_date"] = strings.TrimSpace(fields[4])
-	metadata["committer_name"] = strings.TrimSpace(fields[5])
-	metadata["committer_email"] = strings.TrimSpace(fields[6])
-	metadata["committer_date"] = strings.TrimSpace(fields[7])
-	metadata["message"] = strings.TrimSpace(fields[8])
+	return CommitMetadata{
+		CommitSHA:      sha,
+		ParentSHAs:     parentSHAs,
+		AuthorName:     strings.TrimSpace(fields[2]),
+		AuthorEmail:    strings.TrimSpace(fields[3]),
+		AuthorDate:     strings.TrimSpace(fields[4]),
+		CommitterName:  strings.TrimSpace(fields[5]),
+		CommitterEmail: strings.TrimSpace(fields[6]),
+		CommitterDate:  strings.TrimSpace(fields[7]),
+		Message:        strings.TrimSpace(fields[8]),
+	}, true
 }
 
 // collectDiffMetadata runs diff commands against the resolved base branch

@@ -363,32 +363,24 @@ func TestCollectPlanMetadata_DetachedHead(t *testing.T) {
 	}
 }
 
-func TestCollectPlanMetadata_AllFieldsMatchBackfillFormat(t *testing.T) {
-	// Verify that the key names in the metadata map match the JSON tags
-	// of CommitMetadata and CommitDiffs structs (the backfill format).
-	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
-	t.Setenv("BUILDKITE_BUILD_ID", "")
-
-	record := "abc123\x1fdef456\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fGitHub\x1fnoreply@github.com\x1f2026-03-15T10:00:00+00:00\x1fFix bug"
-	gitLogOutput := record + "\x1e"
-
-	runner := &FakeGitRunner{
-		Responses: map[string]string{
-			fmt.Sprintf("log -1 --format=%s", MetadataFormat):   gitLogOutput,
-			"diff --no-ext-diff --name-only origin/main...HEAD": "file.go\n",
-			"diff --no-ext-diff --numstat origin/main...HEAD":   "1\t0\tfile.go\n",
-			"diff --no-ext-diff origin/main...HEAD":             "diff content\n",
-			"diff --no-ext-diff --raw origin/main...HEAD":       ":raw content\n",
-			"branch --show-current":                             "feat\n",
-		},
+func TestCommitMetadata_ToMap(t *testing.T) {
+	meta := CommitMetadata{
+		CommitSHA:      "abc123",
+		ParentSHAs:     []string{"def456", "ghi789"},
+		AuthorName:     "Alice",
+		AuthorEmail:    "alice@example.com",
+		AuthorDate:     "2026-03-15T10:00:00+00:00",
+		CommitterName:  "GitHub",
+		CommitterEmail: "noreply@github.com",
+		CommitterDate:  "2026-03-15T10:00:00+00:00",
+		Message:        "Fix bug",
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "origin/main")
+	got := meta.ToMap()
 
-	// These key names must match the JSON tags in CommitMetadata struct
-	commitMetadataKeys := map[string]string{
+	want := map[string]string{
 		"commit_sha":      "abc123",
-		"parent_shas":     "def456",
+		"parent_shas":     "def456 ghi789",
 		"author_name":     "Alice",
 		"author_email":    "alice@example.com",
 		"author_date":     "2026-03-15T10:00:00+00:00",
@@ -398,23 +390,31 @@ func TestCollectPlanMetadata_AllFieldsMatchBackfillFormat(t *testing.T) {
 		"message":         "Fix bug",
 	}
 
-	for key, want := range commitMetadataKeys {
-		got, ok := metadata[key]
-		if !ok {
-			t.Errorf("key %q missing from metadata", key)
-			continue
-		}
-		if got != want {
-			t.Errorf("key %q: got %q, want %q", key, got, want)
-		}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToMap() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCommitMetadata_ToMap_NoParents(t *testing.T) {
+	meta := CommitMetadata{
+		CommitSHA:      "abc123",
+		ParentSHAs:     nil,
+		AuthorName:     "Alice",
+		AuthorEmail:    "alice@example.com",
+		AuthorDate:     "2026-03-15T10:00:00+00:00",
+		CommitterName:  "Alice",
+		CommitterEmail: "alice@example.com",
+		CommitterDate:  "2026-03-15T10:00:00+00:00",
+		Message:        "Initial commit",
 	}
 
-	// These key names must match the JSON tags in CommitDiffs struct
-	diffKeys := []string{"files_changed", "diff_stat", "git_diff", "git_diff_raw"}
-	for _, key := range diffKeys {
-		if _, ok := metadata[key]; !ok {
-			t.Errorf("diff key %q missing from metadata", key)
-		}
+	got := meta.ToMap()
+
+	if _, ok := got["parent_shas"]; ok {
+		t.Errorf("expected parent_shas to be absent for root commit, got %q", got["parent_shas"])
+	}
+	if got["commit_sha"] != "abc123" {
+		t.Errorf("commit_sha: got %q, want %q", got["commit_sha"], "abc123")
 	}
 }
 
