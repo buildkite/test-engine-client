@@ -132,14 +132,21 @@ func TestResolveBaseBranch_ExplicitFailsEnvVarSucceeds(t *testing.T) {
 	}
 }
 
+// --- Helpers ---
+
+// buildRecord joins fields with fieldSeparator and appends recordSeparator,
+// matching the output format of git log --format=MetadataFormat.
+func buildRecord(fields ...string) string {
+	return strings.Join(fields, fieldSeparator) + recordSeparator
+}
+
 // --- CollectPlanMetadata tests ---
 
 func TestCollectPlanMetadata_HappyPath(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "my-pipeline")
 	t.Setenv("BUILDKITE_BUILD_ID", "build-uuid-123")
 
-	record := "abc123\x1fdef456 ghi789\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fGitHub\x1fnoreply@github.com\x1f2026-03-15T10:00:00+00:00\x1fFix the thing"
-	gitLogOutput := record + "\x1e"
+	gitLogOutput := buildRecord("abc123", "def456 ghi789", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "GitHub", "noreply@github.com", "2026-03-15T10:00:00+00:00", "Fix the thing")
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
@@ -213,8 +220,7 @@ func TestCollectPlanMetadata_NoBaseBranch(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
 	t.Setenv("BUILDKITE_BUILD_ID", "")
 
-	record := "abc123\x1f\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fInitial commit"
-	gitLogOutput := record + "\x1e"
+	gitLogOutput := buildRecord("abc123", "", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Initial commit")
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
@@ -264,8 +270,7 @@ func TestCollectPlanMetadata_DiffFails(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
 	t.Setenv("BUILDKITE_BUILD_ID", "")
 
-	record := "abc123\x1fdef456\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fSome commit"
-	gitLogOutput := record + "\x1e"
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Some commit")
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
@@ -340,8 +345,7 @@ func TestCollectPlanMetadata_DetachedHead(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
 	t.Setenv("BUILDKITE_BUILD_ID", "")
 
-	record := "abc123\x1fdef456\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fCommit msg"
-	gitLogOutput := record + "\x1e"
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Commit msg")
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
@@ -422,8 +426,7 @@ func TestCollectPlanMetadata_MultilineMessage(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
 	t.Setenv("BUILDKITE_BUILD_ID", "")
 
-	record := "abc123\x1fdef456\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fFix the thing\n\nThis is a longer description\nwith multiple lines."
-	gitLogOutput := record + "\x1e"
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Fix the thing\n\nThis is a longer description\nwith multiple lines.")
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
@@ -444,8 +447,7 @@ func TestCollectPlanMetadata_EnvVarsPopulated(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "my-org/my-pipeline")
 	t.Setenv("BUILDKITE_BUILD_ID", "abc-def-123")
 
-	record := "abc123\x1f\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fMsg"
-	gitLogOutput := record + "\x1e"
+	gitLogOutput := buildRecord("abc123", "", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Msg")
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
@@ -469,8 +471,7 @@ func TestCollectPlanMetadata_EmptyDiffOutput(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
 	t.Setenv("BUILDKITE_BUILD_ID", "")
 
-	record := "abc123\x1fdef456\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fAlice\x1falice@example.com\x1f2026-03-15T10:00:00+00:00\x1fMerge commit"
-	gitLogOutput := record + "\x1e"
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Merge commit")
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{

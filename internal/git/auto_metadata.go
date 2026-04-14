@@ -80,7 +80,7 @@ func collectCommitMetadata(ctx context.Context, runner GitRunner, metadata map[s
 		return
 	}
 
-	record := strings.TrimRight(output, recordSeparator+"\n ")
+	record := strings.TrimSpace(strings.TrimSuffix(output, recordSeparator))
 	meta, ok := parseRecord(record)
 	if !ok {
 		debug.Printf("Warning: git log returned unparseable output; skipping commit metadata")
