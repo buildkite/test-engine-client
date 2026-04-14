@@ -423,8 +423,8 @@ func TestCommitMetadata_ToMap_NoParents(t *testing.T) {
 
 	got := meta.ToMap()
 
-	if _, ok := got["parent_shas"]; ok {
-		t.Errorf("expected parent_shas to be absent for root commit, got %q", got["parent_shas"])
+	if got["parent_shas"] != "" {
+		t.Errorf("parent_shas: got %q, want empty string for root commit", got["parent_shas"])
 	}
 	if got["commit_sha"] != "abc123" {
 		t.Errorf("commit_sha: got %q, want %q", got["commit_sha"], "abc123")

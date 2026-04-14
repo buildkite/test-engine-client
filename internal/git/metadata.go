@@ -51,11 +51,12 @@ var MetadataFormat = strings.Join([]string{
 }, fmtFieldSep) + fmtRecordSep
 
 // ToMap returns the commit metadata as a flat string map using the same key
-// names as the JSON tags. ParentSHAs are stored as a space-separated string;
-// the key is omitted if there are no parents (root commit).
+// names as the JSON tags. All keys are always present; ParentSHAs are stored
+// as a space-separated string (empty string for root commits).
 func (m CommitMetadata) ToMap() map[string]string {
-	result := map[string]string{
+	return map[string]string{
 		"commit_sha":      m.CommitSHA,
+		"parent_shas":     strings.Join(m.ParentSHAs, " "),
 		"author_name":     m.AuthorName,
 		"author_email":    m.AuthorEmail,
 		"author_date":     m.AuthorDate,
@@ -64,10 +65,6 @@ func (m CommitMetadata) ToMap() map[string]string {
 		"committer_date":  m.CommitterDate,
 		"message":         m.Message,
 	}
-	if len(m.ParentSHAs) > 0 {
-		result["parent_shas"] = strings.Join(m.ParentSHAs, " ")
-	}
-	return result
 }
 
 // FetchBulkMetadata fetches metadata for all given commits in a single git call.
