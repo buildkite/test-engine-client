@@ -105,6 +105,17 @@ func CollectDiffs(
 	return results, nil
 }
 
+// ToMap returns the diff fields as a flat string map using the same key
+// names as the JSON tags.
+func (d CommitDiffs) ToMap() map[string]string {
+	return map[string]string{
+		"files_changed": d.FilesChanged,
+		"diff_stat":     d.DiffStat,
+		"git_diff":      d.GitDiff,
+		"git_diff_raw":  d.GitDiffRaw,
+	}
+}
+
 // extractCommitDiffs extracts diff information for a single commit.
 func extractCommitDiffs(
 	ctx context.Context,
@@ -119,37 +130,50 @@ func extractCommitDiffs(
 	}
 	debug.Printf("commit %s fork-point %s (strategy: %s)", commit, fp.Base, fp.Strategy)
 
+	return runDiffCommands(ctx, runner, skipDiffs, fp.Base, commit), nil
+}
+
+// runDiffCommands runs the 4 git diff commands against the given ref args
+// and returns the results as a CommitDiffs struct. The refArgs are passed
+// directly to git diff (e.g. ["base", "commit"] for two-arg form, or
+// ["base...HEAD"] for triple-dot form). Each command is independent; failures
+// log a debug warning and leave the field empty.
+func runDiffCommands(ctx context.Context, runner GitRunner, skipDiffs bool, refArgs ...string) CommitDiffs {
 	var diffs CommitDiffs
 
 	// files_changed: --name-only
-	if out, err := runner.Output(ctx, "diff", "--no-ext-diff", "--name-only", fp.Base, commit); err == nil {
+	args := append([]string{"diff", "--no-ext-diff", "--name-only"}, refArgs...)
+	if out, err := runner.Output(ctx, args...); err == nil {
 		diffs.FilesChanged = strings.TrimRight(out, "\n")
 	} else {
-		debug.Printf("Warning: diff --name-only failed for %s: %v", commit, err)
+		debug.Printf("Warning: diff --name-only failed: %v", err)
 	}
 
 	// diff_stat: --numstat
-	if out, err := runner.Output(ctx, "diff", "--no-ext-diff", "--numstat", fp.Base, commit); err == nil {
+	args = append([]string{"diff", "--no-ext-diff", "--numstat"}, refArgs...)
+	if out, err := runner.Output(ctx, args...); err == nil {
 		diffs.DiffStat = strings.TrimRight(out, "\n")
 	} else {
-		debug.Printf("Warning: diff --numstat failed for %s: %v", commit, err)
+		debug.Printf("Warning: diff --numstat failed: %v", err)
 	}
 
 	if !skipDiffs {
 		// git_diff: full diff
-		if out, err := runner.Output(ctx, "diff", "--no-ext-diff", fp.Base, commit); err == nil {
+		args = append([]string{"diff", "--no-ext-diff"}, refArgs...)
+		if out, err := runner.Output(ctx, args...); err == nil {
 			diffs.GitDiff = strings.TrimRight(out, "\n")
 		} else {
-			debug.Printf("Warning: diff failed for %s: %v", commit, err)
+			debug.Printf("Warning: diff failed: %v", err)
 		}
 
 		// git_diff_raw: --raw
-		if out, err := runner.Output(ctx, "diff", "--no-ext-diff", "--raw", fp.Base, commit); err == nil {
+		args = append([]string{"diff", "--no-ext-diff", "--raw"}, refArgs...)
+		if out, err := runner.Output(ctx, args...); err == nil {
 			diffs.GitDiffRaw = strings.TrimRight(out, "\n")
 		} else {
-			debug.Printf("Warning: diff --raw failed for %s: %v", commit, err)
+			debug.Printf("Warning: diff --raw failed: %v", err)
 		}
 	}
 
-	return diffs, nil
+	return diffs
 }

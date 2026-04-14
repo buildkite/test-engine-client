@@ -282,11 +282,11 @@ func TestCollectPlanMetadata_DiffFails(t *testing.T) {
 		t.Errorf("commit_sha: got %q, want %q", metadata["commit_sha"], "abc123")
 	}
 
-	// Diff fields should be absent (all failed)
+	// Diff fields should be present but empty (ToMap always includes all keys)
 	diffFields := []string{"files_changed", "diff_stat", "git_diff", "git_diff_raw"}
 	for _, key := range diffFields {
-		if _, ok := metadata[key]; ok {
-			t.Errorf("expected key %q to be absent when diff fails, but found value %q", key, metadata[key])
+		if metadata[key] != "" {
+			t.Errorf("expected key %q to be empty when diff fails, got %q", key, metadata[key])
 		}
 	}
 

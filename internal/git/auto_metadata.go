@@ -130,36 +130,12 @@ func parseCommitRecord(output string) (CommitMetadata, bool) {
 }
 
 // collectDiffMetadata runs diff commands against the resolved base branch
-// using triple-dot syntax (<base>...HEAD).
+// using triple-dot syntax (<base>...HEAD) and merges the results into the
+// metadata map.
 func collectDiffMetadata(ctx context.Context, runner GitRunner, baseBranch string, metadata map[string]string) {
-	diffRef := baseBranch + "...HEAD"
-
-	// files_changed: --name-only
-	if out, err := runner.Output(ctx, "diff", "--no-ext-diff", "--name-only", diffRef); err == nil {
-		metadata["files_changed"] = strings.TrimRight(out, "\n")
-	} else {
-		debug.Printf("Warning: git diff --name-only failed: %v", err)
-	}
-
-	// diff_stat: --numstat
-	if out, err := runner.Output(ctx, "diff", "--no-ext-diff", "--numstat", diffRef); err == nil {
-		metadata["diff_stat"] = strings.TrimRight(out, "\n")
-	} else {
-		debug.Printf("Warning: git diff --numstat failed: %v", err)
-	}
-
-	// git_diff: full diff
-	if out, err := runner.Output(ctx, "diff", "--no-ext-diff", diffRef); err == nil {
-		metadata["git_diff"] = strings.TrimRight(out, "\n")
-	} else {
-		debug.Printf("Warning: git diff failed: %v", err)
-	}
-
-	// git_diff_raw: --raw
-	if out, err := runner.Output(ctx, "diff", "--no-ext-diff", "--raw", diffRef); err == nil {
-		metadata["git_diff_raw"] = strings.TrimRight(out, "\n")
-	} else {
-		debug.Printf("Warning: git diff --raw failed: %v", err)
+	diffs := runDiffCommands(ctx, runner, false, baseBranch+"...HEAD")
+	for k, v := range diffs.ToMap() {
+		metadata[k] = v
 	}
 }
 
