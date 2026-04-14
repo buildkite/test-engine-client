@@ -88,38 +88,48 @@ func FetchBulkMetadata(ctx context.Context, runner GitRunner, commits []string) 
 	result := make(map[string]CommitMetadata, len(commits))
 	records := strings.Split(output, recordSeparator)
 	for _, record := range records {
-		record = strings.TrimSpace(record)
-		if record == "" {
+		meta, ok := parseRecord(strings.TrimSpace(record))
+		if !ok {
 			continue
 		}
-		fields := strings.SplitN(record, fieldSeparator, metadataFields)
-		if len(fields) < metadataFields {
-			continue
-		}
-
-		sha := strings.TrimSpace(fields[0])
-		if sha == "" {
-			continue
-		}
-
-		var parentSHAs []string
-		if parents := strings.TrimSpace(fields[1]); parents != "" {
-			parentSHAs = strings.Fields(parents)
-		}
-
-		meta := CommitMetadata{
-			CommitSHA:      sha,
-			ParentSHAs:     parentSHAs,
-			AuthorName:     strings.TrimSpace(fields[2]),
-			AuthorEmail:    strings.TrimSpace(fields[3]),
-			AuthorDate:     strings.TrimSpace(fields[4]),
-			CommitterName:  strings.TrimSpace(fields[5]),
-			CommitterEmail: strings.TrimSpace(fields[6]),
-			CommitterDate:  strings.TrimSpace(fields[7]),
-			Message:        strings.TrimSpace(fields[8]),
-		}
-		result[sha] = meta
+		result[meta.CommitSHA] = meta
 	}
 
 	return result, nil
+}
+
+// parseRecord parses a single record (already split from the record-
+// separator-delimited output) into a CommitMetadata. Returns false if the
+// record is empty, has too few fields, or has an empty commit SHA.
+func parseRecord(record string) (CommitMetadata, bool) {
+	if record == "" {
+		return CommitMetadata{}, false
+	}
+
+	fields := strings.SplitN(record, fieldSeparator, metadataFields)
+	if len(fields) < metadataFields {
+		return CommitMetadata{}, false
+	}
+
+	sha := strings.TrimSpace(fields[0])
+	if sha == "" {
+		return CommitMetadata{}, false
+	}
+
+	var parentSHAs []string
+	if parents := strings.TrimSpace(fields[1]); parents != "" {
+		parentSHAs = strings.Fields(parents)
+	}
+
+	return CommitMetadata{
+		CommitSHA:      sha,
+		ParentSHAs:     parentSHAs,
+		AuthorName:     strings.TrimSpace(fields[2]),
+		AuthorEmail:    strings.TrimSpace(fields[3]),
+		AuthorDate:     strings.TrimSpace(fields[4]),
+		CommitterName:  strings.TrimSpace(fields[5]),
+		CommitterEmail: strings.TrimSpace(fields[6]),
+		CommitterDate:  strings.TrimSpace(fields[7]),
+		Message:        strings.TrimSpace(fields[8]),
+	}, true
 }

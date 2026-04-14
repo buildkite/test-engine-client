@@ -80,51 +80,14 @@ func collectCommitMetadata(ctx context.Context, runner GitRunner, metadata map[s
 		return
 	}
 
-	meta, ok := parseCommitRecord(output)
+	record := strings.TrimRight(output, recordSeparator+"\n ")
+	meta, ok := parseRecord(record)
 	if !ok {
+		debug.Printf("Warning: git log returned unparseable output; skipping commit metadata")
 		return
 	}
 
 	mergeNonEmpty(metadata, meta.ToMap())
-}
-
-// parseCommitRecord parses a single git log record (using MetadataFormat
-// separators) into a CommitMetadata struct. Returns false if the record
-// is empty or has too few fields. Reuses the same parsing logic as
-// FetchBulkMetadata.
-func parseCommitRecord(output string) (CommitMetadata, bool) {
-	record := strings.TrimRight(output, recordSeparator+"\n ")
-	if record == "" {
-		return CommitMetadata{}, false
-	}
-
-	fields := strings.SplitN(record, fieldSeparator, metadataFields)
-	if len(fields) < metadataFields {
-		debug.Printf("Warning: git log returned %d fields, expected %d; skipping commit metadata", len(fields), metadataFields)
-		return CommitMetadata{}, false
-	}
-
-	sha := strings.TrimSpace(fields[0])
-	if sha == "" {
-		return CommitMetadata{}, false
-	}
-
-	var parentSHAs []string
-	if parents := strings.TrimSpace(fields[1]); parents != "" {
-		parentSHAs = strings.Fields(parents)
-	}
-
-	return CommitMetadata{
-		CommitSHA:      sha,
-		ParentSHAs:     parentSHAs,
-		AuthorName:     strings.TrimSpace(fields[2]),
-		AuthorEmail:    strings.TrimSpace(fields[3]),
-		AuthorDate:     strings.TrimSpace(fields[4]),
-		CommitterName:  strings.TrimSpace(fields[5]),
-		CommitterEmail: strings.TrimSpace(fields[6]),
-		CommitterDate:  strings.TrimSpace(fields[7]),
-		Message:        strings.TrimSpace(fields[8]),
-	}, true
 }
 
 // collectDiffMetadata runs diff commands against the resolved base branch
