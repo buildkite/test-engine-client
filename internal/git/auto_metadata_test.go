@@ -209,40 +209,24 @@ func TestCollectPlanMetadata_NoBaseBranch(t *testing.T) {
 		},
 	}
 
-	metadata := CollectPlanMetadata(context.Background(), runner, "")
+	got := CollectPlanMetadata(context.Background(), runner, "")
 
-	// Commit metadata should still be present
-	if metadata["commit_sha"] != "abc123" {
-		t.Errorf("commit_sha: got %q, want %q", metadata["commit_sha"], "abc123")
-	}
-	if metadata["author_name"] != "Alice" {
-		t.Errorf("author_name: got %q, want %q", metadata["author_name"], "Alice")
-	}
-
-	// Diff fields should be absent (no base branch)
-	diffFields := []string{"files_changed", "diff_stat", "git_diff", "git_diff_raw"}
-	for _, key := range diffFields {
-		if _, ok := metadata[key]; ok {
-			t.Errorf("expected key %q to be absent when no base branch, but found value %q", key, metadata[key])
-		}
+	// No base branch: diff fields, base_branch, parent_shas (root commit),
+	// pipeline_slug, and build_uuid should all be absent.
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Initial commit",
+		"branch":          "main",
 	}
 
-	// base_branch should be absent
-	if _, ok := metadata["base_branch"]; ok {
-		t.Errorf("expected base_branch to be absent when empty")
-	}
-
-	// parent_shas should be absent (empty parents)
-	if _, ok := metadata["parent_shas"]; ok {
-		t.Errorf("expected parent_shas to be absent for root commit")
-	}
-
-	// Env var fields should be absent (unset)
-	if _, ok := metadata["pipeline_slug"]; ok {
-		t.Errorf("expected pipeline_slug to be absent when env var unset")
-	}
-	if _, ok := metadata["build_uuid"]; ok {
-		t.Errorf("expected build_uuid to be absent when env var unset")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
 	}
 }
 
