@@ -161,7 +161,7 @@ func TestCollectPlanMetadata_HappyPath(t *testing.T) {
 
 	metadata := CollectPlanMetadata(context.Background(), runner, "origin/main")
 
-	// All 15 fields should be populated (parent_shas counted as 1 field)
+	// All 17 keys should be populated
 	expectedKeys := []string{
 		"commit_sha", "parent_shas", "author_name", "author_email", "author_date",
 		"committer_name", "committer_email", "committer_date", "message",
@@ -486,7 +486,7 @@ func TestCollectPlanMetadata_EmptyDiffOutput(t *testing.T) {
 
 	metadata := CollectPlanMetadata(context.Background(), runner, "origin/main")
 
-	// Empty diffs should be omitted (ToMap skips empty values)
+	// Empty diffs should be omitted (mergeNonEmpty skips empty values)
 	diffFields := []string{"files_changed", "diff_stat", "git_diff", "git_diff_raw"}
 	for _, key := range diffFields {
 		if _, ok := metadata[key]; ok {
