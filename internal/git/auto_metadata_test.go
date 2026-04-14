@@ -282,11 +282,11 @@ func TestCollectPlanMetadata_DiffFails(t *testing.T) {
 		t.Errorf("commit_sha: got %q, want %q", metadata["commit_sha"], "abc123")
 	}
 
-	// Diff fields should be present but empty (ToMap always includes all keys)
+	// Diff fields should be absent (empty values filtered at merge)
 	diffFields := []string{"files_changed", "diff_stat", "git_diff", "git_diff_raw"}
 	for _, key := range diffFields {
-		if metadata[key] != "" {
-			t.Errorf("expected key %q to be empty when diff fails, got %q", key, metadata[key])
+		if _, ok := metadata[key]; ok {
+			t.Errorf("expected key %q to be absent when diff fails, but found value %q", key, metadata[key])
 		}
 	}
 
@@ -485,12 +485,12 @@ func TestCollectPlanMetadata_EmptyDiffOutput(t *testing.T) {
 
 	metadata := CollectPlanMetadata(context.Background(), runner, "origin/main")
 
-	// Empty diffs should result in empty string values (not absent keys)
-	if metadata["files_changed"] != "" {
-		t.Errorf("files_changed: got %q, want empty", metadata["files_changed"])
-	}
-	if metadata["diff_stat"] != "" {
-		t.Errorf("diff_stat: got %q, want empty", metadata["diff_stat"])
+	// Empty diffs should be omitted (ToMap skips empty values)
+	diffFields := []string{"files_changed", "diff_stat", "git_diff", "git_diff_raw"}
+	for _, key := range diffFields {
+		if _, ok := metadata[key]; ok {
+			t.Errorf("expected key %q to be absent for empty diff, but found value %q", key, metadata[key])
+		}
 	}
 
 	// Commit metadata should still be fully populated

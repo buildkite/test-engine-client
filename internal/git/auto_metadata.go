@@ -85,9 +85,7 @@ func collectCommitMetadata(ctx context.Context, runner GitRunner, metadata map[s
 		return
 	}
 
-	for k, v := range meta.ToMap() {
-		metadata[k] = v
-	}
+	mergeNonEmpty(metadata, meta.ToMap())
 }
 
 // parseCommitRecord parses a single git log record (using MetadataFormat
@@ -134,8 +132,17 @@ func parseCommitRecord(output string) (CommitMetadata, bool) {
 // metadata map.
 func collectDiffMetadata(ctx context.Context, runner GitRunner, baseBranch string, metadata map[string]string) {
 	diffs := runDiffCommands(ctx, runner, false, baseBranch+"...HEAD")
-	for k, v := range diffs.ToMap() {
-		metadata[k] = v
+	mergeNonEmpty(metadata, diffs.ToMap())
+}
+
+// mergeNonEmpty copies entries from src into dst, skipping empty values.
+// This avoids sending meaningless keys (e.g. "git_diff":"") in the API
+// request, since json.Marshal does not omit empty strings within a map.
+func mergeNonEmpty(dst, src map[string]string) {
+	for k, v := range src {
+		if v != "" {
+			dst[k] = v
+		}
 	}
 }
 
