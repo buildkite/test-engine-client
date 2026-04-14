@@ -390,7 +390,20 @@ var remoteFlag = &cli.StringFlag{
 	Category:    "BACKFILL",
 	Usage:       "Git remote name for fetching missing commits and detecting default branch",
 	Value:       "origin",
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BACKFILL_REMOTE"),
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_REMOTE", "BUILDKITE_TEST_ENGINE_BACKFILL_REMOTE"),
+	Destination: &cfg.Remote,
+}
+
+// planRemoteFlag is a selection-scoped variant of remoteFlag for the plan
+// command. It only reads BUILDKITE_TEST_ENGINE_REMOTE (not the backfill-
+// specific BUILDKITE_TEST_ENGINE_BACKFILL_REMOTE) to avoid the backfill
+// env var unexpectedly affecting plan behaviour.
+var planRemoteFlag = &cli.StringFlag{
+	Name:        "remote",
+	Category:    "PREVIEW: TEST SELECTION",
+	Usage:       "Git remote name for metadata auto-collection",
+	Value:       "origin",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_REMOTE"),
 	Destination: &cfg.Remote,
 }
 
@@ -433,6 +446,7 @@ func previewSelectionFlags() []cli.Flag {
 		selectionStrategyFlag,
 		selectionParamFlag,
 		metadataFlag,
+		planRemoteFlag,
 	}
 }
 

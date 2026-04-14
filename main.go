@@ -77,7 +77,8 @@ func autoCollectGitMetadata(ctx context.Context) {
 
 	// Use user-provided base_branch from --metadata if present
 	explicit := cfg.Metadata["base_branch"]
-	baseBranch, err := git.ResolveBaseBranch(ctx, runner, explicit, "origin")
+	remote := cfg.Remote
+	baseBranch, err := git.ResolveBaseBranch(ctx, runner, explicit, remote)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not resolve base branch for diff metadata. "+
 			"Set --metadata base_branch=<branch> if your repo uses a non-standard default branch.\n")
