@@ -159,12 +159,13 @@ func TestCollectPlanMetadata_HappyPath(t *testing.T) {
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
-			fmt.Sprintf("log -1 --format=%s", MetadataFormat):   gitLogOutput,
-			"diff --no-ext-diff --name-only origin/main...HEAD": "file1.go\nfile2.go\n",
-			"diff --no-ext-diff --numstat origin/main...HEAD":   "10\t5\tfile1.go\n3\t0\tfile2.go\n",
-			"diff --no-ext-diff origin/main...HEAD":             "diff --git a/file1.go b/file1.go\n",
-			"diff --no-ext-diff --raw origin/main...HEAD":       ":100644 100644 aaa bbb M\tfile1.go\n",
-			"branch --show-current":                             "feature/my-branch\n",
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"merge-base origin/main HEAD":                     "aaa000\n",
+			"diff --no-ext-diff --name-only aaa000 HEAD":      "file1.go\nfile2.go\n",
+			"diff --no-ext-diff --numstat aaa000 HEAD":        "10\t5\tfile1.go\n3\t0\tfile2.go\n",
+			"diff --no-ext-diff aaa000 HEAD":                  "diff --git a/file1.go b/file1.go\n",
+			"diff --no-ext-diff --raw aaa000 HEAD":            ":100644 100644 aaa bbb M\tfile1.go\n",
+			"branch --show-current":                           "feature/my-branch\n",
 		},
 	}
 
@@ -317,11 +318,12 @@ func TestCollectPlanMetadata_LogFails(t *testing.T) {
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
 			// git log missing -> will error
-			"diff --no-ext-diff --name-only origin/main...HEAD": "file1.go\n",
-			"diff --no-ext-diff --numstat origin/main...HEAD":   "10\t5\tfile1.go\n",
-			"diff --no-ext-diff origin/main...HEAD":             "diff text\n",
-			"diff --no-ext-diff --raw origin/main...HEAD":       ":100644 raw\n",
-			"branch --show-current":                             "feature\n",
+			"merge-base origin/main HEAD":                "aaa000\n",
+			"diff --no-ext-diff --name-only aaa000 HEAD": "file1.go\n",
+			"diff --no-ext-diff --numstat aaa000 HEAD":   "10\t5\tfile1.go\n",
+			"diff --no-ext-diff aaa000 HEAD":             "diff text\n",
+			"diff --no-ext-diff --raw aaa000 HEAD":       ":100644 raw\n",
+			"branch --show-current":                      "feature\n",
 		},
 	}
 
@@ -484,12 +486,13 @@ func TestCollectPlanMetadata_EmptyDiffOutput(t *testing.T) {
 
 	runner := &FakeGitRunner{
 		Responses: map[string]string{
-			fmt.Sprintf("log -1 --format=%s", MetadataFormat):   gitLogOutput,
-			"diff --no-ext-diff --name-only origin/main...HEAD": "\n",
-			"diff --no-ext-diff --numstat origin/main...HEAD":   "\n",
-			"diff --no-ext-diff origin/main...HEAD":             "\n",
-			"diff --no-ext-diff --raw origin/main...HEAD":       "\n",
-			"branch --show-current":                             "main\n",
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"merge-base origin/main HEAD":                     "aaa000\n",
+			"diff --no-ext-diff --name-only aaa000 HEAD":      "\n",
+			"diff --no-ext-diff --numstat aaa000 HEAD":        "\n",
+			"diff --no-ext-diff aaa000 HEAD":                  "\n",
+			"diff --no-ext-diff --raw aaa000 HEAD":            "\n",
+			"branch --show-current":                           "main\n",
 		},
 	}
 

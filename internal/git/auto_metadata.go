@@ -93,11 +93,20 @@ func collectCommitMetadata(ctx context.Context, runner GitRunner, metadata map[s
 	mergeNonEmpty(metadata, meta.ToMap())
 }
 
-// collectDiffMetadata runs diff commands against the resolved base branch
-// using triple-dot syntax (<base>...HEAD) and merges the results into the
-// metadata map.
+// collectDiffMetadata computes the merge-base between baseBranch and HEAD,
+// then runs diff commands using two-arg form (merge-base, HEAD). This is
+// equivalent to git diff baseBranch...HEAD but makes the fork-point
+// resolution explicit and uses the same two-arg diff form as the backfill
+// path.
 func collectDiffMetadata(ctx context.Context, runner GitRunner, baseBranch string, metadata map[string]string) {
-	diffs := runDiffCommands(ctx, runner, false, baseBranch+"...HEAD")
+	forkPoint, err := runner.Output(ctx, "merge-base", baseBranch, "HEAD")
+	if err != nil {
+		debug.Printf("Warning: git merge-base failed: %v", err)
+		return
+	}
+	forkPoint = strings.TrimSpace(forkPoint)
+
+	diffs := runDiffCommands(ctx, runner, false, forkPoint, "HEAD")
 	mergeNonEmpty(metadata, diffs.ToMap())
 }
 
