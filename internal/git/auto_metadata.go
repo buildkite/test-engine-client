@@ -32,6 +32,9 @@ import (
 // git rev-parse --verify before being accepted.
 // Returns the resolved ref (e.g. "origin/main") or an error.
 func ResolveBaseBranch(ctx context.Context, runner GitRunner, explicit string, remote string) (string, error) {
+	if remote == "" {
+		return "", fmt.Errorf("remote must not be empty")
+	}
 	for _, candidate := range []string{explicit, os.Getenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH")} {
 		if candidate == "" {
 			continue
@@ -96,6 +99,25 @@ func collectCommitMetadata(ctx context.Context, runner GitRunner, metadata map[s
 func collectDiffMetadata(ctx context.Context, runner GitRunner, baseBranch string, metadata map[string]string) {
 	diffs := runDiffCommands(ctx, runner, false, baseBranch+"...HEAD")
 	mergeNonEmpty(metadata, diffs.ToMap())
+}
+
+// MergeMetadata merges auto-collected metadata into existing user-provided
+// metadata. User-provided keys take precedence: auto-collected values only
+// fill in keys that are not already present. Empty auto-collected values
+// are skipped. If existing is nil, the auto map is returned as-is.
+func MergeMetadata(existing, auto map[string]string) map[string]string {
+	if existing == nil {
+		return auto
+	}
+	for k, v := range auto {
+		if v == "" {
+			continue
+		}
+		if _, exists := existing[k]; !exists {
+			existing[k] = v
+		}
+	}
+	return existing
 }
 
 // mergeNonEmpty copies entries from src into dst, skipping empty values.

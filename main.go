@@ -87,17 +87,7 @@ func autoCollectGitMetadata(ctx context.Context) {
 	}
 
 	autoMetadata := git.CollectPlanMetadata(ctx, runner, baseBranch)
-
-	// Merge: user-provided values take precedence
-	if cfg.Metadata == nil {
-		cfg.Metadata = autoMetadata
-	} else {
-		for k, v := range autoMetadata {
-			if _, exists := cfg.Metadata[k]; !exists {
-				cfg.Metadata[k] = v
-			}
-		}
-	}
+	cfg.Metadata = git.MergeMetadata(cfg.Metadata, autoMetadata)
 }
 
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {

@@ -132,6 +132,15 @@ func TestResolveBaseBranch_ExplicitFailsEnvVarSucceeds(t *testing.T) {
 	}
 }
 
+func TestResolveBaseBranch_EmptyRemote(t *testing.T) {
+	runner := &FakeGitRunner{}
+
+	_, err := ResolveBaseBranch(context.Background(), runner, "main", "")
+	if err == nil {
+		t.Fatal("expected error for empty remote, got nil")
+	}
+}
+
 // --- Helpers ---
 
 // buildRecord joins fields with fieldSeparator and appends recordSeparator,
@@ -497,5 +506,68 @@ func TestCollectPlanMetadata_EmptyDiffOutput(t *testing.T) {
 	// Commit metadata should still be fully populated
 	if metadata["commit_sha"] != "abc123" {
 		t.Errorf("commit_sha: got %q, want %q", metadata["commit_sha"], "abc123")
+	}
+}
+
+// --- MergeMetadata tests ---
+
+func TestMergeMetadata_UserPrecedence(t *testing.T) {
+	existing := map[string]string{
+		"commit_sha": "user-provided-sha",
+		"branch":     "user-branch",
+	}
+	auto := map[string]string{
+		"commit_sha":  "auto-sha",
+		"branch":      "auto-branch",
+		"author_name": "Alice",
+	}
+
+	result := MergeMetadata(existing, auto)
+
+	// User-provided values should win
+	if result["commit_sha"] != "user-provided-sha" {
+		t.Errorf("commit_sha: got %q, want %q", result["commit_sha"], "user-provided-sha")
+	}
+	if result["branch"] != "user-branch" {
+		t.Errorf("branch: got %q, want %q", result["branch"], "user-branch")
+	}
+	// Auto-collected values should fill gaps
+	if result["author_name"] != "Alice" {
+		t.Errorf("author_name: got %q, want %q", result["author_name"], "Alice")
+	}
+}
+
+func TestMergeMetadata_NilExisting(t *testing.T) {
+	auto := map[string]string{
+		"commit_sha":  "abc123",
+		"author_name": "Alice",
+	}
+
+	result := MergeMetadata(nil, auto)
+
+	if result["commit_sha"] != "abc123" {
+		t.Errorf("commit_sha: got %q, want %q", result["commit_sha"], "abc123")
+	}
+	if result["author_name"] != "Alice" {
+		t.Errorf("author_name: got %q, want %q", result["author_name"], "Alice")
+	}
+}
+
+func TestMergeMetadata_SkipsEmptyAutoValues(t *testing.T) {
+	existing := map[string]string{
+		"branch": "main",
+	}
+	auto := map[string]string{
+		"commit_sha": "abc123",
+		"git_diff":   "",
+	}
+
+	result := MergeMetadata(existing, auto)
+
+	if result["commit_sha"] != "abc123" {
+		t.Errorf("commit_sha: got %q, want %q", result["commit_sha"], "abc123")
+	}
+	if _, ok := result["git_diff"]; ok {
+		t.Errorf("expected git_diff to be absent for empty auto value, got %q", result["git_diff"])
 	}
 }
