@@ -301,9 +301,10 @@ func TestCollectPlanMetadata_LogFails(t *testing.T) {
 	}
 }
 
-func TestCollectPlanMetadata_DetachedHead(t *testing.T) {
+func TestCollectPlanMetadata_DetachedHeadFallsToBuildkiteBranch(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
 	t.Setenv("BUILDKITE_BUILD_ID", "")
+	t.Setenv("BUILDKITE_BRANCH", "feature/from-env")
 
 	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Commit msg")
 
@@ -311,6 +312,40 @@ func TestCollectPlanMetadata_DetachedHead(t *testing.T) {
 		Responses: map[string]string{
 			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
 			"branch --show-current":                           "\n", // empty on detached HEAD
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "")
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Commit msg",
+		"branch":          "feature/from-env",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCollectPlanMetadata_DetachedHeadNoBuildkiteBranch(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+	t.Setenv("BUILDKITE_BRANCH", "")
+
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Commit msg")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"branch --show-current":                           "\n",
 		},
 	}
 

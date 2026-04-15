@@ -157,14 +157,23 @@ func mergeNonEmpty(dst, src map[string]string) {
 
 // collectContextFields adds branch, base_branch, and Buildkite env var fields.
 func collectContextFields(ctx context.Context, runner GitRunner, baseBranch string, metadata map[string]string) {
-	// branch: current branch name (empty on detached HEAD, omitted)
+	// branch: current branch name, falling back to BUILDKITE_BRANCH
+	// for detached HEAD (common in CI where the agent checks out a commit SHA)
 	if out, err := runner.Output(ctx, "branch", "--show-current"); err == nil {
-		branch := strings.TrimSpace(out)
-		if branch != "" {
+		if branch := strings.TrimSpace(out); branch != "" {
 			metadata["branch"] = branch
+			debug.Printf("branch resolved via git branch --show-current: %s", branch)
 		}
 	} else {
 		debug.Printf("Warning: git branch --show-current failed: %v", err)
+	}
+	if _, ok := metadata["branch"]; !ok {
+		if branch := os.Getenv("BUILDKITE_BRANCH"); branch != "" {
+			metadata["branch"] = branch
+			debug.Printf("branch resolved via BUILDKITE_BRANCH env var: %s", branch)
+		} else {
+			debug.Printf("branch could not be determined (detached HEAD, no BUILDKITE_BRANCH)")
+		}
 	}
 
 	// base_branch: the resolved base ref (not a git command)
