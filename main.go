@@ -47,11 +47,6 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// Auto-collect git metadata when selection is active
-	if cfg.SelectionStrategy != "" {
-		autoCollectGitMetadata(ctx)
-	}
-
 	if err := cfg.ValidateForPlan(); err != nil {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
@@ -61,33 +56,6 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 	} else {
 		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputPipelineUpload, cmd.String("pipeline-upload"))
 	}
-}
-
-// autoCollectGitMetadata collects git commit metadata and merges it into
-// cfg.Metadata. User-provided metadata values (from --metadata) take
-// precedence over auto-collected values.
-func autoCollectGitMetadata(ctx context.Context) {
-	runner := &git.ExecGitRunner{}
-
-	// Check if we're in a git repo
-	if _, err := runner.Output(ctx, "rev-parse", "--git-dir"); err != nil {
-		fmt.Fprintln(os.Stderr, "Warning: not a git repository, skipping metadata auto-collection")
-		return
-	}
-
-	// Use user-provided base_branch from --metadata if present
-	explicit := cfg.Metadata["base_branch"]
-	remote := cfg.Remote
-	baseBranch, err := git.ResolveBaseBranch(ctx, runner, explicit, remote)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not resolve base branch for diff metadata. "+
-			"Set --metadata base_branch=<branch> if your repo uses a non-standard default branch.\n")
-	} else {
-		debug.Printf("auto-detected base branch: %s", baseBranch)
-	}
-
-	autoMetadata := git.CollectPlanMetadata(ctx, runner, baseBranch)
-	cfg.Metadata = git.MergeMetadata(cfg.Metadata, autoMetadata)
 }
 
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
