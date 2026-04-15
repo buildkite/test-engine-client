@@ -35,20 +35,35 @@ func ResolveBaseBranch(ctx context.Context, runner GitRunner, explicit string, r
 	if remote == "" {
 		return "", fmt.Errorf("remote must not be empty")
 	}
-	for _, candidate := range []string{explicit, os.Getenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH")} {
-		if candidate == "" {
+
+	type candidate struct {
+		value  string
+		source string
+	}
+	candidates := []candidate{
+		{value: explicit, source: "explicit --metadata base_branch"},
+		{value: os.Getenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH"), source: "BUILDKITE_PULL_REQUEST_BASE_BRANCH"},
+	}
+
+	for _, c := range candidates {
+		if c.value == "" {
 			continue
 		}
-		ref := candidate
+		ref := c.value
 		if !strings.HasPrefix(ref, remote+"/") {
 			ref = remote + "/" + ref
 		}
 		if _, err := runner.Output(ctx, "rev-parse", "--verify", ref); err == nil {
+			debug.Printf("base branch resolved via %s: %q -> %s", c.source, c.value, ref)
 			return ref, nil
 		}
-		debug.Printf("base branch candidate %q (resolved to %q) not found, trying next", candidate, ref)
+		debug.Printf("base branch candidate %q (resolved to %q) from %s not found, trying next", c.value, ref, c.source)
 	}
-	return DetectDefaultBranch(ctx, runner, remote)
+	ref, err := DetectDefaultBranch(ctx, runner, remote)
+	if err == nil {
+		debug.Printf("base branch resolved via DetectDefaultBranch: %s", ref)
+	}
+	return ref, err
 }
 
 // CollectPlanMetadata collects git metadata for the current HEAD commit.
