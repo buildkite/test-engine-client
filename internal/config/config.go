@@ -9,6 +9,8 @@ type Config struct {
 	// Branch is the string value of the git branch name, used by Buildkite only.
 	Branch  string `json:"BUILDKITE_BRANCH"`
 	BuildId string `json:"BUILDKITE_BUILD_ID"`
+	// CollectMetadata enables git metadata auto-collection on plan without requiring --selection-strategy to be set.
+	CollectMetadata bool `json:"-"`
 	// Concurrency is the number of concurrent git operations for diff collection (default 10).
 	Concurrency int `json:"-"`
 	// Days is the lookback window in days for the commit list API (1-90, default 90).
