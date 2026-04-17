@@ -1,0 +1,723 @@
+package git
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+)
+
+// --- ResolveBaseBranch tests ---
+
+func TestResolveBaseBranch_ExplicitFromMetadata(t *testing.T) {
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify origin/develop": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "develop", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "origin/develop" {
+		t.Errorf("got %q, want %q", ref, "origin/develop")
+	}
+}
+
+func TestResolveBaseBranch_ExplicitWithRemotePrefix(t *testing.T) {
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify origin/main": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "origin/main", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "origin/main" {
+		t.Errorf("got %q, want %q", ref, "origin/main")
+	}
+}
+
+func TestResolveBaseBranch_EnvVar(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "main")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify origin/main": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "origin/main" {
+		t.Errorf("got %q, want %q", ref, "origin/main")
+	}
+}
+
+func TestResolveBaseBranch_DetectDefault(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "origin/main" {
+		t.Errorf("got %q, want %q", ref, "origin/main")
+	}
+}
+
+func TestResolveBaseBranch_AllFail(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{},
+	}
+
+	_, err := ResolveBaseBranch(context.Background(), runner, "", "origin")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "could not detect default branch") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestResolveBaseBranch_ExplicitRefNotFound(t *testing.T) {
+	// Explicit ref doesn't exist, falls through to DetectDefaultBranch
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			// rev-parse --verify origin/nonexistent is missing -> error
+			"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "nonexistent", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "origin/main" {
+		t.Errorf("got %q, want %q", ref, "origin/main")
+	}
+}
+
+func TestResolveBaseBranch_ExplicitFailsEnvVarSucceeds(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "release/v2")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			// explicit "nonexistent" fails (no response)
+			"rev-parse --verify origin/release/v2": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "nonexistent", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "origin/release/v2" {
+		t.Errorf("got %q, want %q", ref, "origin/release/v2")
+	}
+}
+
+func TestResolveBaseBranch_EmptyRemote(t *testing.T) {
+	runner := &FakeGitRunner{}
+
+	_, err := ResolveBaseBranch(context.Background(), runner, "main", "")
+	if err == nil {
+		t.Fatal("expected error for empty remote, got nil")
+	}
+}
+
+// TestResolveBaseBranch_ExplicitQualifiedDifferentRemote locks in the fix
+// for the multi-remote case: when the user passes a qualified ref from a
+// remote other than the configured one ("upstream/main" with remote=origin),
+// the resolver must accept it verbatim instead of rewriting it to
+// "origin/upstream/main" (which would fail rev-parse and silently drop the
+// override).
+func TestResolveBaseBranch_ExplicitQualifiedDifferentRemote(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify upstream/main": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "upstream/main", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "upstream/main" {
+		t.Errorf("got %q, want %q (must not be re-prefixed to origin/upstream/main)", ref, "upstream/main")
+	}
+}
+
+// TestResolveBaseBranch_ExplicitFullyQualifiedRef covers the fully-
+// qualified ref case ("refs/heads/release"), which would otherwise be
+// rewritten to "origin/refs/heads/release".
+func TestResolveBaseBranch_ExplicitFullyQualifiedRef(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify refs/heads/release": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "refs/heads/release", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "refs/heads/release" {
+		t.Errorf("got %q, want %q (must not be re-prefixed)", ref, "refs/heads/release")
+	}
+}
+
+// TestResolveBaseBranch_EnvVarQualifiedRef asserts the same qualified-ref
+// handling applies to values sourced from BUILDKITE_PULL_REQUEST_BASE_BRANCH,
+// since the env var is subject to the same prefixing logic as --metadata.
+func TestResolveBaseBranch_EnvVarQualifiedRef(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "upstream/develop")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify upstream/develop": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "upstream/develop" {
+		t.Errorf("got %q, want %q", ref, "upstream/develop")
+	}
+}
+
+// --- Helpers ---
+
+// buildRecord joins fields with fieldSeparator and appends recordSeparator,
+// matching the output format of git log --format=MetadataFormat.
+func buildRecord(fields ...string) string {
+	return strings.Join(fields, fieldSeparator) + recordSeparator
+}
+
+// --- CollectPlanMetadata tests ---
+
+func TestCollectPlanMetadata_HappyPath(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "my-pipeline")
+	t.Setenv("BUILDKITE_BUILD_ID", "build-uuid-123")
+
+	gitLogOutput := buildRecord("abc123", "def456 ghi789", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "GitHub", "noreply@github.com", "2026-03-15T10:00:00+00:00", "Fix the thing")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"merge-base origin/main HEAD":                     "aaa000\n",
+			"diff --no-ext-diff --name-only aaa000 HEAD":      "file1.go\nfile2.go\n",
+			"diff --no-ext-diff --numstat aaa000 HEAD":        "10\t5\tfile1.go\n3\t0\tfile2.go\n",
+			"diff --no-ext-diff aaa000 HEAD":                  "diff --git a/file1.go b/file1.go\n",
+			"diff --no-ext-diff --raw aaa000 HEAD":            ":100644 100644 aaa bbb M\tfile1.go\n",
+			"branch --show-current":                           "feature/my-branch\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "origin/main")
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456 ghi789",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "GitHub",
+		"committer_email": "noreply@github.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Fix the thing",
+		"files_changed":   "file1.go\nfile2.go",
+		"diff_stat":       "10\t5\tfile1.go\n3\t0\tfile2.go",
+		"git_diff":        "diff --git a/file1.go b/file1.go",
+		"git_diff_raw":    ":100644 100644 aaa bbb M\tfile1.go",
+		"branch":          "feature/my-branch",
+		"base_branch":     "origin/main",
+		"pipeline_slug":   "my-pipeline",
+		"build_uuid":      "build-uuid-123",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCollectPlanMetadata_NoBaseBranch(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+
+	gitLogOutput := buildRecord("abc123", "", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Initial commit")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"branch --show-current":                           "main\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "")
+
+	// No base branch: diff fields, base_branch, parent_shas (root commit),
+	// pipeline_slug, and build_uuid should all be absent.
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Initial commit",
+		"branch":          "main",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCollectPlanMetadata_DiffFails(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Some commit")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			// All diff commands missing -> will error
+			"branch --show-current": "feature\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "origin/main")
+
+	// Diff commands all fail (missing from FakeGitRunner), so diff fields
+	// are absent. Commit metadata and context fields should still be present.
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Some commit",
+		"branch":          "feature",
+		"base_branch":     "origin/main",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCollectPlanMetadata_LogFails(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			// git log missing -> will error
+			"merge-base origin/main HEAD":                "aaa000\n",
+			"diff --no-ext-diff --name-only aaa000 HEAD": "file1.go\n",
+			"diff --no-ext-diff --numstat aaa000 HEAD":   "10\t5\tfile1.go\n",
+			"diff --no-ext-diff aaa000 HEAD":             "diff text\n",
+			"diff --no-ext-diff --raw aaa000 HEAD":       ":100644 raw\n",
+			"branch --show-current":                      "feature\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "origin/main")
+
+	// Git log fails, so commit metadata is absent. Diff and context fields
+	// should still be present.
+	want := map[string]string{
+		"files_changed": "file1.go",
+		"diff_stat":     "10\t5\tfile1.go",
+		"git_diff":      "diff text",
+		"git_diff_raw":  ":100644 raw",
+		"branch":        "feature",
+		"base_branch":   "origin/main",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCollectPlanMetadata_DetachedHeadFallsToBuildkiteBranch(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+	t.Setenv("BUILDKITE_BRANCH", "feature/from-env")
+
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Commit msg")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"branch --show-current":                           "\n", // empty on detached HEAD
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "")
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Commit msg",
+		"branch":          "feature/from-env",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCollectPlanMetadata_DetachedHeadNoBuildkiteBranch(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+	t.Setenv("BUILDKITE_BRANCH", "")
+
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Commit msg")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"branch --show-current":                           "\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "")
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Commit msg",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCommitMetadata_ToMap(t *testing.T) {
+	meta := CommitMetadata{
+		CommitSHA:      "abc123",
+		ParentSHAs:     []string{"def456", "ghi789"},
+		AuthorName:     "Alice",
+		AuthorEmail:    "alice@example.com",
+		AuthorDate:     "2026-03-15T10:00:00+00:00",
+		CommitterName:  "GitHub",
+		CommitterEmail: "noreply@github.com",
+		CommitterDate:  "2026-03-15T10:00:00+00:00",
+		Message:        "Fix bug",
+	}
+
+	got := meta.ToMap()
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456 ghi789",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "GitHub",
+		"committer_email": "noreply@github.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Fix bug",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToMap() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCommitMetadata_ToMap_NoParents(t *testing.T) {
+	meta := CommitMetadata{
+		CommitSHA:      "abc123",
+		ParentSHAs:     nil,
+		AuthorName:     "Alice",
+		AuthorEmail:    "alice@example.com",
+		AuthorDate:     "2026-03-15T10:00:00+00:00",
+		CommitterName:  "Alice",
+		CommitterEmail: "alice@example.com",
+		CommitterDate:  "2026-03-15T10:00:00+00:00",
+		Message:        "Initial commit",
+	}
+
+	got := meta.ToMap()
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Initial commit",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToMap() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestCollectPlanMetadata_TrailingNewline reproduces the exact output shape
+// of real `git log -1 --format=...%x1e` invocations, which git always
+// terminates with a trailing "\n" after the record separator. Earlier code
+// applied TrimSuffix before TrimSpace: TrimSuffix saw the "\n" at the end
+// and no-oped on the "\x1e", then TrimSpace stripped the "\n" and left
+// "\x1e" inside the last field (the commit message). Because "\x1e" is not
+// Unicode whitespace, the per-field TrimSpace in parseRecord did not remove
+// it either, so every commit message collected on the plan path carried a
+// trailing "\x1e" into the API payload (observed in Kafka as "\u001e").
+//
+// This test locks in the fix by using a fixture that matches real git
+// output; any regression would reintroduce the trailing "\x1e" in the
+// message value and fail the cmp.Diff below.
+func TestCollectPlanMetadata_TrailingNewline(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+
+	// Note the trailing "\n" appended after buildRecord's "\x1e": this is
+	// what real git log output looks like.
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Fix the thing\n\nLonger description.") + "\n"
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"branch --show-current":                           "main\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "")
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Fix the thing\n\nLonger description.",
+		"branch":          "main",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+
+	// Belt-and-braces assertion: the trailing record separator must not
+	// survive into any field value. This catches the exact regression
+	// without relying on cmp.Diff's failure mode being easy to read.
+	if strings.Contains(got["message"], recordSeparator) {
+		t.Errorf("message field contains stray record separator %q: %q", recordSeparator, got["message"])
+	}
+}
+
+func TestCollectPlanMetadata_MultilineMessage(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Fix the thing\n\nThis is a longer description\nwith multiple lines.")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"branch --show-current":                           "main\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "")
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Fix the thing\n\nThis is a longer description\nwith multiple lines.",
+		"branch":          "main",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCollectPlanMetadata_EnvVarsPopulated(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "my-org/my-pipeline")
+	t.Setenv("BUILDKITE_BUILD_ID", "abc-def-123")
+
+	gitLogOutput := buildRecord("abc123", "", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Msg")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"branch --show-current":                           "main\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "")
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Msg",
+		"branch":          "main",
+		"pipeline_slug":   "my-org/my-pipeline",
+		"build_uuid":      "abc-def-123",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCollectPlanMetadata_EmptyDiffOutput(t *testing.T) {
+	// Simulates builds on the default branch where diff is empty
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Merge commit")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"merge-base origin/main HEAD":                     "aaa000\n",
+			"diff --no-ext-diff --name-only aaa000 HEAD":      "\n",
+			"diff --no-ext-diff --numstat aaa000 HEAD":        "\n",
+			"diff --no-ext-diff aaa000 HEAD":                  "\n",
+			"diff --no-ext-diff --raw aaa000 HEAD":            "\n",
+			"branch --show-current":                           "main\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "origin/main")
+
+	// Empty diffs are omitted by mergeNonEmpty. Commit metadata and context
+	// fields should still be present.
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Merge commit",
+		"branch":          "main",
+		"base_branch":     "origin/main",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// --- MergeMetadata tests ---
+
+func TestMergeMetadata_UserPrecedence(t *testing.T) {
+	existing := map[string]string{
+		"commit_sha": "user-provided-sha",
+		"branch":     "user-branch",
+	}
+	auto := map[string]string{
+		"commit_sha":  "auto-sha",
+		"branch":      "auto-branch",
+		"author_name": "Alice",
+	}
+
+	got := MergeMetadata(existing, auto)
+
+	want := map[string]string{
+		"commit_sha":  "user-provided-sha",
+		"branch":      "user-branch",
+		"author_name": "Alice",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("MergeMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMergeMetadata_NilExisting(t *testing.T) {
+	auto := map[string]string{
+		"commit_sha":  "abc123",
+		"author_name": "Alice",
+	}
+
+	got := MergeMetadata(nil, auto)
+
+	if diff := cmp.Diff(auto, got); diff != "" {
+		t.Errorf("MergeMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMergeMetadata_SkipsEmptyAutoValues(t *testing.T) {
+	existing := map[string]string{
+		"branch": "main",
+	}
+	auto := map[string]string{
+		"commit_sha": "abc123",
+		"git_diff":   "",
+	}
+
+	got := MergeMetadata(existing, auto)
+
+	want := map[string]string{
+		"branch":     "main",
+		"commit_sha": "abc123",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("MergeMetadata mismatch (-want +got):\n%s", diff)
+	}
+}

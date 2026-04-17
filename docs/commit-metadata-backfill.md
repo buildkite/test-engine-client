@@ -86,7 +86,7 @@ This is useful when you want to generate and upload in separate steps or when re
 | `BUILDKITE_TEST_ENGINE_BASE_URL` | `--base-url` | `https://api.buildkite.com` | Buildkite API base URL |
 | `BUILDKITE_TEST_ENGINE_SKIP_DIFFS` | `--skip-diffs` | `false` | Omit full git diffs from the export |
 | `BUILDKITE_TEST_ENGINE_BACKFILL_DAYS` | `--days` | `90` | Number of days of commit history to export (1-90) |
-| `BUILDKITE_TEST_ENGINE_BACKFILL_REMOTE` | `--remote` | `origin` | Git remote name for fetching and branch detection |
+| `BUILDKITE_TEST_ENGINE_REMOTE` or `BUILDKITE_TEST_ENGINE_BACKFILL_REMOTE` | `--remote` | `origin` | Git remote name for fetching and branch detection |
 | `BUILDKITE_TEST_ENGINE_BACKFILL_CONCURRENCY` | `--concurrency` | `10` | Number of concurrent git operations for diff collection |
 | `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` | `--debug` | `false` | Enable debug output |
 

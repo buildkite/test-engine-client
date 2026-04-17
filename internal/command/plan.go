@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/internal/git"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/buildkite/test-engine-client/internal/runner"
 	"github.com/buildkite/test-engine-client/internal/version"
@@ -35,6 +36,11 @@ var (
 // This command creates a test plan via the API
 func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFormat PlanOutput, template string) error {
 	fmt.Fprintln(os.Stderr, "+++ Buildkite Test Engine Client: bktec "+version.Version+"\n")
+
+	// Auto-collect git metadata when selection is active
+	if cfg.SelectionStrategy != "" {
+		autoCollectGitMetadata(ctx, cfg, &git.ExecGitRunner{})
+	}
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
@@ -145,6 +151,31 @@ func createTestPlan(ctx context.Context, cfg *config.Config, files []string, api
 	}
 
 	return testPlan, nil
+}
+
+// autoCollectGitMetadata collects git commit metadata and merges it into
+// cfg.Metadata. User-provided metadata values (from --metadata) take
+// precedence over auto-collected values.
+func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.GitRunner) {
+	// Check if we're in a git repo
+	if _, err := runner.Output(ctx, "rev-parse", "--git-dir"); err != nil {
+		fmt.Fprintln(os.Stderr, "Warning: not a git repository, skipping metadata auto-collection")
+		return
+	}
+
+	// Use user-provided base_branch from --metadata if present
+	explicit := cfg.Metadata["base_branch"]
+	remote := cfg.Remote
+	baseBranch, err := git.ResolveBaseBranch(ctx, runner, explicit, remote)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Warning: could not resolve base branch for diff metadata. "+
+			"Set --metadata base_branch=<branch> if your repo uses a non-standard default branch.")
+	} else {
+		debug.Printf("auto-detected base branch: %s", baseBranch)
+	}
+
+	autoMetadata := git.CollectPlanMetadata(ctx, runner, baseBranch)
+	cfg.Metadata = git.MergeMetadata(cfg.Metadata, autoMetadata)
 }
 
 func handleError(err error) error {

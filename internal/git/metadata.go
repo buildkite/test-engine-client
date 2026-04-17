@@ -50,6 +50,23 @@ var MetadataFormat = strings.Join([]string{
 	fmtBody,
 }, fmtFieldSep) + fmtRecordSep
 
+// ToMap returns the commit metadata as a flat string map using the same key
+// names as the JSON tags. All keys are always present; ParentSHAs are stored
+// as a space-separated string (empty string for root commits).
+func (m CommitMetadata) ToMap() map[string]string {
+	return map[string]string{
+		"commit_sha":      m.CommitSHA,
+		"parent_shas":     strings.Join(m.ParentSHAs, " "),
+		"author_name":     m.AuthorName,
+		"author_email":    m.AuthorEmail,
+		"author_date":     m.AuthorDate,
+		"committer_name":  m.CommitterName,
+		"committer_email": m.CommitterEmail,
+		"committer_date":  m.CommitterDate,
+		"message":         m.Message,
+	}
+}
+
 // FetchBulkMetadata fetches metadata for all given commits in a single git call.
 // Uses --no-walk with --stdin to process only the specified commits (not ancestors).
 // Returns a map from commit SHA to CommitMetadata for O(1) lookup.
@@ -68,38 +85,48 @@ func FetchBulkMetadata(ctx context.Context, runner GitRunner, commits []string) 
 	result := make(map[string]CommitMetadata, len(commits))
 	records := strings.Split(output, recordSeparator)
 	for _, record := range records {
-		record = strings.TrimSpace(record)
-		if record == "" {
+		meta, ok := parseRecord(strings.TrimSpace(record))
+		if !ok {
 			continue
 		}
-		fields := strings.SplitN(record, fieldSeparator, metadataFields)
-		if len(fields) < metadataFields {
-			continue
-		}
-
-		sha := strings.TrimSpace(fields[0])
-		if sha == "" {
-			continue
-		}
-
-		var parentSHAs []string
-		if parents := strings.TrimSpace(fields[1]); parents != "" {
-			parentSHAs = strings.Fields(parents)
-		}
-
-		meta := CommitMetadata{
-			CommitSHA:      sha,
-			ParentSHAs:     parentSHAs,
-			AuthorName:     strings.TrimSpace(fields[2]),
-			AuthorEmail:    strings.TrimSpace(fields[3]),
-			AuthorDate:     strings.TrimSpace(fields[4]),
-			CommitterName:  strings.TrimSpace(fields[5]),
-			CommitterEmail: strings.TrimSpace(fields[6]),
-			CommitterDate:  strings.TrimSpace(fields[7]),
-			Message:        strings.TrimSpace(fields[8]),
-		}
-		result[sha] = meta
+		result[meta.CommitSHA] = meta
 	}
 
 	return result, nil
+}
+
+// parseRecord parses a single record (already split from the record-
+// separator-delimited output) into a CommitMetadata. Returns false if the
+// record is empty, has too few fields, or has an empty commit SHA.
+func parseRecord(record string) (CommitMetadata, bool) {
+	if record == "" {
+		return CommitMetadata{}, false
+	}
+
+	fields := strings.SplitN(record, fieldSeparator, metadataFields)
+	if len(fields) < metadataFields {
+		return CommitMetadata{}, false
+	}
+
+	sha := strings.TrimSpace(fields[0])
+	if sha == "" {
+		return CommitMetadata{}, false
+	}
+
+	var parentSHAs []string
+	if parents := strings.TrimSpace(fields[1]); parents != "" {
+		parentSHAs = strings.Fields(parents)
+	}
+
+	return CommitMetadata{
+		CommitSHA:      sha,
+		ParentSHAs:     parentSHAs,
+		AuthorName:     strings.TrimSpace(fields[2]),
+		AuthorEmail:    strings.TrimSpace(fields[3]),
+		AuthorDate:     strings.TrimSpace(fields[4]),
+		CommitterName:  strings.TrimSpace(fields[5]),
+		CommitterEmail: strings.TrimSpace(fields[6]),
+		CommitterDate:  strings.TrimSpace(fields[7]),
+		Message:        strings.TrimSpace(fields[8]),
+	}, true
 }

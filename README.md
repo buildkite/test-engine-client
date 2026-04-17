@@ -72,12 +72,45 @@ export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=percent
 Command-line flags:
 ```sh
 BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
-  --selection-param percent=40 \
-  --metadata commit_message="fix flaky tests" \
-  --metadata git_diff="$(git diff --no-color)"
+  --selection-param percent=40
 ```
 
-Use repeated `--selection-param key=value` and `--metadata key=value` to pass multiple entries. Values can be large and multiline.  
+#### Automatic git metadata collection
+
+When `--selection-strategy` is set, the `plan` command automatically collects
+git metadata from the current repository and sends it with the API request.
+This includes commit information (SHA, author, committer, message), diff data
+(files changed, numstat, full diff), and context fields (branch name, base
+branch, pipeline slug, build UUID).
+
+The base branch for diff computation is resolved using a fallback chain:
+
+1. Explicit override via `--metadata base_branch=<branch>`
+2. `BUILDKITE_PULL_REQUEST_BASE_BRANCH` (auto-set by Buildkite on PR builds)
+3. Auto-detection via `<remote>/HEAD`, then `<remote>/main`, then `<remote>/master`
+
+Most users don't need to configure anything. Override `base_branch` only if
+your repository uses a non-standard default branch (for example, `develop` or `trunk`)
+and `<remote>/HEAD` isn't configured.
+
+The `--remote` flag (default `origin`) controls which git remote is used for
+base branch detection. You can also set `BUILDKITE_TEST_ENGINE_REMOTE`.
+
+Auto-collected values are merged with any explicit `--metadata` flags you
+provide. Your explicit values always take precedence.
+
+#### Manual metadata overrides
+
+Use `--metadata key=value` to pass additional metadata or override
+auto-collected values. Use `--selection-param key=value` to pass strategy
+parameters. Both flags are repeatable. Values can be large and multiline.
+
+```sh
+BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
+  --selection-param percent=40 \
+  --metadata base_branch=develop
+```
+
 `--selection-param` and `--metadata` are only supported as repeatable CLI flags.
 
 ### Preview: Commit Metadata Backfill
