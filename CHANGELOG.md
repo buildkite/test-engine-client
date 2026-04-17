@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.0 - 2026-04-17
+- Automatically collect git commit metadata on `bktec plan` when `--selection-strategy` is set. Commit info, diff stats, and context fields are sent with the plan request so test selection has the signal it needs without the caller shelling out to git. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
+- Add `--collect-git-metadata` flag (env: `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA`) to `bktec plan` so pipelines can opt in to git metadata collection without using test selection. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
+- Add `--remote` flag (env: `BUILDKITE_TEST_ENGINE_REMOTE`, default `origin`) to `bktec plan` to control which git remote is used for base-branch detection.
+
 ## 2.3.2 - 2026-04-02
 - Add built-in NUnit test runner for .NET test splitting
 
