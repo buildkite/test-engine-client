@@ -168,8 +168,8 @@ func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	remote := cfg.Remote
 	baseBranch, err := git.ResolveBaseBranch(ctx, runner, explicit, remote)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not resolve base branch for diff metadata. "+
-			"Set --metadata base_branch=<branch> if your repo uses a non-standard default branch.\n")
+		fmt.Fprintln(os.Stderr, "Warning: could not resolve base branch for diff metadata. "+
+			"Set --metadata base_branch=<branch> if your repo uses a non-standard default branch.")
 	} else {
 		debug.Printf("auto-detected base branch: %s", baseBranch)
 	}
