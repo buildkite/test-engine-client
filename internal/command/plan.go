@@ -37,8 +37,8 @@ var (
 func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFormat PlanOutput, template string) error {
 	fmt.Fprintln(os.Stderr, "+++ Buildkite Test Engine Client: bktec "+version.Version+"\n")
 
-	// Auto-collect git metadata when selection is active
-	if cfg.SelectionStrategy != "" {
+	// Auto-collect git metadata when selection is active or explicitly requested
+	if cfg.SelectionStrategy != "" || cfg.CollectGitMetadata {
 		autoCollectGitMetadata(ctx, cfg, &git.ExecGitRunner{})
 	}
 

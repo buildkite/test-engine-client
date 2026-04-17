@@ -27,6 +27,7 @@ func applyPlanRequestContext(cmd *cli.Command) error {
 		cfg.SelectionStrategy = ""
 		cfg.SelectionParams = nil
 		cfg.Metadata = nil
+		cfg.CollectGitMetadata = false
 		return nil
 	}
 
@@ -184,6 +185,14 @@ var metadataFlag = &cli.StringSliceFlag{
 	Name:     "metadata",
 	Category: "PREVIEW: TEST SELECTION",
 	Usage:    "Additional metadata key=value sent to the test plan API. Repeat for multiple entries.",
+}
+
+var collectGitMetadataFlag = &cli.BoolFlag{
+	Name:        "collect-git-metadata",
+	Category:    "PREVIEW: TEST SELECTION",
+	Usage:       "Collect git commit metadata and include it in the plan request, even without --selection-strategy",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA"),
+	Destination: &cfg.CollectGitMetadata,
 }
 
 var baseURLFlag = &cli.StringFlag{
@@ -447,6 +456,7 @@ func previewSelectionFlags() []cli.Flag {
 		selectionParamFlag,
 		metadataFlag,
 		planRemoteFlag,
+		collectGitMetadataFlag,
 	}
 }
 

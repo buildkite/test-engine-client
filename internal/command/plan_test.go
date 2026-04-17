@@ -432,6 +432,136 @@ func setDebugEnabled(t *testing.T, w io.Writer) {
 	})
 }
 
+func TestPlan_CollectGitMetadataWithoutSelection(t *testing.T) {
+	// Capture the request body to verify metadata is sent
+	var requestBody []byte
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		enc := json.NewEncoder(w)
+
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			enc.Encode(api.FilteredTestResponse{})
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			requestBody, _ = io.ReadAll(r.Body)
+			enc.Encode(plan.TestPlan{
+				Identifier:  "facecafe",
+				Parallelism: 42,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseUrl = svr.URL
+	cfg.CollectGitMetadata = true
+	cfg.SelectionStrategy = "" // no selection
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	getStderr := captureStderr(t)
+
+	err := Plan(ctx, cfg, "", PlanOutputJSON, "")
+
+	stderrOutput := getStderr()
+
+	if err != nil {
+		t.Fatalf("command.Plan(...) error = %v", err)
+	}
+
+	// The auto-collection should have been triggered. In a test environment
+	// without a git repo, it will warn and skip, but the important thing is
+	// that the code path was entered (the warning proves the gate was passed).
+	if !strings.Contains(stderrOutput, "not a git repository") &&
+		!strings.Contains(stderrOutput, "auto-detected base branch") {
+		// If we're in a git repo (test runs inside a git checkout), we'll
+		// see metadata in the request body instead.
+		if len(requestBody) > 0 {
+			var params map[string]interface{}
+			if err := json.Unmarshal(requestBody, &params); err == nil {
+				if metadata, ok := params["metadata"]; ok && metadata != nil {
+					// Auto-collection ran and populated metadata -- gate worked
+					return
+				}
+			}
+		}
+		t.Errorf("expected auto-collection to run (either git warning or metadata in request), stderr: %s", stderrOutput)
+	}
+}
+
+func TestPlan_NoCollectGitMetadataByDefault(t *testing.T) {
+	// Capture the request body to verify no metadata is sent
+	var requestBody []byte
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		enc := json.NewEncoder(w)
+
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			enc.Encode(api.FilteredTestResponse{})
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			requestBody, _ = io.ReadAll(r.Body)
+			enc.Encode(plan.TestPlan{
+				Identifier:  "facecafe",
+				Parallelism: 42,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseUrl = svr.URL
+	cfg.CollectGitMetadata = false
+	cfg.SelectionStrategy = ""
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	getStderr := captureStderr(t)
+
+	err := Plan(ctx, cfg, "", PlanOutputJSON, "")
+
+	stderrOutput := getStderr()
+
+	if err != nil {
+		t.Fatalf("command.Plan(...) error = %v", err)
+	}
+
+	// Auto-collection should NOT have run -- no git warnings expected
+	if strings.Contains(stderrOutput, "not a git repository") ||
+		strings.Contains(stderrOutput, "auto-detected base branch") ||
+		strings.Contains(stderrOutput, "skipping metadata auto-collection") {
+		t.Errorf("auto-collection should not run when both SelectionStrategy and CollectGitMetadata are unset, stderr: %s", stderrOutput)
+	}
+
+	// Verify no metadata in request body
+	if len(requestBody) > 0 {
+		var params map[string]interface{}
+		if err := json.Unmarshal(requestBody, &params); err == nil {
+			if metadata, ok := params["metadata"]; ok && metadata != nil {
+				t.Errorf("expected no metadata in request, got: %v", metadata)
+			}
+		}
+	}
+}
+
 func TestPlanJSON_DebugLogging(t *testing.T) {
 	svr := getHttptestServer()
 	defer svr.Close()

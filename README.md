@@ -83,6 +83,15 @@ This includes commit information (SHA, author, committer, message), diff data
 (files changed, numstat, full diff), and context fields (branch name, base
 branch, pipeline slug, build UUID).
 
+For pipelines that use `plan` without `--selection-strategy`, you can opt in
+to metadata collection with the `--collect-git-metadata` flag (or
+`BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA=true`). This collects the same git
+metadata without requiring selection to be configured:
+
+```sh
+BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --collect-git-metadata
+```
+
 The base branch for diff computation is resolved using a fallback chain:
 
 1. Explicit override via `--metadata base_branch=<branch>`
