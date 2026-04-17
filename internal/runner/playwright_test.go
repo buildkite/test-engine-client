@@ -268,7 +268,6 @@ func TestPlaywrightGetExamples(t *testing.T) {
 	changeCwd(t, "./testdata/playwright")
 
 	playwright := NewPlaywright(RunnerConfig{
-		// Use npx directly because yarn adds prefix output to stdout that corrupts JSON parsing
 		TestCommand: "npx playwright test",
 	})
 

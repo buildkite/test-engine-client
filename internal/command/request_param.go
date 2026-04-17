@@ -12,7 +12,7 @@ import (
 
 // createRequestParam generates the parameters needed for a test plan request.
 //
-// For the Rspec, Cucumber and Pytest runner, it fetches test files through the Test Engine API
+// For the Rspec, Cucumber, Pytest, and Playwright runners, it fetches test files through the Test Engine API
 // that are slow or contain skipped tests. These files are then split into examples
 // The remaining files are sent as is.
 //
