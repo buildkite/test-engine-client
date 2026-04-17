@@ -141,6 +141,72 @@ func TestResolveBaseBranch_EmptyRemote(t *testing.T) {
 	}
 }
 
+// TestResolveBaseBranch_ExplicitQualifiedDifferentRemote locks in the fix
+// for the multi-remote case: when the user passes a qualified ref from a
+// remote other than the configured one ("upstream/main" with remote=origin),
+// the resolver must accept it verbatim instead of rewriting it to
+// "origin/upstream/main" (which would fail rev-parse and silently drop the
+// override).
+func TestResolveBaseBranch_ExplicitQualifiedDifferentRemote(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify upstream/main": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "upstream/main", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "upstream/main" {
+		t.Errorf("got %q, want %q (must not be re-prefixed to origin/upstream/main)", ref, "upstream/main")
+	}
+}
+
+// TestResolveBaseBranch_ExplicitFullyQualifiedRef covers the fully-
+// qualified ref case ("refs/heads/release"), which would otherwise be
+// rewritten to "origin/refs/heads/release".
+func TestResolveBaseBranch_ExplicitFullyQualifiedRef(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify refs/heads/release": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "refs/heads/release", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "refs/heads/release" {
+		t.Errorf("got %q, want %q (must not be re-prefixed)", ref, "refs/heads/release")
+	}
+}
+
+// TestResolveBaseBranch_EnvVarQualifiedRef asserts the same qualified-ref
+// handling applies to values sourced from BUILDKITE_PULL_REQUEST_BASE_BRANCH,
+// since the env var is subject to the same prefixing logic as --metadata.
+func TestResolveBaseBranch_EnvVarQualifiedRef(t *testing.T) {
+	t.Setenv("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "upstream/develop")
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			"rev-parse --verify upstream/develop": "abc123\n",
+		},
+	}
+
+	ref, err := ResolveBaseBranch(context.Background(), runner, "", "origin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref != "upstream/develop" {
+		t.Errorf("got %q, want %q", ref, "upstream/develop")
+	}
+}
+
 // --- Helpers ---
 
 // buildRecord joins fields with fieldSeparator and appends recordSeparator,

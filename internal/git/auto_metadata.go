@@ -27,9 +27,16 @@ import (
 //     AND $BUILDKITE_PULL_REQUEST_BASE_BRANCH is not set (non-Buildkite CI
 //     or manual trigger)
 //
-// If a candidate is a bare branch name (e.g. "main"), it's prefixed with
-// "<remote>/" to form the remote ref. Each candidate is verified with
-// git rev-parse --verify before being accepted.
+// Each candidate is probed against the repository using
+// git rev-parse --verify. We try the candidate verbatim first, then fall
+// back to "<remote>/<candidate>". This handles every common shape without
+// heuristics: bare branch names ("main") resolve via the fallback to
+// "origin/main"; refs from a different remote ("upstream/main"), fully-
+// qualified refs ("refs/heads/release"), and values already including the
+// configured remote ("origin/main") all resolve on the first probe.
+// Without the verbatim probe, prefixing a qualified ref would rewrite it
+// into an invalid value like "origin/upstream/main" and silently drop the
+// explicit override.
 // Returns the resolved ref (e.g. "origin/main") or an error.
 func ResolveBaseBranch(ctx context.Context, runner GitRunner, explicit string, remote string) (string, error) {
 	if remote == "" {
@@ -49,15 +56,26 @@ func ResolveBaseBranch(ctx context.Context, runner GitRunner, explicit string, r
 		if c.value == "" {
 			continue
 		}
-		ref := c.value
-		if !strings.HasPrefix(ref, remote+"/") {
-			ref = remote + "/" + ref
+
+		// Try the candidate verbatim first. This accepts qualified refs
+		// from a non-default remote ("upstream/main"), fully-qualified
+		// refs ("refs/heads/release"), and values already including the
+		// configured remote ("origin/main") without rewriting them.
+		if _, err := runner.Output(ctx, "rev-parse", "--verify", c.value); err == nil {
+			debug.Printf("base branch resolved via %s: %s", c.source, c.value)
+			return c.value, nil
 		}
-		if _, err := runner.Output(ctx, "rev-parse", "--verify", ref); err == nil {
-			debug.Printf("base branch resolved via %s: %q -> %s", c.source, c.value, ref)
-			return ref, nil
+
+		// Fall back to "<remote>/<candidate>" for bare branch names
+		// ("main" -> "origin/main") and release-style names with a "/"
+		// that are still relative to the configured remote ("release/v2"
+		// -> "origin/release/v2").
+		prefixed := remote + "/" + c.value
+		if _, err := runner.Output(ctx, "rev-parse", "--verify", prefixed); err == nil {
+			debug.Printf("base branch resolved via %s: %q -> %s", c.source, c.value, prefixed)
+			return prefixed, nil
 		}
-		debug.Printf("base branch candidate %q (resolved to %q) from %s not found, trying next", c.value, ref, c.source)
+		debug.Printf("base branch candidate %q from %s not found (also tried %q), trying next", c.value, c.source, prefixed)
 	}
 	ref, err := DetectDefaultBranch(ctx, runner, remote)
 	if err == nil {
