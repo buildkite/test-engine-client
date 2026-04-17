@@ -432,7 +432,7 @@ func setDebugEnabled(t *testing.T, w io.Writer) {
 	})
 }
 
-func TestPlan_CollectMetadataWithoutSelection(t *testing.T) {
+func TestPlan_CollectGitMetadataWithoutSelection(t *testing.T) {
 	// Capture the request body to verify metadata is sent
 	var requestBody []byte
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -460,7 +460,7 @@ func TestPlan_CollectMetadataWithoutSelection(t *testing.T) {
 
 	cfg := getConfig()
 	cfg.ServerBaseUrl = svr.URL
-	cfg.CollectMetadata = true
+	cfg.CollectGitMetadata = true
 	cfg.SelectionStrategy = "" // no selection
 
 	ctx := context.Background()
@@ -498,7 +498,7 @@ func TestPlan_CollectMetadataWithoutSelection(t *testing.T) {
 	}
 }
 
-func TestPlan_NoCollectMetadataByDefault(t *testing.T) {
+func TestPlan_NoCollectGitMetadataByDefault(t *testing.T) {
 	// Capture the request body to verify no metadata is sent
 	var requestBody []byte
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -526,7 +526,7 @@ func TestPlan_NoCollectMetadataByDefault(t *testing.T) {
 
 	cfg := getConfig()
 	cfg.ServerBaseUrl = svr.URL
-	cfg.CollectMetadata = false
+	cfg.CollectGitMetadata = false
 	cfg.SelectionStrategy = ""
 
 	ctx := context.Background()
@@ -548,7 +548,7 @@ func TestPlan_NoCollectMetadataByDefault(t *testing.T) {
 	if strings.Contains(stderrOutput, "not a git repository") ||
 		strings.Contains(stderrOutput, "auto-detected base branch") ||
 		strings.Contains(stderrOutput, "skipping metadata auto-collection") {
-		t.Errorf("auto-collection should not run when both SelectionStrategy and CollectMetadata are unset, stderr: %s", stderrOutput)
+		t.Errorf("auto-collection should not run when both SelectionStrategy and CollectGitMetadata are unset, stderr: %s", stderrOutput)
 	}
 
 	// Verify no metadata in request body

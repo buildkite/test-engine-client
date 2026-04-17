@@ -46,22 +46,22 @@ func TestSelectionFlagsAreGatedByPreviewEnv(t *testing.T) {
 	}
 }
 
-func TestCollectMetadataFlagIsGatedByPreviewEnv(t *testing.T) {
+func TestCollectGitMetadataFlagIsGatedByPreviewEnv(t *testing.T) {
 	t.Setenv(previewSelectionEnvVar, "")
-	if hasFlag(planCommandFlags(), "collect-metadata") {
-		t.Fatalf("planCommandFlags() unexpectedly includes --collect-metadata when preview is disabled")
+	if hasFlag(planCommandFlags(), "collect-git-metadata") {
+		t.Fatalf("planCommandFlags() unexpectedly includes --collect-git-metadata when preview is disabled")
 	}
 
 	t.Setenv(previewSelectionEnvVar, "true")
-	if !hasFlag(planCommandFlags(), "collect-metadata") {
-		t.Fatalf("planCommandFlags() missing --collect-metadata when preview is enabled")
+	if !hasFlag(planCommandFlags(), "collect-git-metadata") {
+		t.Fatalf("planCommandFlags() missing --collect-git-metadata when preview is enabled")
 	}
 }
 
-func TestApplyPlanRequestContext_ClearsCollectMetadataWhenPreviewDisabled(t *testing.T) {
+func TestApplyPlanRequestContext_ClearsCollectGitMetadataWhenPreviewDisabled(t *testing.T) {
 	t.Setenv(previewSelectionEnvVar, "")
 
-	cfg.CollectMetadata = true
+	cfg.CollectGitMetadata = true
 	cfg.SelectionStrategy = "percent"
 	cfg.Metadata = map[string]string{"key": "val"}
 
@@ -72,8 +72,8 @@ func TestApplyPlanRequestContext_ClearsCollectMetadataWhenPreviewDisabled(t *tes
 		t.Fatalf("applyPlanRequestContext() error = %v", err)
 	}
 
-	if cfg.CollectMetadata {
-		t.Errorf("cfg.CollectMetadata = true, want false when preview is disabled")
+	if cfg.CollectGitMetadata {
+		t.Errorf("cfg.CollectGitMetadata = true, want false when preview is disabled")
 	}
 	if cfg.SelectionStrategy != "" {
 		t.Errorf("cfg.SelectionStrategy = %q, want empty when preview is disabled", cfg.SelectionStrategy)
