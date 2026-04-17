@@ -432,6 +432,61 @@ func TestCommitMetadata_ToMap_NoParents(t *testing.T) {
 	}
 }
 
+// TestCollectPlanMetadata_TrailingNewline reproduces the exact output shape
+// of real `git log -1 --format=...%x1e` invocations, which git always
+// terminates with a trailing "\n" after the record separator. Earlier code
+// applied TrimSuffix before TrimSpace: TrimSuffix saw the "\n" at the end
+// and no-oped on the "\x1e", then TrimSpace stripped the "\n" and left
+// "\x1e" inside the last field (the commit message). Because "\x1e" is not
+// Unicode whitespace, the per-field TrimSpace in parseRecord did not remove
+// it either, so every commit message collected on the plan path carried a
+// trailing "\x1e" into the API payload (observed in Kafka as "\u001e").
+//
+// This test locks in the fix by using a fixture that matches real git
+// output; any regression would reintroduce the trailing "\x1e" in the
+// message value and fail the cmp.Diff below.
+func TestCollectPlanMetadata_TrailingNewline(t *testing.T) {
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+
+	// Note the trailing "\n" appended after buildRecord's "\x1e": this is
+	// what real git log output looks like.
+	gitLogOutput := buildRecord("abc123", "def456", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Alice", "alice@example.com", "2026-03-15T10:00:00+00:00", "Fix the thing\n\nLonger description.") + "\n"
+
+	runner := &FakeGitRunner{
+		Responses: map[string]string{
+			fmt.Sprintf("log -1 --format=%s", MetadataFormat): gitLogOutput,
+			"branch --show-current":                           "main\n",
+		},
+	}
+
+	got := CollectPlanMetadata(context.Background(), runner, "")
+
+	want := map[string]string{
+		"commit_sha":      "abc123",
+		"parent_shas":     "def456",
+		"author_name":     "Alice",
+		"author_email":    "alice@example.com",
+		"author_date":     "2026-03-15T10:00:00+00:00",
+		"committer_name":  "Alice",
+		"committer_email": "alice@example.com",
+		"committer_date":  "2026-03-15T10:00:00+00:00",
+		"message":         "Fix the thing\n\nLonger description.",
+		"branch":          "main",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CollectPlanMetadata mismatch (-want +got):\n%s", diff)
+	}
+
+	// Belt-and-braces assertion: the trailing record separator must not
+	// survive into any field value. This catches the exact regression
+	// without relying on cmp.Diff's failure mode being easy to read.
+	if strings.Contains(got["message"], recordSeparator) {
+		t.Errorf("message field contains stray record separator %q: %q", recordSeparator, got["message"])
+	}
+}
+
 func TestCollectPlanMetadata_MultilineMessage(t *testing.T) {
 	t.Setenv("BUILDKITE_PIPELINE_SLUG", "")
 	t.Setenv("BUILDKITE_BUILD_ID", "")

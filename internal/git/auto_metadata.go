@@ -98,7 +98,12 @@ func collectCommitMetadata(ctx context.Context, runner GitRunner, metadata map[s
 		return
 	}
 
-	record := strings.TrimSpace(strings.TrimSuffix(output, recordSeparator))
+	// Real git log output ends in "\x1e\n" (git always appends a trailing
+	// newline). TrimSpace must run first to strip the "\n", otherwise
+	// TrimSuffix("\x1e") sees the "\n" at the end and no-ops, leaving the
+	// record separator trapped inside the final field (the commit message).
+	// TrimSpace does not strip "\x1e" because it is not Unicode whitespace.
+	record := strings.TrimSuffix(strings.TrimSpace(output), recordSeparator)
 	meta, ok := parseRecord(record)
 	if !ok {
 		debug.Printf("Warning: git log returned unparseable output; skipping commit metadata")
