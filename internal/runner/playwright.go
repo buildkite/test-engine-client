@@ -177,8 +177,8 @@ func (p Playwright) GetExamples(files []string) ([]plan.TestCase, error) {
 	debug.Printf("Running `%s %s` to list tests", cmdName, strings.Join(cmdArgs, " "))
 
 	cmd := exec.Command(cmdName, cmdArgs...)
-	// Use PLAYWRIGHT_JSON_OUTPUT_NAME to specify the output file
-	// This avoids issues with yarn adding prefix output to stdout
+    // Playwright's JSON reporter output path can only be set via env var, not CLI args.
+    // See: https://playwright.dev/docs/test-reporters#json-reporter
 	cmd.Env = append(os.Environ(), fmt.Sprintf("PLAYWRIGHT_JSON_OUTPUT_NAME=%s", tmpPath))
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
