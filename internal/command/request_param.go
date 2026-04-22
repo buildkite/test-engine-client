@@ -12,7 +12,7 @@ import (
 
 // createRequestParam generates the parameters needed for a test plan request.
 //
-// For the Rspec, Cucumber and Pytest runner, it fetches test files through the Test Engine API
+// For the Rspec, Cucumber, Pytest, and Playwright runners, it fetches test files through the Test Engine API
 // that are slow or contain skipped tests. These files are then split into examples
 // The remaining files are sent as is.
 //
@@ -30,8 +30,8 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 		})
 	}
 
-	// Splitting files by example is only supported for rspec, cucumber, and pytest runners
-	if runner.Name() != "RSpec" && runner.Name() != "Cucumber" && runner.Name() != "pytest" {
+	// Splitting files by example is only supported for rspec, cucumber, pytest, and playwright runners
+	if runner.Name() != "RSpec" && runner.Name() != "Cucumber" && runner.Name() != "pytest" && runner.Name() != "Playwright" {
 		params := api.TestPlanParams{
 			Identifier:     cfg.Identifier,
 			Parallelism:    cfg.Parallelism,
