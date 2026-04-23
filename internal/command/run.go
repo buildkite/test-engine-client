@@ -313,25 +313,11 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	// Fetch the plan from the server's cache.
 	cachedPlan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier, cfg.JobRetryCount)
 
-	handleError := func(err error) (plan.TestPlan, error) {
-		if errors.Is(err, api.ErrRetryTimeout) {
-			fmt.Println("⚠️ Could not fetch or create plan from server, falling back to non-intelligent splitting. Your build may take longer than usual.")
-			p := plan.CreateFallbackPlan(files, cfg.Parallelism)
-			return p, nil
-		}
-
-		if billingError := new(api.BillingError); errors.As(err, &billingError) {
-			fmt.Println(billingError.Message)
-			fmt.Println("⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual.")
-			p := plan.CreateFallbackPlan(files, cfg.Parallelism)
-			return p, nil
-		}
-
-		return plan.TestPlan{}, err
-	}
-
 	if err != nil {
-		return handleError(err)
+		if handledErr := handleError(err); handledErr != nil {
+			return plan.TestPlan{}, handledErr
+		}
+		return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
 	}
 
 	if cachedPlan != nil {
@@ -351,14 +337,20 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	// If the cache is empty, create a new plan.
 	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
 	if err != nil {
-		return handleError(err)
+		if handledErr := handleError(err); handledErr != nil {
+			return plan.TestPlan{}, handledErr
+		}
+		return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
 	}
 
 	debug.Println("Creating test plan")
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 
 	if err != nil {
-		return handleError(err)
+		if handledErr := handleError(err); handledErr != nil {
+			return plan.TestPlan{}, handledErr
+		}
+		return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).

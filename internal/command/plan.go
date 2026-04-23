@@ -3,7 +3,6 @@ package command
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -176,19 +175,4 @@ func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.
 
 	autoMetadata := git.CollectPlanMetadata(ctx, runner, baseBranch)
 	cfg.Metadata = git.MergeMetadata(cfg.Metadata, autoMetadata)
-}
-
-func handleError(err error) error {
-	if errors.Is(err, api.ErrRetryTimeout) {
-		fmt.Fprintln(os.Stderr, "⚠️ Could not fetch or create plan from server, falling back to non-intelligent splitting. Your build may take longer than usual.")
-		return nil
-	}
-
-	if billingError := new(api.BillingError); errors.As(err, &billingError) {
-		fmt.Fprintln(os.Stderr, billingError.Message+"\n")
-		fmt.Fprintln(os.Stderr, "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual.")
-		return nil
-	}
-
-	return err
 }
