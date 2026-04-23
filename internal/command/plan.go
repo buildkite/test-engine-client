@@ -176,5 +176,3 @@ func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	autoMetadata := git.CollectPlanMetadata(ctx, runner, baseBranch)
 	cfg.Metadata = git.MergeMetadata(cfg.Metadata, autoMetadata)
 }
-
-
