@@ -346,9 +346,13 @@ func TestDoWithRetry_403(t *testing.T) {
 		URL:    svr.URL,
 	}, nil)
 
-	// it returns immediately with the 403 status code.
+	// it returns immediately with ForbiddenError and the 403 status code.
 	if requestCount > 1 {
 		t.Errorf("http request count = %v, want %d", requestCount, 1)
+	}
+
+	if forbiddenError := new(ForbiddenError); !errors.As(err, &forbiddenError) {
+		t.Errorf("DoWithRetry() error type = %T, want %T", err, ForbiddenError{})
 	}
 
 	if err.Error() != "forbidden" {
@@ -357,6 +361,120 @@ func TestDoWithRetry_403(t *testing.T) {
 
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusForbidden)
+	}
+}
+
+func TestDoWithRetry_401(t *testing.T) {
+	requestCount := 0
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, `{"message": "Unauthorized"}`, http.StatusUnauthorized)
+	}))
+	defer svr.Close()
+
+	cfg := ClientConfig{
+		AccessToken:      "bad-token",
+		OrganizationSlug: "my-org",
+		ServerBaseUrl:    svr.URL,
+	}
+
+	c := NewClient(cfg)
+	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+		Method: http.MethodGet,
+		URL:    svr.URL,
+	}, nil)
+
+	if requestCount > 1 {
+		t.Errorf("http request count = %v, want %d", requestCount, 1)
+	}
+
+	if authError := new(AuthError); !errors.As(err, &authError) {
+		t.Errorf("DoWithRetry() error type = %T, want %T", err, AuthError{})
+	}
+
+	if err.Error() != "Unauthorized" {
+		t.Errorf("DoWithRetry() error = %v, want %v", err, "Unauthorized")
+	}
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusUnauthorized)
+	}
+}
+
+func TestDoWithRetry_404(t *testing.T) {
+	requestCount := 0
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, `{"message": "Not Found"}`, http.StatusNotFound)
+	}))
+	defer svr.Close()
+
+	cfg := ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "my-org",
+		ServerBaseUrl:    svr.URL,
+	}
+
+	c := NewClient(cfg)
+	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+		Method: http.MethodGet,
+		URL:    svr.URL,
+	}, nil)
+
+	if requestCount > 1 {
+		t.Errorf("http request count = %v, want %d", requestCount, 1)
+	}
+
+	if notFoundError := new(NotFoundError); !errors.As(err, &notFoundError) {
+		t.Errorf("DoWithRetry() error type = %T, want %T", err, NotFoundError{})
+	}
+
+	if err.Error() != "Not Found" {
+		t.Errorf("DoWithRetry() error = %v, want %v", err, "Not Found")
+	}
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestDoWithRetry_400(t *testing.T) {
+	requestCount := 0
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, `{"message": "Bad Request"}`, http.StatusBadRequest)
+	}))
+	defer svr.Close()
+
+	cfg := ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "my-org",
+		ServerBaseUrl:    svr.URL,
+	}
+
+	c := NewClient(cfg)
+	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+		Method: http.MethodGet,
+		URL:    svr.URL,
+	}, nil)
+
+	if requestCount > 1 {
+		t.Errorf("http request count = %v, want %d", requestCount, 1)
+	}
+
+	if badRequestError := new(BadRequestError); !errors.As(err, &badRequestError) {
+		t.Errorf("DoWithRetry() error type = %T, want %T", err, BadRequestError{})
+	}
+
+	if err.Error() != "Bad Request" {
+		t.Errorf("DoWithRetry() error = %v, want %v", err, "Bad Request")
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusBadRequest)
 	}
 }
 

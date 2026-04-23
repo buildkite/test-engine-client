@@ -396,7 +396,9 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// simulate cache miss for GET test_plan so it will trigger the test plan creation
 		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message": "Not Found"}`)
 		} else {
 			fmt.Fprint(w, response)
 		}
