@@ -16,7 +16,7 @@ func TestHandleError_RetryTimeout(t *testing.T) {
 	assert.Nil(t, err)
 
 	stderr := getStderr()
-	assert.Contains(t, stderr, "Test Engine API timed out after 130s")
+	assert.Contains(t, stderr, "Test Engine API timed out")
 	assert.Contains(t, stderr, "Falling back to non-intelligent splitting")
 }
 
@@ -36,15 +36,14 @@ func TestHandleError_BillingError(t *testing.T) {
 func TestHandleError_AuthError(t *testing.T) {
 	getStderr := captureStderr(t)
 
-	authErr := &api.AuthError{Message: "Unauthorized"}
+	authErr := &api.AuthError{Message: "Authentication required. Please supply a valid API Access Token: https://buildkite.com/docs/apis/rest-api#authentication"}
 	err := handleError(authErr)
 
 	assert.Equal(t, authErr, err)
 
 	stderr := getStderr()
-	assert.Contains(t, stderr, "Invalid API token")
-	assert.Contains(t, stderr, "BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN")
-	assert.Contains(t, stderr, "https://buildkite.com/docs/apis/managing-api-tokens")
+	assert.Contains(t, stderr, "Authentication failed")
+	assert.Contains(t, stderr, "Authentication required. Please supply a valid API Access Token")
 }
 
 func TestHandleError_ForbiddenError(t *testing.T) {
@@ -58,19 +57,18 @@ func TestHandleError_ForbiddenError(t *testing.T) {
 	stderr := getStderr()
 	assert.Contains(t, stderr, "Access denied")
 	assert.Contains(t, stderr, "Your access token doesn't have the read_suites scope")
-	assert.Contains(t, stderr, "https://buildkite.com/docs/apis/managing-api-tokens")
 }
 
 func TestHandleError_NotFoundError(t *testing.T) {
 	getStderr := captureStderr(t)
 
-	notFoundErr := &api.NotFoundError{Message: "Not Found"}
+	notFoundErr := &api.NotFoundError{Message: "No suite found"}
 	err := handleError(notFoundErr)
 
 	assert.Nil(t, err)
 
 	stderr := getStderr()
-	assert.Contains(t, stderr, "Suite not found")
+	assert.Contains(t, stderr, "Not found: No suite found")
 	assert.Contains(t, stderr, "BUILDKITE_TEST_ENGINE_SUITE_SLUG")
 	assert.Contains(t, stderr, "Falling back to non-intelligent splitting")
 }

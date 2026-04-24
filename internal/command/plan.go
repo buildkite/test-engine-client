@@ -149,6 +149,13 @@ func createTestPlan(ctx context.Context, cfg *config.Config, files []string, api
 		return fallbackPlan, err
 	}
 
+	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
+	// In this case, we should create a fallback plan.
+	if len(testPlan.Tasks) == 0 {
+		warnErrorPlan()
+		return fallbackPlan, nil
+	}
+
 	return testPlan, nil
 }
 
