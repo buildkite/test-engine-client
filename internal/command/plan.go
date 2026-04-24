@@ -165,7 +165,7 @@ func createTestPlan(ctx context.Context, cfg *config.Config, files []string, api
 func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.GitRunner) {
 	// Check if we're in a git repo
 	if _, err := runner.Output(ctx, "rev-parse", "--git-dir"); err != nil {
-		fmt.Fprintln(os.Stderr, "Warning: not a git repository, skipping metadata auto-collection")
+		fmt.Fprintln(os.Stderr, "⚠️ Not a git repository, skipping metadata auto-collection.")
 		return
 	}
 
@@ -174,7 +174,7 @@ func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	remote := cfg.Remote
 	baseBranch, err := git.ResolveBaseBranch(ctx, runner, explicit, remote)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Warning: could not resolve base branch for diff metadata. "+
+		fmt.Fprintln(os.Stderr, "⚠️ Could not resolve base branch for diff metadata. "+
 			"Set --metadata base_branch=<branch> if your repo uses a non-standard default branch.")
 	} else {
 		debug.Printf("auto-detected base branch: %s", baseBranch)
