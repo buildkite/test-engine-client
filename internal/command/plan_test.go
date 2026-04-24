@@ -303,7 +303,9 @@ called with testtemplate.yml
 func getZeroParallelismServer() *httptest.Server {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message": "Not found"}`))
 			return
 		}
 
@@ -317,11 +319,15 @@ func getZeroParallelismServer() *httptest.Server {
 			testPlan := plan.TestPlan{
 				Identifier:  "facecafe",
 				Parallelism: 0,
-				Tasks:       map[string]*plan.Task{},
+				Tasks: map[string]*plan.Task{
+					"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
+				},
 			}
 			enc.Encode(testPlan)
 		default:
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message": "Not found"}`))
 		}
 	}))
 	return svr
@@ -330,7 +336,9 @@ func getZeroParallelismServer() *httptest.Server {
 func getHttptestServer() *httptest.Server {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message": "Not found"}`))
 			return
 		}
 
@@ -344,6 +352,9 @@ func getHttptestServer() *httptest.Server {
 			testPlan := plan.TestPlan{
 				Identifier:  "facecafe",
 				Parallelism: 42,
+				Tasks: map[string]*plan.Task{
+					"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
+				},
 			}
 			enc.Encode(testPlan)
 		default:
