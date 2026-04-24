@@ -8,38 +8,63 @@ import (
 	"github.com/buildkite/test-engine-client/internal/api"
 )
 
-// handleError classifies API errors and prints user-facing warnings to stderr.
+type errorSeverity int
+
+const (
+	severityWarning errorSeverity = iota
+	severityFatal
+)
+
+func (s errorSeverity) icon() string {
+	if s == severityFatal {
+		return "❌"
+	}
+	return "⚠️"
+}
+
+// printError formats and prints a categorized error to stderr.
+// Format: icon error_type: message. fallbackMessage
+func printError(severity errorSeverity, errorType string, message string, fallbackMessage string) {
+	out := fmt.Sprintf("%s %s: %s", severity.icon(), errorType, message)
+	if fallbackMessage != "" {
+		out += "\n" + fallbackMessage
+	}
+	fmt.Fprintln(os.Stderr, out)
+}
+
+const fallbackExtra = "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual."
+
+// handleError classifies API errors and prints user-facing messages to stderr.
 // Returns nil for recoverable errors (caller should fall back to non-intelligent splitting),
 // or the original error for unrecoverable failures.
 func handleError(err error) error {
 	if errors.Is(err, api.ErrRetryTimeout) {
-		fmt.Fprintln(os.Stderr, "⚠️ Test Engine API timed out. Falling back to non-intelligent splitting. Your build may take longer than usual.")
+		printError(severityWarning, "Timeout", "Test Engine API timed out", fallbackExtra)
 		return nil
 	}
 
 	if billingError := new(api.BillingError); errors.As(err, &billingError) {
-		fmt.Fprintln(os.Stderr, billingError.Message+"\n")
-		fmt.Fprintln(os.Stderr, "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual.")
+		printError(severityWarning, "Billing Error", billingError.Message, fallbackExtra)
 		return nil
 	}
 
 	if notFoundError := new(api.NotFoundError); errors.As(err, &notFoundError) {
-		fmt.Fprintf(os.Stderr, "⚠️ Not found: %s. Check BUILDKITE_TEST_ENGINE_SUITE_SLUG is correct. Falling back to non-intelligent splitting.\n", notFoundError.Message)
+		printError(severityWarning, "Not Found", notFoundError.Message, "Check BUILDKITE_TEST_ENGINE_SUITE_SLUG is correct. "+fallbackExtra)
 		return nil
 	}
 
 	if authError := new(api.AuthError); errors.As(err, &authError) {
-		fmt.Fprintf(os.Stderr, "❌ Authentication failed: %s\n", authError.Message)
+		printError(severityFatal, "Authentication Failed", authError.Message, "")
 		return err
 	}
 
 	if forbiddenError := new(api.ForbiddenError); errors.As(err, &forbiddenError) {
-		fmt.Fprintf(os.Stderr, "❌ Access denied: %s\n", forbiddenError.Message)
+		printError(severityFatal, "Access Denied", forbiddenError.Message, "")
 		return err
 	}
 
 	if badRequestError := new(api.BadRequestError); errors.As(err, &badRequestError) {
-		fmt.Fprintf(os.Stderr, "❌ Invalid request: %s\n", badRequestError.Message)
+		printError(severityFatal, "Invalid Request", badRequestError.Message, "")
 		return err
 	}
 
@@ -47,5 +72,5 @@ func handleError(err error) error {
 }
 
 func warnErrorPlan() {
-	fmt.Fprintln(os.Stderr, "⚠️ Server returned an error plan (possibly missing suite data or a server-side issue). Falling back to non-intelligent splitting. Upload test results first to enable intelligent splitting.")
+	printError(severityWarning, "Error Plan", "Server returned an error plan (possibly missing suite data or a server-side issue)", "Upload test results first to enable intelligent splitting. "+fallbackExtra)
 }
