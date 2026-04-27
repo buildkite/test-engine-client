@@ -1,4 +1,4 @@
-FROM ruby:4.0.2-slim-bookworm AS ruby
+FROM ruby:4.0.3-slim-bookworm AS ruby
 FROM cypress/included:14.5.3 AS cypress
 FROM python:3.15.0a8-bookworm AS python
 
