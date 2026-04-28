@@ -622,9 +622,6 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	want := plan.TestPlan{}
 
 	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
-	if err == nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
-	}
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "❌ Invalid Request:")
 	assert.Contains(t, err.Error(), "Invalid parameters: runner is required")
@@ -703,9 +700,6 @@ func TestFetchOrCreateTestPlan_AuthError(t *testing.T) {
 	want := plan.TestPlan{}
 
 	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
-	if err == nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got nil", cfg, files)
-	}
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "❌ Authentication Failed:")
 	assert.Contains(t, err.Error(), "Authentication required. Please supply a valid API Access Token")
@@ -743,9 +737,6 @@ func TestFetchOrCreateTestPlan_ForbiddenError(t *testing.T) {
 	want := plan.TestPlan{}
 
 	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
-	if err == nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got nil", cfg, files)
-	}
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "❌ Access Denied:")
 	assert.Contains(t, err.Error(), "Your access token doesn't have the write_suites scope")

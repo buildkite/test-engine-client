@@ -10,9 +10,34 @@ import (
 
 const fallbackExtra = "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual."
 
-// warn prints a recoverable warning to stderr followed by the fallback notice.
-func warn(label, message string) {
-	fmt.Fprintf(os.Stderr, "⚠️ %s: %s\n%s\n", label, message, fallbackExtra)
+// ANSI color codes. Disabled when NO_COLOR is set (https://no-color.org).
+var (
+	colorRed    = ansi("\033[31m")
+	colorYellow = ansi("\033[33m")
+	colorBold   = ansi("\033[1m")
+	colorReset  = ansi("\033[0m")
+)
+
+func ansi(code string) string {
+	if os.Getenv("NO_COLOR") != "" {
+		return ""
+	}
+	return code
+}
+
+// warn prints a recoverable warning to stderr followed by an optional hint
+// and the fallback notice.
+func warn(label, message string, hints ...string) {
+	fmt.Fprintf(os.Stderr, "%s⚠️ %s:%s %s\n", colorYellow+colorBold, label, colorReset, message)
+	for _, h := range hints {
+		fmt.Fprintln(os.Stderr, h)
+	}
+	fmt.Fprintf(os.Stderr, "%s%s%s\n", colorYellow, fallbackExtra, colorReset)
+}
+
+// fatal formats an unrecoverable error message with red bold styling.
+func fatal(label, message string) error {
+	return fmt.Errorf("%s❌ %s:%s %s", colorRed+colorBold, label, colorReset, message)
 }
 
 // handleError classifies API errors and prints user-facing messages to stderr.
@@ -35,25 +60,25 @@ func handleError(err error) error {
 	}
 
 	if notFoundError := new(api.NotFoundError); errors.As(err, &notFoundError) {
-		fmt.Fprintf(os.Stderr, "⚠️ Not Found: %s\nCheck BUILDKITE_ORGANIZATION_SLUG and BUILDKITE_TEST_ENGINE_SUITE_SLUG are correct.\n%s\n", notFoundError.Message, fallbackExtra)
+		warn("Not Found", notFoundError.Message, "Check BUILDKITE_ORGANIZATION_SLUG and BUILDKITE_TEST_ENGINE_SUITE_SLUG are correct.")
 		return nil
 	}
 
 	if authError := new(api.AuthError); errors.As(err, &authError) {
-		return fmt.Errorf("❌ Authentication Failed: %s", authError.Message)
+		return fatal("Authentication Failed", authError.Message)
 	}
 
 	if forbiddenError := new(api.ForbiddenError); errors.As(err, &forbiddenError) {
-		return fmt.Errorf("❌ Access Denied: %s", forbiddenError.Message)
+		return fatal("Access Denied", forbiddenError.Message)
 	}
 
 	if badRequestError := new(api.BadRequestError); errors.As(err, &badRequestError) {
-		return fmt.Errorf("❌ Invalid Request: %s", badRequestError.Message)
+		return fatal("Invalid Request", badRequestError.Message)
 	}
 
-	return err
+	return fmt.Errorf("%s❌ Unexpected error:%s %w", colorRed+colorBold, colorReset, err)
 }
 
 func warnErrorPlan() {
-	fmt.Fprintf(os.Stderr, "⚠️ Error Plan: The Test Engine API failed to generate a plan.\n%s\n", fallbackExtra)
+	warn("Error Plan", "The Test Engine API failed to generate a plan.")
 }

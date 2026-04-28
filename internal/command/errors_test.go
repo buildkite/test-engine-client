@@ -83,7 +83,10 @@ func TestHandleError_UnknownError(t *testing.T) {
 	originalErr := fmt.Errorf("something unexpected")
 	err := handleError(originalErr)
 
-	assert.Equal(t, originalErr, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Unexpected error:")
+	assert.Contains(t, err.Error(), "something unexpected")
+	assert.ErrorIs(t, err, originalErr)
 
 	stderr := getStderr()
 	assert.Empty(t, stderr)

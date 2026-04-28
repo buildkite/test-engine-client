@@ -226,6 +226,8 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 				return resp, fmt.Errorf("parsing response: %w", err)
 			}
 
+			// 5xx and 429 are handled above and trigger retries; here we only
+			// classify 4xx responses into typed errors.
 			switch resp.StatusCode {
 			case http.StatusUnauthorized:
 				return resp, &AuthError{Message: respError.Message}
