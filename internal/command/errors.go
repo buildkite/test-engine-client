@@ -25,19 +25,23 @@ func ansi(code string) string {
 	return code
 }
 
-// warn prints a recoverable warning to stderr followed by an optional hint
+// printWarn prints a recoverable warning to stderr followed by an optional hint
 // and the fallback notice.
-func warn(label, message string, hints ...string) {
-	fmt.Fprintf(os.Stderr, "%s⚠️ %s:%s %s\n", colorYellow+colorBold, label, colorReset, message)
+func printWarn(label, message string, hints ...string) {
+	fmt.Fprintf(os.Stderr, "%s⚠️ %s: %s\n", colorYellow+colorBold, label, message)
 	for _, h := range hints {
-		fmt.Fprintln(os.Stderr, h)
+		fmt.Fprintln(os.Stderr, colorYellow+h+colorReset)
 	}
 	fmt.Fprintf(os.Stderr, "%s%s%s\n", colorYellow, fallbackExtra, colorReset)
 }
 
 // fatal formats an unrecoverable error message with red bold styling.
-func fatal(label, message string) error {
-	return fmt.Errorf("%s❌ %s:%s %s", colorRed+colorBold, label, colorReset, message)
+// When a is an error, it is wrapped so callers can use errors.Is/As.
+func fatal(label string, a any) error {
+	if e, ok := a.(error); ok {
+		return fmt.Errorf("%s❌ %s: %w%s", colorRed+colorBold, label, e, colorReset)
+	}
+	return fmt.Errorf("%s❌ %s: %v%s", colorRed+colorBold, label, a, colorReset)
 }
 
 // handleError classifies API errors and prints user-facing messages to stderr.
@@ -45,22 +49,26 @@ func fatal(label, message string) error {
 // or a fatal error with a formatted message for unrecoverable failures.
 func handleError(err error) error {
 	if errors.Is(err, api.ErrRetryTimeout) {
-		warn("Timeout", "Test Engine API timed out")
+		printWarn("Timeout", "Test Engine API timed out")
 		return nil
 	}
 
 	if billingError := new(api.BillingError); errors.As(err, &billingError) {
-		warn("Billing Error", billingError.Message)
+		printWarn("Billing Error", billingError.Message)
 		return nil
 	}
 
+	// 422 from the Test Engine API on plan endpoints indicates the API is
+	// administratively disabled for the org (ANALYTICS_DISABLE_API feature flag).
+	// Surface it as "Unavailable" since it's a temporary, server-side disable
+	// rather than a client-side validation problem.
 	if unprocessableError := new(api.UnprocessableEntityError); errors.As(err, &unprocessableError) {
-		warn("Unavailable", unprocessableError.Message)
+		printWarn("Unavailable", unprocessableError.Message)
 		return nil
 	}
 
 	if notFoundError := new(api.NotFoundError); errors.As(err, &notFoundError) {
-		warn("Not Found", notFoundError.Message, "Check BUILDKITE_ORGANIZATION_SLUG and BUILDKITE_TEST_ENGINE_SUITE_SLUG are correct.")
+		printWarn("Not Found", notFoundError.Message, "Check BUILDKITE_ORGANIZATION_SLUG and BUILDKITE_TEST_ENGINE_SUITE_SLUG are correct.")
 		return nil
 	}
 
@@ -76,9 +84,9 @@ func handleError(err error) error {
 		return fatal("Invalid Request", badRequestError.Message)
 	}
 
-	return fmt.Errorf("%s❌ Unexpected error:%s %w", colorRed+colorBold, colorReset, err)
+	return fatal("Unexpected error", err)
 }
 
 func warnErrorPlan() {
-	warn("Error Plan", "The Test Engine API failed to generate a plan.")
+	printWarn("Error Plan", "The Test Engine API failed to generate a plan.")
 }
