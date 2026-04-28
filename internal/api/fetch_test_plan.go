@@ -22,7 +22,8 @@ func (c Client) FetchTestPlan(ctx context.Context, suiteSlug string, identifier 
 	}, &testPlan)
 
 	if err != nil {
-		if errors.As(err, new(*NotFoundError)) {
+		var notFoundErr *NotFoundError
+		if errors.As(err, &notFoundErr) {
 			return nil, nil
 		}
 		return nil, err

@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/buildkite/roko"
@@ -232,7 +232,7 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 			case http.StatusUnauthorized:
 				return resp, &AuthError{Message: respError.Message}
 			case http.StatusForbidden:
-				if matched := regexp.MustCompile(`^Billing Error`).MatchString(respError.Message); matched {
+				if strings.HasPrefix(respError.Message, "Billing Error") {
 					return resp, &BillingError{Message: respError.Message}
 				}
 				return resp, &ForbiddenError{Message: respError.Message}
