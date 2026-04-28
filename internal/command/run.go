@@ -63,7 +63,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
-		return fmt.Errorf("couldn't fetch or create test plan: %w", err)
+		return err
 	}
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)

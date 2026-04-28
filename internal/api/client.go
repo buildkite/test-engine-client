@@ -111,6 +111,14 @@ func (e *BadRequestError) Error() string {
 	return e.Message
 }
 
+type UnprocessableEntityError struct {
+	Message string
+}
+
+func (e *UnprocessableEntityError) Error() string {
+	return e.Message
+}
+
 type responseError struct {
 	Message string `json:"message"`
 }
@@ -230,6 +238,8 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 				return resp, &NotFoundError{Message: respError.Message}
 			case http.StatusBadRequest:
 				return resp, &BadRequestError{Message: respError.Message}
+			case http.StatusUnprocessableEntity:
+				return resp, &UnprocessableEntityError{Message: respError.Message}
 			default:
 				return resp, &respError
 			}

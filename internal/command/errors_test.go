@@ -36,29 +36,21 @@ func TestHandleError_BillingError(t *testing.T) {
 }
 
 func TestHandleError_AuthError(t *testing.T) {
-	getStderr := captureStderr(t)
-
 	authErr := &api.AuthError{Message: "Authentication required. Please supply a valid API Access Token: https://buildkite.com/docs/apis/rest-api#authentication"}
 	err := handleError(authErr)
 
-	assert.Equal(t, authErr, err)
-
-	stderr := getStderr()
-	assert.Contains(t, stderr, "❌ Authentication Failed:")
-	assert.Contains(t, stderr, "Authentication required. Please supply a valid API Access Token")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Authentication Failed:")
+	assert.Contains(t, err.Error(), "Authentication required. Please supply a valid API Access Token")
 }
 
 func TestHandleError_ForbiddenError(t *testing.T) {
-	getStderr := captureStderr(t)
-
 	forbiddenErr := &api.ForbiddenError{Message: "Your access token doesn't have the read_suites scope"}
 	err := handleError(forbiddenErr)
 
-	assert.Equal(t, forbiddenErr, err)
-
-	stderr := getStderr()
-	assert.Contains(t, stderr, "❌ Access Denied:")
-	assert.Contains(t, stderr, "Your access token doesn't have the read_suites scope")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Access Denied:")
+	assert.Contains(t, err.Error(), "Your access token doesn't have the read_suites scope")
 }
 
 func TestHandleError_NotFoundError(t *testing.T) {
@@ -72,21 +64,17 @@ func TestHandleError_NotFoundError(t *testing.T) {
 	stderr := getStderr()
 	assert.Contains(t, stderr, "⚠️ Not Found:")
 	assert.Contains(t, stderr, "No suite found")
-	assert.Contains(t, stderr, "BUILDKITE_TEST_ENGINE_SUITE_SLUG")
+	assert.Contains(t, stderr, "BUILDKITE_ORGANIZATION_SLUG and BUILDKITE_TEST_ENGINE_SUITE_SLUG")
 	assert.Contains(t, stderr, "Falling back to non-intelligent splitting")
 }
 
 func TestHandleError_BadRequestError(t *testing.T) {
-	getStderr := captureStderr(t)
-
 	badReqErr := &api.BadRequestError{Message: "Invalid parameters"}
 	err := handleError(badReqErr)
 
-	assert.Equal(t, badReqErr, err)
-
-	stderr := getStderr()
-	assert.Contains(t, stderr, "❌ Invalid Request:")
-	assert.Contains(t, stderr, "Invalid parameters")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Invalid Request:")
+	assert.Contains(t, err.Error(), "Invalid parameters")
 }
 
 func TestHandleError_UnknownError(t *testing.T) {
@@ -108,7 +96,6 @@ func TestWarnErrorPlan(t *testing.T) {
 
 	stderr := getStderr()
 	assert.Contains(t, stderr, "⚠️ Error Plan:")
-	assert.Contains(t, stderr, "Server returned an error plan")
-	assert.Contains(t, stderr, "Upload test results first")
+	assert.Contains(t, stderr, "Test Engine API failed to generate a plan")
 	assert.Contains(t, stderr, "Falling back to non-intelligent splitting")
 }

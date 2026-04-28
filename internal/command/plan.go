@@ -62,7 +62,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	testPlan, err := createTestPlan(ctx, cfg, files, apiClient, testRunner)
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
-			return fmt.Errorf("create test plan failed: %w", err)
+			return fmt.Errorf("create test plan failed: %w", handledErr)
 		}
 	}
 

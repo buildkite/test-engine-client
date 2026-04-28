@@ -547,7 +547,7 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	}
 
 	stderr := getStderr()
-	assert.Contains(t, stderr, "Server returned an error plan")
+	assert.Contains(t, stderr, "Test Engine API failed to generate a plan")
 }
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
@@ -605,8 +605,6 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	getStderr := captureStderr(t)
-
 	ctx := context.Background()
 
 	cfg := config.Config{
@@ -627,15 +625,13 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	if err == nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
 	}
-	assert.ErrorAs(t, err, new(*api.BadRequestError))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Invalid Request:")
+	assert.Contains(t, err.Error(), "Invalid parameters: runner is required")
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
-
-	stderr := getStderr()
-	assert.Contains(t, stderr, "Invalid request")
-	assert.Contains(t, stderr, "Invalid parameters: runner is required")
 }
 
 func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
@@ -691,8 +687,6 @@ func TestFetchOrCreateTestPlan_AuthError(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	getStderr := captureStderr(t)
-
 	ctx := context.Background()
 
 	cfg := config.Config{
@@ -712,14 +706,13 @@ func TestFetchOrCreateTestPlan_AuthError(t *testing.T) {
 	if err == nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got nil", cfg, files)
 	}
-	assert.ErrorAs(t, err, new(*api.AuthError))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Authentication Failed:")
+	assert.Contains(t, err.Error(), "Authentication required. Please supply a valid API Access Token")
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
-
-	stderr := getStderr()
-	assert.Contains(t, stderr, "Authentication failed")
 }
 
 func TestFetchOrCreateTestPlan_ForbiddenError(t *testing.T) {
@@ -734,8 +727,6 @@ func TestFetchOrCreateTestPlan_ForbiddenError(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	getStderr := captureStderr(t)
-
 	ctx := context.Background()
 
 	cfg := config.Config{
@@ -755,15 +746,13 @@ func TestFetchOrCreateTestPlan_ForbiddenError(t *testing.T) {
 	if err == nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got nil", cfg, files)
 	}
-	assert.ErrorAs(t, err, new(*api.ForbiddenError))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Access Denied:")
+	assert.Contains(t, err.Error(), "Your access token doesn't have the write_suites scope")
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
-
-	stderr := getStderr()
-	assert.Contains(t, stderr, "Access denied")
-	assert.Contains(t, stderr, "Your access token doesn't have the write_suites scope")
 }
 
 func TestSendMetadata(t *testing.T) {

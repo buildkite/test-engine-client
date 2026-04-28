@@ -8,69 +8,52 @@ import (
 	"github.com/buildkite/test-engine-client/internal/api"
 )
 
-type errorSeverity int
-
-const (
-	severityWarning errorSeverity = iota
-	severityFatal
-)
-
-func (s errorSeverity) icon() string {
-	if s == severityFatal {
-		return "❌"
-	}
-	return "⚠️"
-}
-
-// printError formats and prints a categorized error to stderr.
-// Format: icon error_type: message. fallbackMessage
-func printError(severity errorSeverity, errorType string, message string, fallbackMessage string) {
-	out := fmt.Sprintf("%s %s: %s", severity.icon(), errorType, message)
-	if fallbackMessage != "" {
-		out += "\n" + fallbackMessage
-	}
-	fmt.Fprintln(os.Stderr, out)
-}
-
 const fallbackExtra = "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual."
+
+// warn prints a recoverable warning to stderr followed by the fallback notice.
+func warn(label, message string) {
+	fmt.Fprintf(os.Stderr, "⚠️ %s: %s\n%s\n", label, message, fallbackExtra)
+}
 
 // handleError classifies API errors and prints user-facing messages to stderr.
 // Returns nil for recoverable errors (caller should fall back to non-intelligent splitting),
-// or the original error for unrecoverable failures.
+// or a fatal error with a formatted message for unrecoverable failures.
 func handleError(err error) error {
 	if errors.Is(err, api.ErrRetryTimeout) {
-		printError(severityWarning, "Timeout", "Test Engine API timed out", fallbackExtra)
+		warn("Timeout", "Test Engine API timed out")
 		return nil
 	}
 
 	if billingError := new(api.BillingError); errors.As(err, &billingError) {
-		printError(severityWarning, "Billing Error", billingError.Message, fallbackExtra)
+		warn("Billing Error", billingError.Message)
+		return nil
+	}
+
+	if unprocessableError := new(api.UnprocessableEntityError); errors.As(err, &unprocessableError) {
+		warn("Unavailable", unprocessableError.Message)
 		return nil
 	}
 
 	if notFoundError := new(api.NotFoundError); errors.As(err, &notFoundError) {
-		printError(severityWarning, "Not Found", notFoundError.Message, "Check BUILDKITE_TEST_ENGINE_SUITE_SLUG is correct. "+fallbackExtra)
+		fmt.Fprintf(os.Stderr, "⚠️ Not Found: %s\nCheck BUILDKITE_ORGANIZATION_SLUG and BUILDKITE_TEST_ENGINE_SUITE_SLUG are correct.\n%s\n", notFoundError.Message, fallbackExtra)
 		return nil
 	}
 
 	if authError := new(api.AuthError); errors.As(err, &authError) {
-		printError(severityFatal, "Authentication Failed", authError.Message, "")
-		return err
+		return fmt.Errorf("❌ Authentication Failed: %s", authError.Message)
 	}
 
 	if forbiddenError := new(api.ForbiddenError); errors.As(err, &forbiddenError) {
-		printError(severityFatal, "Access Denied", forbiddenError.Message, "")
-		return err
+		return fmt.Errorf("❌ Access Denied: %s", forbiddenError.Message)
 	}
 
 	if badRequestError := new(api.BadRequestError); errors.As(err, &badRequestError) {
-		printError(severityFatal, "Invalid Request", badRequestError.Message, "")
-		return err
+		return fmt.Errorf("❌ Invalid Request: %s", badRequestError.Message)
 	}
 
 	return err
 }
 
 func warnErrorPlan() {
-	printError(severityWarning, "Error Plan", "Server returned an error plan (possibly missing suite data or a server-side issue)", "Upload test results first to enable intelligent splitting. "+fallbackExtra)
+	fmt.Fprintf(os.Stderr, "⚠️ Error Plan: The Test Engine API failed to generate a plan.\n%s\n", fallbackExtra)
 }
