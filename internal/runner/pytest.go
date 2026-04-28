@@ -96,7 +96,7 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 
 	for _, test := range tests {
-		result.RecordTestResult(plan.TestCase{
+		tc := plan.TestCase{
 			Identifier: test.Id,
 			Format:     plan.TestCaseFormatExample,
 			Scope:      test.Scope,
@@ -104,7 +104,13 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 			// pytest can execute individual test using node id, which is a filename, classname (if any), and function, separated by `::`.
 			// Ref: https://docs.pytest.org/en/6.2.x/usage.html#nodeids
 			Path: fmt.Sprintf("%s::%s", test.Scope, test.Name),
-		}, test.Result)
+		}
+
+		if test.Tags["test.pytest_collection_error"] == "true" {
+			result.RecordCollectionError(tc)
+		} else {
+			result.RecordTestResult(tc, test.Result)
+		}
 	}
 
 	// Return any command error after processing the report

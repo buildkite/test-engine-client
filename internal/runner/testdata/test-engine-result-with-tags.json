@@ -1,0 +1,19 @@
+[
+  {
+    "id": "db2c4ffa-efee-4b6a-b293-a4c4168aa353",
+    "scope": "tests/test_sample.py",
+    "name": "test_happy",
+    "location": "tests/test_sample.py:0",
+    "file_name": "tests/test_sample.py",
+    "result": "passed"
+  },
+  {
+    "id": "c0ffee00-dead-beef-cafe-123456789abc",
+    "scope": "tests/broken_import.py",
+    "name": "tests/broken_import.py",
+    "location": "tests/broken_import.py",
+    "file_name": "tests/broken_import.py",
+    "result": "failed",
+    "tags": {"test.pytest_collection_error": "true"}
+  }
+]

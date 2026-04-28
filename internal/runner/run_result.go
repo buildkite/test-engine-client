@@ -76,17 +76,42 @@ func (r *RunResult) RecordTestResult(testCase plan.TestCase, status TestStatus) 
 	}
 }
 
+// RecordCollectionError records a test collection error (e.g. import failure).
+// Collection errors are recorded as failed but excluded from retries.
+func (r *RunResult) RecordCollectionError(testCase plan.TestCase) {
+	test := r.getTest(testCase)
+	test.Status = TestStatusFailed
+	test.CollectionError = true
+	test.ExecutionCount++
+	if r.mutedTestLookup[mutedTestIdentifier(testCase)] {
+		test.Muted = true
+	}
+}
+
 // FailedTests returns a list of test cases that failed.
+// Collection errors are excluded because retrying them is pointless
+// (the underlying issue is a broken import or syntax error, not a flaky test).
 func (r *RunResult) FailedTests() []plan.TestCase {
 	var failedTests []plan.TestCase
 
 	for _, test := range r.tests {
-		if test.Status == TestStatusFailed && !test.Muted {
+		if test.Status == TestStatusFailed && !test.Muted && !test.CollectionError {
 			failedTests = append(failedTests, test.TestCase)
 		}
 	}
 
 	return failedTests
+}
+
+// CollectionErrors returns test cases that failed due to collection errors (e.g. import failures).
+func (r *RunResult) CollectionErrors() []plan.TestCase {
+	var errors []plan.TestCase
+	for _, test := range r.tests {
+		if test.CollectionError && !test.Muted {
+			errors = append(errors, test.TestCase)
+		}
+	}
+	return errors
 }
 
 func (r *RunResult) MutedTests() []TestResult {
@@ -115,7 +140,7 @@ func (r *RunResult) FailedMutedTests() []plan.TestCase {
 	var failedTests []plan.TestCase
 
 	for _, test := range r.tests {
-		if test.Status == TestStatusFailed && test.Muted {
+		if test.Status == TestStatusFailed && test.Muted && !test.CollectionError {
 			failedTests = append(failedTests, test.TestCase)
 		}
 	}
@@ -126,6 +151,26 @@ func (r *RunResult) passedTestsCount() int {
 	count := 0
 	for _, test := range r.tests {
 		if test.Status == TestStatusPassed {
+			count++
+		}
+	}
+	return count
+}
+
+func (r *RunResult) collectionErrorCount() int {
+	count := 0
+	for _, test := range r.tests {
+		if test.CollectionError && !test.Muted {
+			count++
+		}
+	}
+	return count
+}
+
+func (r *RunResult) mutedCollectionErrorCount() int {
+	count := 0
+	for _, test := range r.tests {
+		if test.CollectionError && test.Muted {
 			count++
 		}
 	}
@@ -163,7 +208,7 @@ func (r *RunResult) OnlyMutedFailures() bool {
 
 // Status returns the overall status of the test run.
 // If there is an error, it returns RunStatusError.
-// If there are failed tests, it returns RunStatusFailed.
+// If there are any non-muted failed tests (including collection errors), it returns RunStatusFailed.
 // Otherwise, it returns RunStatusPassed.
 func (r *RunResult) Status() RunStatus {
 	if r.error != nil {
@@ -174,11 +219,11 @@ func (r *RunResult) Status() RunStatus {
 		return RunStatusUnknown
 	}
 
-	if len(r.FailedTests()) > 0 {
+	if len(r.FailedTests()) > 0 || r.collectionErrorCount() > 0 {
 		return RunStatusFailed
 	}
 
-	if r.passedTestsCount()+r.skippedTestsCount()+len(r.FailedMutedTests()) == len(r.tests) {
+	if r.passedTestsCount()+r.skippedTestsCount()+len(r.FailedMutedTests())+r.mutedCollectionErrorCount() == len(r.tests) {
 		return RunStatusPassed
 	}
 
@@ -241,8 +286,9 @@ type TestEngineTest struct {
 	Name     string
 	Scope    string
 	Location string
-	FileName string `json:"file_name,omitempty"`
+	FileName string            `json:"file_name,omitempty"`
 	Result   TestStatus
+	Tags     map[string]string `json:"tags,omitempty"`
 }
 
 func parseTestEngineTestResult(path string) ([]TestEngineTest, error) {

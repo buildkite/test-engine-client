@@ -171,6 +171,15 @@ func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.Tes
 			}
 		}
 
+		collectionErrors := runResult.CollectionErrors()
+		if len(collectionErrors) > 0 {
+			fmt.Println("")
+			fmt.Println("+++ Collection Errors (will not be retried):")
+			for _, ce := range collectionErrors {
+				fmt.Printf("- %s %s\n", ce.Scope, ce.Name)
+			}
+		}
+
 		failedTests := runResult.FailedTests()
 		if len(failedTests) > 0 {
 			fmt.Println("")
