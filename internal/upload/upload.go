@@ -13,10 +13,20 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
+	"github.com/buildkite/roko"
+	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/google/uuid"
+)
+
+// userAgent matches the format used by internal/api so all bktec HTTP
+// traffic is identifiable in server logs.
+var userAgent = fmt.Sprintf(
+	"Buildkite Test Engine Client/%s (%s/%s)",
+	version.Version, runtime.GOOS, runtime.GOARCH,
 )
 
 // EnvLookup mirrors the signature of os.LookupEnv so callers can pass it
@@ -117,52 +127,80 @@ func UploadFile(ctx context.Context, cfg Config, env EnvLookup, filename string,
 	return nil
 }
 
-// Upload sends test result data to Test Engine.
+// Upload sends test result data to Test Engine. Transient failures (network
+// errors, 429, 5xx) are retried with exponential backoff, matching the
+// behaviour of the internal/api client.
 func Upload(ctx context.Context, cfg Config, runEnv RunEnvMap, format string, filename string) (map[string]string, error) {
 	body, err := buildUploadData(runEnv, format, filename)
 	if err != nil {
 		return nil, fmt.Errorf("preparing upload data: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		cfg.UploadUrl,
-		body.buf,
+	// Snapshot the body bytes and content type so each retry attempt can
+	// build a fresh request with a re-readable body.
+	bodyBytes := body.buf.Bytes()
+	contentType := body.writer.FormDataContentType()
+
+	r := roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		roko.WithJitter(),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("creating HTTP request: %w", err)
-	}
 
-	req.Header.Set("Content-Type", body.writer.FormDataContentType())
-	req.Header.Set("Authorization", fmt.Sprintf(`Token token="%s"`, cfg.SuiteToken))
+	var respData map[string]string
+	err = r.DoWithContext(ctx, func(r *roko.Retrier) error {
+		if r.AttemptCount() > 0 {
+			debug.Printf("Retrying upload, attempt %d", r.AttemptCount())
+		}
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP error: %w", err)
-	}
-	defer resp.Body.Close()
-
-	status := resp.Status
-
-	// Currently this should get HTTP 202 Accepted, but let's be a bit permissive to future changes.
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
-		return nil, fmt.Errorf(
-			"expected HTTP %d or %d from Upload API, got %s",
-			http.StatusCreated,
-			http.StatusAccepted,
-			status,
+		req, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodPost,
+			cfg.UploadUrl,
+			bytes.NewReader(bodyBytes),
 		)
-	}
+		if err != nil {
+			r.Break()
+			return fmt.Errorf("creating HTTP request: %w", err)
+		}
 
-	// try to parse the response, but just warn if that fails
-	respData := make(map[string]string)
-	err = json.NewDecoder(resp.Body).Decode(&respData)
-	if err != nil && !errors.Is(err, io.EOF) {
-		slog.Warn("failed to parse response", "status", status, "error", err)
-	}
+		req.Header.Set("Content-Type", contentType)
+		req.Header.Set("Authorization", fmt.Sprintf(`Token token="%s"`, cfg.SuiteToken))
+		req.Header.Set("User-Agent", userAgent)
 
-	return respData, nil
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			// Network errors are retryable.
+			return fmt.Errorf("HTTP error: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Retryable server-side conditions.
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			return fmt.Errorf("server returned %s", resp.Status)
+		}
+
+		// Currently this should get HTTP 202 Accepted, but let's be a bit
+		// permissive to future changes.
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+			r.Break()
+			return fmt.Errorf(
+				"expected HTTP %d or %d from Upload API, got %s",
+				http.StatusCreated,
+				http.StatusAccepted,
+				resp.Status,
+			)
+		}
+
+		// try to parse the response, but just warn if that fails
+		respData = make(map[string]string)
+		if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil && !errors.Is(err, io.EOF) {
+			slog.Warn("failed to parse response", "status", resp.Status, "error", err)
+		}
+		return nil
+	})
+
+	return respData, err
 }
 
 func RunEnvFromEnv(env EnvLookup) (RunEnvMap, error) {
