@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Add `bktec upload <path>` to upload JUnit XML or JSON test results to Buildkite Test Engine. Authenticated via `--token` (env: `BUILDKITE_ANALYTICS_TOKEN`); upload format is inferred from the filename extension or set explicitly with `--format junit|json`. Requests carry the standard bktec User-Agent and retry on transient network errors and 5xx responses.
+
 ## 2.4.0 - 2026-04-17
 - Automatically collect git commit metadata on `bktec plan` when `--selection-strategy` is set. Commit info, diff stats, and context fields are sent with the plan request so test selection has the signal it needs without the caller shelling out to git. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Add `--collect-git-metadata` flag (env: `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA`) to `bktec plan` so pipelines can opt in to git metadata collection without using test selection. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
