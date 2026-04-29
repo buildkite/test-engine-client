@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestFilterTests_SlowFiles(t *testing.T) {
@@ -44,13 +42,39 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 			t.Errorf("Content-Type header = %q", got)
 		}
 
-		var got FilterTestsParams
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decoding request body: %v", err)
-		}
-		if diff := cmp.Diff(got, params, cmpopts.IgnoreUnexported(config.Config{})); diff != "" {
-			t.Errorf("request body diff (-got +want):\n%s", diff)
-		}
+		assertJSONBody(t, r.Body, `{
+			"files": [
+				{"path": "./cat_spec.rb"},
+				{"path": "./dog_spec.rb"},
+				{"path": "./turtle_spec.rb"}
+			],
+			"env": {
+				"BUILDKITE_BRANCH": "",
+				"BUILDKITE_BUILD_ID": "",
+				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": false,
+				"BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS": false,
+				"BUILDKITE_TEST_ENGINE_IDENTIFIER": "",
+				"BUILDKITE_JOB_ID": "",
+				"BUILDKITE_RETRY_COUNT": 0,
+				"BUILDKITE_TEST_ENGINE_LOCATION_PREFIX": "",
+				"BUILDKITE_TEST_ENGINE_MAX_PARALLELISM": 0,
+				"BUILDKITE_TEST_ENGINE_RETRY_COUNT": 0,
+				"BUILDKITE_PARALLEL_JOB": 0,
+				"BUILDKITE_ORGANIZATION_SLUG": "",
+				"BUILDKITE_PARALLEL_JOB_COUNT": 3,
+				"BUILDKITE_TEST_ENGINE_RETRY_CMD": "",
+				"BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY": "",
+				"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE": true,
+				"BUILDKITE_STEP_ID": "",
+				"BUILDKITE_TEST_ENGINE_SUITE_SLUG": "",
+				"BUILDKITE_TEST_ENGINE_TAG_FILTERS": "",
+				"BUILDKITE_TEST_ENGINE_TARGET_TIME": 0,
+				"BUILDKITE_TEST_ENGINE_TEST_CMD": "",
+				"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN": "",
+				"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN": "",
+				"BUILDKITE_TEST_ENGINE_TEST_RUNNER": ""
+			}
+		}`)
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = io.WriteString(w, `{"tests": [{"path": "./turtle_spec.rb"}]}`)

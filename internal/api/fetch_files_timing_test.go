@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -30,14 +29,14 @@ func TestFetchFilesTiming(t *testing.T) {
 			t.Errorf("Content-Type header = %q", got)
 		}
 
-		var got fetchFilesTimingParams
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decoding request body: %v", err)
-		}
-		want := fetchFilesTimingParams{Paths: files}
-		if diff := cmp.Diff(got, want); diff != "" {
-			t.Errorf("request body diff (-got +want):\n%s", diff)
-		}
+		assertJSONBody(t, r.Body, `{
+			"paths": [
+				"apple_spec.rb",
+				"banana_spec.rb",
+				"cherry_spec.rb",
+				"dragonfruit_spec.rb"
+			]
+		}`)
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = io.WriteString(w, `{

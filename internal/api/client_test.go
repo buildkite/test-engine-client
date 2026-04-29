@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,24 @@ import (
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/google/go-cmp/cmp"
 )
+
+// assertJSONBody asserts that body decodes to the same JSON value as want.
+// Comparison is structural so whitespace and key order are ignored, but JSON
+// tag changes (e.g. renaming `json:"target_time"` to `json:"targetTime"`) will
+// surface because want is a literal and will not move with the struct.
+func assertJSONBody(t *testing.T, body io.Reader, want string) {
+	t.Helper()
+	var gotJSON, wantJSON any
+	if err := json.NewDecoder(body).Decode(&gotJSON); err != nil {
+		t.Fatalf("decoding request body: %v", err)
+	}
+	if err := json.Unmarshal([]byte(want), &wantJSON); err != nil {
+		t.Fatalf("decoding want JSON: %v", err)
+	}
+	if diff := cmp.Diff(wantJSON, gotJSON); diff != "" {
+		t.Errorf("request body diff (-want +got):\n%s", diff)
+	}
+}
 
 func TestNewClient(t *testing.T) {
 	// Create a new client with the given configuration.

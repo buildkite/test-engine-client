@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -50,13 +49,15 @@ func TestCreateTestPlan(t *testing.T) {
 			t.Errorf("Content-Type header = %q", got)
 		}
 
-		var got TestPlanParams
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decoding request body: %v", err)
-		}
-		if diff := cmp.Diff(got, params); diff != "" {
-			t.Errorf("request body diff (-got +want):\n%s", diff)
-		}
+		assertJSONBody(t, r.Body, `{
+			"runner": "rspec",
+			"identifier": "abc123",
+			"parallelism": 3,
+			"branch": "tet-123-add-branch-name",
+			"tests": {"files": [{"path": "sky_spec.rb"}]},
+			"selection": {"strategy": "least-reliable", "params": {"top": "100"}},
+			"metadata": {"git_diff": "line1\nline2"}
+		}`)
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = io.WriteString(w, `{
@@ -133,13 +134,23 @@ func TestCreateTestPlan_SplitByExample(t *testing.T) {
 	}
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var got TestPlanParams
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decoding request body: %v", err)
-		}
-		if diff := cmp.Diff(got, params); diff != "" {
-			t.Errorf("request body diff (-got +want):\n%s", diff)
-		}
+		assertJSONBody(t, r.Body, `{
+			"runner": "rspec",
+			"identifier": "abc123",
+			"parallelism": 3,
+			"branch": "",
+			"tests": {
+				"files": [{"path": "sky_spec.rb"}],
+				"examples": [{
+					"path": "sea_spec.rb:4",
+					"name": "is blue",
+					"scope": "sea",
+					"identifier": "sea_spec.rb[1,1]"
+				}]
+			},
+			"selection": {"strategy": "percent", "params": {"percent": "40"}},
+			"metadata": {"source": "cli"}
+		}`)
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = io.WriteString(w, `{
@@ -241,13 +252,13 @@ func TestCreateTestPlan_MutedTests(t *testing.T) {
 	}
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var got TestPlanParams
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decoding request body: %v", err)
-		}
-		if diff := cmp.Diff(got, params); diff != "" {
-			t.Errorf("request body diff (-got +want):\n%s", diff)
-		}
+		assertJSONBody(t, r.Body, `{
+			"runner": "rspec",
+			"identifier": "abc123",
+			"parallelism": 3,
+			"branch": "tet-123-add-branch-name",
+			"tests": {"files": [{"path": "sky_spec.rb"}]}
+		}`)
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = io.WriteString(w, `{

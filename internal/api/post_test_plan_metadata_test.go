@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,8 +10,6 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/runner"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestPostTestPlanMetadata(t *testing.T) {
@@ -46,13 +43,48 @@ func TestPostTestPlanMetadata(t *testing.T) {
 			t.Errorf("Content-Type header = %q", got)
 		}
 
-		var got TestPlanMetadataParams
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decoding request body: %v", err)
-		}
-		if diff := cmp.Diff(got, params, cmpopts.IgnoreUnexported(config.Config{})); diff != "" {
-			t.Errorf("request body diff (-got +want):\n%s", diff)
-		}
+		assertJSONBody(t, r.Body, `{
+			"version": "0.7.0",
+			"env": {
+				"BUILDKITE_BRANCH": "",
+				"BUILDKITE_BUILD_ID": "",
+				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": false,
+				"BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS": false,
+				"BUILDKITE_TEST_ENGINE_IDENTIFIER": "abc123",
+				"BUILDKITE_JOB_ID": "",
+				"BUILDKITE_RETRY_COUNT": 0,
+				"BUILDKITE_TEST_ENGINE_LOCATION_PREFIX": "",
+				"BUILDKITE_TEST_ENGINE_MAX_PARALLELISM": 0,
+				"BUILDKITE_TEST_ENGINE_RETRY_COUNT": 0,
+				"BUILDKITE_PARALLEL_JOB": 1,
+				"BUILDKITE_ORGANIZATION_SLUG": "",
+				"BUILDKITE_PARALLEL_JOB_COUNT": 3,
+				"BUILDKITE_TEST_ENGINE_RETRY_CMD": "",
+				"BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY": "",
+				"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE": false,
+				"BUILDKITE_STEP_ID": "",
+				"BUILDKITE_TEST_ENGINE_SUITE_SLUG": "my_slug",
+				"BUILDKITE_TEST_ENGINE_TAG_FILTERS": "",
+				"BUILDKITE_TEST_ENGINE_TARGET_TIME": 0,
+				"BUILDKITE_TEST_ENGINE_TEST_CMD": "",
+				"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN": "",
+				"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN": "",
+				"BUILDKITE_TEST_ENGINE_TEST_RUNNER": ""
+			},
+			"timeline": [
+				{"event": "test_start", "timestamp": "2024-06-20T04:46:13.60977Z"},
+				{"event": "test_end", "timestamp": "2024-06-20T04:49:09.609793Z"}
+			],
+			"statistics": {
+				"total": 3,
+				"passed_on_first_run": 0,
+				"passed_on_retry": 0,
+				"muted_passed": 0,
+				"muted_failed": 0,
+				"failed": 0,
+				"skipped": 0
+			}
+		}`)
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = io.WriteString(w, `{"head": "no_content"}`)
