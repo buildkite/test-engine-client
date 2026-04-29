@@ -40,6 +40,9 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer asdf1234" {
 			t.Errorf("Authorization header = %q", got)
 		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type header = %q", got)
+		}
 
 		var got FilterTestsParams
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
