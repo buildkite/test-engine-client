@@ -21,6 +21,13 @@ var uploadTokenFlag = &cli.StringFlag{
 	Destination: &uploadConfig.SuiteToken,
 }
 
+var uploadFormatFlag = &cli.StringFlag{
+	Name:     "format",
+	Category: "TEST ENGINE",
+	Usage:    "Upload format: junit or json. When unset, inferred from filename extension.",
+	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_FORMAT"),
+}
+
 var uploadUrlFlag = &cli.StringFlag{
 	Name:        "upload-url",
 	Category:    "TEST ENGINE",
@@ -592,6 +599,7 @@ var cliCommand = &cli.Command{
 			Action:    uploadAction,
 			Flags: []cli.Flag{
 				uploadTokenFlag,
+				uploadFormatFlag,
 				uploadUrlFlag,
 			},
 		},

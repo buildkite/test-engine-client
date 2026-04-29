@@ -47,9 +47,32 @@ const uploadTimeout = 5 * time.Minute
 // httpClient is the HTTP client used for upload requests.
 var httpClient = &http.Client{Timeout: uploadTimeout}
 
+// validFormats are the upload formats accepted by Test Engine.
+var validFormats = map[string]bool{"junit": true, "json": true}
+
+// inferFormat picks an upload format based on the filename extension.
+func inferFormat(filename string) (string, error) {
+	switch filepath.Ext(filename) {
+	case ".xml":
+		return "junit", nil
+	case ".json":
+		return "json", nil
+	default:
+		return "", fmt.Errorf("could not infer format from filename %q; pass --format junit|json", filename)
+	}
+}
+
+func validateFormat(format string) error {
+	if !validFormats[format] {
+		return fmt.Errorf("invalid format %q; must be one of: junit, json", format)
+	}
+	return nil
+}
+
 // UploadFile uploads the given test results file to Test Engine, deriving
-// run-env metadata from env.
-func UploadFile(ctx context.Context, cfg Config, env EnvLookup, filename string) error {
+// run-env metadata from env. If format is empty, it is inferred from the
+// filename extension.
+func UploadFile(ctx context.Context, cfg Config, env EnvLookup, filename string, format string) error {
 	if cfg.SuiteToken == "" {
 		return fmt.Errorf("BUILDKITE_ANALYTICS_TOKEN missing")
 	}
@@ -68,14 +91,13 @@ func UploadFile(ctx context.Context, cfg Config, env EnvLookup, filename string)
 		return fmt.Errorf("not a regular file: %s", filename)
 	}
 
-	var format string
-	switch filepath.Ext(filename) {
-	case ".xml":
-		format = "junit"
-	case ".json":
-		format = "json"
-	default:
-		return fmt.Errorf("could not infer format (JUnit / JSON) from filename")
+	if format == "" {
+		format, err = inferFormat(filename)
+		if err != nil {
+			return err
+		}
+	} else if err := validateFormat(format); err != nil {
+		return err
 	}
 
 	runEnv, err := RunEnvFromEnv(env)
