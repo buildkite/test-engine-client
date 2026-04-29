@@ -135,6 +135,42 @@ var jobIDFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+var commitFlag = &cli.StringFlag{
+	Name:        "commit",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Git commit SHA being built",
+	Sources:     cli.EnvVars("BUILDKITE_COMMIT"),
+	Destination: &cfg.Commit,
+	Hidden:      true,
+}
+
+var messageFlag = &cli.StringFlag{
+	Name:        "message",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite build message",
+	Sources:     cli.EnvVars("BUILDKITE_MESSAGE"),
+	Destination: &cfg.Message,
+	Hidden:      true,
+}
+
+var buildNumberFlag = &cli.StringFlag{
+	Name:        "build-number",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite build number",
+	Sources:     cli.EnvVars("BUILDKITE_BUILD_NUMBER"),
+	Destination: &cfg.BuildNumber,
+	Hidden:      true,
+}
+
+var buildUrlFlag = &cli.StringFlag{
+	Name:        "build-url",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite build URL",
+	Sources:     cli.EnvVars("BUILDKITE_BUILD_URL"),
+	Destination: &cfg.BuildUrl,
+	Hidden:      true,
+}
+
 var stepIDFlag = &cli.StringFlag{
 	Name:        "step-id",
 	Category:    "BUILD ENVIRONMENT",
@@ -601,6 +637,14 @@ var cliCommand = &cli.Command{
 				uploadTokenFlag,
 				uploadFormatFlag,
 				uploadUrlFlag,
+				// Build environment values used to populate run_env on uploads.
+				buildIDFlag,
+				branchFlag,
+				commitFlag,
+				jobIDFlag,
+				messageFlag,
+				buildNumberFlag,
+				buildUrlFlag,
 			},
 		},
 		{

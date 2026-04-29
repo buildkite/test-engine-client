@@ -20,15 +20,15 @@ import (
 )
 
 func TestBuildRunEnv(t *testing.T) {
-	runEnv, err := RunEnvFromEnv(mapLookup(map[string]string{
-		"BUILDKITE_BUILD_ID":     "thebuild",
-		"BUILDKITE_BRANCH":       "trunk",
-		"BUILDKITE_COMMIT":       "cafe",
-		"BUILDKITE_JOB_ID":       "thejob",
-		"BUILDKITE_MESSAGE":      "hello world",
-		"BUILDKITE_BUILD_NUMBER": "42",
-		"BUILDKITE_BUILD_URL":    "http://localhost/builds/42",
-	}))
+	runEnv, err := RunEnvFromBuildEnv(BuildEnv{
+		BuildId:     "thebuild",
+		Branch:      "trunk",
+		Commit:      "cafe",
+		JobId:       "thejob",
+		Message:     "hello world",
+		BuildNumber: "42",
+		BuildUrl:    "http://localhost/builds/42",
+	})
 	if err != nil {
 		t.Errorf("buildRunEnv(): %v", err)
 	}
@@ -52,7 +52,7 @@ func TestBuildRunEnv(t *testing.T) {
 }
 
 func TestBuildRunEnv_generic(t *testing.T) {
-	runEnv, err := RunEnvFromEnv(mapLookup(map[string]string{}))
+	runEnv, err := RunEnvFromBuildEnv(BuildEnv{})
 	if err != nil {
 		t.Errorf("buildRunEnv(): %v", err)
 	}
@@ -223,11 +223,8 @@ func TestUploadFile_EndToEnd(t *testing.T) {
 	defer srv.Close()
 
 	cfg := Config{UploadUrl: srv.URL, SuiteToken: "tok"}
-	env := mapLookup(map[string]string{
-		"BUILDKITE_BUILD_ID": "build-1",
-		"BUILDKITE_BRANCH":   "main",
-	})
-	if err := UploadFile(context.Background(), cfg, env, filename, ""); err != nil {
+	build := BuildEnv{BuildId: "build-1", Branch: "main"}
+	if err := UploadFile(context.Background(), cfg, build, filename, ""); err != nil {
 		t.Fatalf("UploadFile: %v", err)
 	}
 	if got, want := gotData["format"], "junit"; got != want {
@@ -240,7 +237,7 @@ func TestUploadFile_EndToEnd(t *testing.T) {
 
 func TestUploadFile_MissingToken(t *testing.T) {
 	cfg := Config{}
-	err := UploadFile(context.Background(), cfg, mapLookup(nil), "any.xml", "")
+	err := UploadFile(context.Background(), cfg, BuildEnv{}, "any.xml", "")
 	if err == nil || !strings.Contains(err.Error(), "BUILDKITE_ANALYTICS_TOKEN") {
 		t.Errorf("err = %v, want missing-token error", err)
 	}
@@ -265,7 +262,7 @@ func TestUploadFile_FormatOverride(t *testing.T) {
 	defer srv.Close()
 
 	cfg := Config{UploadUrl: srv.URL, SuiteToken: "t"}
-	if err := UploadFile(context.Background(), cfg, mapLookup(nil), f.Name(), "json"); err != nil {
+	if err := UploadFile(context.Background(), cfg, BuildEnv{}, f.Name(), "json"); err != nil {
 		t.Fatalf("UploadFile: %v", err)
 	}
 	if gotFormat != "json" {
@@ -275,7 +272,7 @@ func TestUploadFile_FormatOverride(t *testing.T) {
 
 func TestUploadFile_StatErrorIsWrapped(t *testing.T) {
 	cfg := Config{UploadUrl: "http://unused", SuiteToken: "t"}
-	err := UploadFile(context.Background(), cfg, mapLookup(nil), "/no/such/file.xml", "")
+	err := UploadFile(context.Background(), cfg, BuildEnv{}, "/no/such/file.xml", "")
 	if err == nil {
 		t.Fatal("expected error for missing file")
 	}
@@ -293,17 +290,9 @@ func TestUploadFile_FormatInferenceFailsWithoutExtension(t *testing.T) {
 	defer os.Remove(f.Name())
 
 	cfg := Config{UploadUrl: "http://unused", SuiteToken: "t"}
-	err = UploadFile(context.Background(), cfg, mapLookup(nil), f.Name(), "")
+	err = UploadFile(context.Background(), cfg, BuildEnv{}, f.Name(), "")
 	if err == nil || !strings.Contains(err.Error(), "could not infer format") {
 		t.Errorf("err = %v, want infer-format error", err)
-	}
-}
-
-// mapLookup adapts a map to the EnvLookup function signature.
-func mapLookup(m map[string]string) EnvLookup {
-	return func(k string) (string, bool) {
-		v, ok := m[k]
-		return v, ok
 	}
 }
 

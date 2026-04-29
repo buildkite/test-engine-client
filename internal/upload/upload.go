@@ -29,11 +29,21 @@ var userAgent = fmt.Sprintf(
 	version.Version, runtime.GOOS, runtime.GOARCH,
 )
 
-// EnvLookup mirrors the signature of os.LookupEnv so callers can pass it
-// directly, while tests can substitute a map-backed lookup.
-type EnvLookup func(key string) (value string, ok bool)
-
 type RunEnvMap map[string]string
+
+// BuildEnv carries the runtime build/job context that ends up in the upload
+// run_env metadata. Fields are typically populated from cli flags (which in
+// turn read BUILDKITE_* env vars) so the upload package itself does not
+// touch os.Environ.
+type BuildEnv struct {
+	BuildId     string
+	Branch      string
+	Commit      string
+	JobId       string
+	Message     string
+	BuildNumber string
+	BuildUrl    string
+}
 
 // Config is upload-specific configuration. UploadUrl and SuiteToken are
 // typically populated from cli flags in cmd/main.
@@ -79,10 +89,9 @@ func validateFormat(format string) error {
 	return nil
 }
 
-// UploadFile uploads the given test results file to Test Engine, deriving
-// run-env metadata from env. If format is empty, it is inferred from the
-// filename extension.
-func UploadFile(ctx context.Context, cfg Config, env EnvLookup, filename string, format string) error {
+// UploadFile uploads the given test results file to Test Engine. If format
+// is empty, it is inferred from the filename extension.
+func UploadFile(ctx context.Context, cfg Config, build BuildEnv, filename string, format string) error {
 	if cfg.SuiteToken == "" {
 		return fmt.Errorf("BUILDKITE_ANALYTICS_TOKEN missing")
 	}
@@ -110,7 +119,7 @@ func UploadFile(ctx context.Context, cfg Config, env EnvLookup, filename string,
 		return err
 	}
 
-	runEnv, err := RunEnvFromEnv(env)
+	runEnv, err := RunEnvFromBuildEnv(build)
 	if err != nil {
 		return fmt.Errorf("unable to derive runEnv: %w", err)
 	}
@@ -203,24 +212,26 @@ func Upload(ctx context.Context, cfg Config, runEnv RunEnvMap, format string, fi
 	return respData, err
 }
 
-func RunEnvFromEnv(env EnvLookup) (RunEnvMap, error) {
-	get := func(k string) string { v, _ := env(k); return v }
-
+// RunEnvFromBuildEnv builds the run_env map sent to the upload API. When
+// build.BuildId is set we treat the run as Buildkite-originated and emit the
+// full set of build context fields; otherwise we emit a generic-CI run with
+// a fresh UUIDv7 key.
+func RunEnvFromBuildEnv(build BuildEnv) (RunEnvMap, error) {
 	runEnv := RunEnvMap{
 		"collector": "bktec",
 		"version":   version.Version,
 	}
 
-	if _, ok := env("BUILDKITE_BUILD_ID"); ok {
+	if build.BuildId != "" {
 		maps.Copy(runEnv, RunEnvMap{
 			"CI":         "buildkite",
-			"branch":     get("BUILDKITE_BRANCH"),
-			"commit_sha": get("BUILDKITE_COMMIT"),
-			"job_id":     get("BUILDKITE_JOB_ID"),
-			"key":        get("BUILDKITE_BUILD_ID"),
-			"message":    get("BUILDKITE_MESSAGE"),
-			"number":     get("BUILDKITE_BUILD_NUMBER"),
-			"url":        get("BUILDKITE_BUILD_URL"),
+			"branch":     build.Branch,
+			"commit_sha": build.Commit,
+			"job_id":     build.JobId,
+			"key":        build.BuildId,
+			"message":    build.Message,
+			"number":     build.BuildNumber,
+			"url":        build.BuildUrl,
 		})
 	} else {
 		key, err := uuid.NewV7()

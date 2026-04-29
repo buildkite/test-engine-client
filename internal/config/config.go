@@ -7,8 +7,12 @@ type Config struct {
 	// AccessToken is the access token for the API.
 	AccessToken string `json:"-"`
 	// Branch is the string value of the git branch name, used by Buildkite only.
-	Branch  string `json:"BUILDKITE_BRANCH"`
-	BuildId string `json:"BUILDKITE_BUILD_ID"`
+	Branch      string `json:"BUILDKITE_BRANCH"`
+	BuildId     string `json:"BUILDKITE_BUILD_ID"`
+	BuildNumber string `json:"BUILDKITE_BUILD_NUMBER"`
+	BuildUrl    string `json:"BUILDKITE_BUILD_URL"`
+	// Commit is the git commit SHA being built.
+	Commit string `json:"BUILDKITE_COMMIT"`
 	// CollectGitMetadata enables git metadata auto-collection on plan without requiring --selection-strategy to be set.
 	CollectGitMetadata bool `json:"-"`
 	// Concurrency is the number of concurrent git operations for diff collection (default 10).
@@ -22,6 +26,7 @@ type Config struct {
 	// Identifier is the identifier of the build.
 	Identifier string `json:"BUILDKITE_TEST_ENGINE_IDENTIFIER"`
 	JobId      string `json:"BUILDKITE_JOB_ID"`
+	Message    string `json:"BUILDKITE_MESSAGE"`
 	// JobRetryCount is the count of the number of times the job has been retried.
 	JobRetryCount int `json:"BUILDKITE_RETRY_COUNT"`
 	// LocationPrefix is prepended to test file paths when requesting a test plan.

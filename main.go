@@ -77,7 +77,17 @@ func uploadAction(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("expected exactly one argument: path to JUnit XML or JSON file")
 	}
 
-	return upload.UploadFile(ctx, uploadConfig, os.LookupEnv, cmd.Args().First(), cmd.String("format"))
+	build := upload.BuildEnv{
+		BuildId:     cfg.BuildId,
+		Branch:      cfg.Branch,
+		Commit:      cfg.Commit,
+		JobId:       cfg.JobId,
+		Message:     cfg.Message,
+		BuildNumber: cfg.BuildNumber,
+		BuildUrl:    cfg.BuildUrl,
+	}
+
+	return upload.UploadFile(ctx, uploadConfig, build, cmd.Args().First(), cmd.String("format"))
 }
 
 func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error {
