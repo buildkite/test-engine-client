@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/version"
@@ -139,6 +140,152 @@ func TestUpload(t *testing.T) {
 	}
 }
 
+func TestUpload_RetriesOn5xxThenSucceeds(t *testing.T) {
+	filename, _ := createTestXML(t)
+	defer os.Remove(filename)
+
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 3 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		io.WriteString(w, `{"upload_url":"http://example/uploads/abc"}`)
+	}))
+	defer srv.Close()
+
+	cfg := Config{UploadUrl: srv.URL, SuiteToken: "t"}
+	resp, err := Upload(context.Background(), cfg, RunEnvMap{"key": "k"}, "junit", filename)
+	if err != nil {
+		t.Fatalf("Upload after retries: %v", err)
+	}
+	if attempts != 3 {
+		t.Errorf("attempts = %d, want 3", attempts)
+	}
+	if resp["upload_url"] != "http://example/uploads/abc" {
+		t.Errorf("response = %v", resp)
+	}
+}
+
+func TestUpload_DoesNotRetryOn4xx(t *testing.T) {
+	filename, _ := createTestXML(t)
+	defer os.Remove(filename)
+
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	cfg := Config{UploadUrl: srv.URL, SuiteToken: "t"}
+	_, err := Upload(context.Background(), cfg, RunEnvMap{"key": "k"}, "junit", filename)
+	if err == nil {
+		t.Fatal("expected error from 401 response")
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (no retry on 4xx)", attempts)
+	}
+}
+
+func TestUpload_SetsUserAgent(t *testing.T) {
+	filename, _ := createTestXML(t)
+	defer os.Remove(filename)
+
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	cfg := Config{UploadUrl: srv.URL, SuiteToken: "t"}
+	_, _ = Upload(context.Background(), cfg, RunEnvMap{"key": "k"}, "junit", filename)
+	if !strings.HasPrefix(gotUA, "Buildkite Test Engine Client/") {
+		t.Errorf("User-Agent = %q, want prefix %q", gotUA, "Buildkite Test Engine Client/")
+	}
+}
+
+func TestUploadFile_EndToEnd(t *testing.T) {
+	filename, _ := createTestXML(t)
+	defer os.Remove(filename)
+
+	var gotData map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotData, _ = multipartToMap(r)
+		w.WriteHeader(http.StatusAccepted)
+		io.WriteString(w, `{}`)
+	}))
+	defer srv.Close()
+
+	cfg := Config{UploadUrl: srv.URL, SuiteToken: "tok"}
+	env := mapLookup(map[string]string{
+		"BUILDKITE_BUILD_ID": "build-1",
+		"BUILDKITE_BRANCH":   "main",
+	})
+	if err := UploadFile(context.Background(), cfg, env, filename, ""); err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if got, want := gotData["format"], "junit"; got != want {
+		t.Errorf("format = %q, want %q", got, want)
+	}
+	if got, want := gotData["run_env[key]"], "build-1"; got != want {
+		t.Errorf("run_env[key] = %q, want %q", got, want)
+	}
+}
+
+func TestUploadFile_MissingToken(t *testing.T) {
+	cfg := Config{}
+	err := UploadFile(context.Background(), cfg, mapLookup(nil), "any.xml", "")
+	if err == nil || !strings.Contains(err.Error(), "BUILDKITE_ANALYTICS_TOKEN") {
+		t.Errorf("err = %v, want missing-token error", err)
+	}
+}
+
+func TestUploadFile_FormatOverride(t *testing.T) {
+	// File has no extension, but explicit --format wins.
+	f, err := os.CreateTemp("", "results")
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.WriteString(f, `{"ok":true}`)
+	f.Close()
+	defer os.Remove(f.Name())
+
+	var gotFormat string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := multipartToMap(r)
+		gotFormat = data["format"]
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	cfg := Config{UploadUrl: srv.URL, SuiteToken: "t"}
+	if err := UploadFile(context.Background(), cfg, mapLookup(nil), f.Name(), "json"); err != nil {
+		t.Fatalf("UploadFile: %v", err)
+	}
+	if gotFormat != "json" {
+		t.Errorf("format = %q, want json", gotFormat)
+	}
+}
+
+func TestUploadFile_FormatInferenceFailsWithoutExtension(t *testing.T) {
+	f, err := os.CreateTemp("", "results")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+
+	cfg := Config{UploadUrl: "http://unused", SuiteToken: "t"}
+	err = UploadFile(context.Background(), cfg, mapLookup(nil), f.Name(), "")
+	if err == nil || !strings.Contains(err.Error(), "could not infer format") {
+		t.Errorf("err = %v, want infer-format error", err)
+	}
+}
+
 // mapLookup adapts a map to the EnvLookup function signature.
 func mapLookup(m map[string]string) EnvLookup {
 	return func(k string) (string, bool) {
@@ -160,7 +307,7 @@ func cmpKeyValidUUID() cmp.Option {
 
 func createTestXML(t *testing.T) (string, string) {
 	data := `<testsuites><testsuite><testcase classname="a" name="b" /></testsuite></testsuites>`
-	f, err := os.CreateTemp("", "test.xml")
+	f, err := os.CreateTemp("", "test*.xml")
 	if err != nil {
 		t.Fatal(err)
 	}
