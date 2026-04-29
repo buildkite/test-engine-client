@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/google/uuid"
@@ -36,6 +37,15 @@ type Config struct {
 
 // DefaultUploadUrl is used when Config.UploadUrl is empty.
 const DefaultUploadUrl = "https://analytics-api.buildkite.com/v1/uploads"
+
+// uploadTimeout caps the total time for a single upload request, including
+// connection, TLS handshake, request body upload, and response read. Test
+// result files are typically small, but generous headroom protects against
+// slow networks and avoids the http.DefaultClient's "wait forever" default.
+const uploadTimeout = 5 * time.Minute
+
+// httpClient is the HTTP client used for upload requests.
+var httpClient = &http.Client{Timeout: uploadTimeout}
 
 // UploadFile uploads the given test results file to Test Engine, deriving
 // run-env metadata from env.
@@ -105,7 +115,7 @@ func Upload(ctx context.Context, cfg Config, runEnv RunEnvMap, format string, fi
 	req.Header.Set("Content-Type", body.writer.FormDataContentType())
 	req.Header.Set("Authorization", fmt.Sprintf(`Token token="%s"`, cfg.SuiteToken))
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP error: %w", err)
 	}
