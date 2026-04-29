@@ -96,7 +96,7 @@ func UploadFile(ctx context.Context, cfg Config, env EnvLookup, filename string,
 
 	info, err := os.Stat(filename)
 	if err != nil {
-		return fmt.Errorf("file does not exist: %s", filename)
+		return fmt.Errorf("cannot stat %s: %w", filename, err)
 	} else if !info.Mode().IsRegular() {
 		return fmt.Errorf("not a regular file: %s", filename)
 	}

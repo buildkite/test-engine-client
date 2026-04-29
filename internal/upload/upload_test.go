@@ -2,8 +2,10 @@ package upload
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -268,6 +270,17 @@ func TestUploadFile_FormatOverride(t *testing.T) {
 	}
 	if gotFormat != "json" {
 		t.Errorf("format = %q, want json", gotFormat)
+	}
+}
+
+func TestUploadFile_StatErrorIsWrapped(t *testing.T) {
+	cfg := Config{UploadUrl: "http://unused", SuiteToken: "t"}
+	err := UploadFile(context.Background(), cfg, mapLookup(nil), "/no/such/file.xml", "")
+	if err == nil {
+		t.Fatal("expected error for missing file")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("err = %v, want errors.Is(err, fs.ErrNotExist)", err)
 	}
 }
 
