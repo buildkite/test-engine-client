@@ -2,72 +2,65 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pact-foundation/pact-go/v2/consumer"
-	"github.com/pact-foundation/pact-go/v2/matchers"
 )
 
 func TestFetchFilesTiming(t *testing.T) {
-	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestEngineClient",
-		Provider: "TestEngineServer",
-	})
-
-	if err != nil {
-		t.Error("Error mocking provider", err)
-	}
-
 	files := []string{"apple_spec.rb", "banana_spec.rb", "cherry_spec.rb", "dragonfruit_spec.rb"}
 
-	err = mockProvider.
-		AddInteraction().
-		Given("Test file timings exist").
-		UponReceiving("A request for test file timings").
-		WithRequest("POST", "/v2/analytics/organizations/buildkite/suites/rspec/test_files", func(b *consumer.V2RequestBuilder) {
-			b.Header("Authorization", matchers.Like("Bearer asdf1234"))
-			b.JSONBody(fetchFilesTimingParams{
-				Paths: files,
-			})
-		}).
-		WillRespondWith(200, func(b *consumer.V2ResponseBuilder) {
-			b.Header("Content-Type", matchers.Like("application/json; charset=utf-8"))
-			b.JSONBody(matchers.MapMatcher{
-				"./apple_spec.rb":  matchers.Like(1121),
-				"./banana_spec.rb": matchers.Like(3121),
-				"./cherry_spec.rb": matchers.Like(2143),
-			})
-		}).
-		ExecuteTest(t, func(config consumer.MockServerConfig) error {
-			url := fmt.Sprintf("http://%s:%d", config.Host, config.Port)
-			c := NewClient(ClientConfig{
-				AccessToken:      "asdf1234",
-				OrganizationSlug: "buildkite",
-				ServerBaseUrl:    url,
-			})
-			got, err := c.FetchFilesTiming(context.Background(), "rspec", files)
-			if err != nil {
-				t.Errorf("FetchFilesTiming() error = %v", err)
-			}
-			want := map[string]time.Duration{
-				"./apple_spec.rb":  1121 * time.Millisecond,
-				"./banana_spec.rb": 3121 * time.Millisecond,
-				"./cherry_spec.rb": 2143 * time.Millisecond,
-			}
-			if diff := cmp.Diff(got, want); diff != "" {
-				t.Errorf("FetchFilesTiming() diff (-got +want):\n%s", diff)
-			}
-			return nil
-		})
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/v2/analytics/organizations/buildkite/suites/rspec/test_files" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer asdf1234" {
+			t.Errorf("Authorization header = %q", got)
+		}
 
+		var got fetchFilesTimingParams
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decoding request body: %v", err)
+		}
+		want := fetchFilesTimingParams{Paths: files}
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Errorf("request body diff (-got +want):\n%s", diff)
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"./apple_spec.rb": 1121,
+			"./banana_spec.rb": 3121,
+			"./cherry_spec.rb": 2143
+		}`)
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseUrl:    svr.URL,
+	})
+	got, err := c.FetchFilesTiming(context.Background(), "rspec", files)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("FetchFilesTiming() error = %v", err)
+	}
+	want := map[string]time.Duration{
+		"./apple_spec.rb":  1121 * time.Millisecond,
+		"./banana_spec.rb": 3121 * time.Millisecond,
+		"./cherry_spec.rb": 2143 * time.Millisecond,
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("FetchFilesTiming() diff (-got +want):\n%s", diff)
 	}
 }
 

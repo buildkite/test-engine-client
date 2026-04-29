@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Remove Pact contract testing for the Test Engine API. Consumer tests now use plain `httptest` fixtures (no behaviour change for users); the `internal/api/pacts/` directory, `pact-go` dependency, and `bin/{publish-pact,release-pact-version,pact-record-support-ended}` scripts have been deleted.
+
 ## 2.4.0 - 2026-04-17
 - Automatically collect git commit metadata on `bktec plan` when `--selection-strategy` is set. Commit info, diff stats, and context fields are sent with the plan request so test selection has the signal it needs without the caller shelling out to git. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Add `--collect-git-metadata` flag (env: `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA`) to `bktec plan` so pipelines can opt in to git metadata collection without using test selection. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.

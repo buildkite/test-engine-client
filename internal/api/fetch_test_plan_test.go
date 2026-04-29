@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,144 +11,98 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pact-foundation/pact-go/v2/consumer"
-	"github.com/pact-foundation/pact-go/v2/matchers"
 )
 
 func TestFetchTestPlan(t *testing.T) {
-	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestEngineClient",
-		Provider: "TestEngineServer",
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodGet)
+		}
+		if r.URL.Path != "/v2/analytics/organizations/buildkite/suites/rspec/test_plan" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("identifier"); got != "abc123" {
+			t.Errorf("identifier query = %q", got)
+		}
+		if got := r.URL.Query().Get("job_retry_count"); got != "0" {
+			t.Errorf("job_retry_count query = %q", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer asdf1234" {
+			t.Errorf("Authorization header = %q", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"tasks": {
+				"1": {
+					"node_number": 1,
+					"tests": [{
+						"path": "sky_spec.rb:2",
+						"format": "example",
+						"estimated_duration": 1000,
+						"identifier": "sky_spec.rb[1,1]",
+						"name": "is blue",
+						"scope": "sky"
+					}]
+				}
+			}
+		}`)
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseUrl:    svr.URL,
 	})
 
+	got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
 	if err != nil {
-		t.Error("Error mocking provider", err)
+		t.Fatalf("FetchTestPlan() error = %v", err)
 	}
 
-	err = mockProvider.
-		AddInteraction().
-		Given("A test plan exists").
-		UponReceiving("A request for test plan with identifier abc123").
-		WithRequest("GET", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan", func(b *consumer.V2RequestBuilder) {
-			b.Header("Authorization", matchers.Like("Bearer asdf1234"))
-			b.Query("identifier", matchers.Like("abc123"))
-			b.Query("job_retry_count", matchers.Like("0"))
-		}).
-		WillRespondWith(200, func(b *consumer.V2ResponseBuilder) {
-			b.Header("Content-Type", matchers.Like("application/json; charset=utf-8"))
-			b.JSONBody(matchers.MapMatcher{
-				"tasks": matchers.Like(map[string]interface{}{
-					"1": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(1),
-						"tests": matchers.EachLike(matchers.MapMatcher{
-							"path":               matchers.Like("sky_spec.rb:2"),
-							"format":             matchers.Like("example"),
-							"estimated_duration": matchers.Like(1000),
-							"identifier":         matchers.Like("sky_spec.rb[1,1]"),
-							"name":               matchers.Like("is blue"),
-							"scope":              matchers.Like("sky"),
-						}, 1),
-					}),
-				}),
-			})
-		}).
-		ExecuteTest(t, func(config consumer.MockServerConfig) error {
-			url := fmt.Sprintf("http://%s:%d", config.Host, config.Port)
+	want := plan.TestPlan{
+		Tasks: map[string]*plan.Task{
+			"1": {
+				NodeNumber: 1,
+				Tests: []plan.TestCase{{
+					Path:              "sky_spec.rb:2",
+					Identifier:        "sky_spec.rb[1,1]",
+					Name:              "is blue",
+					Scope:             "sky",
+					Format:            "example",
+					EstimatedDuration: 1000,
+				}},
+			},
+		},
+	}
 
-			cfg := ClientConfig{
-				AccessToken:      "asdf1234",
-				OrganizationSlug: "buildkite",
-				ServerBaseUrl:    url,
-			}
-
-			c := NewClient(cfg)
-
-			got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
-
-			if err != nil {
-				t.Errorf("FetchTestPlan() error = %v", err)
-			}
-
-			want := plan.TestPlan{
-				Tasks: map[string]*plan.Task{
-					"1": {
-						NodeNumber: 1,
-						Tests: []plan.TestCase{{
-							Path:              "sky_spec.rb:2",
-							Identifier:        "sky_spec.rb[1,1]",
-							Name:              "is blue",
-							Scope:             "sky",
-							Format:            "example",
-							EstimatedDuration: 1000,
-						}},
-					},
-				},
-			}
-
-			if diff := cmp.Diff(got, &want); diff != "" {
-				t.Errorf("FetchTestPlan() diff (-got +want):\n%s", diff)
-			}
-
-			return nil
-		})
-
-	if err != nil {
-		t.Error("mockProvider error", err)
+	if diff := cmp.Diff(got, &want); diff != "" {
+		t.Errorf("FetchTestPlan() diff (-got +want):\n%s", diff)
 	}
 }
 
 func TestFetchTestPlan_NotFound(t *testing.T) {
-	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestEngineClient",
-		Provider: "TestEngineServer",
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, `{"message": "Not found"}`)
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseUrl:    svr.URL,
 	})
 
+	got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
 	if err != nil {
-		t.Error("Error mocking provider", err)
+		t.Errorf("FetchTestPlan() error = %v", err)
 	}
 
-	err = mockProvider.
-		AddInteraction().
-		Given("A test plan doesn't exist").
-		UponReceiving("A request for test plan with identifier abc123").
-		WithRequest("GET", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan", func(b *consumer.V2RequestBuilder) {
-			b.
-				Header("Authorization", matchers.Like("Bearer asdf1234")).
-				Query("identifier", matchers.Like("abc123")).
-				Query("job_retry_count", matchers.Like("0"))
-		}).
-		WillRespondWith(404, func(b *consumer.V2ResponseBuilder) {
-			b.Header("Content-Type", matchers.Like("application/json; charset=utf-8"))
-			b.JSONBody(matchers.MapMatcher{
-				"message": matchers.Like("Not found"),
-			})
-		}).
-		ExecuteTest(t, func(config consumer.MockServerConfig) error {
-			url := fmt.Sprintf("http://%s:%d", config.Host, config.Port)
-
-			cfg := ClientConfig{
-				AccessToken:      "asdf1234",
-				OrganizationSlug: "buildkite",
-				ServerBaseUrl:    url,
-			}
-
-			c := NewClient(cfg)
-
-			got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
-
-			if err != nil {
-				t.Errorf("FetchTestPlan() error = %v", err)
-			}
-
-			if got != nil {
-				t.Errorf("FetchTestPlan() = %v, want nil", got)
-			}
-
-			return nil
-		})
-
-	if err != nil {
-		t.Error("mockProvider error", err)
+	if got != nil {
+		t.Errorf("FetchTestPlan() = %v, want nil", got)
 	}
 }
 

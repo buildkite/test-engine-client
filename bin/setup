@@ -1,26 +1,11 @@
 #!/usr/bin/env bash
 
-# install pact-go as a dev dependency
-go get github.com/pact-foundation/pact-go/v2
-
-# install the `pact-go` CLI
-go install github.com/pact-foundation/pact-go/v2
-
 go install gotest.tools/gotestsum@v1.8.0
 
 # Check if asdf is installed and being used for Go
 if command -v asdf &>/dev/null && asdf current golang &>/dev/null; then
   echo "🔄 Reshimming asdf golang..."
   asdf reshim golang
-fi
-
-# download and install the required libraries.
-# TODO if pact-go check return non- zero then install it
-if ! pact-go check &>/dev/null; then
-  echo "🔄 Installing pact-go dependencies..."
-  sudo pact-go -l DEBUG install
-else
-  echo "✅ pact-go dependencies already installed"
 fi
 
 echo "🛠️ Installing dependencies for sample projects..."
