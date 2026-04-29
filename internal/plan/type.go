@@ -22,6 +22,22 @@ type TestCase struct {
 	// In go test, the path can only be package name like "example.com/foo/bar".
 	Path  string `json:"path"`
 	Scope string `json:"scope,omitempty"`
+	// TimingSampleSize is the number of historical executions/runs behind this
+	// case's EstimatedDuration. For file-scoped cases this is distinct runs,
+	// for example-scoped cases this is raw executions. Defaults to 0 when no
+	// history is available or the field is missing on older/cached plans.
+	TimingSampleSize int `json:"timing_sample_size"`
+}
+
+// TimingMetadata describes the historical timing data the server used to
+// build the test plan. All durations are in milliseconds and may be
+// fractional (the server-side median can be the mean of two middle values).
+type TimingMetadata struct {
+	// MedianDuration is the median of historical timings used to backfill
+	// cases without history. Nil when no history existed at all.
+	MedianDuration *float64 `json:"median_duration"`
+	// DefaultDuration is the assumed duration when no history exists at all.
+	DefaultDuration float64 `json:"default_duration"`
 }
 
 // Task represents the task for the given node.
@@ -42,4 +58,8 @@ type TestPlan struct {
 	Fallback     bool
 	MutedTests   []TestCase `json:"muted_tests,omitempty"`
 	SkippedTests []TestCase `json:"skipped_tests,omitempty"`
+	// TimingMetadata describes the historical timing data the server used to
+	// build this plan. Nil when missing (e.g. error plans, plans cached before
+	// the server began emitting it).
+	TimingMetadata *TimingMetadata `json:"timing_metadata,omitempty"`
 }

@@ -72,6 +72,8 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
 	}
 
+	plan.PrintSplitSummary(os.Stderr, testPlan)
+
 	switch outputFormat {
 
 	case PlanOutputJSON:
