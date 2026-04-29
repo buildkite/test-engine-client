@@ -98,7 +98,7 @@ func TestFetchTestPlan_NotFound(t *testing.T) {
 
 	got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
 	if err != nil {
-		t.Errorf("FetchTestPlan() error = %v", err)
+		t.Fatalf("FetchTestPlan() error = %v", err)
 	}
 
 	if got != nil {
