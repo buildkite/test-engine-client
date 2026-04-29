@@ -16,54 +16,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestConfigFromEnv(t *testing.T) {
-	cfg, err := ConfigFromEnv(Map{
-		"BUILDKITE_ANALYTICS_TOKEN": "hunter2",
-	})
-	if err != nil {
-		t.Errorf("ConfigFromEnv(): %v", err)
-	}
-
-	want := Config{
-		UploadUrl:  "https://analytics-api.buildkite.com/v1/uploads",
-		SuiteToken: "hunter2",
-	}
-
-	if diff := cmp.Diff(want, cfg); diff != "" {
-		t.Errorf("ConfigFromEnv() (-want +got)\n%s", diff)
-	}
-}
-
-func TestConfigFromEnv_missingToken(t *testing.T) {
-	_, err := ConfigFromEnv(Map{})
-	if err == nil {
-		t.Fatal("expected error from ConfigFromEnv with no token")
-	}
-
-	want, got := "BUILDKITE_ANALYTICS_TOKEN missing", err.Error()
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("ConfigFromEnv() (-want +got):\n%s", diff)
-	}
-}
-
-func TestConfigFromEnv_uploadURL(t *testing.T) {
-	cfg, _ := ConfigFromEnv(Map{
-		"BUILDKITE_TEST_ENGINE_UPLOAD_URL": "http://localhost:1234/foo",
-		"BUILDKITE_ANALYTICS_TOKEN":        "hello",
-	})
-
-	want := Config{
-		UploadUrl:  "http://localhost:1234/foo",
-		SuiteToken: "hello",
-	}
-
-	if diff := cmp.Diff(want, cfg); diff != "" {
-		t.Errorf("ConfigFromEnv (-want +got)\n%s", diff)
-	}
-}
-
 func TestBuildRunEnv(t *testing.T) {
-	runEnv, err := RunEnvFromEnv(Map{
+	runEnv, err := RunEnvFromEnv(mapLookup(map[string]string{
 		"BUILDKITE_BUILD_ID":     "thebuild",
 		"BUILDKITE_BRANCH":       "trunk",
 		"BUILDKITE_COMMIT":       "cafe",
@@ -71,7 +25,7 @@ func TestBuildRunEnv(t *testing.T) {
 		"BUILDKITE_MESSAGE":      "hello world",
 		"BUILDKITE_BUILD_NUMBER": "42",
 		"BUILDKITE_BUILD_URL":    "http://localhost/builds/42",
-	})
+	}))
 	if err != nil {
 		t.Errorf("buildRunEnv(): %v", err)
 	}
@@ -95,7 +49,7 @@ func TestBuildRunEnv(t *testing.T) {
 }
 
 func TestBuildRunEnv_generic(t *testing.T) {
-	runEnv, err := RunEnvFromEnv(Map{})
+	runEnv, err := RunEnvFromEnv(mapLookup(map[string]string{}))
 	if err != nil {
 		t.Errorf("buildRunEnv(): %v", err)
 	}
@@ -182,6 +136,14 @@ func TestUpload(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantResponseData, responseData); diff != "" {
 		t.Errorf("HTTP response data (-want +got):\n%s", diff)
+	}
+}
+
+// mapLookup adapts a map to the EnvLookup function signature.
+func mapLookup(m map[string]string) EnvLookup {
+	return func(k string) (string, bool) {
+		v, ok := m[k]
+		return v, ok
 	}
 }
 

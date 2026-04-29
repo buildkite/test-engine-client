@@ -77,7 +77,7 @@ func uploadAction(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("expected exactly one argument: path to JUnit XML or JSON file")
 	}
 
-	return upload.UploadFile(ctx, upload.OS{}, cmd.Args().First())
+	return upload.UploadFile(ctx, uploadConfig, os.LookupEnv, cmd.Args().First())
 }
 
 func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error {

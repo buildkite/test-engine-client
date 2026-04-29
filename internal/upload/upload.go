@@ -18,63 +18,33 @@ import (
 	"github.com/google/uuid"
 )
 
-// Env abstracts environment variable access so it can be replaced for tests.
-type Env interface {
-	Get(key string) string
-	Lookup(key string) (string, bool)
-}
-
-// OS is an Env backed by the real operating system environment.
-type OS struct{}
-
-func (OS) Get(key string) string            { return os.Getenv(key) }
-func (OS) Lookup(key string) (string, bool) { return os.LookupEnv(key) }
-
-// Map is an Env backed by a map[string]string for testing.
-type Map map[string]string
-
-func (m Map) Get(key string) string { return m[key] }
-func (m Map) Lookup(key string) (string, bool) {
-	v, ok := m[key]
-	return v, ok
-}
+// EnvLookup mirrors the signature of os.LookupEnv so callers can pass it
+// directly, while tests can substitute a map-backed lookup.
+type EnvLookup func(key string) (value string, ok bool)
 
 type RunEnvMap map[string]string
 
-// Config is upload-specific configuration, but may also contain configuration
-// that is redundant with config.Config, since package upload isn't really
-// unified/integrated with the rest of bktec yet.
+// Config is upload-specific configuration. UploadUrl and SuiteToken are
+// typically populated from cli flags in cmd/main.
 type Config struct {
 	// UploadUrl is the Test Engine upload API endpoint e.g. https://analytics-api.buildkite.com/v1/uploads
 	UploadUrl string
 
-	// SuiteToken is the Test Engine upload API suite authentication token
+	// SuiteToken is the Test Engine upload API suite authentication token.
 	SuiteToken string
 }
 
-func ConfigFromEnv(env Env) (Config, error) {
-	url := env.Get("BUILDKITE_TEST_ENGINE_UPLOAD_URL")
-	if url == "" {
-		url = "https://analytics-api.buildkite.com/v1/uploads"
-	}
-
-	token := env.Get("BUILDKITE_ANALYTICS_TOKEN")
-	if token == "" {
-		return Config{}, fmt.Errorf("BUILDKITE_ANALYTICS_TOKEN missing")
-	}
-
-	return Config{
-		UploadUrl:  url,
-		SuiteToken: token,
-	}, nil
-}
+// DefaultUploadUrl is used when Config.UploadUrl is empty.
+const DefaultUploadUrl = "https://analytics-api.buildkite.com/v1/uploads"
 
 // UploadFile uploads the given test results file to Test Engine, deriving
-// configuration and run-env metadata from env.
-func UploadFile(ctx context.Context, env Env, filename string) error {
-	cfg, err := ConfigFromEnv(env)
-	if err != nil {
-		return fmt.Errorf("configuration error: %w", err)
+// run-env metadata from env.
+func UploadFile(ctx context.Context, cfg Config, env EnvLookup, filename string) error {
+	if cfg.SuiteToken == "" {
+		return fmt.Errorf("BUILDKITE_ANALYTICS_TOKEN missing")
+	}
+	if cfg.UploadUrl == "" {
+		cfg.UploadUrl = DefaultUploadUrl
 	}
 
 	if filename == "" {
@@ -163,22 +133,24 @@ func Upload(ctx context.Context, cfg Config, runEnv RunEnvMap, format string, fi
 	return respData, nil
 }
 
-func RunEnvFromEnv(env Env) (RunEnvMap, error) {
+func RunEnvFromEnv(env EnvLookup) (RunEnvMap, error) {
+	get := func(k string) string { v, _ := env(k); return v }
+
 	runEnv := RunEnvMap{
 		"collector": "bktec",
 		"version":   version.Version,
 	}
 
-	if _, ok := env.Lookup("BUILDKITE_BUILD_ID"); ok {
+	if _, ok := env("BUILDKITE_BUILD_ID"); ok {
 		maps.Copy(runEnv, RunEnvMap{
 			"CI":         "buildkite",
-			"branch":     env.Get("BUILDKITE_BRANCH"),
-			"commit_sha": env.Get("BUILDKITE_COMMIT"),
-			"job_id":     env.Get("BUILDKITE_JOB_ID"),
-			"key":        env.Get("BUILDKITE_BUILD_ID"),
-			"message":    env.Get("BUILDKITE_MESSAGE"),
-			"number":     env.Get("BUILDKITE_BUILD_NUMBER"),
-			"url":        env.Get("BUILDKITE_BUILD_URL"),
+			"branch":     get("BUILDKITE_BRANCH"),
+			"commit_sha": get("BUILDKITE_COMMIT"),
+			"job_id":     get("BUILDKITE_JOB_ID"),
+			"key":        get("BUILDKITE_BUILD_ID"),
+			"message":    get("BUILDKITE_MESSAGE"),
+			"number":     get("BUILDKITE_BUILD_NUMBER"),
+			"url":        get("BUILDKITE_BUILD_URL"),
 		})
 	} else {
 		key, err := uuid.NewV7()

@@ -6,8 +6,30 @@ import (
 	"os"
 	"strings"
 
+	"github.com/buildkite/test-engine-client/internal/upload"
 	"github.com/urfave/cli/v3"
 )
+
+// uploadConfig is populated by upload subcommand cli flags.
+var uploadConfig upload.Config
+
+var uploadTokenFlag = &cli.StringFlag{
+	Name:        "token",
+	Category:    "TEST ENGINE",
+	Usage:       "Buildkite Test Engine suite token used to authenticate uploads",
+	Sources:     cli.EnvVars("BUILDKITE_ANALYTICS_TOKEN"),
+	Destination: &uploadConfig.SuiteToken,
+}
+
+var uploadUrlFlag = &cli.StringFlag{
+	Name:        "upload-url",
+	Category:    "TEST ENGINE",
+	Usage:       "Buildkite Test Engine upload API endpoint",
+	Value:       upload.DefaultUploadUrl,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_URL"),
+	Destination: &uploadConfig.UploadUrl,
+	Hidden:      true,
+}
 
 const (
 	previewSelectionEnvVar = "BKTEC_PREVIEW_SELECTION"
@@ -568,6 +590,10 @@ var cliCommand = &cli.Command{
 			Usage:     "Upload test results to Test Engine",
 			ArgsUsage: "<path-to-junit.xml-or-results.json>",
 			Action:    uploadAction,
+			Flags: []cli.Flag{
+				uploadTokenFlag,
+				uploadUrlFlag,
+			},
 		},
 		{
 			Name:   "tools",
