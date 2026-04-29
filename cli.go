@@ -6,8 +6,37 @@ import (
 	"os"
 	"strings"
 
+	"github.com/buildkite/test-engine-client/internal/upload"
 	"github.com/urfave/cli/v3"
 )
+
+// uploadConfig is populated by upload subcommand cli flags.
+var uploadConfig upload.Config
+
+var uploadTokenFlag = &cli.StringFlag{
+	Name:        "token",
+	Category:    "TEST ENGINE",
+	Usage:       "Buildkite Test Engine suite token used to authenticate uploads",
+	Sources:     cli.EnvVars("BUILDKITE_ANALYTICS_TOKEN"),
+	Destination: &uploadConfig.SuiteToken,
+}
+
+var uploadFormatFlag = &cli.StringFlag{
+	Name:     "format",
+	Category: "TEST ENGINE",
+	Usage:    "Upload format: junit or json. When unset, inferred from filename extension.",
+	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_FORMAT"),
+}
+
+var uploadUrlFlag = &cli.StringFlag{
+	Name:        "upload-url",
+	Category:    "TEST ENGINE",
+	Usage:       "Buildkite Test Engine upload API endpoint",
+	Value:       upload.DefaultUploadUrl,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_URL"),
+	Destination: &uploadConfig.UploadUrl,
+	Hidden:      true,
+}
 
 const (
 	previewSelectionEnvVar = "BKTEC_PREVIEW_SELECTION"
@@ -103,6 +132,42 @@ var jobIDFlag = &cli.StringFlag{
 	Usage:       "Buildkite job id",
 	Sources:     cli.EnvVars("BUILDKITE_JOB_ID"),
 	Destination: &cfg.JobId,
+	Hidden:      true,
+}
+
+var commitFlag = &cli.StringFlag{
+	Name:        "commit",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Git commit SHA being built",
+	Sources:     cli.EnvVars("BUILDKITE_COMMIT"),
+	Destination: &cfg.Commit,
+	Hidden:      true,
+}
+
+var messageFlag = &cli.StringFlag{
+	Name:        "message",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite build message",
+	Sources:     cli.EnvVars("BUILDKITE_MESSAGE"),
+	Destination: &cfg.Message,
+	Hidden:      true,
+}
+
+var buildNumberFlag = &cli.StringFlag{
+	Name:        "build-number",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite build number",
+	Sources:     cli.EnvVars("BUILDKITE_BUILD_NUMBER"),
+	Destination: &cfg.BuildNumber,
+	Hidden:      true,
+}
+
+var buildUrlFlag = &cli.StringFlag{
+	Name:        "build-url",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite build URL",
+	Sources:     cli.EnvVars("BUILDKITE_BUILD_URL"),
+	Destination: &cfg.BuildUrl,
 	Hidden:      true,
 }
 
@@ -561,6 +626,25 @@ var cliCommand = &cli.Command{
 						{pipelineUploadFlag},
 					},
 				},
+			},
+		},
+		{
+			Name:      "upload",
+			Usage:     "Upload test results to Test Engine",
+			ArgsUsage: "<path-to-junit.xml-or-results.json>",
+			Action:    uploadAction,
+			Flags: []cli.Flag{
+				uploadTokenFlag,
+				uploadFormatFlag,
+				uploadUrlFlag,
+				// Build environment values used to populate run_env on uploads.
+				buildIDFlag,
+				branchFlag,
+				commitFlag,
+				jobIDFlag,
+				messageFlag,
+				buildNumberFlag,
+				buildUrlFlag,
 			},
 		},
 		{

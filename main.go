@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/git"
+	"github.com/buildkite/test-engine-client/internal/upload"
 	"github.com/buildkite/test-engine-client/internal/version"
 	"github.com/urfave/cli/v3"
 )
@@ -67,6 +68,26 @@ func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return command.BackfillCommitMetadata(ctx, &cfg, &git.ExecGitRunner{})
+}
+
+func uploadAction(ctx context.Context, cmd *cli.Command) error {
+	debug.SetDebug(cmd.Root().Bool("debug"))
+
+	if cmd.NArg() != 1 {
+		return fmt.Errorf("expected exactly one argument: path to JUnit XML or JSON file")
+	}
+
+	build := upload.BuildEnv{
+		BuildId:     cfg.BuildId,
+		Branch:      cfg.Branch,
+		Commit:      cfg.Commit,
+		JobId:       cfg.JobId,
+		Message:     cfg.Message,
+		BuildNumber: cfg.BuildNumber,
+		BuildUrl:    cfg.BuildUrl,
+	}
+
+	return upload.UploadFile(ctx, uploadConfig, build, cmd.Args().First(), cmd.String("format"))
 }
 
 func printVersion(ctx context.Context, cmd *cli.Command, versionFlag bool) error {
