@@ -303,7 +303,9 @@ called with testtemplate.yml
 func getZeroParallelismServer() *httptest.Server {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message": "Not found"}`))
 			return
 		}
 
@@ -317,11 +319,15 @@ func getZeroParallelismServer() *httptest.Server {
 			testPlan := plan.TestPlan{
 				Identifier:  "facecafe",
 				Parallelism: 0,
-				Tasks:       map[string]*plan.Task{},
+				Tasks: map[string]*plan.Task{
+					"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
+				},
 			}
 			enc.Encode(testPlan)
 		default:
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message": "Not found"}`))
 		}
 	}))
 	return svr
@@ -330,7 +336,9 @@ func getZeroParallelismServer() *httptest.Server {
 func getHttptestServer() *httptest.Server {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message": "Not found"}`))
 			return
 		}
 
@@ -344,6 +352,9 @@ func getHttptestServer() *httptest.Server {
 			testPlan := plan.TestPlan{
 				Identifier:  "facecafe",
 				Parallelism: 42,
+				Tasks: map[string]*plan.Task{
+					"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
+				},
 			}
 			enc.Encode(testPlan)
 		default:
@@ -481,7 +492,7 @@ func TestPlan_CollectGitMetadataWithoutSelection(t *testing.T) {
 	// The auto-collection should have been triggered. In a test environment
 	// without a git repo, it will warn and skip, but the important thing is
 	// that the code path was entered (the warning proves the gate was passed).
-	if !strings.Contains(stderrOutput, "not a git repository") &&
+	if !strings.Contains(stderrOutput, "Not a git repository") &&
 		!strings.Contains(stderrOutput, "auto-detected base branch") {
 		// If we're in a git repo (test runs inside a git checkout), we'll
 		// see metadata in the request body instead.
@@ -545,7 +556,7 @@ func TestPlan_NoCollectGitMetadataByDefault(t *testing.T) {
 	}
 
 	// Auto-collection should NOT have run -- no git warnings expected
-	if strings.Contains(stderrOutput, "not a git repository") ||
+	if strings.Contains(stderrOutput, "Not a git repository") ||
 		strings.Contains(stderrOutput, "auto-detected base branch") ||
 		strings.Contains(stderrOutput, "skipping metadata auto-collection") {
 		t.Errorf("auto-collection should not run when both SelectionStrategy and CollectGitMetadata are unset, stderr: %s", stderrOutput)

@@ -62,7 +62,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	testPlan, err := createTestPlan(ctx, cfg, files, apiClient, testRunner)
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
-			return fmt.Errorf("create test plan failed: %w", err)
+			return handledErr
 		}
 	}
 
@@ -149,6 +149,13 @@ func createTestPlan(ctx context.Context, cfg *config.Config, files []string, api
 		return fallbackPlan, err
 	}
 
+	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
+	// In this case, we should create a fallback plan.
+	if len(testPlan.Tasks) == 0 {
+		warnErrorPlan()
+		return fallbackPlan, nil
+	}
+
 	return testPlan, nil
 }
 
@@ -158,7 +165,7 @@ func createTestPlan(ctx context.Context, cfg *config.Config, files []string, api
 func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.GitRunner) {
 	// Check if we're in a git repo
 	if _, err := runner.Output(ctx, "rev-parse", "--git-dir"); err != nil {
-		fmt.Fprintln(os.Stderr, "Warning: not a git repository, skipping metadata auto-collection")
+		fmt.Fprintln(os.Stderr, "⚠️ Not a git repository, skipping metadata auto-collection.")
 		return
 	}
 
@@ -167,7 +174,7 @@ func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	remote := cfg.Remote
 	baseBranch, err := git.ResolveBaseBranch(ctx, runner, explicit, remote)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Warning: could not resolve base branch for diff metadata. "+
+		fmt.Fprintln(os.Stderr, "⚠️ Could not resolve base branch for diff metadata. "+
 			"Set --metadata base_branch=<branch> if your repo uses a non-standard default branch.")
 	} else {
 		debug.Printf("auto-detected base branch: %s", baseBranch)

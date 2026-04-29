@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/buildkite/roko"
@@ -76,6 +76,46 @@ type BillingError struct {
 }
 
 func (e *BillingError) Error() string {
+	return e.Message
+}
+
+type AuthError struct {
+	Message string
+}
+
+func (e *AuthError) Error() string {
+	return e.Message
+}
+
+type ForbiddenError struct {
+	Message string
+}
+
+func (e *ForbiddenError) Error() string {
+	return e.Message
+}
+
+type NotFoundError struct {
+	Message string
+}
+
+func (e *NotFoundError) Error() string {
+	return e.Message
+}
+
+type BadRequestError struct {
+	Message string
+}
+
+func (e *BadRequestError) Error() string {
+	return e.Message
+}
+
+type UnprocessableEntityError struct {
+	Message string
+}
+
+func (e *UnprocessableEntityError) Error() string {
 	return e.Message
 }
 
@@ -186,11 +226,25 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 				return resp, fmt.Errorf("parsing response: %w", err)
 			}
 
-			if matched := regexp.MustCompile(`^Billing Error`).MatchString(respError.Message); matched && resp.StatusCode == 403 {
-				return resp, &BillingError{Message: respError.Message}
+			// 5xx and 429 are handled above and trigger retries; here we only
+			// classify 4xx responses into typed errors.
+			switch resp.StatusCode {
+			case http.StatusUnauthorized:
+				return resp, &AuthError{Message: respError.Message}
+			case http.StatusForbidden:
+				if strings.HasPrefix(respError.Message, "Billing Error") {
+					return resp, &BillingError{Message: respError.Message}
+				}
+				return resp, &ForbiddenError{Message: respError.Message}
+			case http.StatusNotFound:
+				return resp, &NotFoundError{Message: respError.Message}
+			case http.StatusBadRequest:
+				return resp, &BadRequestError{Message: respError.Message}
+			case http.StatusUnprocessableEntity:
+				return resp, &UnprocessableEntityError{Message: respError.Message}
+			default:
+				return resp, &respError
 			}
-
-			return resp, &respError
 		}
 
 		// parse response

@@ -396,7 +396,9 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// simulate cache miss for GET test_plan so it will trigger the test plan creation
 		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message": "Not Found"}`)
 		} else {
 			fmt.Fprint(w, response)
 		}
@@ -519,6 +521,8 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	}))
 	defer svr.Close()
 
+	getStderr := captureStderr(t)
+
 	ctx := context.Background()
 	cfg := config.Config{
 		NodeIndex:     0,
@@ -541,6 +545,9 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
+
+	stderr := getStderr()
+	assert.Contains(t, stderr, "Test Engine API failed to generate a plan")
 }
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
@@ -552,6 +559,8 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}))
 	defer svr.Close()
+
+	getStderr := captureStderr(t)
 
 	// set the fetch timeout to 1 second so we don't wait too long
 	ctx := context.Background()
@@ -579,15 +588,20 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
+
+	stderr := getStderr()
+	assert.Contains(t, stderr, "Test Engine API timed out")
 }
 
 func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	files := []string{"apple", "banana"}
 	testRunner := runner.Rspec{}
 
-	// mock server to return 400 Bad Request
+	// mock server to return 400 Bad Request with JSON body
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"message": "Invalid parameters: runner is required"}`)
 	}))
 	defer svr.Close()
 
@@ -608,9 +622,10 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	want := plan.TestPlan{}
 
 	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
-	if err == nil {
-		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) want error, got %v", cfg, files, err)
-	}
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Invalid Request:")
+	assert.Contains(t, err.Error(), "Invalid parameters: runner is required")
+
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
@@ -625,6 +640,8 @@ func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
 		http.Error(w, `{"message": "Billing Error: please update your plan"}`, http.StatusForbidden)
 	}))
 	defer svr.Close()
+
+	getStderr := captureStderr(t)
 
 	ctx := context.Background()
 
@@ -647,6 +664,84 @@ func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
+	}
+
+	stderr := getStderr()
+	assert.Contains(t, stderr, "Billing Error: please update your plan")
+	assert.Contains(t, stderr, "Falling back to non-intelligent splitting")
+}
+
+func TestFetchOrCreateTestPlan_AuthError(t *testing.T) {
+	files := []string{"apple", "banana"}
+	testRunner := runner.Rspec{}
+
+	// mock server to return 401 Unauthorized
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"message": "Authentication required. Please supply a valid API Access Token: https://buildkite.com/docs/apis/rest-api#authentication"}`)
+	}))
+	defer svr.Close()
+
+	ctx := context.Background()
+
+	cfg := config.Config{
+		NodeIndex:     0,
+		Parallelism:   2,
+		Identifier:    "identifier",
+		Branch:        "",
+		ServerBaseUrl: svr.URL,
+	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
+
+	want := plan.TestPlan{}
+
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Authentication Failed:")
+	assert.Contains(t, err.Error(), "Authentication required. Please supply a valid API Access Token")
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
+	}
+}
+
+func TestFetchOrCreateTestPlan_ForbiddenError(t *testing.T) {
+	files := []string{"apple", "banana"}
+	testRunner := runner.Rspec{}
+
+	// mock server to return 403 with a non-billing forbidden error
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, `{"message": "Your access token doesn't have the write_suites scope"}`)
+	}))
+	defer svr.Close()
+
+	ctx := context.Background()
+
+	cfg := config.Config{
+		NodeIndex:     0,
+		Parallelism:   2,
+		Identifier:    "identifier",
+		Branch:        "",
+		ServerBaseUrl: svr.URL,
+	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseUrl: cfg.ServerBaseUrl,
+	})
+
+	want := plan.TestPlan{}
+
+	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "❌ Access Denied:")
+	assert.Contains(t, err.Error(), "Your access token doesn't have the write_suites scope")
+
+	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
 }

@@ -63,7 +63,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
-		return fmt.Errorf("couldn't fetch or create test plan: %w", err)
+		return err
 	}
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
@@ -324,9 +324,8 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 		// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 		// In this case, we should create a fallback plan.
 		if len(cachedPlan.Tasks) == 0 {
-			fmt.Println("⚠️ Error plan received, falling back to non-intelligent splitting. Your build may take longer than usual.")
-			testPlan := plan.CreateFallbackPlan(files, cfg.Parallelism)
-			return testPlan, nil
+			warnErrorPlan()
+			return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
 		}
 
 		debug.Printf("Test plan found. Identifier: %q", cfg.Identifier)
@@ -356,9 +355,8 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
-		fmt.Println("⚠️ Error plan received, falling back to non-intelligent splitting. Your build may take longer than usual.")
-		testPlan = plan.CreateFallbackPlan(files, cfg.Parallelism)
-		return testPlan, nil
+		warnErrorPlan()
+		return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
 	}
 
 	debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)
