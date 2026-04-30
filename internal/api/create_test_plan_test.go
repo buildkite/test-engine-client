@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,20 +11,9 @@ import (
 
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pact-foundation/pact-go/v2/consumer"
-	"github.com/pact-foundation/pact-go/v2/matchers"
 )
 
 func TestCreateTestPlan(t *testing.T) {
-	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestEngineClient",
-		Provider: "TestEngineServer",
-	})
-
-	if err != nil {
-		t.Error("Error mocking provider", err)
-	}
-
 	params := TestPlanParams{
 		Runner:      "rspec",
 		Branch:      "tet-123-add-branch-name",
@@ -46,98 +35,76 @@ func TestCreateTestPlan(t *testing.T) {
 		},
 	}
 
-	err = mockProvider.
-		AddInteraction().
-		Given("A test plan doesn't exist").
-		UponReceiving("A request to create test plan with identifier abc123 and split by example disabled").
-		WithRequest("POST", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan", func(b *consumer.V2RequestBuilder) {
-			b.Header("Authorization", matchers.String("Bearer asdf1234"))
-			b.Header("Content-Type", matchers.String("application/json"))
-			b.JSONBody(params)
-		}).
-		WillRespondWith(200, func(b *consumer.V2ResponseBuilder) {
-			b.Header("Content-Type", matchers.String("application/json; charset=utf-8"))
-			b.JSONBody(matchers.MapMatcher{
-				"tasks": matchers.Like(map[string]interface{}{
-					"0": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(0),
-						"tests": matchers.EachLike(matchers.MapMatcher{
-							"path":               matchers.Like("sky_spec.rb"),
-							"format":             matchers.Like("file"),
-							"estimated_duration": matchers.Like(1000),
-						}, 1),
-					}),
-					"1": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(1),
-						"tests":       []plan.TestCase{},
-					}),
-					"2": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(2),
-						"tests":       []plan.TestCase{},
-					}),
-				}),
-			})
-		}).
-		ExecuteTest(t, func(config consumer.MockServerConfig) error {
-			ctx := context.Background()
-			fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			defer cancel()
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/v2/analytics/organizations/buildkite/suites/rspec/test_plan" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer asdf1234" {
+			t.Errorf("Authorization header = %q", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type header = %q", got)
+		}
 
-			url := fmt.Sprintf("http://%s:%d", config.Host, config.Port)
-			apiClient := NewClient(ClientConfig{
-				AccessToken:      "asdf1234",
-				OrganizationSlug: "buildkite",
-				ServerBaseUrl:    url,
-			})
+		assertJSONBody(t, r.Body, `{
+			"runner": "rspec",
+			"identifier": "abc123",
+			"parallelism": 3,
+			"branch": "tet-123-add-branch-name",
+			"tests": {"files": [{"path": "sky_spec.rb"}]},
+			"selection": {"strategy": "least-reliable", "params": {"top": "100"}},
+			"metadata": {"git_diff": "line1\nline2"}
+		}`)
 
-			got, err := apiClient.CreateTestPlan(fetchCtx, "rspec", params)
-			if err != nil {
-				t.Errorf("CreateTestPlan(ctx, %v) error = %v", params, err)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"tasks": {
+				"0": {"node_number": 0, "tests": [{"path": "sky_spec.rb", "format": "file", "estimated_duration": 1000}]},
+				"1": {"node_number": 1, "tests": []},
+				"2": {"node_number": 2, "tests": []}
 			}
+		}`)
+	}))
+	defer svr.Close()
 
-			want := plan.TestPlan{
-				Tasks: map[string]*plan.Task{
-					"0": {
-						NodeNumber: 0,
-						Tests: []plan.TestCase{{
-							Path:              "sky_spec.rb",
-							Format:            "file",
-							EstimatedDuration: 1000,
-						}},
-					},
-					"1": {
-						NodeNumber: 1,
-						Tests:      []plan.TestCase{},
-					},
-					"2": {
-						NodeNumber: 2,
-						Tests:      []plan.TestCase{},
-					},
-				},
-			}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
-			if diff := cmp.Diff(got, want); diff != "" {
-				t.Errorf("CreateTestPlan(ctx, %v) diff (-got +want):\n%s", params, diff)
-			}
+	apiClient := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseUrl:    svr.URL,
+	})
 
-			return nil
-		})
-
+	got, err := apiClient.CreateTestPlan(ctx, "rspec", params)
 	if err != nil {
-		t.Error("mockProvider error", err)
+		t.Fatalf("CreateTestPlan() error = %v", err)
+	}
+
+	want := plan.TestPlan{
+		Tasks: map[string]*plan.Task{
+			"0": {
+				NodeNumber: 0,
+				Tests: []plan.TestCase{{
+					Path:              "sky_spec.rb",
+					Format:            "file",
+					EstimatedDuration: 1000,
+				}},
+			},
+			"1": {NodeNumber: 1, Tests: []plan.TestCase{}},
+			"2": {NodeNumber: 2, Tests: []plan.TestCase{}},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("CreateTestPlan() diff (-got +want):\n%s", diff)
 	}
 }
 
 func TestCreateTestPlan_SplitByExample(t *testing.T) {
-	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestEngineClient",
-		Provider: "TestEngineServer",
-	})
-
-	if err != nil {
-		t.Error("Error mocking provider", err)
-	}
-
 	params := TestPlanParams{
 		Identifier:  "abc123",
 		Parallelism: 3,
@@ -166,99 +133,77 @@ func TestCreateTestPlan_SplitByExample(t *testing.T) {
 		Runner: "rspec",
 	}
 
-	err = mockProvider.
-		AddInteraction().
-		Given("A test plan doesn't exist").
-		UponReceiving("A request to create test plan with identifier abc123 and split by example enabled").
-		WithRequest("POST", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan", func(b *consumer.V2RequestBuilder) {
-			b.Header("Authorization", matchers.String("Bearer asdf1234"))
-			b.Header("Content-Type", matchers.String("application/json"))
-			b.JSONBody(params)
-		}).
-		WillRespondWith(200, func(b *consumer.V2ResponseBuilder) {
-			b.Header("Content-Type", matchers.String("application/json; charset=utf-8"))
-			b.JSONBody(matchers.MapMatcher{
-				"tasks": matchers.Like(map[string]interface{}{
-					"0": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(0),
-						"tests": matchers.EachLike(matchers.MapMatcher{
-							"path":               matchers.Like("sea_spec.rb:4"),
-							"name":               matchers.Like("is blue"),
-							"scope":              matchers.Like("sea"),
-							"identifier":         matchers.Like("sea_spec.rb[1,1]"),
-							"format":             matchers.Like("example"),
-							"estimated_duration": matchers.Like(1000),
-						}, 1),
-					}),
-					"1": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(1),
-						"tests": matchers.EachLike(matchers.MapMatcher{
-							"path":               matchers.Like("sky_spec.rb"),
-							"format":             matchers.Like("file"),
-							"estimated_duration": matchers.Like(1000),
-						}, 1),
-					}),
-					"2": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(2),
-						"tests":       []plan.TestCase{},
-					}),
-				}),
-			})
-		}).
-		ExecuteTest(t, func(config consumer.MockServerConfig) error {
-			ctx := context.Background()
-			fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			defer cancel()
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertJSONBody(t, r.Body, `{
+			"runner": "rspec",
+			"identifier": "abc123",
+			"parallelism": 3,
+			"branch": "",
+			"tests": {
+				"files": [{"path": "sky_spec.rb"}],
+				"examples": [{
+					"path": "sea_spec.rb:4",
+					"name": "is blue",
+					"scope": "sea",
+					"identifier": "sea_spec.rb[1,1]"
+				}]
+			},
+			"selection": {"strategy": "percent", "params": {"percent": "40"}},
+			"metadata": {"source": "cli"}
+		}`)
 
-			url := fmt.Sprintf("http://%s:%d", config.Host, config.Port)
-			apiClient := NewClient(ClientConfig{
-				AccessToken:      "asdf1234",
-				OrganizationSlug: "buildkite",
-				ServerBaseUrl:    url,
-			})
-
-			got, err := apiClient.CreateTestPlan(fetchCtx, "rspec", params)
-			if err != nil {
-				t.Errorf("CreateTestPlan(ctx, %v) error = %v", params, err)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"tasks": {
+				"0": {"node_number": 0, "tests": [{"path": "sea_spec.rb:4", "name": "is blue", "scope": "sea", "identifier": "sea_spec.rb[1,1]", "format": "example", "estimated_duration": 1000}]},
+				"1": {"node_number": 1, "tests": [{"path": "sky_spec.rb", "format": "file", "estimated_duration": 1000}]},
+				"2": {"node_number": 2, "tests": []}
 			}
+		}`)
+	}))
+	defer svr.Close()
 
-			want := plan.TestPlan{
-				Tasks: map[string]*plan.Task{
-					"0": {
-						NodeNumber: 0,
-						Tests: []plan.TestCase{{
-							Path:              "sea_spec.rb:4",
-							Name:              "is blue",
-							Scope:             "sea",
-							Identifier:        "sea_spec.rb[1,1]",
-							Format:            "example",
-							EstimatedDuration: 1000,
-						}},
-					},
-					"1": {
-						NodeNumber: 1,
-						Tests: []plan.TestCase{{
-							Path:              "sky_spec.rb",
-							Format:            "file",
-							EstimatedDuration: 1000,
-						}},
-					},
-					"2": {
-						NodeNumber: 2,
-						Tests:      []plan.TestCase{},
-					},
-				},
-			}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
-			if diff := cmp.Diff(got, want); diff != "" {
-				t.Errorf("CreateTestPlan(ctx, %v) diff (-got +want):\n%s", params, diff)
-			}
+	apiClient := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseUrl:    svr.URL,
+	})
 
-			return nil
-		})
-
+	got, err := apiClient.CreateTestPlan(ctx, "rspec", params)
 	if err != nil {
-		t.Error("mockProvider error", err)
+		t.Fatalf("CreateTestPlan() error = %v", err)
+	}
+
+	want := plan.TestPlan{
+		Tasks: map[string]*plan.Task{
+			"0": {
+				NodeNumber: 0,
+				Tests: []plan.TestCase{{
+					Path:              "sea_spec.rb:4",
+					Name:              "is blue",
+					Scope:             "sea",
+					Identifier:        "sea_spec.rb[1,1]",
+					Format:            "example",
+					EstimatedDuration: 1000,
+				}},
+			},
+			"1": {
+				NodeNumber: 1,
+				Tests: []plan.TestCase{{
+					Path:              "sky_spec.rb",
+					Format:            "file",
+					EstimatedDuration: 1000,
+				}},
+			},
+			"2": {NodeNumber: 2, Tests: []plan.TestCase{}},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("CreateTestPlan() diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -294,15 +239,6 @@ func TestCreateTestPlan_BadRequest(t *testing.T) {
 }
 
 func TestCreateTestPlan_MutedTests(t *testing.T) {
-	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestEngineClient",
-		Provider: "TestEngineServer",
-	})
-
-	if err != nil {
-		t.Error("Error mocking provider", err)
-	}
-
 	params := TestPlanParams{
 		Runner:      "rspec",
 		Branch:      "tet-123-add-branch-name",
@@ -315,91 +251,59 @@ func TestCreateTestPlan_MutedTests(t *testing.T) {
 		},
 	}
 
-	err = mockProvider.
-		AddInteraction().
-		Given("A test plan doesn't exist and muted test exists").
-		UponReceiving("A request to create test plan with identifier abc123 and split by example disabled").
-		WithRequest("POST", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan", func(b *consumer.V2RequestBuilder) {
-			b.Header("Authorization", matchers.String("Bearer asdf1234"))
-			b.Header("Content-Type", matchers.String("application/json"))
-			b.JSONBody(params)
-		}).
-		WillRespondWith(200, func(b *consumer.V2ResponseBuilder) {
-			b.Header("Content-Type", matchers.String("application/json; charset=utf-8"))
-			b.JSONBody(matchers.MapMatcher{
-				"tasks": matchers.Like(map[string]interface{}{
-					"0": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(0),
-						"tests": matchers.EachLike(matchers.MapMatcher{
-							"path":               matchers.Like("sky_spec.rb"),
-							"format":             matchers.Like("file"),
-							"estimated_duration": matchers.Like(1000),
-						}, 1),
-					}),
-					"1": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(1),
-						"tests":       []plan.TestCase{},
-					}),
-					"2": matchers.Like(map[string]interface{}{
-						"node_number": matchers.Like(2),
-						"tests":       []plan.TestCase{},
-					}),
-				}),
-				"muted_tests": matchers.EachLike(matchers.MapMatcher{
-					"path":  matchers.Like("./turtle_spec.rb:3"),
-					"scope": matchers.Like("turtle"),
-					"name":  matchers.Like("is green"),
-				}, 1),
-			})
-		}).
-		ExecuteTest(t, func(config consumer.MockServerConfig) error {
-			ctx := context.Background()
-			fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			defer cancel()
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertJSONBody(t, r.Body, `{
+			"runner": "rspec",
+			"identifier": "abc123",
+			"parallelism": 3,
+			"branch": "tet-123-add-branch-name",
+			"tests": {"files": [{"path": "sky_spec.rb"}]}
+		}`)
 
-			url := fmt.Sprintf("http://%s:%d", config.Host, config.Port)
-			apiClient := NewClient(ClientConfig{
-				AccessToken:      "asdf1234",
-				OrganizationSlug: "buildkite",
-				ServerBaseUrl:    url,
-			})
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"tasks": {
+				"0": {"node_number": 0, "tests": [{"path": "sky_spec.rb", "format": "file", "estimated_duration": 1000}]},
+				"1": {"node_number": 1, "tests": []},
+				"2": {"node_number": 2, "tests": []}
+			},
+			"muted_tests": [{"path": "./turtle_spec.rb:3", "scope": "turtle", "name": "is green"}]
+		}`)
+	}))
+	defer svr.Close()
 
-			got, err := apiClient.CreateTestPlan(fetchCtx, "rspec", params)
-			if err != nil {
-				t.Errorf("CreateTestPlan(ctx, %v) error = %v", params, err)
-			}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
-			want := plan.TestPlan{
-				Tasks: map[string]*plan.Task{
-					"0": {
-						NodeNumber: 0,
-						Tests: []plan.TestCase{{
-							Path:              "sky_spec.rb",
-							Format:            "file",
-							EstimatedDuration: 1000,
-						}},
-					},
-					"1": {
-						NodeNumber: 1,
-						Tests:      []plan.TestCase{},
-					},
-					"2": {
-						NodeNumber: 2,
-						Tests:      []plan.TestCase{},
-					},
-				},
-				MutedTests: []plan.TestCase{{Name: "is green", Path: "./turtle_spec.rb:3", Scope: "turtle"}},
-			}
+	apiClient := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseUrl:    svr.URL,
+	})
 
-			if diff := cmp.Diff(got, want); diff != "" {
-				t.Errorf("CreateTestPlan(ctx, %v) diff (-got +want):\n%s", params, diff)
-			}
-
-			return nil
-		})
-
+	got, err := apiClient.CreateTestPlan(ctx, "rspec", params)
 	if err != nil {
-		t.Error("mockProvider error", err)
+		t.Fatalf("CreateTestPlan() error = %v", err)
+	}
+
+	want := plan.TestPlan{
+		Tasks: map[string]*plan.Task{
+			"0": {
+				NodeNumber: 0,
+				Tests: []plan.TestCase{{
+					Path:              "sky_spec.rb",
+					Format:            "file",
+					EstimatedDuration: 1000,
+				}},
+			},
+			"1": {NodeNumber: 1, Tests: []plan.TestCase{}},
+			"2": {NodeNumber: 2, Tests: []plan.TestCase{}},
+		},
+		MutedTests: []plan.TestCase{{Name: "is green", Path: "./turtle_spec.rb:3", Scope: "turtle"}},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("CreateTestPlan() diff (-got +want):\n%s", diff)
 	}
 }
 

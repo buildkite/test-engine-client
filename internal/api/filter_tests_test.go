@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,80 +12,90 @@ import (
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/plan"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pact-foundation/pact-go/v2/consumer"
-	"github.com/pact-foundation/pact-go/v2/matchers"
 )
 
 func TestFilterTests_SlowFiles(t *testing.T) {
-	mockProvider, err := consumer.NewV2Pact(consumer.MockHTTPProviderConfig{
-		Consumer: "TestEngineClient",
-		Provider: "TestEngineServer",
-	})
-
-	if err != nil {
-		t.Error("Error mocking provider", err)
-	}
-
 	cfg := config.New()
 	cfg.Parallelism = 3
 	cfg.SplitByExample = true
 
 	params := FilterTestsParams{
 		Files: []plan.TestCase{
-			{
-				Path: "./cat_spec.rb",
-			},
-			{
-				Path: "./dog_spec.rb",
-			},
-			{
-				Path: "./turtle_spec.rb",
-			},
+			{Path: "./cat_spec.rb"},
+			{Path: "./dog_spec.rb"},
+			{Path: "./turtle_spec.rb"},
 		},
 		Env: &cfg,
 	}
 
-	err = mockProvider.
-		AddInteraction().
-		Given("A slow file exists").
-		UponReceiving("A request to filter tests").
-		WithRequest("POST", "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests", func(b *consumer.V2RequestBuilder) {
-			b.Header("Authorization", matchers.Like("Bearer asdf1234"))
-			b.JSONBody(params)
-		}).
-		WillRespondWith(200, func(b *consumer.V2ResponseBuilder) {
-			b.Header("Content-Type", matchers.Like("application/json; charset=utf-8"))
-			b.JSONBody(matchers.MapMatcher{
-				"tests": matchers.EachLike(matchers.MapMatcher{
-					"path": matchers.Like("./turtle_spec.rb"),
-				}, 1),
-			})
-		}).
-		ExecuteTest(t, func(config consumer.MockServerConfig) error {
-			url := fmt.Sprintf("http://%s:%d", config.Host, config.Port)
-			c := NewClient(ClientConfig{
-				AccessToken:      "asdf1234",
-				OrganizationSlug: "buildkite",
-				ServerBaseUrl:    url,
-			})
-			got, err := c.FilterTests(context.Background(), "rspec", params)
-			if err != nil {
-				t.Errorf("FilterTests() error = %v", err)
-			}
-			want := []FilteredTest{
-				{
-					Path: "./turtle_spec.rb",
-				},
-			}
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer asdf1234" {
+			t.Errorf("Authorization header = %q", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type header = %q", got)
+		}
 
-			if diff := cmp.Diff(got, want); diff != "" {
-				t.Errorf("FilterTests() diff (-got +want):\n%s", diff)
+		assertJSONBody(t, r.Body, `{
+			"files": [
+				{"path": "./cat_spec.rb"},
+				{"path": "./dog_spec.rb"},
+				{"path": "./turtle_spec.rb"}
+			],
+			"env": {
+				"BUILDKITE_BRANCH": "",
+				"BUILDKITE_BUILD_ID": "",
+				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": false,
+				"BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS": false,
+				"BUILDKITE_TEST_ENGINE_IDENTIFIER": "",
+				"BUILDKITE_JOB_ID": "",
+				"BUILDKITE_RETRY_COUNT": 0,
+				"BUILDKITE_TEST_ENGINE_LOCATION_PREFIX": "",
+				"BUILDKITE_TEST_ENGINE_MAX_PARALLELISM": 0,
+				"BUILDKITE_TEST_ENGINE_RETRY_COUNT": 0,
+				"BUILDKITE_PARALLEL_JOB": 0,
+				"BUILDKITE_ORGANIZATION_SLUG": "",
+				"BUILDKITE_PARALLEL_JOB_COUNT": 3,
+				"BUILDKITE_TEST_ENGINE_RETRY_CMD": "",
+				"BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY": "",
+				"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE": true,
+				"BUILDKITE_STEP_ID": "",
+				"BUILDKITE_TEST_ENGINE_SUITE_SLUG": "",
+				"BUILDKITE_TEST_ENGINE_TAG_FILTERS": "",
+				"BUILDKITE_TEST_ENGINE_TARGET_TIME": 0,
+				"BUILDKITE_TEST_ENGINE_TEST_CMD": "",
+				"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN": "",
+				"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN": "",
+				"BUILDKITE_TEST_ENGINE_TEST_RUNNER": ""
 			}
-			return nil
-		})
+		}`)
 
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{"tests": [{"path": "./turtle_spec.rb"}]}`)
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseUrl:    svr.URL,
+	})
+	got, err := c.FilterTests(context.Background(), "rspec", params)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("FilterTests() error = %v", err)
+	}
+	want := []FilteredTest{
+		{Path: "./turtle_spec.rb"},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("FilterTests() diff (-got +want):\n%s", diff)
 	}
 }
 

@@ -6,10 +6,6 @@ echo arch is "$(uname -m)"
 
 go install gotest.tools/gotestsum@v1.8.0
 
-# Install pact-go
-go install github.com/pact-foundation/pact-go/v2@latest
-pact-go -l DEBUG install
-
 # Install dependencies for js runner tests
 cd internal/runner/testdata
 yarn install
