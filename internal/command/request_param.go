@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/api"
 	"github.com/buildkite/test-engine-client/internal/config"
@@ -93,8 +94,21 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 	}, nil
 }
 
+// buildSelectionParams returns the selection payload sent to the Test Engine
+// API, or nil when no strategy was requested.
+//
+// Beyond the empty string, a handful of human-intuitive sentinel values
+// ("none", "off", "false", "disabled", "no", plus whitespace and case
+// variants) are also coerced to nil. This is defence-in-depth against a
+// recurring foot-gun: pipelines that set BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY
+// to a human-readable "turn it off" value get a confusing 400 from the
+// server, which only accepts the strict allowlist (random, manual,
+// rspec_changed_files, xgboost). See TE-5641 / TE-5638 for context. Every
+// other value, including typos, is still forwarded verbatim so the backend
+// remains authoritative for strategy validation.
 func buildSelectionParams(strategy string, params map[string]string) *api.SelectionParams {
-	if strategy == "" {
+	switch strings.ToLower(strings.TrimSpace(strategy)) {
+	case "", "none", "off", "false", "disabled", "no":
 		return nil
 	}
 

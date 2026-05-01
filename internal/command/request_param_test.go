@@ -671,6 +671,52 @@ func TestCreateRequestParams_WithLocationPrefix(t *testing.T) {
 	}
 }
 
+func TestBuildSelectionParams(t *testing.T) {
+	params := map[string]string{"top": "100"}
+
+	t.Run("forwards real strategies verbatim", func(t *testing.T) {
+		for _, strategy := range []string{"random", "manual", "rspec_changed_files", "xgboost", "least-reliable"} {
+			got := buildSelectionParams(strategy, params)
+			want := &api.SelectionParams{Strategy: strategy, Params: params}
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Errorf("buildSelectionParams(%q) diff (-got +want):\n%s", strategy, diff)
+			}
+		}
+	})
+
+	// Defence-in-depth for TE-5641: coerce human-intuitive "no selection"
+	// sentinels to nil instead of forwarding them to the Test Engine API,
+	// which only accepts the strict allowlist. Covers case and whitespace
+	// variants too.
+	t.Run("coerces sentinel values to nil", func(t *testing.T) {
+		sentinels := []string{
+			"",
+			"none", "NONE", "None",
+			"off", "OFF",
+			"false", "FALSE", "False",
+			"disabled", "DISABLED",
+			"no", "NO",
+			" none ", "\tnone\n", "  ", "\t",
+			" off", "false ", " disabled\t",
+		}
+		for _, strategy := range sentinels {
+			if got := buildSelectionParams(strategy, params); got != nil {
+				t.Errorf("buildSelectionParams(%q) = %+v, want nil", strategy, got)
+			}
+		}
+	})
+
+	// Unknown values are still forwarded so the backend stays authoritative
+	// for strategy validation; that's by design (see TE-5641 notes).
+	t.Run("forwards unknown strategies verbatim", func(t *testing.T) {
+		got := buildSelectionParams("not-a-real-strategy", params)
+		want := &api.SelectionParams{Strategy: "not-a-real-strategy", Params: params}
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Errorf("buildSelectionParams diff (-got +want):\n%s", diff)
+		}
+	})
+}
+
 func TestCreateRequestParams_WithLocationPrefix_SplitByExample(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
