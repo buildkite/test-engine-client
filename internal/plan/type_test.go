@@ -20,7 +20,10 @@ func TestTestPlan_UnmarshalWithTimingMetadata(t *testing.T) {
 				]
 			}
 		},
-		"timing_metadata": {"median_duration": 1200, "default_duration": 1000}
+		"timing_metadata": {
+			"file": {"median_duration": 1200, "default_duration": 1000},
+			"example": {"median_duration": 800, "default_duration": 1000}
+		}
 	}`
 
 	var p TestPlan
@@ -31,11 +34,20 @@ func TestTestPlan_UnmarshalWithTimingMetadata(t *testing.T) {
 	if p.TimingMetadata == nil {
 		t.Fatal("TimingMetadata is nil, want non-nil")
 	}
-	if p.TimingMetadata.MedianDuration == nil || *p.TimingMetadata.MedianDuration != 1200 {
-		t.Errorf("MedianDuration = %v, want 1200", p.TimingMetadata.MedianDuration)
+	if p.TimingMetadata.File == nil {
+		t.Fatal("TimingMetadata.File is nil")
 	}
-	if p.TimingMetadata.DefaultDuration != 1000 {
-		t.Errorf("DefaultDuration = %v, want 1000", p.TimingMetadata.DefaultDuration)
+	if p.TimingMetadata.File.MedianDuration == nil || *p.TimingMetadata.File.MedianDuration != 1200 {
+		t.Errorf("File.MedianDuration = %v, want 1200", p.TimingMetadata.File.MedianDuration)
+	}
+	if p.TimingMetadata.File.DefaultDuration != 1000 {
+		t.Errorf("File.DefaultDuration = %v, want 1000", p.TimingMetadata.File.DefaultDuration)
+	}
+	if p.TimingMetadata.Example == nil {
+		t.Fatal("TimingMetadata.Example is nil")
+	}
+	if p.TimingMetadata.Example.MedianDuration == nil || *p.TimingMetadata.Example.MedianDuration != 800 {
+		t.Errorf("Example.MedianDuration = %v, want 800", p.TimingMetadata.Example.MedianDuration)
 	}
 	gotTests := p.Tasks["0"].Tests
 	wantTests := []TestCase{
@@ -47,21 +59,29 @@ func TestTestPlan_UnmarshalWithTimingMetadata(t *testing.T) {
 	}
 }
 
-func TestTestPlan_UnmarshalWithNullMedianDuration(t *testing.T) {
-	raw := `{"identifier":"x","parallelism":1,"tasks":{},"timing_metadata":{"median_duration":null,"default_duration":1000}}`
+func TestTestPlan_UnmarshalWithFileOnly(t *testing.T) {
+	raw := `{
+		"identifier": "x",
+		"parallelism": 2,
+		"tasks": {},
+		"timing_metadata": {"file": {"median_duration": null, "default_duration": 1000}}
+	}`
 
 	var p TestPlan
 	if err := json.Unmarshal([]byte(raw), &p); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if p.TimingMetadata == nil {
-		t.Fatal("TimingMetadata is nil")
+	if p.TimingMetadata == nil || p.TimingMetadata.File == nil {
+		t.Fatal("TimingMetadata.File is nil")
 	}
-	if p.TimingMetadata.MedianDuration != nil {
-		t.Errorf("MedianDuration = %v, want nil", *p.TimingMetadata.MedianDuration)
+	if p.TimingMetadata.Example != nil {
+		t.Errorf("TimingMetadata.Example = %+v, want nil", p.TimingMetadata.Example)
 	}
-	if p.TimingMetadata.DefaultDuration != 1000 {
-		t.Errorf("DefaultDuration = %v, want 1000", p.TimingMetadata.DefaultDuration)
+	if p.TimingMetadata.File.MedianDuration != nil {
+		t.Errorf("File.MedianDuration = %v, want nil", *p.TimingMetadata.File.MedianDuration)
+	}
+	if p.TimingMetadata.File.DefaultDuration != 1000 {
+		t.Errorf("File.DefaultDuration = %v, want 1000", p.TimingMetadata.File.DefaultDuration)
 	}
 }
 
@@ -95,7 +115,9 @@ func TestTestPlan_RoundTrip(t *testing.T) {
 		Tasks: map[string]*Task{
 			"0": {NodeNumber: 0, Tests: []TestCase{{Path: "a", TimingSampleSize: 3}}},
 		},
-		TimingMetadata: &TimingMetadata{MedianDuration: &median, DefaultDuration: 1000},
+		TimingMetadata: &TimingMetadata{
+			File: &FormatTimingMetadata{MedianDuration: &median, DefaultDuration: 1000},
+		},
 	}
 	b, err := json.Marshal(original)
 	if err != nil {

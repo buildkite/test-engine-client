@@ -30,9 +30,19 @@ type TestCase struct {
 }
 
 // TimingMetadata describes the historical timing data the server used to
-// build the test plan. All durations are in milliseconds and may be
-// fractional (the server-side median can be the mean of two middle values).
+// build the test plan, broken down per case format. Either key may be
+// omitted when the plan contains no cases of that format (or when
+// parallelism is 1 and no timings were fetched).
 type TimingMetadata struct {
+	File    *FormatTimingMetadata `json:"file,omitempty"`
+	Example *FormatTimingMetadata `json:"example,omitempty"`
+}
+
+// FormatTimingMetadata is the timing data for a single case format
+// (file-scoped or example-scoped). All durations are in milliseconds and
+// may be fractional (the server-side median can be the mean of two middle
+// values).
+type FormatTimingMetadata struct {
 	// MedianDuration is the median of historical timings used to backfill
 	// cases without history. Nil when no history existed at all.
 	MedianDuration *float64 `json:"median_duration"`
@@ -62,4 +72,8 @@ type TestPlan struct {
 	// build this plan. Nil when missing (e.g. error plans, plans cached before
 	// the server began emitting it).
 	TimingMetadata *TimingMetadata `json:"timing_metadata,omitempty"`
+	// KnownTimingsRatio is the fraction (0.0–1.0) of cases that had historical
+	// timing data when the plan was built. Used to summarise plans where
+	// per-format timing metadata is not emitted (e.g. parallelism == 1).
+	KnownTimingsRatio *float64 `json:"known_timings_ratio,omitempty"`
 }
