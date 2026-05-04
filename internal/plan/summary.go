@@ -7,11 +7,13 @@ import (
 )
 
 // PrintSplitSummary writes a human-readable summary of the resolved test plan
-// to w (typically os.Stderr). It is a no-op when the plan does not carry
-// timing metadata (fallback plans, error plans, or cached plans created
-// before the server began emitting timing_metadata).
+// to w (typically os.Stderr). At parallelism > 1 it uses per-format
+// TimingMetadata to break down known vs unknown cases. At parallelism == 1
+// the server skips per-format timing data due to performance reasons, so it falls back to the
+// plan-level KnownTimingsRatio. Skipped for fallback plans, or when neither
+// signal is available.
 func PrintSplitSummary(w io.Writer, p TestPlan) {
-	if p.Fallback || p.TimingMetadata == nil {
+	if p.Fallback || (p.TimingMetadata == nil && p.KnownTimingsRatio == nil) {
 		return
 	}
 
@@ -32,7 +34,8 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	noun := summaryNoun(fileTotal, exampleTotal)
 
 	fmt.Fprintln(w, "\n+++ Buildkite Test Engine Client: 📊 Split summary")
-	fmt.Fprintf(w, "%d %s across %d nodes\n", total, noun, nodes)
+	fmt.Fprintf(w, "%d %s across %d %s\n",
+		total, pluralize(total, noun), nodes, pluralize(nodes, "node"))
 
 	// At parallelism == 1 the server skips the per-format timing fetch, so
 	// per-case TimingSampleSize is always 0. Fall back to the plan-level
@@ -43,18 +46,24 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 		return
 	}
 
+	if p.TimingMetadata == nil {
+		fmt.Fprintln(w)
+		return
+	}
+
 	if fileTotal > 0 {
-		printFormatBreakdown(w, fileTotal, fileKnown, "files", p.TimingMetadata.File, mixed)
+		printFormatBreakdown(w, fileTotal, fileKnown, "file", p.TimingMetadata.File, mixed)
 	}
 	if exampleTotal > 0 {
-		printFormatBreakdown(w, exampleTotal, exampleKnown, "examples", p.TimingMetadata.Example, mixed)
+		printFormatBreakdown(w, exampleTotal, exampleKnown, "example", p.TimingMetadata.Example, mixed)
 	}
 	fmt.Fprintln(w)
 }
 
 // printRatioBreakdown renders a single-node summary using the plan-level
-// known_timings_ratio. The known/unknown split is rounded so the two lines
-// always sum to total.
+// known_timings_ratio. Per-format metadata is unavailable at parallelism == 1,
+// so it delegates to printFormatBreakdown with meta == nil; the breakdown text
+// is rendered without parenthesised duration values.
 func printRatioBreakdown(w io.Writer, total int, ratio float64, noun string) {
 	known := int(float64(total)*ratio + 0.5)
 	if known > total {
@@ -63,17 +72,7 @@ func printRatioBreakdown(w io.Writer, total int, ratio float64, noun string) {
 	if known < 0 {
 		known = 0
 	}
-	unknown := total - known
-	width := len(strconv.Itoa(total))
-
-	if known > 0 {
-		fmt.Fprintf(w, "  %*d %s (%d%%) estimated from past historical durations\n",
-			width, known, noun, percentOf(known, total))
-	}
-	if unknown > 0 {
-		fmt.Fprintf(w, "  %*d %s (%d%%) had no history\n",
-			width, unknown, noun, percentOf(unknown, total))
-	}
+	printFormatBreakdown(w, total, known, noun, nil, false)
 }
 
 // countByFormat returns (total, known) for cases of the given format. The
@@ -97,52 +96,63 @@ func countByFormat(p TestPlan, format TestCaseFormat) (total, known int) {
 	return total, known
 }
 
-// summaryNoun picks the heading noun when the plan only contains one format,
-// or "tests" when both are present.
+// summaryNoun returns the singular heading noun. The plan-level summary uses
+// "file"/"example" when the plan only contains one format, or "test" when
+// both are present. Callers pluralize as needed.
 func summaryNoun(fileTotal, exampleTotal int) string {
 	switch {
 	case exampleTotal == 0:
-		return "files"
+		return "file"
 	case fileTotal == 0:
-		return "examples"
+		return "example"
 	default:
-		return "tests"
+		return "test"
 	}
 }
 
+// pluralize returns singular when n == 1, otherwise singular + "s".
+func pluralize(n int, singular string) string {
+	if n == 1 {
+		return singular
+	}
+	return singular + "s"
+}
+
+// printFormatBreakdown writes the per-format lines. noun is the singular form
+// ("file" or "example"); each line is pluralized to match its own count.
 func printFormatBreakdown(w io.Writer, total, known int, noun string, meta *FormatTimingMetadata, mixed bool) {
 	indent := "  "
-	itemNoun := " " + noun
+	itemNounFor := func(n int) string { return " " + pluralize(n, noun) }
 	if mixed {
-		fmt.Fprintf(w, "  %d %s\n", total, noun)
+		fmt.Fprintf(w, "  %d %s\n", total, pluralize(total, noun))
 		indent = "    "
 		// In nested form the "files"/"examples" header carries the noun, so
 		// each line just shows counts.
-		itemNoun = ""
+		itemNounFor = func(int) string { return "" }
 	}
 
 	width := len(strconv.Itoa(total))
 
 	if known == 0 {
-		suffix := ""
+		suffix := " and used the default duration"
 		if meta != nil {
-			suffix = fmt.Sprintf(" and used the default duration (%s)", formatDurationMS(meta.DefaultDuration))
+			suffix += fmt.Sprintf(" (%s)", formatDurationMS(meta.DefaultDuration))
 		}
 		fmt.Fprintf(w, "%s%*d%s (100%%) had no history%s\n",
-			indent, width, total, itemNoun, suffix)
+			indent, width, total, itemNounFor(total), suffix)
 		return
 	}
 
 	unknown := total - known
 	fmt.Fprintf(w, "%s%*d%s (%d%%) estimated from past historical durations\n",
-		indent, width, known, itemNoun, percentOf(known, total))
+		indent, width, known, itemNounFor(known), percentOf(known, total))
 	if unknown > 0 {
 		suffix := ""
 		if meta != nil && meta.MedianDuration != nil {
 			suffix = fmt.Sprintf(" — assumed median (%s)", formatDurationMS(*meta.MedianDuration))
 		}
 		fmt.Fprintf(w, "%s%*d%s (%d%%) had no history%s\n",
-			indent, width, unknown, itemNoun, percentOf(unknown, total), suffix)
+			indent, width, unknown, itemNounFor(unknown), percentOf(unknown, total), suffix)
 	}
 }
 

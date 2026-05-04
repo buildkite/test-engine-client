@@ -34,8 +34,7 @@ func TestPrintSplitSummary_MixedHistory(t *testing.T) {
 	for _, want := range []string{
 		"+++ Buildkite Test Engine Client: 📊 Split summary\n5 files across 2 nodes",
 		"3 files (60%) estimated from past historical durations",
-		"2 files (40%) had no history",
-		"4.2s",
+		"2 files (40%) had no history — assumed median (4.2s)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, got)
@@ -131,9 +130,9 @@ func TestPrintSplitSummary_ParallelismOneUsesKnownRatio(t *testing.T) {
 	got := buf.String()
 
 	for _, want := range []string{
-		"4 files across 1 nodes",
+		"4 files across 1 node",
 		"3 files (75%) estimated from past historical durations",
-		"1 files (25%) had no history",
+		"1 file (25%) had no history",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, got)
@@ -184,8 +183,8 @@ func TestPrintSplitSummary_ExampleMode(t *testing.T) {
 
 	for _, want := range []string{
 		"+++ Buildkite Test Engine Client: 📊 Split summary\n2 examples across 2 nodes",
-		"1 examples (50%) estimated from past historical durations",
-		"1 examples (50%) had no history",
+		"1 example (50%) estimated from past historical durations",
+		"1 example (50%) had no history",
 		"2.0s",
 	} {
 		if !strings.Contains(got, want) {

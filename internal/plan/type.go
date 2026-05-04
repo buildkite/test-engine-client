@@ -26,7 +26,7 @@ type TestCase struct {
 	// case's EstimatedDuration. For file-scoped cases this is distinct runs,
 	// for example-scoped cases this is raw executions. Defaults to 0 when no
 	// history is available or the field is missing on older/cached plans.
-	TimingSampleSize int `json:"timing_sample_size"`
+	TimingSampleSize int `json:"timing_sample_size,omitempty"`
 }
 
 // TimingMetadata describes the historical timing data the server used to
