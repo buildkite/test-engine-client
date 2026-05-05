@@ -447,6 +447,37 @@ var uploadFlag = &cli.StringFlag{
 	Destination: &cfg.UploadFile,
 }
 
+// Groupings common to multiple commands
+var buildEnvironmentFlags = []cli.Flag{
+	organizationSlugFlag,
+	buildIDFlag,
+	jobIDFlag,
+	stepIDFlag,
+	branchFlag,
+	retryCountFlag,
+	parallelJobFlag,
+}
+
+var testEngineFlags = []cli.Flag{
+	accessTokenFlag,
+	suiteSlugFlag,
+	baseURLFlag,
+}
+
+var runnerEnvironmentFlags = []cli.Flag{
+	testCommandFlag,
+	testFilePatternFlag,
+	testFileExcludePatternFlag,
+	testRunnerFlag,
+	resultPathFlag,
+	splitByExampleFlag,
+	locationPrefixFlag,
+	// Runner Retry Flags
+	disableRetryMutedFlag,
+	retryCommandFlag,
+	testEngineRetryCountFlag,
+}
+
 func previewSelectionFlags() []cli.Flag {
 	if !previewSelectionEnabled() {
 		return []cli.Flag{}
@@ -465,71 +496,29 @@ func runCommandFlags() []cli.Flag {
 		filesFlag,
 		tagFiltersFlag,
 		planIdentifierFlag,
-		// Build Environment Flags
-		organizationSlugFlag,
-		buildIDFlag,
-		jobIDFlag,
-		stepIDFlag,
-		branchFlag,
-		retryCountFlag,
-		parallelJobFlag,
-		parallelismFlag,
-		// Test Engine Flags
-		accessTokenFlag,
-		suiteSlugFlag,
-		baseURLFlag,
-		// Runner Environment Flags
-		testCommandFlag,
-		testFilePatternFlag,
-		testFileExcludePatternFlag,
-		testRunnerFlag,
-		resultPathFlag,
-		splitByExampleFlag,
-		failOnNoTestsFlag,
-		locationPrefixFlag,
-		// Runner Retry Flags
-		disableRetryMutedFlag,
-		retryCommandFlag,
-		testEngineRetryCountFlag,
 	}
+	flags = append(flags, buildEnvironmentFlags...)
+	flags = append(flags, testEngineFlags...)
+	flags = append(flags, runnerEnvironmentFlags...)
+	flags = append(flags, parallelismFlag)
+	flags = append(flags, failOnNoTestsFlag)
 	flags = append(flags, previewSelectionFlags()...)
 	return flags
 }
 
 func planCommandFlags() []cli.Flag {
+	// Some of these flags are not strictly required for planning,
+	// we will remove these in future iterations.
 	flags := []cli.Flag{
-		// Some of these flags are not strictly required for planning,
-		// we will remove these in future iterations.
 		filesFlag,
 		tagFiltersFlag,
 		// Dynamic Parallelism Flags
 		maxParallelismFlag,
 		targetTimeFlag,
-		// Build Environment Flags
-		organizationSlugFlag,
-		buildIDFlag,
-		jobIDFlag,
-		stepIDFlag,
-		branchFlag,
-		retryCountFlag,
-		parallelJobFlag,
-		// Test Engine Flags
-		accessTokenFlag,
-		suiteSlugFlag,
-		baseURLFlag,
-		// Runner Environment Flags
-		testCommandFlag,
-		testFilePatternFlag,
-		testFileExcludePatternFlag,
-		testRunnerFlag,
-		resultPathFlag,
-		splitByExampleFlag,
-		locationPrefixFlag,
-		// Runner Retry Flags
-		disableRetryMutedFlag,
-		retryCommandFlag,
-		testEngineRetryCountFlag,
 	}
+	flags = append(flags, buildEnvironmentFlags...)
+	flags = append(flags, testEngineFlags...)
+	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, previewSelectionFlags()...)
 	return flags
 }
