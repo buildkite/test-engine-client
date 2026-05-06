@@ -26,10 +26,6 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	}
 
 	nodes := p.Parallelism
-	if nodes == 0 {
-		nodes = len(p.Tasks)
-	}
-
 	mixed := fileTotal > 0 && exampleTotal > 0
 	noun := summaryNoun(fileTotal, exampleTotal)
 
@@ -68,9 +64,6 @@ func printRatioBreakdown(w io.Writer, total int, ratio float64, noun string) {
 	known := int(float64(total)*ratio + 0.5)
 	if known > total {
 		known = total
-	}
-	if known < 0 {
-		known = 0
 	}
 	printFormatBreakdown(w, total, known, noun, nil, false)
 }
