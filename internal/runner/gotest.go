@@ -42,12 +42,16 @@ func (g GoTest) GetExamples(files []string) ([]plan.TestCase, error) {
 
 // Run executes the configured command for the specified packages.
 func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmdName, cmdArgs, err := g.commandNameAndArgs(g.TestCommand, testCases)
+	packages, err := g.getPackages(testCases)
 	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+		return fmt.Errorf("failed to generate test package list: %w", err)
 	}
 
-	cmd := exec.Command(cmdName, cmdArgs...)
+	cmd, err := buildCommand(g, packages, retry)
+	if err != nil {
+		return err
+	}
+
 	cmdErr := runAndForwardSignal(cmd)
 
 	// go test output does not differentiate build fail or test fail. They both return 1
@@ -110,10 +114,10 @@ func (g GoTest) GetFiles() ([]string, error) {
 	return validPackages, nil
 }
 
-func (p GoTest) commandNameAndArgs(cmd string, testCases []plan.TestCase) (string, []string, error) {
-	packages, err := p.getPackages(testCases)
-	if err != nil {
-		return "", []string{}, nil
+func (g GoTest) CommandNameAndArgs(packages []string, retry bool) (string, []string, error) {
+	cmd := g.TestCommand
+	if retry {
+		cmd = g.RetryTestCommand
 	}
 
 	concatenatedPackages := strings.Join(packages, " ")
@@ -124,7 +128,7 @@ func (p GoTest) commandNameAndArgs(cmd string, testCases []plan.TestCase) (strin
 		cmd = cmd + " " + concatenatedPackages
 	}
 
-	cmd = strings.Replace(cmd, "{{resultPath}}", p.ResultPath, 1)
+	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
 
 	args, err := shellquote.Split(cmd)
 

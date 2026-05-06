@@ -163,7 +163,7 @@ func TestPytestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 		ResultPath:  "result.json",
 	})
 
-	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -187,7 +187,7 @@ func TestPytestCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -211,7 +211,7 @@ func TestPytestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 
 	wantName := ""
 	wantArgs := []string{}
@@ -242,7 +242,7 @@ func TestPytestCommandNameAndArgs_WithSpacesInTestCase(t *testing.T) {
 		},
 	}
 
-	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}

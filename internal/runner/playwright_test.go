@@ -203,7 +203,7 @@ func TestPlaywrightCommandNameAndArgs_WithPlaceholder(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := rspec.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -227,7 +227,7 @@ func TestPlaywrightCommandNameAndArgs_WithoutPlaceholder(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := rspec.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}

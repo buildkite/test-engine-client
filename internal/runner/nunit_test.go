@@ -117,7 +117,7 @@ func TestNUnit_CommandNameAndArgs(t *testing.T) {
 
 	classNames := []string{"CalculatorTests", "StringUtilsTests"}
 
-	gotName, gotArgs, err := nunit.commandNameAndArgs(nunit.TestCommand, classNames)
+	gotName, gotArgs, err := nunit.CommandNameAndArgs(classNames, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs() error = %v", err)
 	}

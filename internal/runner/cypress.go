@@ -2,7 +2,6 @@ package runner
 
 import (
 	"fmt"
-	"os/exec"
 	"slices"
 	"strings"
 
@@ -38,12 +37,11 @@ func (c Cypress) Run(result *RunResult, testCases []plan.TestCase, retry bool) e
 	for i, tc := range testCases {
 		testPaths[i] = tc.Path
 	}
-	cmdName, cmdArgs, err := c.commandNameAndArgs(c.TestCommand, testPaths)
-	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
-	}
 
-	cmd := exec.Command(cmdName, cmdArgs...)
+	cmd, err := buildCommand(c, testPaths, retry)
+	if err != nil {
+		return err
+	}
 
 	err = runAndForwardSignal(cmd)
 
@@ -70,7 +68,11 @@ func (c Cypress) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in Cypress")
 }
 
-func (c Cypress) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+func (c Cypress) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	cmd := c.TestCommand
+	if retry {
+		cmd = c.RetryTestCommand
+	}
 	words, err := shellquote.Split(cmd)
 	if err != nil {
 		return "", []string{}, err

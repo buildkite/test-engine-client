@@ -70,7 +70,7 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 	testPaths = slices.Compact(testPaths)
 
 	if !retry {
-		commandName, commandArgs, err := j.commandNameAndArgs(j.TestCommand, testPaths)
+		commandName, commandArgs, err := j.CommandNameAndArgs(testPaths, false)
 		if err != nil {
 			return fmt.Errorf("failed to build command: %w", err)
 		}
@@ -183,7 +183,12 @@ func (j Jest) ParseReport(path string) (JestReport, error) {
 	return report, nil
 }
 
-func (j Jest) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+func (j Jest) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	cmd := j.TestCommand
+	if retry {
+		cmd = j.RetryTestCommand
+	}
+
 	words, err := shellquote.Split(cmd)
 	if err != nil {
 		return "", []string{}, err

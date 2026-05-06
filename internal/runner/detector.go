@@ -7,30 +7,12 @@ import (
 	"github.com/buildkite/test-engine-client/internal/plan"
 )
 
-type RunnerConfig struct {
-	TestRunner string
-
-	locationPrefix string
-	// ResultPath is used internally so bktec can read result from Test Runner.
-	// User typically don't need to worry about setting this except in in RSpec and playwright.
-	// In playwright, for example, it can only be configured via a config file, therefore it's mandatory for user to set.
-	ResultPath             string
-	RetryTestCommand       string
-	TagFilters             string
-	TestCommand            string
-	TestFileExcludePattern string
-	TestFilePattern        string
-}
-
-func (c RunnerConfig) LocationPrefix() string {
-	return c.locationPrefix
-}
-
 type TestRunner interface {
 	Run(result *RunResult, testCases []plan.TestCase, retry bool) error
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string
+	CommandNameAndArgs(testCases []string, retry bool) (string, []string, error)
 	LocationPrefix() string
 }
 

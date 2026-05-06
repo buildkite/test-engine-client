@@ -125,7 +125,7 @@ func TestCypressCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 		ResultPath:  "cypress.json",
 	})
 
-	gotName, gotArgs, err := cy.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := cy.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -149,7 +149,7 @@ func TestCypressCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) 
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := cypress.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := cypress.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -173,7 +173,7 @@ func TestCypressCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := cypress.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := cypress.CommandNameAndArgs(testCases, false)
 
 	wantName := ""
 	wantArgs := []string{}

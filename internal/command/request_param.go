@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/test-engine-client/internal/config"
 	"github.com/buildkite/test-engine-client/internal/debug"
 	"github.com/buildkite/test-engine-client/internal/plan"
+	"github.com/buildkite/test-engine-client/internal/runner"
 )
 
 // createRequestParam generates the parameters needed for a test plan request.
@@ -22,7 +23,7 @@ import (
 //
 // If tag filtering is enabled, all files are split into examples to support filtering.
 // Currently only the Pytest runner supports tag filtering.
-func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner TestRunner) (api.TestPlanParams, error) {
+func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
 	testFiles := []plan.TestCase{}
 
 	for _, file := range files {
@@ -118,7 +119,7 @@ func buildSelectionParams(strategy string, params map[string]string) *api.Select
 	}
 }
 
-func getExamplesWithPrefix(filePaths []string, runner TestRunner) ([]plan.TestCase, error) {
+func getExamplesWithPrefix(filePaths []string, runner runner.TestRunner) ([]plan.TestCase, error) {
 	prefix := runner.LocationPrefix()
 	trimmedPaths := make([]string, len(filePaths))
 
@@ -152,7 +153,7 @@ func getExamplesWithPrefix(filePaths []string, runner TestRunner) ([]plan.TestCa
 }
 
 // Splits all the test files into examples to support tag filtering.
-func splitAllFiles(files []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
+func splitAllFiles(files []plan.TestCase, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
 	debug.Printf("Splitting all %d files", len(files))
 	filePaths := make([]string, 0, len(files))
 	for _, file := range files {
@@ -174,7 +175,7 @@ func splitAllFiles(files []plan.TestCase, runner TestRunner) (api.TestPlanParams
 // filterAndSplitFiles filters the test files through the Test Engine API and splits the filtered files into examples.
 // It returns the test plan parameters with the examples from the filtered files and the remaining files that are not filtered.
 // An error is returned if there is a failure in any of the process.
-func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Client, allTestFiles []plan.TestCase, runner TestRunner) (api.TestPlanParamsTest, error) {
+func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Client, allTestFiles []plan.TestCase, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
 	// Filter files that need to be split.
 	debug.Printf("Filtering %d files", len(allTestFiles))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{

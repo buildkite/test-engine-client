@@ -8,6 +8,15 @@ import (
 	"syscall"
 )
 
+func buildCommand(runner TestRunner, testCases []string, retry bool) (*exec.Cmd, error) {
+	commandName, commandArgs, err := runner.CommandNameAndArgs(testCases, retry)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build command: %w", err)
+	}
+
+	return exec.Command(commandName, commandArgs...), nil
+}
+
 // runAndForwardSignal runs the command and forwards any signals received to the command.
 func runAndForwardSignal(cmd *exec.Cmd) error {
 	cmd.Stderr = os.Stderr

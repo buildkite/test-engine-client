@@ -110,7 +110,7 @@ func TestCustom_CommandNameAndArgs(t *testing.T) {
 			t.Fatalf("Failed to create Custom runner: %v", err)
 		}
 
-		gotName, gotArgs, err := custom.commandNameAndArgs(custom.TestCommand, testCases)
+		gotName, gotArgs, err := custom.CommandNameAndArgs(testCases, false)
 		if err != nil {
 			t.Errorf("Custom.cmdNameAndArgs(%q, testCases) error = %v", tc.command, err)
 		}
