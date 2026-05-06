@@ -68,7 +68,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
 
-	plan.PrintSplitSummary(os.Stderr, testPlan)
+	plan.PrintSplitSummary(os.Stdout, testPlan)
 
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
