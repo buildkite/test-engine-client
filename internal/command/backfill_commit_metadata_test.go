@@ -320,7 +320,7 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
 
-		case "/v2/analytics/organizations/my-org/commit-metadata-backfill/presigned-upload":
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"uri": "s3://bucket/test.tar.gz",
 				"form": map[string]interface{}{
@@ -445,6 +445,7 @@ func getUploadConfig(serverURL string, filePath string) *config.Config {
 	cfg := config.New()
 	cfg.AccessToken = "test-token"
 	cfg.OrganizationSlug = "my-org"
+	cfg.SuiteSlug = "my-suite"
 	cfg.ServerBaseUrl = serverURL
 	cfg.UploadFile = filePath
 	return &cfg
@@ -491,7 +492,7 @@ func TestBackfillCommitMetadata_UploadOnly_HappyPath(t *testing.T) {
 				"uuid":   "token-uuid",
 				"scopes": []string{"write_suites"},
 			})
-		case "/v2/analytics/organizations/my-org/commit-metadata-backfill/presigned-upload":
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"uri": "s3://bucket/test.tar.gz",
 				"form": map[string]interface{}{
