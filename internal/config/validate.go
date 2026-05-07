@@ -123,8 +123,9 @@ func (c *Config) ValidateForRun() error {
 }
 
 // ValidateForBackfillCommitMetadata validates config for the backfill-commit-metadata command.
-// When --upload is set, only API connection fields are required.
-// Otherwise, requires API connection fields plus suite slug, days, and concurrency.
+// API connection fields and suite slug are required in all modes (the presigned upload
+// endpoint is suite-scoped). Collection-only fields (days, concurrency) are checked when
+// --upload is not set.
 func (c *Config) ValidateForBackfillCommitMetadata() error {
 	if c.ServerBaseUrl == "" {
 		c.ServerBaseUrl = "https://api.buildkite.com"
