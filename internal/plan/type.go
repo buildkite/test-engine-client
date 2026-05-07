@@ -22,6 +22,32 @@ type TestCase struct {
 	// In go test, the path can only be package name like "example.com/foo/bar".
 	Path  string `json:"path"`
 	Scope string `json:"scope,omitempty"`
+	// TimingSampleSize is the number of historical executions/runs behind this
+	// case's EstimatedDuration. For file-scoped cases this is distinct runs,
+	// for example-scoped cases this is raw executions. Defaults to 0 when no
+	// history is available or the field is missing on older/cached plans.
+	TimingSampleSize int `json:"timing_sample_size,omitempty"`
+}
+
+// TimingMetadata describes the historical timing data the server used to
+// build the test plan, broken down per case format. Either key may be
+// omitted when the plan contains no cases of that format (or when
+// parallelism is 1 and no timings were fetched).
+type TimingMetadata struct {
+	File    *FormatTimingMetadata `json:"file,omitempty"`
+	Example *FormatTimingMetadata `json:"example,omitempty"`
+}
+
+// FormatTimingMetadata is the timing data for a single case format
+// (file-scoped or example-scoped). All durations are in milliseconds and
+// may be fractional (the server-side median can be the mean of two middle
+// values).
+type FormatTimingMetadata struct {
+	// MedianDuration is the median of historical timings used to backfill
+	// cases without history. Nil when no history existed at all.
+	MedianDuration *float64 `json:"median_duration"`
+	// DefaultDuration is the assumed duration when no history exists at all.
+	DefaultDuration float64 `json:"default_duration"`
 }
 
 // Task represents the task for the given node.
@@ -42,4 +68,12 @@ type TestPlan struct {
 	Fallback     bool
 	MutedTests   []TestCase `json:"muted_tests,omitempty"`
 	SkippedTests []TestCase `json:"skipped_tests,omitempty"`
+	// TimingMetadata describes the historical timing data the server used to
+	// build this plan. Nil when missing (e.g. error plans, plans cached before
+	// the server began emitting it).
+	TimingMetadata *TimingMetadata `json:"timing_metadata,omitempty"`
+	// KnownTimingsRatio is the fraction (0.0–1.0) of cases that had historical
+	// timing data when the plan was built. Used to summarise plans where
+	// per-format timing metadata is not emitted (e.g. parallelism == 1).
+	KnownTimingsRatio *float64 `json:"known_timings_ratio,omitempty"`
 }
