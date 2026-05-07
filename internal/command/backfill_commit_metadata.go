@@ -229,7 +229,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		fmt.Fprintf(os.Stderr, "Wrote %s\n", cfg.Output)
 	} else {
 		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
-		presigned, err := apiClient.PresignUpload(ctx)
+		presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
 		if err != nil {
 			removeTarball = false
 			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
@@ -277,7 +277,7 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 
 	// 4. Request presigned upload URL
 	fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
-	presigned, err := apiClient.PresignUpload(ctx)
+	presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
 	if err != nil {
 		return fmt.Errorf("presigning upload: %w", err)
 	}
