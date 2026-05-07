@@ -142,16 +142,18 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 		c.errs.appendFieldError("--organization-slug / BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
 	}
 
-	// Upload-only mode: only need API connection fields (no suite slug, days, etc.)
+	// SuiteSlug is required in both modes: the presigned upload endpoint is
+	// suite-scoped, so even upload-only needs the suite to construct the URL.
+	if c.SuiteSlug == "" {
+		c.errs.appendFieldError("--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
+	}
+
+	// Upload-only mode: skip days/concurrency checks (those govern collection).
 	if c.UploadFile != "" {
 		if len(c.errs) > 0 {
 			return c.errs
 		}
 		return nil
-	}
-
-	if c.SuiteSlug == "" {
-		c.errs.appendFieldError("--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
 	if got, min := c.Days, 1; got < min {
