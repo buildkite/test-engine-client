@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-- **Breaking (preview feature):** `bktec tools backfill-commit-metadata` now calls the suite-scoped commit-metadata backfill presigned-upload endpoint (`POST /v2/analytics/organizations/:org/suites/:suite/commit-metadata-backfill/presigned-upload`) instead of the org-scoped one. `--suite-slug` (or `BUILDKITE_TEST_ENGINE_SUITE_SLUG`) is now required for `--upload` as well as for collection. The legacy org-scoped endpoint is being removed in a follow-up server release. This is a preview feature gated behind `BKTEC_PREVIEW_SELECTION`; the only known consumer of the legacy endpoint is bktec itself, so no customer-facing usage is affected.
+- **Breaking (preview feature):** `bktec tools backfill-commit-metadata` now calls the suite-scoped commit-metadata backfill presigned-upload endpoint (`POST /v2/analytics/organizations/:org/suites/:suite/commit-metadata-backfill/presigned-upload`) instead of the org-scoped one. `--suite-slug` (or `BUILDKITE_TEST_ENGINE_SUITE_SLUG`) is now required for `--upload` as well as for collection. The legacy org-scoped endpoint is being removed in a follow-up server release. This is a preview feature gated behind `BKTEC_PREVIEW_SELECTION`.
 - Remove Pact contract testing for the Test Engine API. Consumer tests now use plain `httptest` fixtures (no behaviour change for users); the `internal/api/pacts/` directory, `pact-go` dependency, and `bin/{publish-pact,release-pact-version,pact-record-support-ended}` scripts have been deleted.
 
 ## 2.4.0 - 2026-04-17
