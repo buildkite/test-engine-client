@@ -146,11 +146,15 @@ tar tzf commit-metadata.tar.gz
 # commit-metadata.jsonl
 # metadata.json
 
-# Upload when ready
-bktec tools backfill-commit-metadata --upload commit-metadata.tar.gz
+# Upload when ready (--suite-slug required, see breaking change note below)
+bktec tools backfill-commit-metadata \
+  --upload commit-metadata.tar.gz \
+  --suite-slug "my-suite"
 ```
 
 The API access token requires `read_suites` and `write_suites` scopes.
+
+> **Breaking change (preview feature):** the commit-metadata backfill upload endpoint is now suite-scoped. `--suite-slug` is required for `--upload` (previously it was only required for collection). The legacy org-scoped endpoint is being removed in a follow-up server release. The only known consumer of the legacy endpoint is bktec itself; no customer-facing usage is affected.
 
 For detailed usage, flags, and configuration options, see the [Commit Metadata Backfill](./docs/commit-metadata-backfill.md) guide.
 

@@ -69,10 +69,14 @@ bktec tools backfill-commit-metadata --days 30 --concurrency 5
 **Upload a previously generated tarball:**
 
 ```sh
-bktec tools backfill-commit-metadata --upload commit-metadata.tar.gz
+bktec tools backfill-commit-metadata \
+  --upload commit-metadata.tar.gz \
+  --suite-slug "my-suite"
 ```
 
 This is useful when you want to generate and upload in separate steps or when retrying a failed upload. If the command fails during upload, it retains the generated tarball locally and prints its path. You can then retry with `--upload` without re-running the entire metadata collection.
+
+`--suite-slug` is required even with `--upload` because the presigned upload endpoint is suite-scoped: the server partitions tarballs by suite for the training pipeline. Use the same suite slug that produced the tarball.
 
 ## Configuration
 
@@ -90,7 +94,7 @@ This is useful when you want to generate and upload in separate steps or when re
 | `BUILDKITE_TEST_ENGINE_BACKFILL_CONCURRENCY` | `--concurrency` | `10` | Number of concurrent git operations for diff collection |
 | `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` | `--debug` | `false` | Enable debug output |
 
-When using `--upload`, only `--access-token` and `--organization-slug` are required. The `--suite-slug`, `--days`, and other backfill-specific flags are not needed because the upload endpoint is organization-scoped.
+When using `--upload`, `--access-token`, `--organization-slug`, and `--suite-slug` are required. Collection-specific flags (`--days`, `--concurrency`, `--remote`, `--skip-diffs`) are not needed because the command only uploads an existing tarball.
 
 ### API access token scopes
 
