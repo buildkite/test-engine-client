@@ -556,6 +556,41 @@ func TestBackfillCommitMetadata_UploadOnly_FileNotFound(t *testing.T) {
 	}
 }
 
+func TestBackfillCommitMetadata_UploadOnly_MissingSuiteSlugFailsBeforeNetwork(t *testing.T) {
+	// Pins the contract that uploadOnly's defensive guard catches an empty
+	// suite slug before any network round trip. Today this can only be hit if
+	// a caller skips cfg.ValidateForBackfillCommitMetadata(); the guard makes
+	// the layer boundary safe regardless.
+
+	var requestCount int
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer apiServer.Close()
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "test-tarball-*.tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.WriteString("fake tarball content")
+	tmpFile.Close()
+
+	cfg := getUploadConfig(apiServer.URL, tmpFile.Name())
+	cfg.SuiteSlug = "" // bypass validation gate, exercise the in-command guard
+
+	err = BackfillCommitMetadata(context.Background(), cfg, nil)
+	if err == nil {
+		t.Fatal("expected error for empty suite slug, got nil")
+	}
+	if !strings.Contains(err.Error(), "suite slug must not be blank") {
+		t.Errorf("expected suite-slug error, got: %v", err)
+	}
+	if requestCount != 0 {
+		t.Errorf("expected no network requests, got %d", requestCount)
+	}
+}
+
 func TestBackfillCommitMetadata_UploadOnly_ScopeCheckFails(t *testing.T) {
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
