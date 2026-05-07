@@ -2,7 +2,6 @@ package runner
 
 import (
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -65,19 +64,13 @@ func (n NUnit) GetExamples(files []string) ([]plan.TestCase, error) {
 // Test cases are mapped from .cs file paths to class names, and joined into a
 // FullyQualifiedName~ filter expression.
 func (n NUnit) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	command := n.TestCommand
-	if retry {
-		command = n.RetryTestCommand
-	}
-
 	classNames := extractClassNames(testCases)
 
-	cmdName, cmdArgs, err := n.commandNameAndArgs(command, classNames)
+	cmd, err := buildCommand(n, classNames, retry)
 	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+		return err
 	}
 
-	cmd := exec.Command(cmdName, cmdArgs...)
 	cmdErr := runAndForwardSignal(cmd)
 
 	testResults, parseErr := loadAndParseJUnitXmlResult(n.ResultPath)
@@ -128,7 +121,12 @@ func buildTestFilter(classNames []string) string {
 	return strings.Join(parts, "|")
 }
 
-func (n NUnit) commandNameAndArgs(cmd string, classNames []string) (string, []string, error) {
+func (n NUnit) CommandNameAndArgs(classNames []string, retry bool) (string, []string, error) {
+	cmd := n.TestCommand
+	if retry {
+		cmd = n.RetryTestCommand
+	}
+
 	filter := buildTestFilter(classNames)
 
 	cmd = strings.Replace(cmd, "{{testFilter}}", filter, 1)

@@ -307,7 +307,7 @@ func TestRspecCommandNameAndArgs_WithPlaceholder(t *testing.T) {
 		ResultPath:  "tmp/rspec.json",
 	})
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := rspec.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -331,7 +331,7 @@ func TestRspecCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := rspec.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -355,7 +355,7 @@ func TestRspecCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := rspec.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := rspec.CommandNameAndArgs(testCases, false)
 
 	wantName := ""
 	wantArgs := []string{}

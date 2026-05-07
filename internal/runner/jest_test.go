@@ -345,7 +345,7 @@ func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 		ResultPath:  "jest.json",
 	})
 
-	gotName, gotArgs, err := jest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -370,7 +370,7 @@ func TestJestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 		ResultPath:  "jest.json",
 	})
 
-	gotName, gotArgs, err := jest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -394,7 +394,7 @@ func TestJestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := jest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, false)
 
 	wantName := ""
 	wantArgs := []string{}
@@ -425,7 +425,7 @@ func TestJestCommandNameAndArgs_WithSpecialCharactersInPath(t *testing.T) {
 		ResultPath:  "jest.json",
 	})
 
-	gotName, gotArgs, err := jest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}

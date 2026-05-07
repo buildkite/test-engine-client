@@ -65,18 +65,10 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		testPaths[i] = tc.Path
 	}
 
-	command := p.TestCommand
-
-	if retry {
-		command = p.RetryTestCommand
-	}
-
-	cmdName, cmdArgs, err := p.commandNameAndArgs(command, testPaths)
+	cmd, err := buildCommand(p, testPaths, retry)
 	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+		return err
 	}
-
-	cmd := exec.Command(cmdName, cmdArgs...)
 
 	cmdErr := runAndForwardSignal(cmd)
 
@@ -211,7 +203,12 @@ func mapNodeIdToTestCase(nodeId string) plan.TestCase {
 	}
 }
 
-func (p Pytest) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+func (p Pytest) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	cmd := p.TestCommand
+	if retry {
+		cmd = p.RetryTestCommand
+	}
+
 	testExamples := shellquote.Join(testCases...)
 
 	if strings.Contains(cmd, "{{testExamples}}") {

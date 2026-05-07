@@ -162,7 +162,7 @@ func TestPytestPantsCommandNameAndArgs_WithoutMergeJson(t *testing.T) {
 		ResultPath:  "result.json",
 	})
 
-	_, _, err := pytest.commandNameAndArgs(testCommand, testCases)
+	_, _, err := pytest.CommandNameAndArgs(testCases, false)
 	if err == nil {
 		t.Error("commandNameAndArgs() error = nil, want error")
 	}
@@ -176,7 +176,7 @@ func TestPytestPantsCommandNameAndArgs_WithoutResultPath(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	_, _, err := pytest.commandNameAndArgs(testCommand, testCases)
+	_, _, err := pytest.CommandNameAndArgs(testCases, false)
 	if err == nil {
 		t.Error("commandNameAndArgs() error = nil, want error")
 	}
@@ -190,7 +190,7 @@ func TestPytestPantsCommandNameAndArgs_PytestArgsBeforeDash(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	_, _, err := pytest.commandNameAndArgs(testCommand, testCases)
+	_, _, err := pytest.CommandNameAndArgs(testCases, false)
 	if err == nil {
 		t.Error("commandNameAndArgs() error = nil, want error")
 	}
@@ -204,7 +204,7 @@ func TestPytestPantsCommandNameAndArgs_NoDashSeparator(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 	if err == nil {
 		t.Error("commandNameAndArgs() error = nil, want error")
 	}
@@ -229,7 +229,7 @@ func TestPytestPantsCommandNameAndArgs_ValidCommand(t *testing.T) {
 		ResultPath:  "result.json",
 	})
 
-	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -253,7 +253,7 @@ func TestPytestPantsCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := pytest.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 
 	wantName := ""
 	wantArgs := []string{}

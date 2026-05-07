@@ -3,7 +3,6 @@ package runner
 import (
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
@@ -64,13 +63,11 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	for i, tc := range testCases {
 		testPaths[i] = tc.Path
 	}
-	cmdName, cmdArgs, err := r.commandNameAndArgs(r.TestCommand, testPaths)
 
+	cmd, err := buildCommand(r, testPaths, retry)
 	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+		return err
 	}
-
-	cmd := exec.Command(cmdName, cmdArgs...)
 
 	cmdErr := runAndForwardSignal(cmd)
 
@@ -103,7 +100,11 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	return cmdErr
 }
 
-func (r Custom) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+func (r Custom) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	cmd := r.TestCommand
+	if retry {
+		cmd = r.RetryTestCommand
+	}
 	cmd = strings.Replace(cmd, "{{testExamples}}", strings.Join(testCases, " "), 1)
 
 	words, err := shellquote.Split(cmd)

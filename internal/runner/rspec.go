@@ -72,25 +72,17 @@ func (r Rspec) GetFiles() ([]string, error) {
 //
 // Test failure is not considered an error, and is instead returned as a RunResult.
 func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	command := r.TestCommand
-
-	if retry {
-		command = r.RetryTestCommand
-	}
-
 	testPaths := make([]string, len(testCases))
 	for i, tc := range testCases {
 		testPaths[i] = tc.Path
 	}
 
-	commandName, commandArgs, cmdErr := r.commandNameAndArgs(command, testPaths)
-	if cmdErr != nil {
-		return fmt.Errorf("failed to build command: %w", cmdErr)
+	cmd, err := buildCommand(r, testPaths, retry)
+	if err != nil {
+		return err
 	}
 
-	cmd := exec.Command(commandName, commandArgs...)
-
-	cmdErr = runAndForwardSignal(cmd)
+	cmdErr := runAndForwardSignal(cmd)
 
 	// RSpec exits with a non-zero status code when there are test failures,
 	// so we should always attempt to parse the report even if the command returns an error.
@@ -164,9 +156,14 @@ func (r Rspec) ParseReport(path string) (RspecReport, error) {
 	return report, nil
 }
 
-// commandNameAndArgs replaces the "{{testExamples}}" placeholder in the test command with the test cases.
+// CommandNameAndArgs replaces the "{{testExamples}}" placeholder in the test command with the test cases.
 // It returns the command name and arguments to run the tests.
-func (r Rspec) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+func (r Rspec) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	cmd := r.TestCommand
+	if retry {
+		cmd = r.RetryTestCommand
+	}
+
 	words, err := shellquote.Split(cmd)
 	if err != nil {
 		return "", []string{}, err
@@ -202,7 +199,7 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 		os.Remove(f.Name())
 	}()
 
-	cmdName, cmdArgs, err := r.commandNameAndArgs(r.TestCommand, files)
+	cmdName, cmdArgs, err := r.CommandNameAndArgs(files, false)
 	if err != nil {
 		return nil, err
 	}

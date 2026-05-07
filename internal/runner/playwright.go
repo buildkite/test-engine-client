@@ -27,6 +27,10 @@ func NewPlaywright(p RunnerConfig) Playwright {
 		p.TestCommand = "npx playwright test"
 	}
 
+	if p.RetryTestCommand == "" {
+		p.RetryTestCommand = p.TestCommand
+	}
+
 	if p.TestFilePattern == "" {
 		p.TestFilePattern = "**/{*.spec,*.test}.{ts,js}"
 	}
@@ -42,12 +46,10 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 		testPaths[i] = tc.Path
 	}
 
-	cmdName, cmdArgs, err := p.commandNameAndArgs(p.TestCommand, testPaths)
+	cmd, err := buildCommand(p, testPaths, retry)
 	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+		return err
 	}
-
-	cmd := exec.Command(cmdName, cmdArgs...)
 
 	cmdErr := runAndForwardSignal(cmd)
 
@@ -106,7 +108,12 @@ func (p Playwright) getTestResultsFromSuite(suite PlaywrightReportSuite, suiteNa
 	return testResults
 }
 
-func (p Playwright) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+func (p Playwright) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	cmd := p.TestCommand
+	if retry {
+		cmd = p.RetryTestCommand
+	}
+
 	words, err := shellquote.Split(cmd)
 	if err != nil {
 		return "", []string{}, err
@@ -167,7 +174,7 @@ func (p Playwright) GetExamples(files []string) ([]plan.TestCase, error) {
 	tmpFile.Close()
 	defer os.Remove(tmpPath)
 
-	cmdName, cmdArgs, err := p.commandNameAndArgs(p.TestCommand, files)
+	cmdName, cmdArgs, err := p.CommandNameAndArgs(files, false)
 	if err != nil {
 		return []plan.TestCase{}, err
 	}

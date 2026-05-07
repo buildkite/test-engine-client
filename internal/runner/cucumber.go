@@ -67,22 +67,15 @@ func (c Cucumber) GetFiles() ([]string, error) {
 
 // Run executes the Cucumber command and records results.
 func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	command := c.TestCommand
-	if retry {
-		command = c.RetryTestCommand
-	}
-
 	testPaths := make([]string, len(testCases))
 	for i, tc := range testCases {
 		testPaths[i] = tc.Path
 	}
 
-	commandName, commandArgs, err := c.commandNameAndArgs(command, testPaths)
+	cmd, err := buildCommand(c, testPaths, retry)
 	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+		return err
 	}
-
-	cmd := exec.Command(commandName, commandArgs...)
 
 	cmdErr := runAndForwardSignal(cmd)
 
@@ -170,7 +163,7 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 		}
 	}()
 
-	cmdName, _, err := c.commandNameAndArgs(c.TestCommand, files)
+	cmdName, _, err := c.CommandNameAndArgs(files, false)
 	if err != nil {
 		return nil, err
 	}
@@ -213,8 +206,13 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 	return testCases, nil
 }
 
-// commandNameAndArgs replaces placeholders and returns command + args.
-func (c Cucumber) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+// CommandNameAndArgs replaces placeholders and returns command + args.
+func (c Cucumber) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	cmd := c.TestCommand
+	if retry {
+		cmd = c.RetryTestCommand
+	}
+
 	words, err := shellquote.Split(cmd)
 	if err != nil {
 		return "", []string{}, err

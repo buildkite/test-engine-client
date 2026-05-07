@@ -112,7 +112,7 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	runners := []TestRunner{
+	runners := []runner.TestRunner{
 		runner.Jest{}, runner.Cypress{},
 	}
 
@@ -375,6 +375,10 @@ func (r metadataTestRunner) LocationPrefix() string {
 
 func (r metadataTestRunner) Run(result *runner.RunResult, testCases []plan.TestCase, retry bool) error {
 	return nil
+}
+
+func (r metadataTestRunner) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	return "metadata-test-runner", testCases, nil
 }
 
 func TestCreateRequestParams_FilterTestsError(t *testing.T) {

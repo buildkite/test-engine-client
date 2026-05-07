@@ -422,7 +422,7 @@ func TestCucumberCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 		ResultPath:  "cucumber.json",
 	})
 
-	gotName, gotArgs, err := c.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := c.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -447,7 +447,7 @@ func TestCucumberCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T)
 		ResultPath:  "cucumber.json",
 	})
 
-	gotName, gotArgs, err := c.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := c.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
 	}
@@ -471,7 +471,7 @@ func TestCucumberCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 		TestCommand: testCommand,
 	})
 
-	gotName, gotArgs, err := c.commandNameAndArgs(testCommand, testCases)
+	gotName, gotArgs, err := c.CommandNameAndArgs(testCases, false)
 
 	wantName := ""
 	wantArgs := []string{}

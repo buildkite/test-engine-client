@@ -56,18 +56,10 @@ func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry boo
 		testPaths[i] = tc.Path
 	}
 
-	command := p.TestCommand
-
-	if retry {
-		command = p.RetryTestCommand
-	}
-
-	cmdName, cmdArgs, err := p.commandNameAndArgs(command, testPaths)
+	cmd, err := buildCommand(p, testPaths, retry)
 	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+		return err
 	}
-
-	cmd := exec.Command(cmdName, cmdArgs...)
 
 	cmdErr := runAndForwardSignal(cmd)
 
@@ -110,7 +102,12 @@ func (p PytestPants) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in pytest pants")
 }
 
-func (p PytestPants) commandNameAndArgs(cmd string, testCases []string) (string, []string, error) {
+func (p PytestPants) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+	cmd := p.TestCommand
+	if retry {
+		cmd = p.RetryTestCommand
+	}
+
 	if strings.Contains(cmd, "{{testExamples}}") {
 		return "", []string{}, fmt.Errorf("currently, bktec does not support dynamically injecting {{testExamples}}. Please ensure the test command in BUILDKITE_TEST_ENGINE_TEST_CMD does *not* include {{testExamples}}")
 	}
