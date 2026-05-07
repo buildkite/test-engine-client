@@ -27,6 +27,10 @@ func NewPlaywright(p RunnerConfig) Playwright {
 		p.TestCommand = "npx playwright test"
 	}
 
+	if p.RetryTestCommand == "" {
+		p.RetryTestCommand = p.TestCommand
+	}
+
 	if p.TestFilePattern == "" {
 		p.TestFilePattern = "**/{*.spec,*.test}.{ts,js}"
 	}
