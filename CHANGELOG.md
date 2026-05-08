@@ -2,6 +2,7 @@
 
 ## Unreleased
 - Remove Pact contract testing for the Test Engine API. Consumer tests now use plain `httptest` fixtures (no behaviour change for users); the `internal/api/pacts/` directory, `pact-go` dependency, and `bin/{publish-pact,release-pact-version,pact-record-support-ended}` scripts have been deleted.
+- Fix `bktec plan` so it honors `BUILDKITE_PARALLEL_JOB_COUNT` (and the `--parallelism` flag). Previously the value was dropped before being sent to the `filter_tests` API, which caused split-by-example to never identify slow files when planning.
 
 ## 2.4.0 - 2026-04-17
 - Automatically collect git commit metadata on `bktec plan` when `--selection-strategy` is set. Commit info, diff stats, and context fields are sent with the plan request so test selection has the signal it needs without the caller shelling out to git. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.

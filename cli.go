@@ -519,6 +519,7 @@ func planCommandFlags() []cli.Flag {
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)
 	flags = append(flags, runnerEnvironmentFlags...)
+	flags = append(flags, parallelismFlag)
 	flags = append(flags, previewSelectionFlags()...)
 	return flags
 }
