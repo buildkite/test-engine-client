@@ -117,7 +117,7 @@ func TestCypressGetFiles(t *testing.T) {
 }
 
 func TestCypressCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"cypress/e2e/passing_spec.cy.js", "cypress/e2e/flaky_spec.cy.js"}
+	testCases := []plan.TestCase{{Path: "cypress/e2e/passing_spec.cy.js"}, {Path: "cypress/e2e/flaky_spec.cy.js"}}
 	testCommand := "cypress run --spec {{testExamples}}"
 
 	cy := NewCypress(RunnerConfig{
@@ -142,7 +142,7 @@ func TestCypressCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestCypressCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
-	testCases := []string{"cypress/e2e/passing_spec.cy.js", "cypress/e2e/flaky_spec.cy.js"}
+	testCases := []plan.TestCase{{Path: "cypress/e2e/passing_spec.cy.js"}, {Path: "cypress/e2e/flaky_spec.cy.js"}}
 	testCommand := "cypress run"
 
 	cypress := NewCypress(RunnerConfig{
@@ -166,7 +166,7 @@ func TestCypressCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) 
 }
 
 func TestCypressCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	testCases := []string{"cypress/e2e/passing_spec.cy.js", "cypress/e2e/flaky_spec.cy.js"}
+	testCases := []plan.TestCase{{Path: "cypress/e2e/passing_spec.cy.js"}, {Path: "cypress/e2e/flaky_spec.cy.js"}}
 	testCommand := "cypress run --options '{{testExamples}}"
 
 	cypress := NewCypress(RunnerConfig{

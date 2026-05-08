@@ -51,12 +51,7 @@ func NewPytestPants(c RunnerConfig) PytestPants {
 }
 
 func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	testPaths := make([]string, len(testCases))
-	for i, tc := range testCases {
-		testPaths[i] = tc.Path
-	}
-
-	cmd, err := buildCommand(p, testPaths, retry)
+	cmd, err := buildCommand(p, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -102,7 +97,7 @@ func (p PytestPants) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in pytest pants")
 }
 
-func (p PytestPants) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+func (p PytestPants) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
 	cmd := p.TestCommand
 	if retry {
 		cmd = p.RetryTestCommand

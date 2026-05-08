@@ -37,12 +37,7 @@ func NewCypress(c RunnerConfig) Cypress {
 }
 
 func (c Cypress) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	testPaths := make([]string, len(testCases))
-	for i, tc := range testCases {
-		testPaths[i] = tc.Path
-	}
-
-	cmd, err := buildCommand(c, testPaths, retry)
+	cmd, err := buildCommand(c, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -72,7 +67,7 @@ func (c Cypress) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in Cypress")
 }
 
-func (c Cypress) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+func (c Cypress) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
 	cmd := c.TestCommand
 	if retry {
 		cmd = c.RetryTestCommand
@@ -82,7 +77,10 @@ func (c Cypress) CommandNameAndArgs(testCases []string, retry bool) (string, []s
 		return "", []string{}, err
 	}
 	idx := slices.Index(words, "{{testExamples}}")
-	specs := strings.Join(testCases, ",")
+
+	testPaths := pathsFromTestCases(testCases)
+
+	specs := strings.Join(testPaths, ",")
 	if idx < 0 {
 		words = append(words, "--spec", specs)
 	} else {

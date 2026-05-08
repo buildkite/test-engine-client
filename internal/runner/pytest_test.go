@@ -155,7 +155,7 @@ func TestPytestGetFiles(t *testing.T) {
 }
 
 func TestPytestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"failed_test.py", "test_sample.py"}
+	testCases := []plan.TestCase{{Path: "failed_test.py"}, {Path: "test_sample.py"}}
 	testCommand := "pytest {{testExamples}} --full-trace --json={{resultPath}}"
 
 	pytest := NewPytest(RunnerConfig{
@@ -180,7 +180,7 @@ func TestPytestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestPytestCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
-	testCases := []string{"failed_test.py", "test_sample.py"}
+	testCases := []plan.TestCase{{Path: "failed_test.py"}, {Path: "test_sample.py"}}
 	testCommand := "pytest --full-trace"
 
 	pytest := NewPytest(RunnerConfig{
@@ -204,7 +204,7 @@ func TestPytestCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
 }
 
 func TestPytestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	testCases := []string{"failed_test.py", "test_sample.py"}
+	testCases := []plan.TestCase{{Path: "failed_test.py"}, {Path: "test_sample.py"}}
 	testCommand := "pytest '{{testExamples}}"
 
 	pytest := NewPytest(RunnerConfig{
@@ -228,9 +228,9 @@ func TestPytestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 }
 
 func TestPytestCommandNameAndArgs_WithSpacesInTestCase(t *testing.T) {
-	testCases := []string{
-		"foo/bar.py::TestFoo::test_foo[min-WeightedScalar-valid_reduce_ops0-only sum or avg are supported-2]",
-		"test_sample.py::test_simple",
+	testCases := []plan.TestCase{
+		{Path: "foo/bar.py::TestFoo::test_foo[min-WeightedScalar-valid_reduce_ops0-only sum or avg are supported-2]"},
+		{Path: "test_sample.py::test_simple"},
 	}
 	testCommand := "pytest {{testExamples}} --json={{resultPath}}"
 

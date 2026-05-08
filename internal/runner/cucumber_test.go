@@ -414,7 +414,7 @@ func TestCucumberRun_ScenarioStatuses(t *testing.T) {
 }
 
 func TestCucumberCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"features/spells/expelliarmus.feature", "features/failure.feature"}
+	testCases := []plan.TestCase{{Path: "features/spells/expelliarmus.feature"}, {Path: "features/failure.feature"}}
 	testCommand := "cucumber --format json --out {{resultPath}} {{testExamples}}"
 
 	c := NewCucumber(RunnerConfig{
@@ -439,7 +439,7 @@ func TestCucumberCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestCucumberCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
-	testCases := []string{"features/spells/expelliarmus.feature", "features/failure.feature"}
+	testCases := []plan.TestCase{{Path: "features/spells/expelliarmus.feature"}, {Path: "features/failure.feature"}}
 	testCommand := "cucumber --format json --out {{resultPath}}"
 
 	c := NewCucumber(RunnerConfig{
@@ -464,7 +464,7 @@ func TestCucumberCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T)
 }
 
 func TestCucumberCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	testCases := []string{"features/spells/expelliarmus.feature", "features/failure.feature"}
+	testCases := []plan.TestCase{{Path: "features/spells/expelliarmus.feature"}, {Path: "features/failure.feature"}}
 	testCommand := "cucumber --format json --out '{{resultPath}} {{testExamples}}"
 
 	c := NewCucumber(RunnerConfig{

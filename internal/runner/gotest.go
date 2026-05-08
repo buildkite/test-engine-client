@@ -42,12 +42,7 @@ func (g GoTest) GetExamples(files []string) ([]plan.TestCase, error) {
 
 // Run executes the configured command for the specified packages.
 func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	packages, err := g.getPackages(testCases)
-	if err != nil {
-		return fmt.Errorf("failed to generate test package list: %w", err)
-	}
-
-	cmd, err := buildCommand(g, packages, retry)
+	cmd, err := buildCommand(g, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -114,7 +109,12 @@ func (g GoTest) GetFiles() ([]string, error) {
 	return validPackages, nil
 }
 
-func (g GoTest) CommandNameAndArgs(packages []string, retry bool) (string, []string, error) {
+func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
+	packages, err := g.getPackages(testCases)
+	if err != nil {
+		return "", []string{}, fmt.Errorf("failed to generate test package list: %w", err)
+	}
+
 	cmd := g.TestCommand
 	if retry {
 		cmd = g.RetryTestCommand

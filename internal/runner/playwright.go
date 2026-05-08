@@ -41,12 +41,7 @@ func NewPlaywright(p RunnerConfig) Playwright {
 }
 
 func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	testPaths := make([]string, len(testCases))
-	for i, tc := range testCases {
-		testPaths[i] = tc.Path
-	}
-
-	cmd, err := buildCommand(p, testPaths, retry)
+	cmd, err := buildCommand(p, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -108,7 +103,7 @@ func (p Playwright) getTestResultsFromSuite(suite PlaywrightReportSuite, suiteNa
 	return testResults
 }
 
-func (p Playwright) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+func (p Playwright) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
 	cmd := p.TestCommand
 	if retry {
 		cmd = p.RetryTestCommand
@@ -118,11 +113,14 @@ func (p Playwright) CommandNameAndArgs(testCases []string, retry bool) (string, 
 	if err != nil {
 		return "", []string{}, err
 	}
+
+	testPaths := pathsFromTestCases(testCases)
+
 	idx := slices.Index(words, "{{testExamples}}")
 	if idx < 0 {
-		words = append(words, testCases...)
+		words = append(words, testPaths...)
 	} else {
-		words = slices.Replace(words, idx, idx+1, testCases...)
+		words = slices.Replace(words, idx, idx+1, testPaths...)
 	}
 
 	return words[0], words[1:], nil
@@ -174,7 +172,8 @@ func (p Playwright) GetExamples(files []string) ([]plan.TestCase, error) {
 	tmpFile.Close()
 	defer os.Remove(tmpPath)
 
-	cmdName, cmdArgs, err := p.CommandNameAndArgs(files, false)
+	testCases := testCasesFromPaths(files)
+	cmdName, cmdArgs, err := p.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		return []plan.TestCase{}, err
 	}
@@ -199,7 +198,7 @@ func (p Playwright) GetExamples(files []string) ([]plan.TestCase, error) {
 		return []plan.TestCase{}, fmt.Errorf("failed to parse playwright test list output: %w", err)
 	}
 
-	var testCases []plan.TestCase
+	testCases = nil
 	for _, suite := range report.Suites {
 		testCases = append(testCases, p.getTestCasesFromSuite(suite, suite.Title)...)
 	}

@@ -64,9 +64,7 @@ func (n NUnit) GetExamples(files []string) ([]plan.TestCase, error) {
 // Test cases are mapped from .cs file paths to class names, and joined into a
 // FullyQualifiedName~ filter expression.
 func (n NUnit) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	classNames := extractClassNames(testCases)
-
-	cmd, err := buildCommand(n, classNames, retry)
+	cmd, err := buildCommand(n, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -121,7 +119,9 @@ func buildTestFilter(classNames []string) string {
 	return strings.Join(parts, "|")
 }
 
-func (n NUnit) CommandNameAndArgs(classNames []string, retry bool) (string, []string, error) {
+func (n NUnit) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
+	classNames := extractClassNames(testCases)
+
 	cmd := n.TestCommand
 	if retry {
 		cmd = n.RetryTestCommand

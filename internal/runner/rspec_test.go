@@ -299,7 +299,7 @@ func TestRspecRun_SignaledError(t *testing.T) {
 }
 
 func TestRspecCommandNameAndArgs_WithPlaceholder(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
+	testCases := []plan.TestCase{{Path: "spec/models/user_spec.rb"}, {Path: "spec/models/billing_spec.rb"}}
 	testCommand := "bin/rspec --options {{testExamples}} --out {{resultPath}}"
 
 	rspec := NewRspec(RunnerConfig{
@@ -324,7 +324,7 @@ func TestRspecCommandNameAndArgs_WithPlaceholder(t *testing.T) {
 }
 
 func TestRspecCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
+	testCases := []plan.TestCase{{Path: "spec/models/user_spec.rb"}, {Path: "spec/models/billing_spec.rb"}}
 	testCommand := "bin/rspec --options --format"
 
 	rspec := NewRspec(RunnerConfig{
@@ -348,7 +348,7 @@ func TestRspecCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
 }
 
 func TestRspecCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	testCases := []string{"spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
+	testCases := []plan.TestCase{{Path: "spec/models/user_spec.rb"}, {Path: "spec/models/billing_spec.rb"}}
 	testCommand := "bin/rspec --options ' {{testExamples}}"
 
 	rspec := NewRspec(RunnerConfig{

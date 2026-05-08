@@ -58,13 +58,7 @@ func (r Custom) GetExamples(files []string) ([]plan.TestCase, error) {
 }
 
 func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	testPaths := make([]string, len(testCases))
-
-	for i, tc := range testCases {
-		testPaths[i] = tc.Path
-	}
-
-	cmd, err := buildCommand(r, testPaths, retry)
+	cmd, err := buildCommand(r, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -100,12 +94,15 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	return cmdErr
 }
 
-func (r Custom) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+func (r Custom) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
 	cmd := r.TestCommand
 	if retry {
 		cmd = r.RetryTestCommand
 	}
-	cmd = strings.Replace(cmd, "{{testExamples}}", strings.Join(testCases, " "), 1)
+
+	testPaths := pathsFromTestCases(testCases)
+
+	cmd = strings.Replace(cmd, "{{testExamples}}", strings.Join(testPaths, " "), 1)
 
 	words, err := shellquote.Split(cmd)
 	if err != nil {
