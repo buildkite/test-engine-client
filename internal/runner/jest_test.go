@@ -337,7 +337,7 @@ func TestJestRun_SignaledError(t *testing.T) {
 }
 
 func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"spec/user.spec.js", "spec/billing.spec.js"}
+	testCases := []plan.TestCase{{Path: "spec/user.spec.js"}, {Path: "spec/billing.spec.js"}}
 	testCommand := "jest {{testExamples}} --outputFile {{resultPath}}"
 
 	jest := NewJest(RunnerConfig{
@@ -362,7 +362,7 @@ func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestJestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
-	testCases := []string{"spec/user.spec.js", "spec/billing.spec.js"}
+	testCases := []plan.TestCase{{Path: "spec/user.spec.js"}, {Path: "spec/billing.spec.js"}}
 	testCommand := "jest --json --outputFile {{resultPath}}"
 
 	jest := NewJest(RunnerConfig{
@@ -387,7 +387,7 @@ func TestJestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 }
 
 func TestJestCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	testCases := []string{"spec/user.spec.js", "spec/billing.spec.js"}
+	testCases := []plan.TestCase{{Path: "spec/user.spec.js"}, {Path: "spec/billing.spec.js"}}
 	testCommand := "jest --options '{{testExamples}}"
 
 	jest := NewJest(RunnerConfig{
@@ -414,9 +414,9 @@ func TestJestCommandNameAndArgs_WithSpecialCharactersInPath(t *testing.T) {
 	// Test paths with special regex characters like parentheses (Next.js route groups)
 	// and square brackets (Next.js dynamic routes). These are passed as-is because
 	// the default TestCommand uses --runTestsByPath which treats args as literal paths.
-	testCases := []string{
-		"src/app/(main)/page.test.tsx",
-		"src/app/(main)/[catalogId]/product.test.tsx",
+	testCases := []plan.TestCase{
+		{Path: "src/app/(main)/page.test.tsx"},
+		{Path: "src/app/(main)/[catalogId]/product.test.tsx"},
 	}
 	testCommand := "jest --runTestsByPath {{testExamples}} --outputFile {{resultPath}}"
 

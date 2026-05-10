@@ -196,7 +196,7 @@ func TestPlaywrightRun_SignaledError(t *testing.T) {
 }
 
 func TestPlaywrightCommandNameAndArgs_WithPlaceholder(t *testing.T) {
-	testCases := []string{"tests/example.spec.js", "tests/failed.spec.js"}
+	testCases := []plan.TestCase{{Path: "tests/example.spec.js"}, {Path: "tests/failed.spec.js"}}
 	testCommand := "npx playwright test {{testExamples}}"
 
 	rspec := NewPlaywright(RunnerConfig{
@@ -220,7 +220,7 @@ func TestPlaywrightCommandNameAndArgs_WithPlaceholder(t *testing.T) {
 }
 
 func TestPlaywrightCommandNameAndArgs_WithoutPlaceholder(t *testing.T) {
-	testCases := []string{"tests/example.spec.js", "tests/failed.spec.js"}
+	testCases := []plan.TestCase{{Path: "tests/example.spec.js"}, {Path: "tests/failed.spec.js"}}
 	testCommand := "npx playwright test"
 
 	rspec := NewPlaywright(RunnerConfig{

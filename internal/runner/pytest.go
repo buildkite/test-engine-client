@@ -60,12 +60,7 @@ func NewPytest(c RunnerConfig) Pytest {
 }
 
 func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	testPaths := make([]string, len(testCases))
-	for i, tc := range testCases {
-		testPaths[i] = tc.Path
-	}
-
-	cmd, err := buildCommand(p, testPaths, retry)
+	cmd, err := buildCommand(p, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -203,13 +198,15 @@ func mapNodeIdToTestCase(nodeId string) plan.TestCase {
 	}
 }
 
-func (p Pytest) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+func (p Pytest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
 	cmd := p.TestCommand
 	if retry {
 		cmd = p.RetryTestCommand
 	}
 
-	testExamples := shellquote.Join(testCases...)
+	testPaths := pathsFromTestCases(testCases)
+
+	testExamples := shellquote.Join(testPaths...)
 
 	if strings.Contains(cmd, "{{testExamples}}") {
 		cmd = strings.Replace(cmd, "{{testExamples}}", testExamples, 1)

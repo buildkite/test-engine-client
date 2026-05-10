@@ -72,12 +72,7 @@ func (r Rspec) GetFiles() ([]string, error) {
 //
 // Test failure is not considered an error, and is instead returned as a RunResult.
 func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	testPaths := make([]string, len(testCases))
-	for i, tc := range testCases {
-		testPaths[i] = tc.Path
-	}
-
-	cmd, err := buildCommand(r, testPaths, retry)
+	cmd, err := buildCommand(r, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -158,7 +153,7 @@ func (r Rspec) ParseReport(path string) (RspecReport, error) {
 
 // CommandNameAndArgs replaces the "{{testExamples}}" placeholder in the test command with the test cases.
 // It returns the command name and arguments to run the tests.
-func (r Rspec) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+func (r Rspec) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
 	cmd := r.TestCommand
 	if retry {
 		cmd = r.RetryTestCommand
@@ -169,11 +164,13 @@ func (r Rspec) CommandNameAndArgs(testCases []string, retry bool) (string, []str
 		return "", []string{}, err
 	}
 
+	testPaths := pathsFromTestCases(testCases)
+
 	idx := slices.Index(words, "{{testExamples}}")
 	if idx < 0 {
-		words = append(words, testCases...)
+		words = append(words, testPaths...)
 	} else {
-		words = slices.Replace(words, idx, idx+1, testCases...)
+		words = slices.Replace(words, idx, idx+1, testPaths...)
 	}
 
 	idx = slices.Index(words, "{{resultPath}}")
@@ -199,7 +196,8 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 		os.Remove(f.Name())
 	}()
 
-	cmdName, cmdArgs, err := r.CommandNameAndArgs(files, false)
+	testCases := testCasesFromPaths(files)
+	cmdName, cmdArgs, err := r.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +217,7 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 		return []plan.TestCase{}, err
 	}
 
-	var testCases []plan.TestCase
+	testCases = nil
 	for _, example := range report.Examples {
 		testCases = append(testCases, mapExampleToTestCase(example))
 	}

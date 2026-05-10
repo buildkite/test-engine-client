@@ -154,7 +154,7 @@ func TestPytestPantsGetExamples(t *testing.T) {
 }
 
 func TestPytestPantsCommandNameAndArgs_WithoutMergeJson(t *testing.T) {
-	testCases := []string{"failing_test.py", "passing_test.py"}
+	testCases := []plan.TestCase{{Path: "failing_test.py"}, {Path: "passing_test.py"}}
 	testCommand := "pants test //:: -- --json={{resultPath}}"
 
 	pytest := NewPytestPants(RunnerConfig{
@@ -169,7 +169,7 @@ func TestPytestPantsCommandNameAndArgs_WithoutMergeJson(t *testing.T) {
 }
 
 func TestPytestPantsCommandNameAndArgs_WithoutResultPath(t *testing.T) {
-	testCases := []string{"failing_test.py", "passing_test.py"}
+	testCases := []plan.TestCase{{Path: "failing_test.py"}, {Path: "passing_test.py"}}
 	testCommand := "pants test //:: -- --merge-json"
 
 	pytest := NewPytestPants(RunnerConfig{
@@ -183,7 +183,7 @@ func TestPytestPantsCommandNameAndArgs_WithoutResultPath(t *testing.T) {
 }
 
 func TestPytestPantsCommandNameAndArgs_PytestArgsBeforeDash(t *testing.T) {
-	testCases := []string{"failing_test.py", "passing_test.py"}
+	testCases := []plan.TestCase{{Path: "failing_test.py"}, {Path: "passing_test.py"}}
 	testCommand := "pants test --json={{resultPath}} --merge-json //::"
 
 	pytest := NewPytestPants(RunnerConfig{
@@ -197,7 +197,7 @@ func TestPytestPantsCommandNameAndArgs_PytestArgsBeforeDash(t *testing.T) {
 }
 
 func TestPytestPantsCommandNameAndArgs_NoDashSeparator(t *testing.T) {
-	testCases := []string{"failing_test.py", "passing_test.py"}
+	testCases := []plan.TestCase{{Path: "failing_test.py"}, {Path: "passing_test.py"}}
 	testCommand := "pants test //:: --json={{resultPath}} --merge-json"
 
 	pytest := NewPytestPants(RunnerConfig{
@@ -221,7 +221,7 @@ func TestPytestPantsCommandNameAndArgs_NoDashSeparator(t *testing.T) {
 }
 
 func TestPytestPantsCommandNameAndArgs_ValidCommand(t *testing.T) {
-	testCases := []string{"failing_test.py", "passing_test.py"}
+	testCases := []plan.TestCase{{Path: "failing_test.py"}, {Path: "passing_test.py"}}
 	testCommand := "pants test //:: -- --json={{resultPath}} --merge-json"
 
 	pytest := NewPytestPants(RunnerConfig{
@@ -246,7 +246,7 @@ func TestPytestPantsCommandNameAndArgs_ValidCommand(t *testing.T) {
 }
 
 func TestPytestPantsCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
-	testCases := []string{"failing_test.py", "passing_test.py"}
+	testCases := []plan.TestCase{{Path: "failing_test.py"}, {Path: "passing_test.py"}}
 	testCommand := "pants test //:: -- --json={{resultPath}}' --merge-json"
 
 	pytest := NewPytestPants(RunnerConfig{

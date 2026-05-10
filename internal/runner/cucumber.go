@@ -67,12 +67,7 @@ func (c Cucumber) GetFiles() ([]string, error) {
 
 // Run executes the Cucumber command and records results.
 func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	testPaths := make([]string, len(testCases))
-	for i, tc := range testCases {
-		testPaths[i] = tc.Path
-	}
-
-	cmd, err := buildCommand(c, testPaths, retry)
+	cmd, err := buildCommand(c, testCases, retry)
 	if err != nil {
 		return err
 	}
@@ -163,7 +158,8 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 		}
 	}()
 
-	cmdName, _, err := c.CommandNameAndArgs(files, false)
+	testCases := testCasesFromPaths(files)
+	cmdName, _, err := c.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +181,8 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 		return nil, fmt.Errorf("failed to parse cucumber dry run JSON report from %s: %w", f.Name(), parseErr)
 	}
 
-	var testCases []plan.TestCase
+	testCases = nil
+
 	for _, feature := range dryRunReport {
 		for _, scenario := range feature.Elements {
 			if scenario.Type == "scenario" { // Only include scenarios, not scenario outlines directly (examples are handled differently)
@@ -207,7 +204,9 @@ func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 }
 
 // CommandNameAndArgs replaces placeholders and returns command + args.
-func (c Cucumber) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+func (c Cucumber) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
+	testPaths := pathsFromTestCases(testCases)
+
 	cmd := c.TestCommand
 	if retry {
 		cmd = c.RetryTestCommand
@@ -220,9 +219,9 @@ func (c Cucumber) CommandNameAndArgs(testCases []string, retry bool) (string, []
 
 	idx := slices.Index(words, "{{testExamples}}")
 	if idx < 0 {
-		words = append(words, testCases...)
+		words = append(words, testPaths...)
 	} else {
-		words = slices.Replace(words, idx, idx+1, testCases...)
+		words = slices.Replace(words, idx, idx+1, testPaths...)
 	}
 
 	idx = slices.Index(words, "{{resultPath}}")

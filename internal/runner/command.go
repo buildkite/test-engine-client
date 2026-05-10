@@ -6,9 +6,11 @@ import (
 	"os/exec"
 	"os/signal"
 	"syscall"
+
+	"github.com/buildkite/test-engine-client/internal/plan"
 )
 
-func buildCommand(runner TestRunner, testCases []string, retry bool) (*exec.Cmd, error) {
+func buildCommand(runner TestRunner, testCases []plan.TestCase, retry bool) (*exec.Cmd, error) {
 	commandName, commandArgs, err := runner.CommandNameAndArgs(testCases, retry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build command: %w", err)

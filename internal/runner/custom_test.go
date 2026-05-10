@@ -80,7 +80,7 @@ func TestCustom_GetFiles(t *testing.T) {
 }
 
 func TestCustom_CommandNameAndArgs(t *testing.T) {
-	testCases := []string{"tests/test_a.sh", "tests/test_b.sh"}
+	testCases := []plan.TestCase{{Path: "tests/test_a.sh"}, {Path: "tests/test_b.sh"}}
 
 	commands := []struct {
 		command  string

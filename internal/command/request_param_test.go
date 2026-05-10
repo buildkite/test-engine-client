@@ -377,8 +377,13 @@ func (r metadataTestRunner) Run(result *runner.RunResult, testCases []plan.TestC
 	return nil
 }
 
-func (r metadataTestRunner) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
-	return "metadata-test-runner", testCases, nil
+func (r metadataTestRunner) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
+	paths := make([]string, len(testCases))
+	for i, tc := range testCases {
+		paths[i] = tc.Path
+	}
+
+	return "metadata-test-runner", paths, nil
 }
 
 func TestCreateRequestParams_FilterTestsError(t *testing.T) {

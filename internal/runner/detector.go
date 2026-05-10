@@ -12,7 +12,7 @@ type TestRunner interface {
 	GetExamples(files []string) ([]plan.TestCase, error)
 	GetFiles() ([]string, error)
 	Name() string
-	CommandNameAndArgs(testCases []string, retry bool) (string, []string, error)
+	CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error)
 	LocationPrefix() string
 }
 

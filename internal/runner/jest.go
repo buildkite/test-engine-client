@@ -61,16 +61,12 @@ func (j Jest) GetFiles() ([]string, error) {
 func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	var cmd *exec.Cmd
 
-	testPaths := make([]string, len(testCases))
-	for i, testCase := range testCases {
-		testPaths[i] = testCase.Path
-	}
-
+	testPaths := pathsFromTestCases(testCases)
 	slices.Sort(testPaths)
 	testPaths = slices.Compact(testPaths)
 
 	if !retry {
-		commandName, commandArgs, err := j.CommandNameAndArgs(testPaths, false)
+		commandName, commandArgs, err := j.CommandNameAndArgs(testCases, false)
 		if err != nil {
 			return fmt.Errorf("failed to build command: %w", err)
 		}
@@ -183,7 +179,7 @@ func (j Jest) ParseReport(path string) (JestReport, error) {
 	return report, nil
 }
 
-func (j Jest) CommandNameAndArgs(testCases []string, retry bool) (string, []string, error) {
+func (j Jest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
 	cmd := j.TestCommand
 	if retry {
 		cmd = j.RetryTestCommand
@@ -194,11 +190,13 @@ func (j Jest) CommandNameAndArgs(testCases []string, retry bool) (string, []stri
 		return "", []string{}, err
 	}
 
+	testPaths := pathsFromTestCases(testCases)
+
 	idx := slices.Index(words, "{{testExamples}}")
 	if idx < 0 {
-		words = append(words, testCases...)
+		words = append(words, testPaths...)
 	} else {
-		words = slices.Replace(words, idx, idx+1, testCases...)
+		words = slices.Replace(words, idx, idx+1, testPaths...)
 	}
 
 	outputIdx := slices.Index(words, "{{resultPath}}")

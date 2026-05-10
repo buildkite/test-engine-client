@@ -115,7 +115,7 @@ func TestNUnit_CommandNameAndArgs(t *testing.T) {
 		ResultPath: "test-results.xml",
 	})
 
-	classNames := []string{"CalculatorTests", "StringUtilsTests"}
+	classNames := []plan.TestCase{{Path: "CalculatorTests"}, {Path: "StringUtilsTests"}}
 
 	gotName, gotArgs, err := nunit.CommandNameAndArgs(classNames, false)
 	if err != nil {
