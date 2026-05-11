@@ -44,6 +44,7 @@
 - ⚠️ **BREAKING** Running bktec without arguments is no longer supported. Build steps should be updated to call `bktec run` instead of `bktec`.
 - New `--files` flag to specify a list of test files to be run.
 - Support for [dynamic parallelism](https://buildkite.com/docs/test-engine/bktec/configuring#dynamic-parallelism).
+- `bktec` container images are now published to [AWS ECR Public Gallery](https://gallery.ecr.aws/buildkite/test-engine-client) in addition to existing distribution channels.
 
 ## 1.6.1 - 2025-10-24
 - Improve compatibility with Vitest (unofficial support) by updating the `jest` runner to correctly handle file-level runtime errors.
