@@ -1,7 +1,13 @@
 # Changelog
 
-## 2.5.0 - 2026-05-08
+## Unreleased
+
+## 2.5.0 - 2026-05-11
+- Add split-by-example support for [Playwright](./docs/playwright.md), allowing slow test files to be split across parallel jobs by individual test case rather than by file.
 - **Breaking (preview feature):** `bktec tools backfill-commit-metadata` now calls the suite-scoped commit-metadata backfill presigned-upload endpoint (`POST /v2/analytics/organizations/:org/suites/:suite/commit-metadata-backfill/presigned-upload`) instead of the org-scoped one. `--suite-slug` (or `BUILDKITE_TEST_ENGINE_SUITE_SLUG`) is now required for `--upload` as well as for collection. The legacy org-scoped endpoint is being removed in a follow-up server release. This is a preview feature gated behind `BKTEC_PREVIEW_SELECTION`.
+- Replace the generic test plan fallback warning with differentiated failure messages so operators can distinguish between API errors, timeouts, and other failure modes when bktec falls back to a local plan.
+- Print the split summary (file count, parallelism, slow-file detection) to stderr from both `plan` and `run` so the information is visible without polluting stdout consumers.
+- Treat `none`, `off`, and `false` as empty values in `--selection-*` flags and `BUILDKITE_TEST_ENGINE_SELECTION_*` env vars, making it easier to disable selection params from CI without unsetting variables. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Remove Pact contract testing for the Test Engine API. Consumer tests now use plain `httptest` fixtures (no behaviour change for users); the `internal/api/pacts/` directory, `pact-go` dependency, and `bin/{publish-pact,release-pact-version,pact-record-support-ended}` scripts have been deleted.
 
 ## 2.4.0 - 2026-04-17
