@@ -2,7 +2,7 @@ FROM ruby:4.0.3-slim-bookworm AS ruby
 FROM cypress/included:14.5.3 AS cypress
 FROM python:3.15.0a8-bookworm AS python
 
-FROM golang:1.26.2-bookworm AS golang
+FROM golang:1.26.3-bookworm AS golang
 
 COPY --from=ruby / /
 COPY --from=cypress / /
