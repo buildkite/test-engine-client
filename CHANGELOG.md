@@ -1,10 +1,17 @@
 # Changelog
 
-## 2.5.0 - 2026-05-08
+## Unreleased
+
+## 2.5.0 - 2026-05-11
+- Add split-by-example support for [Playwright](./docs/playwright.md), allowing slow test files to be split across parallel jobs by individual test case rather than by file.
 - **Breaking (preview feature):** `bktec tools backfill-commit-metadata` now calls the suite-scoped commit-metadata backfill presigned-upload endpoint (`POST /v2/analytics/organizations/:org/suites/:suite/commit-metadata-backfill/presigned-upload`) instead of the org-scoped one. `--suite-slug` (or `BUILDKITE_TEST_ENGINE_SUITE_SLUG`) is now required for `--upload` as well as for collection. The legacy org-scoped endpoint is being removed in a follow-up server release. This is a preview feature gated behind `BKTEC_PREVIEW_SELECTION`.
+- Replace the generic test plan fallback warning with differentiated failure messages so operators can distinguish between API errors, timeouts, and other failure modes when bktec falls back to a local plan.
+- Print the split summary (file count, parallelism, slow-file detection) to stderr from both `plan` and `run` so the information is visible without polluting stdout consumers.
+- Treat `none`, `off`, and `false` as empty values in `--selection-*` flags and `BUILDKITE_TEST_ENGINE_SELECTION_*` env vars, making it easier to disable selection params from CI without unsetting variables. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Remove Pact contract testing for the Test Engine API. Consumer tests now use plain `httptest` fixtures (no behaviour change for users); the `internal/api/pacts/` directory, `pact-go` dependency, and `bin/{publish-pact,release-pact-version,pact-record-support-ended}` scripts have been deleted.
 
 ## 2.4.0 - 2026-04-17
+- Add `bktec tools backfill-commit-metadata` subcommand to collect and upload historical git commit metadata to the Test Engine API, so test selection has the signal it needs for repositories that pre-date bktec rollout. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Automatically collect git commit metadata on `bktec plan` when `--selection-strategy` is set. Commit info, diff stats, and context fields are sent with the plan request so test selection has the signal it needs without the caller shelling out to git. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Add `--collect-git-metadata` flag (env: `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA`) to `bktec plan` so pipelines can opt in to git metadata collection without using test selection. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Add `--remote` flag (env: `BUILDKITE_TEST_ENGINE_REMOTE`, default `origin`) to `bktec plan` to control which git remote is used for base-branch detection.
@@ -44,6 +51,7 @@
 - ⚠️ **BREAKING** Running bktec without arguments is no longer supported. Build steps should be updated to call `bktec run` instead of `bktec`.
 - New `--files` flag to specify a list of test files to be run.
 - Support for [dynamic parallelism](https://buildkite.com/docs/test-engine/bktec/configuring#dynamic-parallelism).
+- `bktec` container images are now published to [AWS ECR Public Gallery](https://gallery.ecr.aws/buildkite/test-engine-client) in addition to existing distribution channels.
 
 ## 1.6.1 - 2025-10-24
 - Improve compatibility with Vitest (unofficial support) by updating the `jest` runner to correctly handle file-level runtime errors.
