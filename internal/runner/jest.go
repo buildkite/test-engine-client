@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -59,14 +58,10 @@ func (j Jest) GetFiles() ([]string, error) {
 }
 
 func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	var cmd *exec.Cmd
-
-	commandName, commandArgs, err := j.CommandNameAndArgs(testCases, retry)
+	cmd, err := buildCommand(j, testCases, retry)
 	if err != nil {
-		return fmt.Errorf("failed to build command: %w", err)
+		return err
 	}
-
-	cmd = exec.Command(commandName, commandArgs...)
 
 	cmdErr := runAndForwardSignal(cmd)
 
