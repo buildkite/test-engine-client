@@ -17,12 +17,11 @@ type PresignedUploadResponse struct {
 
 // PresignUpload requests a presigned S3 upload URL for commit metadata.
 //
-// Endpoint: POST /v2/analytics/organizations/:org/commit-metadata-backfill/presigned-upload
-// This is org-scoped (not suite-scoped) because git data applies across suites.
-func (c Client) PresignUpload(ctx context.Context) (PresignedUploadResponse, error) {
+// Endpoint: POST /v2/analytics/organizations/:org/suites/:suite/commit-metadata-backfill/presigned-upload
+func (c Client) PresignUpload(ctx context.Context, suiteSlug string) (PresignedUploadResponse, error) {
 	reqURL := fmt.Sprintf(
-		"%s/v2/analytics/organizations/%s/commit-metadata-backfill/presigned-upload",
-		c.ServerBaseUrl, url.PathEscape(c.OrganizationSlug))
+		"%s/v2/analytics/organizations/%s/suites/%s/commit-metadata-backfill/presigned-upload",
+		c.ServerBaseUrl, url.PathEscape(c.OrganizationSlug), url.PathEscape(suiteSlug))
 
 	var resp PresignedUploadResponse
 	_, err := c.DoWithRetry(ctx, httpRequest{Method: http.MethodPost, URL: reqURL}, &resp)

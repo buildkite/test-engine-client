@@ -123,8 +123,9 @@ func (c *Config) ValidateForRun() error {
 }
 
 // ValidateForBackfillCommitMetadata validates config for the backfill-commit-metadata command.
-// When --upload is set, only API connection fields are required.
-// Otherwise, requires API connection fields plus suite slug, days, and concurrency.
+// API connection fields and suite slug are required in all modes (the presigned upload
+// endpoint is suite-scoped). Collection-only fields (days, concurrency) are checked when
+// --upload is not set.
 func (c *Config) ValidateForBackfillCommitMetadata() error {
 	if c.ServerBaseUrl == "" {
 		c.ServerBaseUrl = "https://api.buildkite.com"
@@ -142,16 +143,18 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 		c.errs.appendFieldError("--organization-slug / BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
 	}
 
-	// Upload-only mode: only need API connection fields (no suite slug, days, etc.)
+	// SuiteSlug is required in both modes: the presigned upload endpoint is
+	// suite-scoped, so even upload-only needs the suite to construct the URL.
+	if c.SuiteSlug == "" {
+		c.errs.appendFieldError("--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
+	}
+
+	// Upload-only mode: skip days/concurrency checks (those govern collection).
 	if c.UploadFile != "" {
 		if len(c.errs) > 0 {
 			return c.errs
 		}
 		return nil
-	}
-
-	if c.SuiteSlug == "" {
-		c.errs.appendFieldError("--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
 	if got, min := c.Days, 1; got < min {

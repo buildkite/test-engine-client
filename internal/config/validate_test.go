@@ -498,13 +498,36 @@ func TestConfigValidateForBackfill_MissingAccessToken(t *testing.T) {
 	}
 }
 
-func TestConfigValidateForBackfill_UploadOnlySkipsSuiteSlug(t *testing.T) {
+func TestConfigValidateForBackfill_UploadOnlyRequiresSuiteSlug(t *testing.T) {
+	// The presigned upload endpoint is suite-scoped, so --suite-slug is
+	// required in upload-only mode too. Days/concurrency are still skipped
+	// (those govern collection, which doesn't run with --upload).
 	c := createBackfillConfig()
 	c.SuiteSlug = ""
 	c.UploadFile = "/tmp/test.tar.gz"
 	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG"
+	if len(invConfigError[key]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for %s length = %d, want 1", key, len(invConfigError[key]))
+	}
+}
+
+func TestConfigValidateForBackfill_UploadOnlySkipsDaysAndConcurrency(t *testing.T) {
+	// In upload-only mode, the collection-side checks (--days, --concurrency)
+	// don't apply because the command only uploads an existing tarball.
+	c := createBackfillConfig()
+	c.UploadFile = "/tmp/test.tar.gz"
+	c.Days = 0        // would be invalid for collection mode
+	c.Concurrency = 0 // would be invalid for collection mode
+	err := c.ValidateForBackfillCommitMetadata()
 	if err != nil {
-		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil (upload mode skips suite slug)", err)
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil (upload mode skips days/concurrency)", err)
 	}
 }
 

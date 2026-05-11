@@ -229,7 +229,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		fmt.Fprintf(os.Stderr, "Wrote %s\n", cfg.Output)
 	} else {
 		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
-		presigned, err := apiClient.PresignUpload(ctx)
+		presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
 		if err != nil {
 			removeTarball = false
 			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
@@ -257,32 +257,41 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 // via presigned S3 POST. This is the upload-only path for --upload, intended for
 // cases where generation and upload happen in separate steps.
 func uploadOnly(ctx context.Context, cfg *config.Config) error {
-	// 1. Verify file exists
+	// 1. Defensive contract check. Callers (today: main.go) are expected to call
+	// cfg.ValidateForBackfillCommitMetadata() first; this guard makes the layer
+	// boundary safe if that ever stops being true. Empty suite slug would otherwise
+	// produce a malformed URL with a `//` segment that 404s after a network round
+	// trip and a token-scope check.
+	if cfg.SuiteSlug == "" {
+		return fmt.Errorf("suite slug must not be blank (set --suite-slug or BUILDKITE_TEST_ENGINE_SUITE_SLUG)")
+	}
+
+	// 2. Verify file exists
 	if _, err := os.Stat(cfg.UploadFile); err != nil {
 		return fmt.Errorf("file not found: %w", err)
 	}
 
-	// 2. Create API client
+	// 3. Create API client
 	apiClient := api.NewClient(api.ClientConfig{
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 	})
 
-	// 3. Verify token scopes
+	// 4. Verify token scopes
 	if _, err := apiClient.VerifyTokenScopes(ctx, []string{"write_suites"}); err != nil {
 		return fmt.Errorf("token scope check failed: %w", err)
 	}
 	debug.Println("Token scopes verified")
 
-	// 4. Request presigned upload URL
+	// 5. Request presigned upload URL
 	fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
-	presigned, err := apiClient.PresignUpload(ctx)
+	presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
 	if err != nil {
 		return fmt.Errorf("presigning upload: %w", err)
 	}
 
-	// 5. Upload to S3
+	// 6. Upload to S3
 	fmt.Fprintln(os.Stderr, "Uploading to S3...")
 	if err := upload.UploadToS3(ctx, cfg.UploadFile, presigned.Form); err != nil {
 		return fmt.Errorf("uploading to S3: %w", err)

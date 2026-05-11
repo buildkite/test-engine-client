@@ -320,7 +320,7 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
 
-		case "/v2/analytics/organizations/my-org/commit-metadata-backfill/presigned-upload":
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"uri": "s3://bucket/test.tar.gz",
 				"form": map[string]interface{}{
@@ -445,6 +445,7 @@ func getUploadConfig(serverURL string, filePath string) *config.Config {
 	cfg := config.New()
 	cfg.AccessToken = "test-token"
 	cfg.OrganizationSlug = "my-org"
+	cfg.SuiteSlug = "my-suite"
 	cfg.ServerBaseUrl = serverURL
 	cfg.UploadFile = filePath
 	return &cfg
@@ -491,7 +492,7 @@ func TestBackfillCommitMetadata_UploadOnly_HappyPath(t *testing.T) {
 				"uuid":   "token-uuid",
 				"scopes": []string{"write_suites"},
 			})
-		case "/v2/analytics/organizations/my-org/commit-metadata-backfill/presigned-upload":
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"uri": "s3://bucket/test.tar.gz",
 				"form": map[string]interface{}{
@@ -552,6 +553,41 @@ func TestBackfillCommitMetadata_UploadOnly_FileNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "file not found") {
 		t.Errorf("expected 'file not found' in error, got: %v", err)
+	}
+}
+
+func TestBackfillCommitMetadata_UploadOnly_MissingSuiteSlugFailsBeforeNetwork(t *testing.T) {
+	// Pins the contract that uploadOnly's defensive guard catches an empty
+	// suite slug before any network round trip. Today this can only be hit if
+	// a caller skips cfg.ValidateForBackfillCommitMetadata(); the guard makes
+	// the layer boundary safe regardless.
+
+	var requestCount int
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer apiServer.Close()
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "test-tarball-*.tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.WriteString("fake tarball content")
+	tmpFile.Close()
+
+	cfg := getUploadConfig(apiServer.URL, tmpFile.Name())
+	cfg.SuiteSlug = "" // bypass validation gate, exercise the in-command guard
+
+	err = BackfillCommitMetadata(context.Background(), cfg, nil)
+	if err == nil {
+		t.Fatal("expected error for empty suite slug, got nil")
+	}
+	if !strings.Contains(err.Error(), "suite slug must not be blank") {
+		t.Errorf("expected suite-slug error, got: %v", err)
+	}
+	if requestCount != 0 {
+		t.Errorf("expected no network requests, got %d", requestCount)
 	}
 }
 

@@ -147,7 +147,9 @@ tar tzf commit-metadata.tar.gz
 # metadata.json
 
 # Upload when ready
-bktec tools backfill-commit-metadata --upload commit-metadata.tar.gz
+bktec tools backfill-commit-metadata \
+  --upload commit-metadata.tar.gz \
+  --suite-slug "my-suite"
 ```
 
 The API access token requires `read_suites` and `write_suites` scopes.
