@@ -13,7 +13,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v3 v3.8.0
-	golang.org/x/mod v0.35.0
+	golang.org/x/mod v0.36.0
 )
 
 require (
