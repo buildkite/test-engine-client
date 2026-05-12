@@ -373,6 +373,10 @@ func (r metadataTestRunner) LocationPrefix() string {
 	return ""
 }
 
+func (r metadataTestRunner) UploadToken() string {
+	return ""
+}
+
 func (r metadataTestRunner) Run(result *runner.RunResult, testCases []plan.TestCase, retry bool) error {
 	return nil
 }

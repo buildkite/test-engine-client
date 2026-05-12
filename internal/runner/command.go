@@ -16,7 +16,14 @@ func buildCommand(runner TestRunner, testCases []plan.TestCase, retry bool) (*ex
 		return nil, fmt.Errorf("failed to build command: %w", err)
 	}
 
-	return exec.Command(commandName, commandArgs...), nil
+	cmd := exec.Command(commandName, commandArgs...)
+
+	env := os.Environ()
+	analyticsTokenEnv := fmt.Sprintf("BUILDKITE_ANALYTICS_TOKEN=%s", runner.UploadToken())
+	env = append(env, analyticsTokenEnv)
+	cmd.Env = env
+
+	return cmd, nil
 }
 
 // runAndForwardSignal runs the command and forwards any signals received to the command.

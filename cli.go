@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v3"
 )
@@ -154,9 +155,27 @@ var parallelismFlag = &cli.IntFlag{
 var accessTokenFlag = &cli.StringFlag{
 	Name:        "access-token",
 	Category:    "TEST ENGINE",
-	Usage:       "Buildkite API access token",
+	Usage:       "Buildkite API access token. If not set, an OIDC token will be generated using buildkite-agent",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN"),
 	Destination: &cfg.AccessToken,
+}
+
+var uploadTokenFlag = &cli.StringFlag{
+	Name:        "upload-token",
+	Category:    "TEST ENGINE",
+	Usage:       "Buildkite collector upload token. If not set, an OIDC token will be generated using buildkite-agent",
+	Sources:     cli.EnvVars("BUILDKITE_ANALYTICS_TOKEN"),
+	Destination: &cfg.UploadToken,
+	Hidden:      true,
+}
+
+var oidcLifetimeFlag = &cli.DurationFlag{
+	Name:        "oidc-lifetime",
+	Value:       2 * time.Hour,
+	Category:    "TEST ENGINE",
+	Usage:       "Specify OIDC token lifetime",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_OIDC_LIFETIME"),
+	Destination: &cfg.OidcLifetime,
 }
 
 var suiteSlugFlag = &cli.StringFlag{
@@ -460,8 +479,10 @@ var buildEnvironmentFlags = []cli.Flag{
 
 var testEngineFlags = []cli.Flag{
 	accessTokenFlag,
+	uploadTokenFlag,
 	suiteSlugFlag,
 	baseURLFlag,
+	oidcLifetimeFlag,
 }
 
 var runnerEnvironmentFlags = []cli.Flag{

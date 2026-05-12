@@ -13,8 +13,13 @@ type RunnerConfig struct {
 	TestCommand            string
 	TestFileExcludePattern string
 	TestFilePattern        string
+	uploadToken            string
 }
 
 func (rc RunnerConfig) LocationPrefix() string {
 	return rc.locationPrefix
+}
+
+func (rc RunnerConfig) UploadToken() string {
+	return rc.uploadToken
 }
