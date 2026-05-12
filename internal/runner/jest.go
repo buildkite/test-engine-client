@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -59,30 +58,9 @@ func (j Jest) GetFiles() ([]string, error) {
 }
 
 func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	var cmd *exec.Cmd
-
-	testPaths := pathsFromTestCases(testCases)
-	slices.Sort(testPaths)
-	testPaths = slices.Compact(testPaths)
-
-	if !retry {
-		commandName, commandArgs, err := j.CommandNameAndArgs(testCases, false)
-		if err != nil {
-			return fmt.Errorf("failed to build command: %w", err)
-		}
-
-		cmd = exec.Command(commandName, commandArgs...)
-	} else {
-		testNames := make([]string, len(testCases))
-		for i, testCase := range testCases {
-			testNames[i] = fmt.Sprintf("%s %s", testCase.Scope, testCase.Name)
-		}
-		commandName, commandArgs, err := j.retryCommandNameAndArgs(j.RetryTestCommand, testNames, testPaths)
-		if err != nil {
-			return fmt.Errorf("failed to build command: %w", err)
-		}
-
-		cmd = exec.Command(commandName, commandArgs...)
+	cmd, err := buildCommand(j, testCases, retry)
+	if err != nil {
+		return err
 	}
 
 	cmdErr := runAndForwardSignal(cmd)
@@ -191,12 +169,36 @@ func (j Jest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string,
 	}
 
 	testPaths := pathsFromTestCases(testCases)
+	slices.Sort(testPaths)
+	testPaths = slices.Compact(testPaths)
 
-	idx := slices.Index(words, "{{testExamples}}")
-	if idx < 0 {
-		words = append(words, testPaths...)
+	if retry {
+		idx := slices.Index(words, "{{testNamePattern}}")
+		if idx < 0 {
+			err := fmt.Errorf("couldn't find '{{testNamePattern}}' sentinel in retry command")
+			return "", []string{}, err
+		}
+
+		escapedTestCases := make([]string, len(testCases))
+		for i, testCase := range testCases {
+			escapedTestCases[i] = regexp.QuoteMeta(fmt.Sprintf("%s %s", testCase.Scope, testCase.Name))
+		}
+
+		testNamePattern := fmt.Sprintf("(%s)", strings.Join(escapedTestCases, "|"))
+
+		words = slices.Replace(words, idx, idx+1, testNamePattern)
+
+		testExamplesIdx := slices.Index(words, "{{testExamples}}")
+		if testExamplesIdx >= 0 {
+			words = slices.Replace(words, testExamplesIdx, testExamplesIdx+1, testPaths...)
+		}
 	} else {
-		words = slices.Replace(words, idx, idx+1, testPaths...)
+		idx := slices.Index(words, "{{testExamples}}")
+		if idx < 0 {
+			words = append(words, testPaths...)
+		} else {
+			words = slices.Replace(words, idx, idx+1, testPaths...)
+		}
 	}
 
 	outputIdx := slices.Index(words, "{{resultPath}}")
@@ -207,42 +209,6 @@ func (j Jest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string,
 	words = slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
 
 	return words[0], words[1:], nil
-}
-
-func (j Jest) retryCommandNameAndArgs(cmd string, testCases []string, testPaths []string) (string, []string, error) {
-	words, err := shellquote.Split(cmd)
-	if err != nil {
-		return "", []string{}, err
-	}
-
-	idx := slices.Index(words, "{{testNamePattern}}")
-	if idx < 0 {
-		err := fmt.Errorf("couldn't find '{{testNamePattern}}' sentinel in retry command")
-		return "", []string{}, err
-	}
-
-	escapedTestCases := make([]string, len(testCases))
-	for i, testCase := range testCases {
-		escapedTestCases[i] = regexp.QuoteMeta(testCase)
-	}
-
-	testNamePattern := fmt.Sprintf("(%s)", strings.Join(escapedTestCases, "|"))
-
-	words = slices.Replace(words, idx, idx+1, testNamePattern)
-
-	testExamplesIdx := slices.Index(words, "{{testExamples}}")
-	if testExamplesIdx >= 0 {
-		words = slices.Replace(words, testExamplesIdx, testExamplesIdx+1, testPaths...)
-	}
-
-	outputIdx := slices.Index(words, "{{resultPath}}")
-	if outputIdx < 0 {
-		err := fmt.Errorf("couldn't find '{{resultPath}}' sentinel in retry command, exiting")
-		return "", []string{}, err
-	}
-	words = slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
-
-	return words[0], words[1:], err
 }
 
 func (j Jest) GetExamples(files []string) ([]plan.TestCase, error) {
