@@ -10,10 +10,29 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 )
+
+// PresignedURLExpiredError is returned when S3 rejects the upload because the
+// presigned URL signature has expired. S3's response body is an XML document
+// with Code: AccessDenied and Message: Request has expired -- we pattern-match
+// on the message string because that is the documented, stable contract for
+// expired-signature rejections.
+//
+// Callers can use errors.As to detect this case and request a fresh presigned
+// URL before retrying. The wrapped Body field preserves the raw S3 response so
+// the original error remains diagnosable in logs.
+type PresignedURLExpiredError struct {
+	Status int
+	Body   string
+}
+
+func (e *PresignedURLExpiredError) Error() string {
+	return fmt.Sprintf("S3 presigned URL expired (status %d): %s", e.Status, e.Body)
+}
 
 // PresignedUploadForm describes the S3 presigned POST form returned by the
 // Buildkite API. All Data fields must be sent as form fields before the file.
@@ -89,7 +108,20 @@ func UploadToS3(ctx context.Context, filePath string, form PresignedUploadForm) 
 	// S3 returns 204 No Content on success for presigned POSTs
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("S3 upload failed with status %d: %s", resp.StatusCode, string(body))
+		bodyStr := string(body)
+
+		// Detect S3's "presigned URL expired" response so callers can request
+		// a fresh URL and retry. S3 returns 403 with an XML body containing
+		// <Code>AccessDenied</Code> and <Message>Request has expired</Message>
+		// (see AWS S3 error responses reference). We match on the Message text
+		// because it's the most stable part of the contract -- the HTTP status
+		// is also 403 for unrelated permission errors, so status alone is not
+		// sufficient.
+		if resp.StatusCode == http.StatusForbidden && strings.Contains(bodyStr, "Request has expired") {
+			return &PresignedURLExpiredError{Status: resp.StatusCode, Body: bodyStr}
+		}
+
+		return fmt.Errorf("S3 upload failed with status %d: %s", resp.StatusCode, bodyStr)
 	}
 
 	debug.Printf("Upload successful: %d", resp.StatusCode)

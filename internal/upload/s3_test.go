@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -203,6 +204,89 @@ func TestUploadToS3_ServerError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "403") {
 		t.Errorf("expected 403 in error, got: %v", err)
+	}
+}
+
+// TestUploadToS3_ReturnsPresignedURLExpiredError pins the typed-error
+// contract that BackfillCommitMetadata's expired-URL refresh path relies on
+// (TE-5834). S3 returns 403 with an XML body containing "Request has expired"
+// when a presigned URL is used past its signature TTL; we surface that as a
+// distinguishable PresignedURLExpiredError so callers can request a fresh URL
+// and retry, while leaving other 403 cases (bucket policy, etc.) as opaque
+// errors to avoid masking real configuration problems behind an unbounded
+// retry loop.
+func TestUploadToS3_ReturnsPresignedURLExpiredError(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>Request has expired</Message>
+  <Expires>2026-05-14T10:00:00Z</Expires>
+  <ServerTime>2026-05-14T11:30:00Z</ServerTime>
+</Error>`))
+	}))
+	defer svr.Close()
+
+	tmpFile := createTempFile(t, "content")
+
+	form := PresignedUploadForm{
+		Method:    "POST",
+		URL:       svr.URL,
+		Data:      map[string]string{"key": "test.tar.gz"},
+		FileInput: "file",
+	}
+
+	err := UploadToS3(context.Background(), tmpFile, form)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var expired *PresignedURLExpiredError
+	if !errors.As(err, &expired) {
+		t.Fatalf("expected PresignedURLExpiredError, got %T: %v", err, err)
+	}
+	if expired.Status != http.StatusForbidden {
+		t.Errorf("expired.Status: got %d, want %d", expired.Status, http.StatusForbidden)
+	}
+	if !strings.Contains(expired.Body, "Request has expired") {
+		t.Errorf("expired.Body should preserve raw S3 response, got: %s", expired.Body)
+	}
+}
+
+// TestUploadToS3_GenericForbiddenIsNotExpiredError pins the negative side of
+// the typed-error contract: a 403 without the "Request has expired" marker
+// must not be classified as PresignedURLExpiredError. This is what stops the
+// refresh-and-retry path from masking legitimate auth or bucket-policy
+// failures.
+func TestUploadToS3_GenericForbiddenIsNotExpiredError(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>The bucket policy does not allow this operation.</Message>
+</Error>`))
+	}))
+	defer svr.Close()
+
+	tmpFile := createTempFile(t, "content")
+
+	form := PresignedUploadForm{
+		Method:    "POST",
+		URL:       svr.URL,
+		Data:      map[string]string{"key": "test.tar.gz"},
+		FileInput: "file",
+	}
+
+	err := UploadToS3(context.Background(), tmpFile, form)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var expired *PresignedURLExpiredError
+	if errors.As(err, &expired) {
+		t.Fatalf("did not expect PresignedURLExpiredError for generic 403, got: %v", err)
 	}
 }
 
