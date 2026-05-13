@@ -36,6 +36,8 @@ type Config struct {
 	Metadata map[string]string `json:"-"`
 	// Node index is index of the current node.
 	NodeIndex int `json:"BUILDKITE_PARALLEL_JOB"`
+	// Enable OIDC token generation
+	Oidc bool `json:"BUILDKITE_TEST_ENGINE_OIDC"`
 	// Lifetime of OIDC tokens
 	OidcLifetime time.Duration `json:"BUILDKITE_TEST_ENGINE_OIDC_LIFETIME"`
 	// OrganizationSlug is the slug of the organization.

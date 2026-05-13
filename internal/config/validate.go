@@ -236,6 +236,10 @@ func (c *Config) ValidateForPlan() error {
 }
 
 func (c *Config) generateOidcToken() (token string, err error) {
+	if !c.Oidc {
+		return "", nil
+	}
+
 	suiteUrl := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s", c.ServerBaseUrl, c.OrganizationSlug, c.SuiteSlug)
 	var tokenWriter strings.Builder
 	var errorWriter strings.Builder

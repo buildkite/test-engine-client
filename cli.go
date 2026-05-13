@@ -169,6 +169,15 @@ var uploadTokenFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+var oidcFlag = &cli.BoolWithInverseFlag{
+	Name:        "oidc",
+	Value:       true,
+	Category:    "TEST ENGINE",
+	Usage:       "When required tokens are missing, generate OIDC tokens using buildkite-agent",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_OIDC"),
+	Destination: &cfg.Oidc,
+}
+
 var oidcLifetimeFlag = &cli.DurationFlag{
 	Name:        "oidc-lifetime",
 	Value:       2 * time.Hour,
@@ -482,6 +491,7 @@ var testEngineFlags = []cli.Flag{
 	uploadTokenFlag,
 	suiteSlugFlag,
 	baseURLFlag,
+	oidcFlag,
 	oidcLifetimeFlag,
 }
 
