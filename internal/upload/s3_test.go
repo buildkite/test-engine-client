@@ -207,11 +207,9 @@ func TestUploadToS3_ServerError(t *testing.T) {
 	}
 }
 
-// TestUploadToS3_ReturnsS3ForbiddenError pins the typed-error contract that
-// BackfillCommitMetadata's refresh-and-retry path relies on (TE-5834). The
-// response body is the literal expired-policy response captured from S3 in a
-// sandbox account; keeping it here documents what the common 403 case looks
-// like in the wild.
+// TestUploadToS3_ReturnsS3ForbiddenError asserts that a 403 response is
+// surfaced as S3ForbiddenError so callers can refresh the presigned URL and
+// retry. The fixture body is the real expired-policy response from S3.
 func TestUploadToS3_ReturnsS3ForbiddenError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -246,17 +244,10 @@ func TestUploadToS3_ReturnsS3ForbiddenError(t *testing.T) {
 	}
 }
 
-// TestUploadToS3_PolicyConditionMismatchIsNotS3ForbiddenError uses the
-// real-world shape of a non-retryable presigned-POST failure: when the
-// submitted form violates a signed condition (e.g. the key doesn't match
-// the policy's `eq $key` condition), S3 returns 400 Bad Request, not 403.
-// Verified in a sandbox account.
-//
-// This is the boundary the matcher gates on. The matcher classifies a
-// response as retryable on the basis of HTTP status alone (403), so any
-// non-403 response -- including this 400 -- must fall through to the
-// generic error path rather than triggering a refresh-and-retry against
-// a fresh URL (which would not fix the malformed upload anyway).
+// TestUploadToS3_PolicyConditionMismatchIsNotS3ForbiddenError asserts that a
+// 400 response from S3 falls through to the generic upload error rather than
+// matching S3ForbiddenError. The fixture body is the real "Policy Condition
+// failed" response from S3.
 func TestUploadToS3_PolicyConditionMismatchIsNotS3ForbiddenError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

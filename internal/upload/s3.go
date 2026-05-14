@@ -16,18 +16,11 @@ import (
 )
 
 // S3ForbiddenError is returned when S3 rejects the upload with 403 Forbidden.
-// The common case is "the presigned POST policy has expired", which is
-// recoverable by re-fetching a fresh presigned URL and retrying. Less common
-// permanent 403s (bucket-policy denial, VPC endpoint policy, etc.) also land
-// here -- a single retry against a fresh URL is harmless in those cases (it
-// just produces the same error a second time and then surfaces).
-//
-// 4xx responses other than 403 -- in particular the 400 Bad Request that S3
-// returns for policy-condition mismatches and signature mismatches -- do not
-// match this type; they surface as the generic upload error.
-//
-// Callers can use errors.As to detect this case. The Body field preserves the
-// raw S3 response so the original error remains diagnosable in logs.
+// Callers can use errors.As to detect this case and re-fetch the presigned
+// URL before retrying; the most common cause is a presigned POST policy that
+// has reached its expiration. Other 4xx responses surface as the generic
+// upload error. The Body field preserves the raw S3 response so the original
+// error remains diagnosable in logs.
 type S3ForbiddenError struct {
 	Status int
 	Body   string
@@ -113,17 +106,8 @@ func UploadToS3(ctx context.Context, filePath string, form PresignedUploadForm) 
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
 
-		// Classify any 403 as retryable. The common case is "presigned POST
-		// policy expired", which is recoverable by requesting a fresh URL.
-		// The previous version of this matcher pattern-matched on the
-		// literal S3 message text ("Policy expired."), which is brittle --
-		// AWS does not version that string, and a wording change would
-		// silently disable the retry path. Status alone is a more durable
-		// signal, and the cases we'd want to exclude (policy condition
-		// mismatch, signature mismatch) return 400 Bad Request, not 403,
-		// so they fall through to the generic error path below. A 403 that
-		// is genuinely permanent (e.g. bucket-policy denial) costs one
-		// wasted retry against a fresh URL, then surfaces.
+		// Surface 403 as a typed error so the caller can refresh the presigned
+		// URL and retry once. Other non-2xx responses fall through.
 		if resp.StatusCode == http.StatusForbidden {
 			return &S3ForbiddenError{Status: resp.StatusCode, Body: bodyStr}
 		}

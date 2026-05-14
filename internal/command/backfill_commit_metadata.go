@@ -24,17 +24,6 @@ import (
 // the specified tarball directly. This supports workflows where generation and
 // upload happen in separate steps (e.g. air-gapped environments or retrying a
 // failed upload).
-//
-// Auth model (TE-5834): bktec does not preflight token scopes via the
-// user-token introspection endpoint. That endpoint (GET /v2/access-token) does
-// not accept OIDC JWTs, so preflighting there breaks the agent-OIDC auth path.
-// Instead, this command relies on the natural error path of the suite-scoped
-// endpoints it has to call anyway: FetchCommitList fast-fails for read_suites
-// + suite policy, and PresignUpload (run before the git work) fast-fails for
-// write_suites + suite policy. The PresignUpload response is held and reused
-// at the actual upload site; if S3 rejects the upload because the presigned
-// URL has expired, a fresh presigned URL is fetched and the upload is retried
-// once.
 func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.GitRunner) error {
 	fmt.Fprintf(os.Stderr, "+++ Buildkite Test Engine Client: bktec %s\n\n", version.Version)
 
@@ -50,11 +39,6 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	})
 
 	// 2. Fetch commit list from server.
-	// This is the first auth-validating call. Missing read_suites, an
-	// un-admitted OIDC pipeline, or a bad suite slug all surface here as a
-	// typed API error before any git work runs. This preserves the fast-fail
-	// UX that the dropped /v2/access-token preflight used to provide for the
-	// read-scope half of the check.
 	fmt.Fprintf(os.Stderr, "Fetching commit list for suite %q (last %d days)...\n", cfg.SuiteSlug, cfg.Days)
 	commits, err := apiClient.FetchCommitList(ctx, cfg.SuiteSlug, cfg.Days)
 	if err != nil {
@@ -67,18 +51,10 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		return nil
 	}
 
-	// 3. Preflight the upload by requesting a presigned URL up front.
-	// This is the write-scope half of what the dropped /v2/access-token
-	// preflight used to do: PresignUpload runs verify_write_scope server-side,
-	// so missing write_suites or a wrong OIDC policy fails here, before the
-	// git work. The response is held and reused at the actual upload site
-	// below; if it has expired by then, the upload site re-fetches a fresh
-	// URL.
-	//
-	// Skipped when --output is set, because there's no upload to authorise.
-	// In that case missing write_suites is not an error -- the user has asked
-	// for a local tarball, and write_suites is only needed if they later
-	// re-run with --upload.
+	// 3. Request the presigned upload URL now (before the git work) so the
+	// suite-scoped auth check fails fast, and reuse the held response at the
+	// upload site below. Skipped when --output is set, because there's no
+	// upload to authorise.
 	var presigned api.PresignedUploadResponse
 	if cfg.Output == "" {
 		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
@@ -262,13 +238,6 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 // uploadOnly uploads a previously generated commit metadata tarball to Buildkite
 // via presigned S3 POST. This is the upload-only path for --upload, intended for
 // cases where generation and upload happen in separate steps.
-//
-// Auth model: PresignUpload is the first network call. It runs verify_write_scope
-// server-side, so missing write_suites or a wrong OIDC policy surfaces here as
-// a typed API error before the S3 upload runs. There is no held-response window
-// to worry about in this path (no git work between PresignUpload and S3 upload),
-// but we still route through uploadWithRetryOn403 to keep the retry path
-// centralised and exercise the same code in both call sites.
 func uploadOnly(ctx context.Context, cfg *config.Config) error {
 	// 1. Defensive contract check. Callers (today: main.go) are expected to call
 	// cfg.ValidateForBackfillCommitMetadata() first; this guard makes the layer
@@ -291,9 +260,7 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 	})
 
-	// 4. Request presigned upload URL.
-	// This is the first auth-validating call; missing write_suites or a wrong
-	// OIDC policy surfaces here as a typed API error.
+	// 4. Request presigned upload URL
 	fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
 	presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
 	if err != nil {
@@ -314,15 +281,6 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 // form. If S3 rejects the upload with 403 Forbidden, it requests a fresh
 // presigned URL and retries the upload once. Other S3 errors surface to the
 // caller as-is.
-//
-// The common 403 case is "the presigned POST policy has expired" (recoverable
-// by refreshing); less common permanent 403s (bucket-policy denial, etc.) cost
-// one wasted retry against a fresh URL, which is a fair price to pay for not
-// pattern-matching on AWS error message text.
-//
-// The "preflight + held response + retry" pattern is isolated in this helper
-// so a future migration to a side-effect-free auth check is a small surface
-// change rather than a refactor of the whole BackfillCommitMetadata flow.
 func uploadWithRetryOn403(
 	ctx context.Context,
 	apiClient *api.Client,
@@ -339,9 +297,6 @@ func uploadWithRetryOn403(
 		return err
 	}
 
-	// Two-line emit: a clean operator-facing line on stderr, and the raw S3
-	// XML body under debug for diagnosis if the retry itself goes wrong. The
-	// raw body is too verbose to print unconditionally.
 	fmt.Fprintln(os.Stderr, "S3 rejected the upload (403); requesting a fresh presigned URL and retrying...")
 	debug.Printf("S3 403 response body: %s", forbidden.Body)
 

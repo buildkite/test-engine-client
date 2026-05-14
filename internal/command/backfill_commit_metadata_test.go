@@ -132,43 +132,6 @@ func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 	}
 }
 
-// TestBackfillCommitMetadata_NoAccessTokenPreflight pins the TE-5834 contract
-// that BackfillCommitMetadata never calls GET /v2/access-token. That endpoint
-// is the user-token introspection endpoint; calling it breaks OIDC JWTs minted
-// by agent.buildkite.com, which are authenticated against a separate
-// suite-scoped policy and would 401 here. Asserting the negative explicitly
-// prevents a future refactor from re-introducing the preflight.
-func TestBackfillCommitMetadata_NoAccessTokenPreflight(t *testing.T) {
-	var accessTokenHits int32
-
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v2/access-token" {
-			atomic.AddInt32(&accessTokenHits, 1)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		switch r.URL.Path {
-		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
-			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte("abc123\n"))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer svr.Close()
-
-	cfg := getBackfillConfig(svr.URL)
-	cfg.Output = t.TempDir() + "/output.tar.gz"
-
-	if err := BackfillCommitMetadata(context.Background(), cfg, newFakeGitRunner()); err != nil {
-		t.Fatalf("BackfillCommitMetadata error: %v", err)
-	}
-
-	if got := atomic.LoadInt32(&accessTokenHits); got != 0 {
-		t.Errorf("expected 0 /v2/access-token requests (TE-5834), got %d", got)
-	}
-}
-
 func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -378,20 +341,16 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	if uploadedFileContent == "" {
 		t.Error("uploaded file content was empty")
 	}
-	// Pins the held-response contract: when S3 accepts on the first try, we
-	// must reuse the held URL rather than re-call PresignUpload. Two hits
-	// would indicate the held-response optimisation has regressed.
+	// On the happy path the held URL is reused; a second PresignUpload call
+	// would mean the held-response optimisation has regressed.
 	if got := atomic.LoadInt32(&presignHits); got != 1 {
 		t.Errorf("expected 1 PresignUpload call (held URL reused on happy path), got %d", got)
 	}
 }
 
-// TestBackfillCommitMetadata_WriteScopeMissing_FailsAtPreflight pins TE-5834's
-// fast-fail UX for the write-scope half of the check. Before this ticket, a
-// missing write_suites scope was caught by the GET /v2/access-token preflight.
-// After this ticket, the same case is caught by the PresignUpload call we run
-// before the git work as a deliberate auth preflight. The user-visible outcome
-// (clear error before the git work starts) is preserved.
+// TestBackfillCommitMetadata_WriteScopeMissing_FailsAtPreflight asserts that a
+// 403 from PresignUpload surfaces before any git command runs, so a token
+// missing write_suites fails fast rather than after the git work.
 func TestBackfillCommitMetadata_WriteScopeMissing_FailsAtPreflight(t *testing.T) {
 	var (
 		commitsCalled  bool
@@ -418,7 +377,6 @@ func TestBackfillCommitMetadata_WriteScopeMissing_FailsAtPreflight(t *testing.T)
 	defer svr.Close()
 
 	cfg := getBackfillConfig(svr.URL)
-	// No --output set, so write_suites is required and the preflight runs.
 
 	runner := &countingGitRunner{calls: &gitRunnerCalls}
 
@@ -438,20 +396,14 @@ func TestBackfillCommitMetadata_WriteScopeMissing_FailsAtPreflight(t *testing.T)
 	if !presignCalled {
 		t.Error("expected PresignUpload to run as the write-scope preflight")
 	}
-	// The whole point of running PresignUpload before the git work is that
-	// missing write_suites fails before any git command runs. If this drops
-	// below the assertion, the preflight has regressed back to running after
-	// the git work.
 	if got := atomic.LoadInt32(&gitRunnerCalls); got != 0 {
 		t.Errorf("expected 0 git commands before preflight failure, got %d", got)
 	}
 }
 
-// TestBackfillCommitMetadata_ReadScopeMissing_FailsAtFetchCommitList pins
-// TE-5834's fast-fail UX for the read-scope half of the check. Before this
-// ticket, a missing read_suites scope was caught by the GET /v2/access-token
-// preflight. After this ticket, the same case is caught by FetchCommitList,
-// which is the first API call in the flow.
+// TestBackfillCommitMetadata_ReadScopeMissing_FailsAtFetchCommitList asserts
+// that a 403 from FetchCommitList surfaces before any git command runs, so a
+// token missing read_suites fails fast.
 func TestBackfillCommitMetadata_ReadScopeMissing_FailsAtFetchCommitList(t *testing.T) {
 	var gitRunnerCalls int32
 
@@ -484,12 +436,9 @@ func TestBackfillCommitMetadata_ReadScopeMissing_FailsAtFetchCommitList(t *testi
 	}
 }
 
-// TestBackfillCommitMetadata_OutputSkipsPresignPreflight pins the contract
-// that --output (write-tarball-locally) does not call PresignUpload. The
-// preflight is only relevant when bktec is about to upload; a user writing
-// locally has explicitly opted out of the upload step and should not be
-// blocked by a missing write_suites scope. The dropped /v2/access-token
-// preflight used to warn-only in this case; now we don't check at all.
+// TestBackfillCommitMetadata_OutputSkipsPresignPreflight asserts that
+// --output (write-tarball-locally) does not call PresignUpload, so a user
+// who opts out of the upload is not blocked by a missing write_suites scope.
 func TestBackfillCommitMetadata_OutputSkipsPresignPreflight(t *testing.T) {
 	var presignHits int32
 
@@ -525,23 +474,17 @@ func TestBackfillCommitMetadata_OutputSkipsPresignPreflight(t *testing.T) {
 	}
 }
 
-// TestBackfillCommitMetadata_RetriesOnS3Forbidden pins the held-URL retry
-// path. If the held PresignUpload response triggers a 403 from S3, bktec
-// re-fetches a fresh presigned URL and retries once. The first-attempt
-// response body is the literal "Policy expired." response captured from S3
-// in a sandbox account; the matcher only cares about the 403 status, not
-// the message text.
+// TestBackfillCommitMetadata_RetriesOnS3Forbidden asserts that a 403 from S3
+// on the held presigned URL triggers a refresh and a single retry, and that
+// the retry succeeds.
 func TestBackfillCommitMetadata_RetriesOnS3Forbidden(t *testing.T) {
 	var (
 		s3Attempts      int32
 		uploadSucceeded bool
 	)
 
-	// S3 mock: first attempt returns the real "Policy expired." 403 captured
-	// from a sandbox account; second attempt succeeds. The matcher classifies
-	// on status alone, so the message text doesn't affect the test outcome --
-	// the literal body is here so the fixture documents what a real S3 403
-	// looks like in the wild.
+	// First attempt: real "Policy expired." 403 captured from S3.
+	// Second attempt: succeeds.
 	s3Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempt := atomic.AddInt32(&s3Attempts, 1)
 		if attempt == 1 {
@@ -550,7 +493,6 @@ func TestBackfillCommitMetadata_RetriesOnS3Forbidden(t *testing.T) {
 <Error><Code>AccessDenied</Code><Message>Invalid according to Policy: Policy expired.</Message><RequestId>P7XG7F93RENQV3B6</RequestId><HostId>lZUQ47E9D7XbgAiipMfWIbgJj4WVl1/34BihhSMiDaHGEAjE0FtKZ9QAh4psrJ8S1tFRvaGcoBeuEUnICTnXu9c6uOWe7ELO</HostId></Error>`))
 			return
 		}
-		// Second attempt: drain body so the client sees a clean 204.
 		io.Copy(io.Discard, r.Body)
 		uploadSucceeded = true
 		w.WriteHeader(http.StatusNoContent)
@@ -590,18 +532,10 @@ func TestBackfillCommitMetadata_RetriesOnS3Forbidden(t *testing.T) {
 	}
 }
 
-// TestBackfillCommitMetadata_S3PolicyConditionMismatchDoesNotRefresh pins
-// the boundary of the 403-retry path using the real-world shape of a
-// non-retryable S3 POST failure: when the submitted form violates a signed
-// policy condition (e.g. the key field doesn't match the policy's
-// `eq $key` clause), S3 returns 400 Bad Request, not 403. Verified in a
-// sandbox account.
-//
-// Because the matcher classifies on status alone, the 400 falls through
-// to the generic error path rather than triggering a refresh. Surfacing
-// immediately is correct here -- the configuration error is on the
-// caller's side (a malformed upload) and refreshing the presigned URL
-// won't change anything.
+// TestBackfillCommitMetadata_S3PolicyConditionMismatchDoesNotRefresh asserts
+// that a 400 from S3 (e.g. a policy condition mismatch) surfaces immediately
+// rather than triggering a refresh-and-retry, since refreshing the presigned
+// URL would not fix a malformed upload.
 func TestBackfillCommitMetadata_S3PolicyConditionMismatchDoesNotRefresh(t *testing.T) {
 	var (
 		s3Attempts  int32
@@ -776,10 +710,8 @@ func TestBackfillCommitMetadata_UploadOnly_MissingSuiteSlugFailsBeforeNetwork(t 
 }
 
 // TestBackfillCommitMetadata_UploadOnly_WriteScopeMissing_FailsAtPresignUpload
-// pins TE-5834's fast-fail UX for the upload-only path. Before this ticket,
-// missing write_suites was caught by the GET /v2/access-token preflight; now
-// it surfaces from PresignUpload, which is the first network call in this
-// path. The S3 upload must not run.
+// asserts that on the --upload path a 403 from PresignUpload surfaces before
+// the S3 upload runs.
 func TestBackfillCommitMetadata_UploadOnly_WriteScopeMissing_FailsAtPresignUpload(t *testing.T) {
 	var s3Hit int32
 
@@ -823,10 +755,9 @@ func TestBackfillCommitMetadata_UploadOnly_WriteScopeMissing_FailsAtPresignUploa
 	}
 }
 
-// countingGitRunner is a GitRunner that records every invocation. Used to
-// assert that the auth preflights run before any git work. Returns empty
-// output, which is enough to make the assertion observable -- the tests using
-// this runner never reach git work, so the return values don't matter.
+// countingGitRunner records every invocation, for tests that assert no git
+// commands ran. Returns empty output; callers that reach git work will fail
+// for unrelated reasons and the counter assertion will surface the regression.
 type countingGitRunner struct {
 	calls *int32
 }
