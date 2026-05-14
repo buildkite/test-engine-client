@@ -244,7 +244,9 @@ func (c *Config) generateOidcToken() (token string, err error) {
 	var tokenWriter strings.Builder
 	var errorWriter strings.Builder
 	lifetime := strconv.Itoa(int(c.OidcLifetime.Seconds()))
-	cmd := exec.Command("buildkite-agent", "oidc", "request-token", "--audience", suiteUrl, "--lifetime", lifetime)
+	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
+	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
+	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteUrl, "--lifetime", lifetime) //nolint:gosec
 	cmd.Stderr = &errorWriter
 	cmd.Stdout = &tokenWriter
 	cmd.Env = os.Environ()

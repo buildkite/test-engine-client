@@ -360,6 +360,13 @@ var debugFlag = &cli.BoolFlag{
 	Destination: &cfg.DebugEnabled,
 }
 
+var buildkiteAgentCommandFlag = &cli.StringFlag{
+	Name:        "buildkite-agent-command",
+	Value:       "buildkite-agent",
+	Destination: &cfg.BuildkiteAgentCommand,
+	Hidden:      true,
+}
+
 // `run` command flags
 var planIdentifierFlag = &cli.StringFlag{
 	Name:        "plan-identifier",
@@ -507,6 +514,7 @@ var runnerEnvironmentFlags = []cli.Flag{
 	disableRetryMutedFlag,
 	retryCommandFlag,
 	testEngineRetryCountFlag,
+	buildkiteAgentCommandFlag,
 }
 
 func previewSelectionFlags() []cli.Flag {

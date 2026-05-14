@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if [ "$1" != "oidc" ] ; then
+  echo "mock-buildkite-agent got unexpected \$1: $1" >&2
+  exit 1
+fi
+
+if [ "$2" != "request-token" ] ; then
+  echo "mock-buildkite-agent got unexpected \$2: $2" >&2
+  exit 1
+fi
+
+echo "mocktoken"

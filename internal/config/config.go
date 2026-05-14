@@ -7,8 +7,9 @@ type Config struct {
 	// AccessToken is the access token for the API.
 	AccessToken string `json:"-"`
 	// Branch is the string value of the git branch name, used by Buildkite only.
-	Branch  string `json:"BUILDKITE_BRANCH"`
-	BuildId string `json:"BUILDKITE_BUILD_ID"`
+	Branch                string `json:"BUILDKITE_BRANCH"`
+	BuildId               string `json:"BUILDKITE_BUILD_ID"`
+	BuildkiteAgentCommand string `json:"-"`
 	// CollectGitMetadata enables git metadata auto-collection on plan without requiring --selection-strategy to be set.
 	CollectGitMetadata bool `json:"-"`
 	// Concurrency is the number of concurrent git operations for diff collection (default 10).
