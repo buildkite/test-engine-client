@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-- `bktec tools backfill-commit-metadata` no longer preflights token scopes via the user-token introspection endpoint (`GET /v2/access-token`), so it now works with OIDC JWTs minted by `buildkite-agent oidc request-token` against suite-scoped policies. The fast-fail UX for missing scopes is preserved: missing `read_suites` surfaces from `FetchCommitList`, and missing `write_suites` surfaces from a `PresignUpload` call that now runs as an explicit preflight before the git work. If the held presigned URL expires before the upload runs, bktec automatically requests a fresh URL and retries the upload once.
+- `bktec tools backfill-commit-metadata` now accepts OIDC tokens from `buildkite-agent oidc request-token` in addition to API access tokens. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 
 ## 2.5.0 - 2026-05-11
 - Add split-by-example support for [Playwright](./docs/playwright.md), allowing slow test files to be split across parallel jobs by individual test case rather than by file.
