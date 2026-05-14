@@ -24,6 +24,17 @@ import (
 // the specified tarball directly. This supports workflows where generation and
 // upload happen in separate steps (e.g. air-gapped environments or retrying a
 // failed upload).
+//
+// Auth model (TE-5834): bktec does not preflight token scopes via the
+// user-token introspection endpoint. That endpoint (GET /v2/access-token) does
+// not accept OIDC JWTs, so preflighting there breaks the agent-OIDC auth path.
+// Instead, this command relies on the natural error path of the suite-scoped
+// endpoints it has to call anyway: FetchCommitList fast-fails for read_suites
+// + suite policy, and PresignUpload (run before the git work) fast-fails for
+// write_suites + suite policy. The PresignUpload response is held and reused
+// at the actual upload site; if S3 rejects the upload because the presigned
+// URL has expired, a fresh presigned URL is fetched and the upload is retried
+// once.
 func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.GitRunner) error {
 	fmt.Fprintf(os.Stderr, "+++ Buildkite Test Engine Client: bktec %s\n\n", version.Version)
 
@@ -38,33 +49,12 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 	})
 
-	// 2. Verify token scopes (fast-fail before expensive git work)
-	// Always check both scopes so we can warn about missing write_suites
-	// even when --output is set (the user may intend to upload later).
-	tokenInfo, scopeErr := apiClient.VerifyTokenScopes(ctx, []string{"read_suites", "write_suites"})
-	if scopeErr != nil {
-		// Check if read_suites is present -- it's always required
-		hasReadSuites := false
-		if tokenInfo != nil {
-			for _, s := range tokenInfo.Scopes {
-				if s == "read_suites" {
-					hasReadSuites = true
-					break
-				}
-			}
-		}
-
-		if cfg.Output != "" && hasReadSuites {
-			// write_suites not needed for local output, warn only
-			fmt.Fprintf(os.Stderr, "Warning: %v\n", scopeErr)
-		} else {
-			fmt.Fprintln(os.Stderr, "The token needs read_suites and write_suites scopes.")
-			return fmt.Errorf("token scope check failed: %w", scopeErr)
-		}
-	}
-	debug.Println("Token scopes verified")
-
-	// 3. Fetch commit list from server
+	// 2. Fetch commit list from server.
+	// This is the first auth-validating call. Missing read_suites, an
+	// un-admitted OIDC pipeline, or a bad suite slug all surface here as a
+	// typed API error before any git work runs. This preserves the fast-fail
+	// UX that the dropped /v2/access-token preflight used to provide for the
+	// read-scope half of the check.
 	fmt.Fprintf(os.Stderr, "Fetching commit list for suite %q (last %d days)...\n", cfg.SuiteSlug, cfg.Days)
 	commits, err := apiClient.FetchCommitList(ctx, cfg.SuiteSlug, cfg.Days)
 	if err != nil {
@@ -77,12 +67,18 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		return nil
 	}
 
-	// 4. Preflight the upload by requesting a presigned URL up front, so the
-	// write-scope check and presign signing happen before the ~13 min of git
-	// work. The response is held and reused at the actual upload site below;
-	// if it has expired by then, the upload site re-fetches a fresh URL.
+	// 3. Preflight the upload by requesting a presigned URL up front.
+	// This is the write-scope half of what the dropped /v2/access-token
+	// preflight used to do: PresignUpload runs verify_write_scope server-side,
+	// so missing write_suites or a wrong OIDC policy fails here, before the
+	// git work. The response is held and reused at the actual upload site
+	// below; if it has expired by then, the upload site re-fetches a fresh
+	// URL.
 	//
 	// Skipped when --output is set, because there's no upload to authorise.
+	// In that case missing write_suites is not an error -- the user has asked
+	// for a local tarball, and write_suites is only needed if they later
+	// re-run with --upload.
 	var presigned api.PresignedUploadResponse
 	if cfg.Output == "" {
 		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
@@ -93,20 +89,20 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		debug.Println("Held presigned upload URL for use after git work")
 	}
 
-	// 5. Detect default branch
+	// 4. Detect default branch
 	defaultBranch, err := git.DetectDefaultBranch(ctx, runner, cfg.Remote)
 	if err != nil {
 		return fmt.Errorf("detecting default branch: %w", err)
 	}
 	debug.Printf("Default branch: %s", defaultBranch)
 
-	// 6. Filter commits that exist locally
+	// 5. Filter commits that exist locally
 	existingCommits, missingCommits, err := git.FilterExistingCommits(ctx, runner, commits)
 	if err != nil {
 		return fmt.Errorf("filtering commits: %w", err)
 	}
 
-	// 7. Fetch missing commits from remote
+	// 6. Fetch missing commits from remote
 	if len(missingCommits) > 0 {
 		fmt.Fprintf(os.Stderr, "Fetching %d missing commits from %s...\n", len(missingCommits), cfg.Remote)
 		unfetchable, err := git.FetchMissingCommits(ctx, runner, cfg.Remote, missingCommits)
@@ -134,7 +130,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		return nil
 	}
 
-	// 8. Build mainline cache
+	// 7. Build mainline cache
 	fmt.Fprintln(os.Stderr, "Building mainline cache...")
 	mc, err := git.BuildMainlineCache(ctx, runner, defaultBranch, cfg.Days)
 	if err != nil {
@@ -142,14 +138,14 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	}
 	debug.Printf("Mainline cache: %d commits", mc.Size())
 
-	// 9. Bulk-fetch commit metadata
+	// 8. Bulk-fetch commit metadata
 	fmt.Fprintln(os.Stderr, "Fetching commit metadata...")
 	metadataMap, err := git.FetchBulkMetadata(ctx, runner, existingCommits)
 	if err != nil {
 		return fmt.Errorf("fetching metadata: %w", err)
 	}
 
-	// 10. Collect diffs (concurrent worker pool)
+	// 9. Collect diffs (concurrent worker pool)
 	fmt.Fprintln(os.Stderr, "Collecting diffs...")
 	diffs, err := git.CollectDiffs(ctx, runner, existingCommits, defaultBranch, mc, cfg.SkipDiffs,
 		cfg.Concurrency, func(done, total int) {
@@ -162,7 +158,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	}
 	fmt.Fprintln(os.Stderr) // newline after progress
 
-	// 11. Assemble records and compute commit date range
+	// 10. Assemble records and compute commit date range
 	var records []packaging.CommitRecord
 	var minDate, maxDate string
 	for i, commit := range existingCommits {
@@ -198,7 +194,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		}
 	}
 
-	// 12. Package as tar.gz
+	// 11. Package as tar.gz
 	fmt.Fprintln(os.Stderr, "Packaging tarball...")
 	archiveMeta := packaging.ArchiveMetadata{
 		SchemaVersion:    1,
@@ -238,7 +234,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		}
 	}()
 
-	// 13. Upload or write locally
+	// 12. Upload or write locally
 	if cfg.Output != "" {
 		if err := copyFile(tarPath, cfg.Output); err != nil {
 			return fmt.Errorf("writing output file: %w", err)
@@ -266,12 +262,19 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 // uploadOnly uploads a previously generated commit metadata tarball to Buildkite
 // via presigned S3 POST. This is the upload-only path for --upload, intended for
 // cases where generation and upload happen in separate steps.
+//
+// Auth model: PresignUpload is the first network call. It runs verify_write_scope
+// server-side, so missing write_suites or a wrong OIDC policy surfaces here as
+// a typed API error before the S3 upload runs. There is no held-response window
+// to worry about in this path (no git work between PresignUpload and S3 upload),
+// but we still route through uploadWithRefreshOnExpiry to keep the retry path
+// centralised and exercise the same code in both call sites.
 func uploadOnly(ctx context.Context, cfg *config.Config) error {
 	// 1. Defensive contract check. Callers (today: main.go) are expected to call
 	// cfg.ValidateForBackfillCommitMetadata() first; this guard makes the layer
 	// boundary safe if that ever stops being true. Empty suite slug would otherwise
 	// produce a malformed URL with a `//` segment that 404s after a network round
-	// trip and a token-scope check.
+	// trip.
 	if cfg.SuiteSlug == "" {
 		return fmt.Errorf("suite slug must not be blank (set --suite-slug or BUILDKITE_TEST_ENGINE_SUITE_SLUG)")
 	}
@@ -288,20 +291,16 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 	})
 
-	// 4. Verify token scopes
-	if _, err := apiClient.VerifyTokenScopes(ctx, []string{"write_suites"}); err != nil {
-		return fmt.Errorf("token scope check failed: %w", err)
-	}
-	debug.Println("Token scopes verified")
-
-	// 5. Request presigned upload URL
+	// 4. Request presigned upload URL.
+	// This is the first auth-validating call; missing write_suites or a wrong
+	// OIDC policy surfaces here as a typed API error.
 	fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
 	presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
 	if err != nil {
 		return fmt.Errorf("presigning upload: %w", err)
 	}
 
-	// 6. Upload to S3 (with one retry on expired URL)
+	// 5. Upload to S3
 	fmt.Fprintln(os.Stderr, "Uploading to S3...")
 	if err := uploadWithRefreshOnExpiry(ctx, apiClient, cfg.SuiteSlug, cfg.UploadFile, presigned); err != nil {
 		return fmt.Errorf("uploading to S3: %w", err)

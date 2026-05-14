@@ -61,14 +61,6 @@ func newFakeGitRunner() *git.FakeGitRunner {
 	}
 }
 
-// writeTokenScopes writes a JSON response for GET /v2/access-token with the given scopes.
-func writeTokenScopes(w http.ResponseWriter, scopes ...string) {
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"uuid":   "token-uuid",
-		"scopes": scopes,
-	})
-}
-
 // writePresignedUploadJSON writes the API response for the presigned-upload
 // endpoint, pointing the form at s3URL.
 func writePresignedUploadJSON(w http.ResponseWriter, s3URL string) {
@@ -86,8 +78,6 @@ func writePresignedUploadJSON(w http.ResponseWriter, s3URL string) {
 func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
@@ -142,11 +132,46 @@ func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 	}
 }
 
+// TestBackfillCommitMetadata_NoAccessTokenPreflight pins the TE-5834 contract
+// that BackfillCommitMetadata never calls GET /v2/access-token. That endpoint
+// is the user-token introspection endpoint; calling it breaks OIDC JWTs minted
+// by agent.buildkite.com, which are authenticated against a separate
+// suite-scoped policy and would 401 here. Asserting the negative explicitly
+// prevents a future refactor from re-introducing the preflight.
+func TestBackfillCommitMetadata_NoAccessTokenPreflight(t *testing.T) {
+	var accessTokenHits int32
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/access-token" {
+			atomic.AddInt32(&accessTokenHits, 1)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("abc123\n"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getBackfillConfig(svr.URL)
+	cfg.Output = t.TempDir() + "/output.tar.gz"
+
+	if err := BackfillCommitMetadata(context.Background(), cfg, newFakeGitRunner()); err != nil {
+		t.Fatalf("BackfillCommitMetadata error: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&accessTokenHits); got != 0 {
+		t.Errorf("expected 0 /v2/access-token requests (TE-5834), got %d", got)
+	}
+}
+
 func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
@@ -186,8 +211,6 @@ func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 func TestBackfillCommitMetadata_NoCommits(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte(""))
@@ -208,8 +231,6 @@ func TestBackfillCommitMetadata_NoCommits(t *testing.T) {
 func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("missing111\n"))
@@ -244,13 +265,8 @@ func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 
 func TestBackfillCommitMetadata_APIError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
-		default:
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("internal server error"))
-		}
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("internal server error"))
 	}))
 	defer svr.Close()
 
@@ -269,8 +285,6 @@ func TestBackfillCommitMetadata_DaysParam(t *testing.T) {
 	var receivedDays string
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			receivedDays = r.URL.Query().Get("days")
 			w.Header().Set("Content-Type", "text/plain")
@@ -334,9 +348,6 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	// API server
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
-
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
@@ -375,12 +386,31 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	}
 }
 
-func TestBackfillCommitMetadata_ScopeCheckFails(t *testing.T) {
+// TestBackfillCommitMetadata_WriteScopeMissing_FailsAtPreflight pins TE-5834's
+// fast-fail UX for the write-scope half of the check. Before this ticket, a
+// missing write_suites scope was caught by the GET /v2/access-token preflight.
+// After this ticket, the same case is caught by the PresignUpload call we run
+// before the git work as a deliberate auth preflight. The user-visible outcome
+// (clear error before the git work starts) is preserved.
+func TestBackfillCommitMetadata_WriteScopeMissing_FailsAtPreflight(t *testing.T) {
+	var (
+		commitsCalled  bool
+		presignCalled  bool
+		gitRunnerCalls int32
+	)
+
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			// Token has read_suites but missing write_suites
-			writeTokenScopes(w, "read_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
+			commitsCalled = true
+			// read_suites succeeds: return a commit so we get past this stage.
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("abc123\n"))
+
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
+			presignCalled = true
+			http.Error(w, `{"message":"missing required scope: write_suites"}`, http.StatusForbidden)
+
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -388,29 +418,47 @@ func TestBackfillCommitMetadata_ScopeCheckFails(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getBackfillConfig(svr.URL)
-	// No --output, so write_suites is required
+	// No --output set, so write_suites is required and the preflight runs.
 
-	err := BackfillCommitMetadata(context.Background(), cfg, nil)
+	runner := &countingGitRunner{calls: &gitRunnerCalls}
+
+	err := BackfillCommitMetadata(context.Background(), cfg, runner)
 	if err == nil {
 		t.Fatal("expected error for missing write_suites scope, got nil")
 	}
-	if !strings.Contains(err.Error(), "token scope check failed") {
-		t.Errorf("expected scope check error, got: %v", err)
+	if !strings.Contains(err.Error(), "presigning upload") {
+		t.Errorf("expected presigning-upload error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "write_suites") {
 		t.Errorf("expected write_suites in error, got: %v", err)
 	}
+	if !commitsCalled {
+		t.Error("expected FetchCommitList to run before the preflight")
+	}
+	if !presignCalled {
+		t.Error("expected PresignUpload to run as the write-scope preflight")
+	}
+	// The whole point of running PresignUpload before the git work is that
+	// missing write_suites fails before any git command runs. If this drops
+	// below the assertion, the preflight has regressed back to running after
+	// the git work.
+	if got := atomic.LoadInt32(&gitRunnerCalls); got != 0 {
+		t.Errorf("expected 0 git commands before preflight failure, got %d", got)
+	}
 }
 
-func TestBackfillCommitMetadata_ScopeCheckWarnsWithOutput(t *testing.T) {
+// TestBackfillCommitMetadata_ReadScopeMissing_FailsAtFetchCommitList pins
+// TE-5834's fast-fail UX for the read-scope half of the check. Before this
+// ticket, a missing read_suites scope was caught by the GET /v2/access-token
+// preflight. After this ticket, the same case is caught by FetchCommitList,
+// which is the first API call in the flow.
+func TestBackfillCommitMetadata_ReadScopeMissing_FailsAtFetchCommitList(t *testing.T) {
+	var gitRunnerCalls int32
+
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			// Token only has read_suites (no write_suites)
-			writeTokenScopes(w, "read_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
-			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte("abc123\n"))
+			http.Error(w, `{"message":"missing required scope: read_suites"}`, http.StatusForbidden)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -418,44 +466,62 @@ func TestBackfillCommitMetadata_ScopeCheckWarnsWithOutput(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getBackfillConfig(svr.URL)
-	cfg.Output = t.TempDir() + "/output.tar.gz"
 
-	runner := newFakeGitRunner()
+	runner := &countingGitRunner{calls: &gitRunnerCalls}
 
-	// With --output set, missing write_suites should warn, not error
 	err := BackfillCommitMetadata(context.Background(), cfg, runner)
-	if err != nil {
-		t.Fatalf("expected no error with --output (warn only), got: %v", err)
-	}
-
-	// Verify the output file was still created
-	if _, err := os.Stat(cfg.Output); err != nil {
-		t.Errorf("expected output file to exist: %v", err)
-	}
-}
-
-func TestBackfillCommitMetadata_ScopeCheckFailsWithOutputMissingReadSuites(t *testing.T) {
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v2/access-token":
-			// Token has write_suites but NOT read_suites
-			writeTokenScopes(w, "write_suites")
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer svr.Close()
-
-	cfg := getBackfillConfig(svr.URL)
-	cfg.Output = t.TempDir() + "/output.tar.gz"
-
-	// Even with --output, missing read_suites is a hard error
-	err := BackfillCommitMetadata(context.Background(), cfg, nil)
 	if err == nil {
 		t.Fatal("expected error for missing read_suites scope, got nil")
 	}
-	if !strings.Contains(err.Error(), "token scope check failed") {
-		t.Errorf("expected scope check error, got: %v", err)
+	if !strings.Contains(err.Error(), "fetching commit list") {
+		t.Errorf("expected fetching-commit-list error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "read_suites") {
+		t.Errorf("expected read_suites in error, got: %v", err)
+	}
+	if got := atomic.LoadInt32(&gitRunnerCalls); got != 0 {
+		t.Errorf("expected 0 git commands when FetchCommitList rejects, got %d", got)
+	}
+}
+
+// TestBackfillCommitMetadata_OutputSkipsPresignPreflight pins the contract
+// that --output (write-tarball-locally) does not call PresignUpload. The
+// preflight is only relevant when bktec is about to upload; a user writing
+// locally has explicitly opted out of the upload step and should not be
+// blocked by a missing write_suites scope. The dropped /v2/access-token
+// preflight used to warn-only in this case; now we don't check at all.
+func TestBackfillCommitMetadata_OutputSkipsPresignPreflight(t *testing.T) {
+	var presignHits int32
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("abc123\n"))
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
+			atomic.AddInt32(&presignHits, 1)
+			// If this is called, the test should fail, but respond plausibly
+			// so the test failure surfaces as a clear assertion below rather
+			// than as a downstream error.
+			writePresignedUploadJSON(w, "http://unused.example/")
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getBackfillConfig(svr.URL)
+	cfg.Output = t.TempDir() + "/output.tar.gz"
+
+	if err := BackfillCommitMetadata(context.Background(), cfg, newFakeGitRunner()); err != nil {
+		t.Fatalf("BackfillCommitMetadata error: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&presignHits); got != 0 {
+		t.Errorf("expected 0 PresignUpload calls when --output is set, got %d", got)
+	}
+	if _, err := os.Stat(cfg.Output); err != nil {
+		t.Errorf("expected output file to exist: %v", err)
 	}
 }
 
@@ -499,8 +565,6 @@ func TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL(t *testing.T) {
 
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
@@ -554,8 +618,6 @@ func TestBackfillCommitMetadata_S3GenericForbiddenDoesNotRefresh(t *testing.T) {
 
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "read_suites", "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
@@ -630,8 +692,6 @@ func TestBackfillCommitMetadata_UploadOnly_HappyPath(t *testing.T) {
 
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
 			writePresignedUploadJSON(w, s3Server.URL)
 		default:
@@ -665,12 +725,7 @@ func TestBackfillCommitMetadata_UploadOnly_HappyPath(t *testing.T) {
 
 func TestBackfillCommitMetadata_UploadOnly_FileNotFound(t *testing.T) {
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v2/access-token":
-			writeTokenScopes(w, "write_suites")
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
+		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer apiServer.Close()
 
@@ -720,12 +775,24 @@ func TestBackfillCommitMetadata_UploadOnly_MissingSuiteSlugFailsBeforeNetwork(t 
 	}
 }
 
-func TestBackfillCommitMetadata_UploadOnly_ScopeCheckFails(t *testing.T) {
+// TestBackfillCommitMetadata_UploadOnly_WriteScopeMissing_FailsAtPresignUpload
+// pins TE-5834's fast-fail UX for the upload-only path. Before this ticket,
+// missing write_suites was caught by the GET /v2/access-token preflight; now
+// it surfaces from PresignUpload, which is the first network call in this
+// path. The S3 upload must not run.
+func TestBackfillCommitMetadata_UploadOnly_WriteScopeMissing_FailsAtPresignUpload(t *testing.T) {
+	var s3Hit int32
+
+	s3Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&s3Hit, 1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer s3Server.Close()
+
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v2/access-token":
-			// Token missing write_suites
-			writeTokenScopes(w, "read_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
+			http.Error(w, `{"message":"missing required scope: write_suites"}`, http.StatusForbidden)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -745,10 +812,31 @@ func TestBackfillCommitMetadata_UploadOnly_ScopeCheckFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing write_suites scope, got nil")
 	}
-	if !strings.Contains(err.Error(), "token scope check failed") {
-		t.Errorf("expected scope check error, got: %v", err)
+	if !strings.Contains(err.Error(), "presigning upload") {
+		t.Errorf("expected presigning-upload error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "write_suites") {
 		t.Errorf("expected write_suites in error, got: %v", err)
 	}
+	if got := atomic.LoadInt32(&s3Hit); got != 0 {
+		t.Errorf("expected 0 S3 requests when preflight fails, got %d", got)
+	}
+}
+
+// countingGitRunner is a GitRunner that records every invocation. Used to
+// assert that the auth preflights run before any git work. Returns empty
+// output, which is enough to make the assertion observable -- the tests using
+// this runner never reach git work, so the return values don't matter.
+type countingGitRunner struct {
+	calls *int32
+}
+
+func (r *countingGitRunner) Output(ctx context.Context, args ...string) (string, error) {
+	atomic.AddInt32(r.calls, 1)
+	return "", nil
+}
+
+func (r *countingGitRunner) OutputWithStdin(ctx context.Context, stdin string, args ...string) (string, error) {
+	atomic.AddInt32(r.calls, 1)
+	return "", nil
 }
