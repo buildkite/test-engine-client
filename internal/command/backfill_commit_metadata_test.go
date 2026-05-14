@@ -527,31 +527,23 @@ func TestBackfillCommitMetadata_OutputSkipsPresignPreflight(t *testing.T) {
 
 // TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL pins the held-URL
 // retry path. If the held PresignUpload response has expired by the time the
-// S3 upload runs (S3 returns 403 "Request has expired"), bktec re-fetches a
-// fresh presigned URL and retries the upload once. This defends against the
-// case where git work takes longer than the server-side signature TTL.
+// S3 upload runs, bktec re-fetches a fresh presigned URL and retries once.
+// The first-attempt response body is the literal response captured from S3
+// in a sandbox account after waiting past the policy's expiration timestamp.
 func TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL(t *testing.T) {
 	var (
 		s3Attempts      int32
 		uploadSucceeded bool
 	)
 
-	// S3 mock: first attempt returns the AWS "Request has expired" 403; second
-	// attempt succeeds. The body shape matches what AWS S3 actually returns
-	// for an expired presigned URL (XML, not JSON).
+	// S3 mock: first attempt returns the real "Policy expired." 403; second
+	// attempt succeeds.
 	s3Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempt := atomic.AddInt32(&s3Attempts, 1)
 		if attempt == 1 {
 			w.WriteHeader(http.StatusForbidden)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-  <Code>AccessDenied</Code>
-  <Message>Request has expired</Message>
-  <Expires>2026-05-14T10:00:00Z</Expires>
-  <ServerTime>2026-05-14T11:30:00Z</ServerTime>
-  <RequestId>EXAMPLE000</RequestId>
-  <HostId>EXAMPLE</HostId>
-</Error>`))
+<Error><Code>AccessDenied</Code><Message>Invalid according to Policy: Policy expired.</Message><RequestId>P7XG7F93RENQV3B6</RequestId><HostId>lZUQ47E9D7XbgAiipMfWIbgJj4WVl1/34BihhSMiDaHGEAjE0FtKZ9QAh4psrJ8S1tFRvaGcoBeuEUnICTnXu9c6uOWe7ELO</HostId></Error>`))
 			return
 		}
 		// Second attempt: drain body so the client sees a clean 204.
@@ -594,12 +586,18 @@ func TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL(t *testing.T) {
 	}
 }
 
-// TestBackfillCommitMetadata_S3GenericForbiddenDoesNotRefresh pins the
-// boundary of the expired-URL retry: a generic 403 from S3 (e.g. a
-// configuration problem in the bucket policy) must not trigger an unbounded
-// retry loop. Only the specific "Request has expired" message triggers a
-// refresh. Anything else surfaces immediately.
-func TestBackfillCommitMetadata_S3GenericForbiddenDoesNotRefresh(t *testing.T) {
+// TestBackfillCommitMetadata_S3PolicyConditionMismatchDoesNotRefresh pins
+// the boundary of the expired-URL retry using the real-world shape of a
+// non-expiry S3 POST failure: when the submitted form violates a signed
+// policy condition (e.g. the key field doesn't match the policy's
+// `eq $key` clause), S3 returns 400 Bad Request with Code AccessDenied
+// and a different Message. Verified in a sandbox account.
+//
+// This must surface immediately as a one-shot failure rather than
+// trigger a refresh loop, because the configuration error is on the
+// caller's side (a malformed upload) and refreshing the presigned URL
+// won't change anything.
+func TestBackfillCommitMetadata_S3PolicyConditionMismatchDoesNotRefresh(t *testing.T) {
 	var (
 		s3Attempts  int32
 		presignHits int32
@@ -607,12 +605,9 @@ func TestBackfillCommitMetadata_S3GenericForbiddenDoesNotRefresh(t *testing.T) {
 
 	s3Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&s3Attempts, 1)
-		w.WriteHeader(http.StatusForbidden)
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-  <Code>AccessDenied</Code>
-  <Message>The bucket does not allow this operation.</Message>
-</Error>`))
+<Error><Code>AccessDenied</Code><Message>Invalid according to Policy: Policy Condition failed: ["eq", "$key", "test-policy.txt"]</Message><RequestId>0000000000000000</RequestId><HostId>HOST</HostId></Error>`))
 	}))
 	defer s3Server.Close()
 

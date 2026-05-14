@@ -110,14 +110,28 @@ func UploadToS3(ctx context.Context, filePath string, form PresignedUploadForm) 
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
 
-		// Detect S3's "presigned URL expired" response so callers can request
-		// a fresh URL and retry. S3 returns 403 with an XML body containing
-		// <Code>AccessDenied</Code> and <Message>Request has expired</Message>
-		// (see AWS S3 error responses reference). We match on the Message text
-		// because it's the most stable part of the contract -- the HTTP status
-		// is also 403 for unrelated permission errors, so status alone is not
-		// sufficient.
-		if resp.StatusCode == http.StatusForbidden && strings.Contains(bodyStr, "Request has expired") {
+		// Detect S3's "presigned POST policy expired" response so callers
+		// can request a fresh URL and retry. Verified against real S3
+		// responses in a sandbox account: bktec uploads via
+		// generate_presigned_post (multipart form-data with a policy
+		// document and signed conditions), and when the policy's
+		// `expiration` field is past, S3 returns
+		//
+		//   HTTP/1.1 403 Forbidden
+		//   <Error>
+		//     <Code>AccessDenied</Code>
+		//     <Message>Invalid according to Policy: Policy expired.</Message>
+		//     <RequestId>...</RequestId>
+		//     <HostId>...</HostId>
+		//   </Error>
+		//
+		// Match on "Policy expired." -- the trailing full stop is part of
+		// the real S3 message. Do NOT match on "Request has expired", which
+		// is the message presigned-PUT URLs return; bktec doesn't use PUT.
+		// Other non-expiry errors return different shapes entirely (policy
+		// condition mismatch and signature mismatch are 400 Bad Request,
+		// not 403), so they fall through to the generic error path below.
+		if resp.StatusCode == http.StatusForbidden && strings.Contains(bodyStr, "Policy expired.") {
 			return &PresignedURLExpiredError{Status: resp.StatusCode, Body: bodyStr}
 		}
 
