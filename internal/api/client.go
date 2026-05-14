@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/buildkite/roko"
-	"github.com/buildkite/test-engine-client/internal/debug"
-	"github.com/buildkite/test-engine-client/internal/version"
+	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/version"
 )
 
 // client is a client for the test plan API.

@@ -4,7 +4,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/internal/plan"
+	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )

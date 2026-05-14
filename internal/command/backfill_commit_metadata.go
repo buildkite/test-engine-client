@@ -8,13 +8,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/test-engine-client/internal/api"
-	"github.com/buildkite/test-engine-client/internal/config"
-	"github.com/buildkite/test-engine-client/internal/debug"
-	"github.com/buildkite/test-engine-client/internal/git"
-	"github.com/buildkite/test-engine-client/internal/packaging"
-	"github.com/buildkite/test-engine-client/internal/upload"
-	"github.com/buildkite/test-engine-client/internal/version"
+	"github.com/buildkite/test-engine-client/v2/internal/api"
+	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/git"
+	"github.com/buildkite/test-engine-client/v2/internal/packaging"
+	"github.com/buildkite/test-engine-client/v2/internal/upload"
+	"github.com/buildkite/test-engine-client/v2/internal/version"
 )
 
 // BackfillCommitMetadata collects historical git commit metadata from the local

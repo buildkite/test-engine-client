@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/test-engine-client/internal/runner"
+	"github.com/buildkite/test-engine-client/v2/internal/runner"
 )
 
 func getTestFiles(fileList string, testRunner runner.TestRunner) ([]string, error) {

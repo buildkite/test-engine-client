@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/buildkite/test-engine-client/internal/plan"
+	"github.com/buildkite/test-engine-client/v2/internal/plan"
 )
 
 // FetchTestPlan fetchs a test plan from the server.

@@ -1,6 +1,6 @@
 package runner
 
-import "github.com/buildkite/test-engine-client/internal/plan"
+import "github.com/buildkite/test-engine-client/v2/internal/plan"
 
 func testCasesFromPaths(paths []string) []plan.TestCase {
 	testCases := make([]plan.TestCase, len(paths))

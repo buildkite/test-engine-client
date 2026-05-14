@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/test-engine-client/internal/api"
+	"github.com/buildkite/test-engine-client/v2/internal/api"
 )
 
 const fallbackExtra = "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual."
