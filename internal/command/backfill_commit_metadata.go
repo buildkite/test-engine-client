@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -37,33 +38,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 	})
 
-	// 2. Verify token scopes (fast-fail before expensive git work)
-	// Always check both scopes so we can warn about missing write_suites
-	// even when --output is set (the user may intend to upload later).
-	tokenInfo, scopeErr := apiClient.VerifyTokenScopes(ctx, []string{"read_suites", "write_suites"})
-	if scopeErr != nil {
-		// Check if read_suites is present -- it's always required
-		hasReadSuites := false
-		if tokenInfo != nil {
-			for _, s := range tokenInfo.Scopes {
-				if s == "read_suites" {
-					hasReadSuites = true
-					break
-				}
-			}
-		}
-
-		if cfg.Output != "" && hasReadSuites {
-			// write_suites not needed for local output, warn only
-			fmt.Fprintf(os.Stderr, "Warning: %v\n", scopeErr)
-		} else {
-			fmt.Fprintln(os.Stderr, "The token needs read_suites and write_suites scopes.")
-			return fmt.Errorf("token scope check failed: %w", scopeErr)
-		}
-	}
-	debug.Println("Token scopes verified")
-
-	// 3. Fetch commit list from server
+	// 2. Fetch commit list from server.
 	fmt.Fprintf(os.Stderr, "Fetching commit list for suite %q (last %d days)...\n", cfg.SuiteSlug, cfg.Days)
 	commits, err := apiClient.FetchCommitList(ctx, cfg.SuiteSlug, cfg.Days)
 	if err != nil {
@@ -74,6 +49,20 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	if len(commits) == 0 {
 		fmt.Fprintln(os.Stderr, "No commits to process.")
 		return nil
+	}
+
+	// 3. Request the presigned upload URL now (before the git work) so the
+	// suite-scoped auth check fails fast, and reuse the held response at the
+	// upload site below. Skipped when --output is set, because there's no
+	// upload to authorise.
+	var presigned api.PresignedUploadResponse
+	if cfg.Output == "" {
+		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
+		presigned, err = apiClient.PresignUpload(ctx, cfg.SuiteSlug)
+		if err != nil {
+			return fmt.Errorf("presigning upload: %w", err)
+		}
+		debug.Println("Held presigned upload URL for use after git work")
 	}
 
 	// 4. Detect default branch
@@ -228,15 +217,8 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		}
 		fmt.Fprintf(os.Stderr, "Wrote %s\n", cfg.Output)
 	} else {
-		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
-		presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
-		if err != nil {
-			removeTarball = false
-			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
-			return fmt.Errorf("presigning upload: %w", err)
-		}
 		fmt.Fprintln(os.Stderr, "Uploading to S3...")
-		if err := upload.UploadToS3(ctx, tarPath, presigned.Form); err != nil {
+		if err := uploadWithRetryOn403(ctx, apiClient, cfg.SuiteSlug, tarPath, presigned); err != nil {
 			removeTarball = false
 			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
 			return fmt.Errorf("uploading to S3: %w", err)
@@ -261,7 +243,7 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 	// cfg.ValidateForBackfillCommitMetadata() first; this guard makes the layer
 	// boundary safe if that ever stops being true. Empty suite slug would otherwise
 	// produce a malformed URL with a `//` segment that 404s after a network round
-	// trip and a token-scope check.
+	// trip.
 	if cfg.SuiteSlug == "" {
 		return fmt.Errorf("suite slug must not be blank (set --suite-slug or BUILDKITE_TEST_ENGINE_SUITE_SLUG)")
 	}
@@ -278,26 +260,54 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 		ServerBaseUrl:    cfg.ServerBaseUrl,
 	})
 
-	// 4. Verify token scopes
-	if _, err := apiClient.VerifyTokenScopes(ctx, []string{"write_suites"}); err != nil {
-		return fmt.Errorf("token scope check failed: %w", err)
-	}
-	debug.Println("Token scopes verified")
-
-	// 5. Request presigned upload URL
+	// 4. Request presigned upload URL
 	fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
 	presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
 	if err != nil {
 		return fmt.Errorf("presigning upload: %w", err)
 	}
 
-	// 6. Upload to S3
+	// 5. Upload to S3
 	fmt.Fprintln(os.Stderr, "Uploading to S3...")
-	if err := upload.UploadToS3(ctx, cfg.UploadFile, presigned.Form); err != nil {
+	if err := uploadWithRetryOn403(ctx, apiClient, cfg.SuiteSlug, cfg.UploadFile, presigned); err != nil {
 		return fmt.Errorf("uploading to S3: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Uploaded %s to %s\n", cfg.UploadFile, presigned.URI)
+	return nil
+}
+
+// uploadWithRetryOn403 uploads filePath to S3 using the provided presigned
+// form. If S3 rejects the upload with 403 Forbidden, it requests a fresh
+// presigned URL and retries the upload once. Other S3 errors surface to the
+// caller as-is.
+func uploadWithRetryOn403(
+	ctx context.Context,
+	apiClient *api.Client,
+	suiteSlug, filePath string,
+	presigned api.PresignedUploadResponse,
+) error {
+	err := upload.UploadToS3(ctx, filePath, presigned.Form)
+	if err == nil {
+		return nil
+	}
+
+	var forbidden *upload.S3ForbiddenError
+	if !errors.As(err, &forbidden) {
+		return err
+	}
+
+	fmt.Fprintln(os.Stderr, "S3 rejected the upload (403); requesting a fresh presigned URL and retrying...")
+	debug.Printf("S3 403 response body: %s", forbidden.Body)
+
+	fresh, err := apiClient.PresignUpload(ctx, suiteSlug)
+	if err != nil {
+		return fmt.Errorf("refreshing presigned upload: %w", err)
+	}
+
+	if err := upload.UploadToS3(ctx, filePath, fresh.Form); err != nil {
+		return fmt.Errorf("retrying upload with fresh URL: %w", err)
+	}
 	return nil
 }
 

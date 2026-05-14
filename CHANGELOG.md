@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- `bktec tools backfill-commit-metadata` now accepts OIDC tokens from `buildkite-agent oidc request-token` in addition to API access tokens. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 
 ## 2.5.0 - 2026-05-11
 - Add split-by-example support for [Playwright](./docs/playwright.md), allowing slow test files to be split across parallel jobs by individual test case rather than by file.

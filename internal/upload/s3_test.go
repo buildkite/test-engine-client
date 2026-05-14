@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -203,6 +204,75 @@ func TestUploadToS3_ServerError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "403") {
 		t.Errorf("expected 403 in error, got: %v", err)
+	}
+}
+
+// TestUploadToS3_ReturnsS3ForbiddenError asserts that a 403 response is
+// surfaced as S3ForbiddenError so callers can refresh the presigned URL and
+// retry. The fixture body is the real expired-policy response from S3.
+func TestUploadToS3_ReturnsS3ForbiddenError(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error><Code>AccessDenied</Code><Message>Invalid according to Policy: Policy expired.</Message><RequestId>P7XG7F93RENQV3B6</RequestId><HostId>lZUQ47E9D7XbgAiipMfWIbgJj4WVl1/34BihhSMiDaHGEAjE0FtKZ9QAh4psrJ8S1tFRvaGcoBeuEUnICTnXu9c6uOWe7ELO</HostId></Error>`))
+	}))
+	defer svr.Close()
+
+	tmpFile := createTempFile(t, "content")
+
+	form := PresignedUploadForm{
+		Method:    "POST",
+		URL:       svr.URL,
+		Data:      map[string]string{"key": "test.tar.gz"},
+		FileInput: "file",
+	}
+
+	err := UploadToS3(context.Background(), tmpFile, form)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var forbidden *S3ForbiddenError
+	if !errors.As(err, &forbidden) {
+		t.Fatalf("expected S3ForbiddenError, got %T: %v", err, err)
+	}
+	if forbidden.Status != http.StatusForbidden {
+		t.Errorf("forbidden.Status: got %d, want %d", forbidden.Status, http.StatusForbidden)
+	}
+	if !strings.Contains(forbidden.Body, "Policy expired.") {
+		t.Errorf("forbidden.Body should preserve raw S3 response, got: %s", forbidden.Body)
+	}
+}
+
+// TestUploadToS3_PolicyConditionMismatchIsNotS3ForbiddenError asserts that a
+// 400 response from S3 falls through to the generic upload error rather than
+// matching S3ForbiddenError. The fixture body is the real "Policy Condition
+// failed" response from S3.
+func TestUploadToS3_PolicyConditionMismatchIsNotS3ForbiddenError(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error><Code>AccessDenied</Code><Message>Invalid according to Policy: Policy Condition failed: ["eq", "$key", "test-policy.txt"]</Message><RequestId>0000000000000000</RequestId><HostId>HOST</HostId></Error>`))
+	}))
+	defer svr.Close()
+
+	tmpFile := createTempFile(t, "content")
+
+	form := PresignedUploadForm{
+		Method:    "POST",
+		URL:       svr.URL,
+		Data:      map[string]string{"key": "test.tar.gz"},
+		FileInput: "file",
+	}
+
+	err := UploadToS3(context.Background(), tmpFile, form)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var forbidden *S3ForbiddenError
+	if errors.As(err, &forbidden) {
+		t.Fatalf("did not expect S3ForbiddenError for policy condition mismatch (400), got: %v", err)
 	}
 }
 

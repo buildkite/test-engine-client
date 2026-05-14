@@ -15,6 +15,21 @@ import (
 	"github.com/buildkite/test-engine-client/internal/debug"
 )
 
+// S3ForbiddenError is returned when S3 rejects the upload with 403 Forbidden.
+// Callers can use errors.As to detect this case and re-fetch the presigned
+// URL before retrying; the most common cause is a presigned POST policy that
+// has reached its expiration. Other 4xx responses surface as the generic
+// upload error. The Body field preserves the raw S3 response so the original
+// error remains diagnosable in logs.
+type S3ForbiddenError struct {
+	Status int
+	Body   string
+}
+
+func (e *S3ForbiddenError) Error() string {
+	return fmt.Sprintf("S3 upload rejected with status %d: %s", e.Status, e.Body)
+}
+
 // PresignedUploadForm describes the S3 presigned POST form returned by the
 // Buildkite API. All Data fields must be sent as form fields before the file.
 type PresignedUploadForm struct {
@@ -89,7 +104,15 @@ func UploadToS3(ctx context.Context, filePath string, form PresignedUploadForm) 
 	// S3 returns 204 No Content on success for presigned POSTs
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("S3 upload failed with status %d: %s", resp.StatusCode, string(body))
+		bodyStr := string(body)
+
+		// Surface 403 as a typed error so the caller can refresh the presigned
+		// URL and retry once. Other non-2xx responses fall through.
+		if resp.StatusCode == http.StatusForbidden {
+			return &S3ForbiddenError{Status: resp.StatusCode, Body: bodyStr}
+		}
+
+		return fmt.Errorf("S3 upload failed with status %d: %s", resp.StatusCode, bodyStr)
 	}
 
 	debug.Printf("Upload successful: %d", resp.StatusCode)
