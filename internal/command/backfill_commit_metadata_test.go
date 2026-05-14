@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/internal/config"
@@ -65,6 +66,20 @@ func writeTokenScopes(w http.ResponseWriter, scopes ...string) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"uuid":   "token-uuid",
 		"scopes": scopes,
+	})
+}
+
+// writePresignedUploadJSON writes the API response for the presigned-upload
+// endpoint, pointing the form at s3URL.
+func writePresignedUploadJSON(w http.ResponseWriter, s3URL string) {
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"uri": "s3://bucket/test.tar.gz",
+		"form": map[string]interface{}{
+			"method":     "POST",
+			"url":        s3URL,
+			"data":       map[string]string{"key": "test.tar.gz"},
+			"file_input": "file",
+		},
 	})
 }
 
@@ -198,6 +213,10 @@ func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("missing111\n"))
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
+			// The preflight runs before the git filter step, so we still need
+			// to mock it even though no commits will be processed locally.
+			writePresignedUploadJSON(w, "http://unused.example/")
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -310,6 +329,8 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	}))
 	defer s3Server.Close()
 
+	var presignHits int32
+
 	// API server
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -321,15 +342,8 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 			w.Write([]byte("abc123\n"))
 
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"uri": "s3://bucket/test.tar.gz",
-				"form": map[string]interface{}{
-					"method":     "POST",
-					"url":        s3Server.URL,
-					"data":       map[string]string{"key": "test.tar.gz"},
-					"file_input": "file",
-				},
-			})
+			atomic.AddInt32(&presignHits, 1)
+			writePresignedUploadJSON(w, s3Server.URL)
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -352,6 +366,12 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	}
 	if uploadedFileContent == "" {
 		t.Error("uploaded file content was empty")
+	}
+	// Pins the held-response contract: when S3 accepts on the first try, we
+	// must reuse the held URL rather than re-call PresignUpload. Two hits
+	// would indicate the held-response optimisation has regressed.
+	if got := atomic.LoadInt32(&presignHits); got != 1 {
+		t.Errorf("expected 1 PresignUpload call (held URL reused on happy path), got %d", got)
 	}
 }
 
@@ -439,6 +459,129 @@ func TestBackfillCommitMetadata_ScopeCheckFailsWithOutputMissingReadSuites(t *te
 	}
 }
 
+// TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL pins the held-URL
+// retry path. If the held PresignUpload response has expired by the time the
+// S3 upload runs (S3 returns 403 "Request has expired"), bktec re-fetches a
+// fresh presigned URL and retries the upload once. This defends against the
+// case where git work takes longer than the server-side signature TTL.
+func TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL(t *testing.T) {
+	var (
+		s3Attempts      int32
+		uploadSucceeded bool
+	)
+
+	// S3 mock: first attempt returns the AWS "Request has expired" 403; second
+	// attempt succeeds. The body shape matches what AWS S3 actually returns
+	// for an expired presigned URL (XML, not JSON).
+	s3Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempt := atomic.AddInt32(&s3Attempts, 1)
+		if attempt == 1 {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>Request has expired</Message>
+  <Expires>2026-05-14T10:00:00Z</Expires>
+  <ServerTime>2026-05-14T11:30:00Z</ServerTime>
+  <RequestId>EXAMPLE000</RequestId>
+  <HostId>EXAMPLE</HostId>
+</Error>`))
+			return
+		}
+		// Second attempt: drain body so the client sees a clean 204.
+		io.Copy(io.Discard, r.Body)
+		uploadSucceeded = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer s3Server.Close()
+
+	var presignHits int32
+
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("abc123\n"))
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
+			atomic.AddInt32(&presignHits, 1)
+			writePresignedUploadJSON(w, s3Server.URL)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer apiServer.Close()
+
+	cfg := getBackfillConfig(apiServer.URL)
+
+	if err := BackfillCommitMetadata(context.Background(), cfg, newFakeGitRunner()); err != nil {
+		t.Fatalf("BackfillCommitMetadata error: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&s3Attempts); got != 2 {
+		t.Errorf("expected 2 S3 attempts (first expired, second succeeds), got %d", got)
+	}
+	if got := atomic.LoadInt32(&presignHits); got != 2 {
+		t.Errorf("expected 2 PresignUpload calls (initial preflight + refresh), got %d", got)
+	}
+	if !uploadSucceeded {
+		t.Error("expected second S3 attempt to receive the upload body")
+	}
+}
+
+// TestBackfillCommitMetadata_S3GenericForbiddenDoesNotRefresh pins the
+// boundary of the expired-URL retry: a generic 403 from S3 (e.g. a
+// configuration problem in the bucket policy) must not trigger an unbounded
+// retry loop. Only the specific "Request has expired" message triggers a
+// refresh. Anything else surfaces immediately.
+func TestBackfillCommitMetadata_S3GenericForbiddenDoesNotRefresh(t *testing.T) {
+	var (
+		s3Attempts  int32
+		presignHits int32
+	)
+
+	s3Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&s3Attempts, 1)
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>The bucket does not allow this operation.</Message>
+</Error>`))
+	}))
+	defer s3Server.Close()
+
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/access-token":
+			writeTokenScopes(w, "read_suites", "write_suites")
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("abc123\n"))
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
+			atomic.AddInt32(&presignHits, 1)
+			writePresignedUploadJSON(w, s3Server.URL)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer apiServer.Close()
+
+	cfg := getBackfillConfig(apiServer.URL)
+
+	err := BackfillCommitMetadata(context.Background(), cfg, newFakeGitRunner())
+	if err == nil {
+		t.Fatal("expected error for generic S3 403, got nil")
+	}
+	if got := atomic.LoadInt32(&s3Attempts); got != 1 {
+		t.Errorf("expected 1 S3 attempt (no refresh on generic 403), got %d", got)
+	}
+	if got := atomic.LoadInt32(&presignHits); got != 1 {
+		t.Errorf("expected 1 PresignUpload call (no refresh on generic 403), got %d", got)
+	}
+}
+
 // --- Upload-only mode tests (--upload flag) ---
 
 func getUploadConfig(serverURL string, filePath string) *config.Config {
@@ -488,20 +631,9 @@ func TestBackfillCommitMetadata_UploadOnly_HappyPath(t *testing.T) {
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v2/access-token":
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"uuid":   "token-uuid",
-				"scopes": []string{"write_suites"},
-			})
+			writeTokenScopes(w, "write_suites")
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"uri": "s3://bucket/test.tar.gz",
-				"form": map[string]interface{}{
-					"method":     "POST",
-					"url":        s3Server.URL,
-					"data":       map[string]string{"key": "test.tar.gz"},
-					"file_input": "file",
-				},
-			})
+			writePresignedUploadJSON(w, s3Server.URL)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -535,10 +667,7 @@ func TestBackfillCommitMetadata_UploadOnly_FileNotFound(t *testing.T) {
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v2/access-token":
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"uuid":   "token-uuid",
-				"scopes": []string{"write_suites"},
-			})
+			writeTokenScopes(w, "write_suites")
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -596,10 +725,7 @@ func TestBackfillCommitMetadata_UploadOnly_ScopeCheckFails(t *testing.T) {
 		switch r.URL.Path {
 		case "/v2/access-token":
 			// Token missing write_suites
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"uuid":   "token-uuid",
-				"scopes": []string{"read_suites"},
-			})
+			writeTokenScopes(w, "read_suites")
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -76,20 +77,36 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		return nil
 	}
 
-	// 4. Detect default branch
+	// 4. Preflight the upload by requesting a presigned URL up front, so the
+	// write-scope check and presign signing happen before the ~13 min of git
+	// work. The response is held and reused at the actual upload site below;
+	// if it has expired by then, the upload site re-fetches a fresh URL.
+	//
+	// Skipped when --output is set, because there's no upload to authorise.
+	var presigned api.PresignedUploadResponse
+	if cfg.Output == "" {
+		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
+		presigned, err = apiClient.PresignUpload(ctx, cfg.SuiteSlug)
+		if err != nil {
+			return fmt.Errorf("presigning upload: %w", err)
+		}
+		debug.Println("Held presigned upload URL for use after git work")
+	}
+
+	// 5. Detect default branch
 	defaultBranch, err := git.DetectDefaultBranch(ctx, runner, cfg.Remote)
 	if err != nil {
 		return fmt.Errorf("detecting default branch: %w", err)
 	}
 	debug.Printf("Default branch: %s", defaultBranch)
 
-	// 5. Filter commits that exist locally
+	// 6. Filter commits that exist locally
 	existingCommits, missingCommits, err := git.FilterExistingCommits(ctx, runner, commits)
 	if err != nil {
 		return fmt.Errorf("filtering commits: %w", err)
 	}
 
-	// 6. Fetch missing commits from remote
+	// 7. Fetch missing commits from remote
 	if len(missingCommits) > 0 {
 		fmt.Fprintf(os.Stderr, "Fetching %d missing commits from %s...\n", len(missingCommits), cfg.Remote)
 		unfetchable, err := git.FetchMissingCommits(ctx, runner, cfg.Remote, missingCommits)
@@ -117,7 +134,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		return nil
 	}
 
-	// 7. Build mainline cache
+	// 8. Build mainline cache
 	fmt.Fprintln(os.Stderr, "Building mainline cache...")
 	mc, err := git.BuildMainlineCache(ctx, runner, defaultBranch, cfg.Days)
 	if err != nil {
@@ -125,14 +142,14 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	}
 	debug.Printf("Mainline cache: %d commits", mc.Size())
 
-	// 8. Bulk-fetch commit metadata
+	// 9. Bulk-fetch commit metadata
 	fmt.Fprintln(os.Stderr, "Fetching commit metadata...")
 	metadataMap, err := git.FetchBulkMetadata(ctx, runner, existingCommits)
 	if err != nil {
 		return fmt.Errorf("fetching metadata: %w", err)
 	}
 
-	// 9. Collect diffs (concurrent worker pool)
+	// 10. Collect diffs (concurrent worker pool)
 	fmt.Fprintln(os.Stderr, "Collecting diffs...")
 	diffs, err := git.CollectDiffs(ctx, runner, existingCommits, defaultBranch, mc, cfg.SkipDiffs,
 		cfg.Concurrency, func(done, total int) {
@@ -145,7 +162,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	}
 	fmt.Fprintln(os.Stderr) // newline after progress
 
-	// 10. Assemble records and compute commit date range
+	// 11. Assemble records and compute commit date range
 	var records []packaging.CommitRecord
 	var minDate, maxDate string
 	for i, commit := range existingCommits {
@@ -181,7 +198,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		}
 	}
 
-	// 11. Package as tar.gz
+	// 12. Package as tar.gz
 	fmt.Fprintln(os.Stderr, "Packaging tarball...")
 	archiveMeta := packaging.ArchiveMetadata{
 		SchemaVersion:    1,
@@ -221,22 +238,15 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		}
 	}()
 
-	// 12. Upload or write locally
+	// 13. Upload or write locally
 	if cfg.Output != "" {
 		if err := copyFile(tarPath, cfg.Output); err != nil {
 			return fmt.Errorf("writing output file: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Wrote %s\n", cfg.Output)
 	} else {
-		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
-		presigned, err := apiClient.PresignUpload(ctx, cfg.SuiteSlug)
-		if err != nil {
-			removeTarball = false
-			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
-			return fmt.Errorf("presigning upload: %w", err)
-		}
 		fmt.Fprintln(os.Stderr, "Uploading to S3...")
-		if err := upload.UploadToS3(ctx, tarPath, presigned.Form); err != nil {
+		if err := uploadWithRefreshOnExpiry(ctx, apiClient, cfg.SuiteSlug, tarPath, presigned); err != nil {
 			removeTarball = false
 			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
 			return fmt.Errorf("uploading to S3: %w", err)
@@ -291,13 +301,56 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("presigning upload: %w", err)
 	}
 
-	// 6. Upload to S3
+	// 6. Upload to S3 (with one retry on expired URL)
 	fmt.Fprintln(os.Stderr, "Uploading to S3...")
-	if err := upload.UploadToS3(ctx, cfg.UploadFile, presigned.Form); err != nil {
+	if err := uploadWithRefreshOnExpiry(ctx, apiClient, cfg.SuiteSlug, cfg.UploadFile, presigned); err != nil {
 		return fmt.Errorf("uploading to S3: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Uploaded %s to %s\n", cfg.UploadFile, presigned.URI)
+	return nil
+}
+
+// uploadWithRefreshOnExpiry uploads filePath to S3 using the provided
+// presigned form. If S3 rejects the upload because the presigned URL has
+// expired (PresignedURLExpiredError), it requests a fresh presigned URL and
+// retries the upload once. Other S3 errors surface to the caller as-is.
+//
+// The "preflight + held response + retry on expiry" pattern is isolated in
+// this helper so a future migration to a side-effect-free auth check is a
+// small surface change rather than a refactor of the whole
+// BackfillCommitMetadata flow.
+func uploadWithRefreshOnExpiry(
+	ctx context.Context,
+	apiClient *api.Client,
+	suiteSlug, filePath string,
+	presigned api.PresignedUploadResponse,
+) error {
+	err := upload.UploadToS3(ctx, filePath, presigned.Form)
+	if err == nil {
+		return nil
+	}
+
+	var expired *upload.PresignedURLExpiredError
+	if !errors.As(err, &expired) {
+		return err
+	}
+
+	// Two-line emit: a clean operator-facing line on stderr, and the raw S3
+	// XML body (Expires / ServerTime / RequestId / HostId) under debug for
+	// deeper diagnosis if the retry itself goes wrong. The raw body is too
+	// verbose to print unconditionally.
+	fmt.Fprintln(os.Stderr, "Presigned URL expired; requesting a fresh one and retrying...")
+	debug.Printf("S3 presigned URL expired, raw response: %s", expired.Error())
+
+	fresh, err := apiClient.PresignUpload(ctx, suiteSlug)
+	if err != nil {
+		return fmt.Errorf("refreshing presigned upload: %w", err)
+	}
+
+	if err := upload.UploadToS3(ctx, filePath, fresh.Form); err != nil {
+		return fmt.Errorf("retrying upload with fresh URL: %w", err)
+	}
 	return nil
 }
 
