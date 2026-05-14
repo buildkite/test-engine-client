@@ -525,19 +525,23 @@ func TestBackfillCommitMetadata_OutputSkipsPresignPreflight(t *testing.T) {
 	}
 }
 
-// TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL pins the held-URL
-// retry path. If the held PresignUpload response has expired by the time the
-// S3 upload runs, bktec re-fetches a fresh presigned URL and retries once.
-// The first-attempt response body is the literal response captured from S3
-// in a sandbox account after waiting past the policy's expiration timestamp.
-func TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL(t *testing.T) {
+// TestBackfillCommitMetadata_RetriesOnS3Forbidden pins the held-URL retry
+// path. If the held PresignUpload response triggers a 403 from S3, bktec
+// re-fetches a fresh presigned URL and retries once. The first-attempt
+// response body is the literal "Policy expired." response captured from S3
+// in a sandbox account; the matcher only cares about the 403 status, not
+// the message text.
+func TestBackfillCommitMetadata_RetriesOnS3Forbidden(t *testing.T) {
 	var (
 		s3Attempts      int32
 		uploadSucceeded bool
 	)
 
-	// S3 mock: first attempt returns the real "Policy expired." 403; second
-	// attempt succeeds.
+	// S3 mock: first attempt returns the real "Policy expired." 403 captured
+	// from a sandbox account; second attempt succeeds. The matcher classifies
+	// on status alone, so the message text doesn't affect the test outcome --
+	// the literal body is here so the fixture documents what a real S3 403
+	// looks like in the wild.
 	s3Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempt := atomic.AddInt32(&s3Attempts, 1)
 		if attempt == 1 {
@@ -576,7 +580,7 @@ func TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL(t *testing.T) {
 	}
 
 	if got := atomic.LoadInt32(&s3Attempts); got != 2 {
-		t.Errorf("expected 2 S3 attempts (first expired, second succeeds), got %d", got)
+		t.Errorf("expected 2 S3 attempts (first 403, second succeeds), got %d", got)
 	}
 	if got := atomic.LoadInt32(&presignHits); got != 2 {
 		t.Errorf("expected 2 PresignUpload calls (initial preflight + refresh), got %d", got)
@@ -587,14 +591,15 @@ func TestBackfillCommitMetadata_RetriesOnExpiredPresignedURL(t *testing.T) {
 }
 
 // TestBackfillCommitMetadata_S3PolicyConditionMismatchDoesNotRefresh pins
-// the boundary of the expired-URL retry using the real-world shape of a
-// non-expiry S3 POST failure: when the submitted form violates a signed
+// the boundary of the 403-retry path using the real-world shape of a
+// non-retryable S3 POST failure: when the submitted form violates a signed
 // policy condition (e.g. the key field doesn't match the policy's
-// `eq $key` clause), S3 returns 400 Bad Request with Code AccessDenied
-// and a different Message. Verified in a sandbox account.
+// `eq $key` clause), S3 returns 400 Bad Request, not 403. Verified in a
+// sandbox account.
 //
-// This must surface immediately as a one-shot failure rather than
-// trigger a refresh loop, because the configuration error is on the
+// Because the matcher classifies on status alone, the 400 falls through
+// to the generic error path rather than triggering a refresh. Surfacing
+// immediately is correct here -- the configuration error is on the
 // caller's side (a malformed upload) and refreshing the presigned URL
 // won't change anything.
 func TestBackfillCommitMetadata_S3PolicyConditionMismatchDoesNotRefresh(t *testing.T) {

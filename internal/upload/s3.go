@@ -10,28 +10,31 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/buildkite/test-engine-client/internal/debug"
 )
 
-// PresignedURLExpiredError is returned when S3 rejects the upload because the
-// presigned URL signature has expired. S3's response body is an XML document
-// with Code: AccessDenied and Message: Request has expired -- we pattern-match
-// on the message string because that is the documented, stable contract for
-// expired-signature rejections.
+// S3ForbiddenError is returned when S3 rejects the upload with 403 Forbidden.
+// The common case is "the presigned POST policy has expired", which is
+// recoverable by re-fetching a fresh presigned URL and retrying. Less common
+// permanent 403s (bucket-policy denial, VPC endpoint policy, etc.) also land
+// here -- a single retry against a fresh URL is harmless in those cases (it
+// just produces the same error a second time and then surfaces).
 //
-// Callers can use errors.As to detect this case and request a fresh presigned
-// URL before retrying. The wrapped Body field preserves the raw S3 response so
-// the original error remains diagnosable in logs.
-type PresignedURLExpiredError struct {
+// 4xx responses other than 403 -- in particular the 400 Bad Request that S3
+// returns for policy-condition mismatches and signature mismatches -- do not
+// match this type; they surface as the generic upload error.
+//
+// Callers can use errors.As to detect this case. The Body field preserves the
+// raw S3 response so the original error remains diagnosable in logs.
+type S3ForbiddenError struct {
 	Status int
 	Body   string
 }
 
-func (e *PresignedURLExpiredError) Error() string {
-	return fmt.Sprintf("S3 presigned URL expired (status %d): %s", e.Status, e.Body)
+func (e *S3ForbiddenError) Error() string {
+	return fmt.Sprintf("S3 upload rejected with status %d: %s", e.Status, e.Body)
 }
 
 // PresignedUploadForm describes the S3 presigned POST form returned by the
@@ -110,29 +113,19 @@ func UploadToS3(ctx context.Context, filePath string, form PresignedUploadForm) 
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
 
-		// Detect S3's "presigned POST policy expired" response so callers
-		// can request a fresh URL and retry. Verified against real S3
-		// responses in a sandbox account: bktec uploads via
-		// generate_presigned_post (multipart form-data with a policy
-		// document and signed conditions), and when the policy's
-		// `expiration` field is past, S3 returns
-		//
-		//   HTTP/1.1 403 Forbidden
-		//   <Error>
-		//     <Code>AccessDenied</Code>
-		//     <Message>Invalid according to Policy: Policy expired.</Message>
-		//     <RequestId>...</RequestId>
-		//     <HostId>...</HostId>
-		//   </Error>
-		//
-		// Match on "Policy expired." -- the trailing full stop is part of
-		// the real S3 message. Do NOT match on "Request has expired", which
-		// is the message presigned-PUT URLs return; bktec doesn't use PUT.
-		// Other non-expiry errors return different shapes entirely (policy
-		// condition mismatch and signature mismatch are 400 Bad Request,
-		// not 403), so they fall through to the generic error path below.
-		if resp.StatusCode == http.StatusForbidden && strings.Contains(bodyStr, "Policy expired.") {
-			return &PresignedURLExpiredError{Status: resp.StatusCode, Body: bodyStr}
+		// Classify any 403 as retryable. The common case is "presigned POST
+		// policy expired", which is recoverable by requesting a fresh URL.
+		// The previous version of this matcher pattern-matched on the
+		// literal S3 message text ("Policy expired."), which is brittle --
+		// AWS does not version that string, and a wording change would
+		// silently disable the retry path. Status alone is a more durable
+		// signal, and the cases we'd want to exclude (policy condition
+		// mismatch, signature mismatch) return 400 Bad Request, not 403,
+		// so they fall through to the generic error path below. A 403 that
+		// is genuinely permanent (e.g. bucket-policy denial) costs one
+		// wasted retry against a fresh URL, then surfaces.
+		if resp.StatusCode == http.StatusForbidden {
+			return &S3ForbiddenError{Status: resp.StatusCode, Body: bodyStr}
 		}
 
 		return fmt.Errorf("S3 upload failed with status %d: %s", resp.StatusCode, bodyStr)

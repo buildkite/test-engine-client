@@ -242,7 +242,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		fmt.Fprintf(os.Stderr, "Wrote %s\n", cfg.Output)
 	} else {
 		fmt.Fprintln(os.Stderr, "Uploading to S3...")
-		if err := uploadWithRefreshOnExpiry(ctx, apiClient, cfg.SuiteSlug, tarPath, presigned); err != nil {
+		if err := uploadWithRetryOn403(ctx, apiClient, cfg.SuiteSlug, tarPath, presigned); err != nil {
 			removeTarball = false
 			fmt.Fprintf(os.Stderr, "Tarball retained at %s\n", tarPath)
 			return fmt.Errorf("uploading to S3: %w", err)
@@ -267,7 +267,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 // server-side, so missing write_suites or a wrong OIDC policy surfaces here as
 // a typed API error before the S3 upload runs. There is no held-response window
 // to worry about in this path (no git work between PresignUpload and S3 upload),
-// but we still route through uploadWithRefreshOnExpiry to keep the retry path
+// but we still route through uploadWithRetryOn403 to keep the retry path
 // centralised and exercise the same code in both call sites.
 func uploadOnly(ctx context.Context, cfg *config.Config) error {
 	// 1. Defensive contract check. Callers (today: main.go) are expected to call
@@ -302,7 +302,7 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 
 	// 5. Upload to S3
 	fmt.Fprintln(os.Stderr, "Uploading to S3...")
-	if err := uploadWithRefreshOnExpiry(ctx, apiClient, cfg.SuiteSlug, cfg.UploadFile, presigned); err != nil {
+	if err := uploadWithRetryOn403(ctx, apiClient, cfg.SuiteSlug, cfg.UploadFile, presigned); err != nil {
 		return fmt.Errorf("uploading to S3: %w", err)
 	}
 
@@ -310,16 +310,20 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-// uploadWithRefreshOnExpiry uploads filePath to S3 using the provided
-// presigned form. If S3 rejects the upload because the presigned URL has
-// expired (PresignedURLExpiredError), it requests a fresh presigned URL and
-// retries the upload once. Other S3 errors surface to the caller as-is.
+// uploadWithRetryOn403 uploads filePath to S3 using the provided presigned
+// form. If S3 rejects the upload with 403 Forbidden, it requests a fresh
+// presigned URL and retries the upload once. Other S3 errors surface to the
+// caller as-is.
 //
-// The "preflight + held response + retry on expiry" pattern is isolated in
-// this helper so a future migration to a side-effect-free auth check is a
-// small surface change rather than a refactor of the whole
-// BackfillCommitMetadata flow.
-func uploadWithRefreshOnExpiry(
+// The common 403 case is "the presigned POST policy has expired" (recoverable
+// by refreshing); less common permanent 403s (bucket-policy denial, etc.) cost
+// one wasted retry against a fresh URL, which is a fair price to pay for not
+// pattern-matching on AWS error message text.
+//
+// The "preflight + held response + retry" pattern is isolated in this helper
+// so a future migration to a side-effect-free auth check is a small surface
+// change rather than a refactor of the whole BackfillCommitMetadata flow.
+func uploadWithRetryOn403(
 	ctx context.Context,
 	apiClient *api.Client,
 	suiteSlug, filePath string,
@@ -330,17 +334,16 @@ func uploadWithRefreshOnExpiry(
 		return nil
 	}
 
-	var expired *upload.PresignedURLExpiredError
-	if !errors.As(err, &expired) {
+	var forbidden *upload.S3ForbiddenError
+	if !errors.As(err, &forbidden) {
 		return err
 	}
 
 	// Two-line emit: a clean operator-facing line on stderr, and the raw S3
-	// XML body (Expires / ServerTime / RequestId / HostId) under debug for
-	// deeper diagnosis if the retry itself goes wrong. The raw body is too
-	// verbose to print unconditionally.
-	fmt.Fprintln(os.Stderr, "Presigned URL expired; requesting a fresh one and retrying...")
-	debug.Printf("S3 presigned URL expired, raw response: %s", expired.Error())
+	// XML body under debug for diagnosis if the retry itself goes wrong. The
+	// raw body is too verbose to print unconditionally.
+	fmt.Fprintln(os.Stderr, "S3 rejected the upload (403); requesting a fresh presigned URL and retrying...")
+	debug.Printf("S3 403 response body: %s", forbidden.Body)
 
 	fresh, err := apiClient.PresignUpload(ctx, suiteSlug)
 	if err != nil {

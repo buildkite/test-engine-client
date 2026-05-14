@@ -207,13 +207,12 @@ func TestUploadToS3_ServerError(t *testing.T) {
 	}
 }
 
-// TestUploadToS3_ReturnsPresignedURLExpiredError pins the typed-error
-// contract that BackfillCommitMetadata's expired-URL refresh path relies on
-// (TE-5834). The response body is the literal response captured from S3 in a
-// sandbox account after waiting past the policy's `expiration` timestamp;
-// keeping the real shape here means a future maintainer changing the matcher
-// can't accidentally introduce a string the real S3 never sends.
-func TestUploadToS3_ReturnsPresignedURLExpiredError(t *testing.T) {
+// TestUploadToS3_ReturnsS3ForbiddenError pins the typed-error contract that
+// BackfillCommitMetadata's refresh-and-retry path relies on (TE-5834). The
+// response body is the literal expired-policy response captured from S3 in a
+// sandbox account; keeping it here documents what the common 403 case looks
+// like in the wild.
+func TestUploadToS3_ReturnsS3ForbiddenError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -235,29 +234,30 @@ func TestUploadToS3_ReturnsPresignedURLExpiredError(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	var expired *PresignedURLExpiredError
-	if !errors.As(err, &expired) {
-		t.Fatalf("expected PresignedURLExpiredError, got %T: %v", err, err)
+	var forbidden *S3ForbiddenError
+	if !errors.As(err, &forbidden) {
+		t.Fatalf("expected S3ForbiddenError, got %T: %v", err, err)
 	}
-	if expired.Status != http.StatusForbidden {
-		t.Errorf("expired.Status: got %d, want %d", expired.Status, http.StatusForbidden)
+	if forbidden.Status != http.StatusForbidden {
+		t.Errorf("forbidden.Status: got %d, want %d", forbidden.Status, http.StatusForbidden)
 	}
-	if !strings.Contains(expired.Body, "Policy expired.") {
-		t.Errorf("expired.Body should preserve raw S3 response, got: %s", expired.Body)
+	if !strings.Contains(forbidden.Body, "Policy expired.") {
+		t.Errorf("forbidden.Body should preserve raw S3 response, got: %s", forbidden.Body)
 	}
 }
 
-// TestUploadToS3_PolicyConditionMismatchIsNotExpiredError uses the real-world
-// shape of a non-expiry presigned-POST failure: when the submitted form
-// violates a signed condition (e.g. the key doesn't match the policy's
-// `eq $key` condition), S3 returns 400 Bad Request, not 403. Verified in a
-// sandbox account.
+// TestUploadToS3_PolicyConditionMismatchIsNotS3ForbiddenError uses the
+// real-world shape of a non-retryable presigned-POST failure: when the
+// submitted form violates a signed condition (e.g. the key doesn't match
+// the policy's `eq $key` condition), S3 returns 400 Bad Request, not 403.
+// Verified in a sandbox account.
 //
-// This is the case the retry path must not catch. If a future change widens
-// the matcher to e.g. "any AccessDenied response", this test fails because
-// (a) the status is 400, not the 403 the matcher gates on, and (b) the
-// message string ("Policy Condition failed") isn't the expired marker.
-func TestUploadToS3_PolicyConditionMismatchIsNotExpiredError(t *testing.T) {
+// This is the boundary the matcher gates on. The matcher classifies a
+// response as retryable on the basis of HTTP status alone (403), so any
+// non-403 response -- including this 400 -- must fall through to the
+// generic error path rather than triggering a refresh-and-retry against
+// a fresh URL (which would not fix the malformed upload anyway).
+func TestUploadToS3_PolicyConditionMismatchIsNotS3ForbiddenError(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -279,44 +279,9 @@ func TestUploadToS3_PolicyConditionMismatchIsNotExpiredError(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	var expired *PresignedURLExpiredError
-	if errors.As(err, &expired) {
-		t.Fatalf("did not expect PresignedURLExpiredError for policy condition mismatch (400), got: %v", err)
-	}
-}
-
-// TestUploadToS3_GenericForbiddenIsNotExpiredError pins the matcher's
-// behaviour for the hypothetical case of a 403 whose body doesn't contain
-// the expired marker. This isn't a real S3 shape today (signature mismatch
-// returns 400, not 403; bucket-policy denial would have a different code
-// like "Forbidden" or "InvalidAccessKeyId") but the test pins the
-// defensive: status 403 alone is not sufficient to trigger a refresh,
-// the body marker is required too.
-func TestUploadToS3_GenericForbiddenIsNotExpiredError(t *testing.T) {
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
-<Error><Code>AccessDenied</Code><Message>The bucket policy does not allow this operation.</Message></Error>`))
-	}))
-	defer svr.Close()
-
-	tmpFile := createTempFile(t, "content")
-
-	form := PresignedUploadForm{
-		Method:    "POST",
-		URL:       svr.URL,
-		Data:      map[string]string{"key": "test.tar.gz"},
-		FileInput: "file",
-	}
-
-	err := UploadToS3(context.Background(), tmpFile, form)
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-
-	var expired *PresignedURLExpiredError
-	if errors.As(err, &expired) {
-		t.Fatalf("did not expect PresignedURLExpiredError for generic 403, got: %v", err)
+	var forbidden *S3ForbiddenError
+	if errors.As(err, &forbidden) {
+		t.Fatalf("did not expect S3ForbiddenError for policy condition mismatch (400), got: %v", err)
 	}
 }
 
