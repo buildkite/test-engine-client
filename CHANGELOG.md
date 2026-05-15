@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
-- `bktec tools backfill-commit-metadata` now accepts OIDC tokens from `buildkite-agent oidc request-token` in addition to API access tokens. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
+## 2.5.1 - 2026-05-15
+- `bktec tools backfill-commit-metadata` accepts OIDC tokens from `buildkite-agent oidc request-token`. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
+- **Breaking (Go module consumers):** module path is now `github.com/buildkite/test-engine-client/v2`. Earlier v2.x tags lacked the [required `/v2` suffix](https://go.dev/ref/mod#major-version-suffixes) and were unfetchable via `go get`/`go tool`. Update imports to include `/v2` and pin to v2.5.1+.
 
 ## 2.5.0 - 2026-05-11
 - Add split-by-example support for [Playwright](./docs/playwright.md), allowing slow test files to be split across parallel jobs by individual test case rather than by file.
