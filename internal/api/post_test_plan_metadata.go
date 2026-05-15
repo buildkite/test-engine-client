@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/buildkite/test-engine-client/internal/config"
-	"github.com/buildkite/test-engine-client/internal/runner"
+	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v2/internal/runner"
 )
 
 type Timeline struct {

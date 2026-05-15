@@ -14,9 +14,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/internal/config"
-	"github.com/buildkite/test-engine-client/internal/git"
-	"github.com/buildkite/test-engine-client/internal/packaging"
+	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v2/internal/git"
+	"github.com/buildkite/test-engine-client/v2/internal/packaging"
 )
 
 func getBackfillConfig(serverURL string) *config.Config {

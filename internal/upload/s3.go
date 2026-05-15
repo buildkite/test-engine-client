@@ -12,7 +12,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/debug"
 )
 
 // S3ForbiddenError is returned when S3 rejects the upload with 403 Forbidden.

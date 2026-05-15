@@ -9,11 +9,11 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/buildkite/test-engine-client/internal/command"
-	"github.com/buildkite/test-engine-client/internal/config"
-	"github.com/buildkite/test-engine-client/internal/debug"
-	"github.com/buildkite/test-engine-client/internal/git"
-	"github.com/buildkite/test-engine-client/internal/version"
+	"github.com/buildkite/test-engine-client/v2/internal/command"
+	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/git"
+	"github.com/buildkite/test-engine-client/v2/internal/version"
 	"github.com/urfave/cli/v3"
 )
 

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-engine-client/internal/version"
+	"github.com/buildkite/test-engine-client/v2/internal/version"
 	"github.com/google/go-cmp/cmp"
 )
 

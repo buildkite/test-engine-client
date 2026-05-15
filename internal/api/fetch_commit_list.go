@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/test-engine-client/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/debug"
 )
 
 // FetchCommitList fetches the list of commit SHAs that need metadata from the

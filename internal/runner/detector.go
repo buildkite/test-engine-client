@@ -3,8 +3,8 @@ package runner
 import (
 	"fmt"
 
-	"github.com/buildkite/test-engine-client/internal/config"
-	"github.com/buildkite/test-engine-client/internal/plan"
+	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v2/internal/plan"
 )
 
 type TestRunner interface {
