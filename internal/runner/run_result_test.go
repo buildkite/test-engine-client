@@ -309,6 +309,56 @@ func TestOnlyMutedFailures(t *testing.T) {
 	}
 }
 
+func TestCollectionErrors_ExcludedFromFailedTests(t *testing.T) {
+	r := NewRunResult([]plan.TestCase{})
+
+	realFailure := plan.TestCase{Scope: "tests/math.py", Name: "test_add"}
+	collectionErr := plan.TestCase{Scope: "tests/broken.py", Name: "tests/broken.py"}
+
+	r.RecordTestResult(realFailure, TestStatusFailed)
+	r.RecordCollectionError(collectionErr)
+
+	if r.Status() != RunStatusFailed {
+		t.Errorf("Status() = %s, want %s", r.Status(), RunStatusFailed)
+	}
+
+	failedTests := r.FailedTests()
+	if len(failedTests) != 1 {
+		t.Fatalf("len(FailedTests()) = %d, want 1", len(failedTests))
+	}
+	if failedTests[0].Name != "test_add" {
+		t.Errorf("FailedTests()[0].Name = %q, want %q", failedTests[0].Name, "test_add")
+	}
+}
+
+func TestCollectionErrors_ExcludedFromFailedMutedTests(t *testing.T) {
+	collectionErr := plan.TestCase{Scope: "tests/broken.py", Name: "tests/broken.py"}
+
+	r := NewRunResult([]plan.TestCase{collectionErr})
+	r.RecordCollectionError(collectionErr)
+
+	failedMuted := r.FailedMutedTests()
+	if len(failedMuted) != 0 {
+		t.Errorf("len(FailedMutedTests()) = %d, want 0", len(failedMuted))
+	}
+}
+
+func TestCollectionErrors_OnlyCollectionErrorsStillFailed(t *testing.T) {
+	r := NewRunResult([]plan.TestCase{})
+
+	collectionErr := plan.TestCase{Scope: "tests/broken.py", Name: "tests/broken.py"}
+	r.RecordCollectionError(collectionErr)
+
+	if r.Status() != RunStatusFailed {
+		t.Errorf("Status() = %s, want %s", r.Status(), RunStatusFailed)
+	}
+
+	// No retryable failures
+	if len(r.FailedTests()) != 0 {
+		t.Errorf("len(FailedTests()) = %d, want 0", len(r.FailedTests()))
+	}
+}
+
 func TestParseTestEngineTestResult(t *testing.T) {
 	results, err := parseTestEngineTestResult("testdata/test-engine-result.json")
 	if err != nil {
@@ -316,5 +366,24 @@ func TestParseTestEngineTestResult(t *testing.T) {
 	}
 	if len(results) != 2 {
 		t.Errorf("len(results) = %d, want 2", len(results))
+	}
+}
+
+func TestParseTestEngineTestResult_WithTags(t *testing.T) {
+	results, err := parseTestEngineTestResult("testdata/test-engine-result-with-tags.json")
+	if err != nil {
+		t.Fatalf("parseTestEngineTestResult() error = %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("len(results) = %d, want 2", len(results))
+	}
+
+	if results[0].Tags != nil {
+		t.Errorf("results[0].Tags = %v, want nil", results[0].Tags)
+	}
+
+	wantTag := "true"
+	if got := results[1].Tags["test.pytest_collection_error"]; got != wantTag {
+		t.Errorf("results[1].Tags[\"test.pytest_collection_error\"] = %q, want %q", got, wantTag)
 	}
 }

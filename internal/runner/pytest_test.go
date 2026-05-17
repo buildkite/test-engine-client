@@ -91,6 +91,38 @@ func TestPytestRun_TestFailed(t *testing.T) {
 	}
 }
 
+func TestPytestRun_CollectionErrorNotRetried(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
+	pytest := NewPytest(RunnerConfig{
+		TestCommand: "pytest",
+		ResultPath:  "result-collection-error.json",
+	})
+	testCases := []plan.TestCase{
+		{Path: "failed_test.py"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := pytest.Run(result, testCases, false)
+
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
+	if result.Status() != RunStatusFailed {
+		t.Errorf("RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
+	}
+
+	// FailedTests should only contain the real test failure, not the collection error
+	failedTests := result.FailedTests()
+	if len(failedTests) != 1 {
+		t.Errorf("len(FailedTests()) = %d, want 1", len(failedTests))
+	}
+	if len(failedTests) > 0 {
+		if failedTests[0].Name != "test_failed" {
+			t.Errorf("FailedTests()[0].Name = %q, want %q", failedTests[0].Name, "test_failed")
+		}
+	}
+}
+
 func TestPytestRun_TestFailedWithoutResultFile(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 

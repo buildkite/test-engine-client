@@ -14,9 +14,10 @@ const (
 // TestResult is a struct to keep track the result of an individual test case.
 type TestResult struct {
 	plan.TestCase
-	Status         TestStatus
-	ExecutionCount int
-	Muted          bool
+	Status          TestStatus
+	ExecutionCount  int
+	Muted           bool
+	CollectionError bool
 }
 
 // testIdentifier returns a unique identifier for a test case based on its scope, name and path.
