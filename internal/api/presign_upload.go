@@ -21,7 +21,7 @@ type PresignedUploadResponse struct {
 func (c Client) PresignUpload(ctx context.Context, suiteSlug string) (PresignedUploadResponse, error) {
 	reqURL := fmt.Sprintf(
 		"%s/v2/analytics/organizations/%s/suites/%s/commit-metadata-backfill/presigned-upload",
-		c.ServerBaseUrl, url.PathEscape(c.OrganizationSlug), url.PathEscape(suiteSlug))
+		c.ServerBaseURL, url.PathEscape(c.OrganizationSlug), url.PathEscape(suiteSlug))
 
 	var resp PresignedUploadResponse
 	_, err := c.DoWithRetry(ctx, httpRequest{Method: http.MethodPost, URL: reqURL}, &resp)

@@ -428,9 +428,9 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 	}
 	defer f.Close()
 	defer os.Remove(f.Name())
-	withOtherJson := "rspec --format json --out " + f.Name()
+	withOtherJSON := "rspec --format json --out " + f.Name()
 
-	commands := []string{"rspec --format documentation", "rspec --format html", withOtherJson}
+	commands := []string{"rspec --format documentation", "rspec --format html", withOtherJSON}
 	for _, command := range commands {
 		rspec := NewRspec(RunnerConfig{
 			TestCommand: command,

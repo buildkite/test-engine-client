@@ -96,12 +96,12 @@ func TestPostTestPlanMetadata(t *testing.T) {
 	c := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	_, err := c.DoWithRetry(context.Background(), httpRequest{
 		Method: http.MethodPost,
-		URL:    fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan_metadata", c.ServerBaseUrl, c.OrganizationSlug, "rspec"),
+		URL:    fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan_metadata", c.ServerBaseURL, c.OrganizationSlug, "rspec"),
 		Body:   params,
 	}, nil)
 	if err != nil {
@@ -136,12 +136,12 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 	c := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	_, err := c.DoWithRetry(context.Background(), httpRequest{
 		Method: http.MethodPost,
-		URL:    fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan_metadata", c.ServerBaseUrl, c.OrganizationSlug, "rspec"),
+		URL:    fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan_metadata", c.ServerBaseURL, c.OrganizationSlug, "rspec"),
 		Body:   params,
 	}, nil)
 

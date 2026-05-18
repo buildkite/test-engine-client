@@ -76,7 +76,7 @@ func TestCreateTestPlan(t *testing.T) {
 	apiClient := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	got, err := apiClient.CreateTestPlan(ctx, "rspec", params)
@@ -169,7 +169,7 @@ func TestCreateTestPlan_SplitByExample(t *testing.T) {
 	apiClient := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	got, err := apiClient.CreateTestPlan(ctx, "rspec", params)
@@ -218,7 +218,7 @@ func TestCreateTestPlan_BadRequest(t *testing.T) {
 	ctx := context.Background()
 	params := TestPlanParams{}
 	apiClient := NewClient(ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 
 	got, err := apiClient.CreateTestPlan(ctx, "my-suite", params)
@@ -278,7 +278,7 @@ func TestCreateTestPlan_MutedTests(t *testing.T) {
 	apiClient := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	got, err := apiClient.CreateTestPlan(ctx, "rspec", params)
@@ -321,7 +321,7 @@ func TestCreateTestPlan_InternalServerError(t *testing.T) {
 
 	params := TestPlanParams{}
 	apiClient := NewClient(ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 
 	got, err := apiClient.CreateTestPlan(context.Background(), "my-suite", params)

@@ -53,7 +53,7 @@ func TestFetchTestPlan(t *testing.T) {
 	c := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
@@ -93,7 +93,7 @@ func TestFetchTestPlan_NotFound(t *testing.T) {
 	c := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	got, err := c.FetchTestPlan(context.Background(), "rspec", "abc123", 0)
@@ -117,7 +117,7 @@ func TestFetchTestPlan_BadRequest(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -151,7 +151,7 @@ func TestFetchTestPlan_InternalServerError(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)

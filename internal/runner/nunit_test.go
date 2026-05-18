@@ -142,7 +142,7 @@ func TestNUnit_CommandNameAndArgs(t *testing.T) {
 }
 
 func TestNUnit_ParseJUnitResults(t *testing.T) {
-	results, err := loadAndParseJUnitXmlResult("./testdata/nunit/junit-results.xml")
+	results, err := loadAndParseJUnitXMLResult("./testdata/nunit/junit-results.xml")
 	if err != nil {
 		t.Fatalf("loadAndParseJUnitXmlResult() error = %v", err)
 	}

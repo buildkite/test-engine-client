@@ -52,7 +52,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	}
 
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl:    cfg.ServerBaseUrl,
+		ServerBaseURL:    cfg.ServerBaseURL,
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
 	})

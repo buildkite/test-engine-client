@@ -75,7 +75,7 @@ func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry boo
 
 	for _, test := range tests {
 		result.RecordTestResult(plan.TestCase{
-			Identifier: test.Id,
+			Identifier: test.ID,
 			Format:     plan.TestCaseFormatExample,
 			Scope:      test.Scope,
 			Name:       test.Name,

@@ -39,7 +39,7 @@ func TestNewClient(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    "http://example.com",
+		ServerBaseURL:    "http://example.com",
 	}
 	c := NewClient(cfg)
 
@@ -49,8 +49,8 @@ func TestNewClient(t *testing.T) {
 	}
 
 	// Check if the client has the correct server base URL.
-	if c.ServerBaseUrl != cfg.ServerBaseUrl {
-		t.Errorf("NewClient() = %v, want %v", c.ServerBaseUrl, cfg.ServerBaseUrl)
+	if c.ServerBaseURL != cfg.ServerBaseURL {
+		t.Errorf("NewClient() = %v, want %v", c.ServerBaseURL, cfg.ServerBaseURL)
 	}
 
 	// Check if the client has an HTTP client.
@@ -69,7 +69,7 @@ func TestHttpClient_AttachAccessTokenToRequest(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -96,7 +96,7 @@ func TestHttpClient_AttachUserAgentToRequest(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -115,7 +115,7 @@ func TestDoWithRetry_Succesful_POST(t *testing.T) {
 	defer svr.Close()
 
 	cfg := ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	c := NewClient(cfg)
 
@@ -158,7 +158,7 @@ func TestDoWithRetry_Succesful_GET(t *testing.T) {
 	defer svr.Close()
 
 	cfg := ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	c := NewClient(cfg)
 
@@ -227,7 +227,7 @@ func TestDoWithRetry_429(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -273,7 +273,7 @@ func TestDoWithRetry_409(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -320,7 +320,7 @@ func TestDoWithRetry_500(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -356,7 +356,7 @@ func TestDoWithRetry_403(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -395,7 +395,7 @@ func TestDoWithRetry_401(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "bad-token",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -433,7 +433,7 @@ func TestDoWithRetry_404(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -471,7 +471,7 @@ func TestDoWithRetry_400(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)
@@ -510,7 +510,7 @@ func TestDoWithRetry_BillingError(t *testing.T) {
 	cfg := ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 
 	c := NewClient(cfg)

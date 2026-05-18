@@ -42,7 +42,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	// get plan
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl:    cfg.ServerBaseUrl,
+		ServerBaseURL:    cfg.ServerBaseURL,
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
 	})

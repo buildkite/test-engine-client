@@ -15,7 +15,7 @@ type fetchFilesTimingParams struct {
 // The server only returns timings for the files that has been run before.
 // ErrRetryTimeout is returned if the client failed to communicate with the server after exceeding the retry limit.
 func (c Client) FetchFilesTiming(ctx context.Context, suiteSlug string, files []string) (map[string]time.Duration, error) {
-	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_files", c.ServerBaseUrl, c.OrganizationSlug, suiteSlug)
+	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_files", c.ServerBaseURL, c.OrganizationSlug, suiteSlug)
 
 	var filesTiming map[string]int
 	_, err := c.DoWithRetry(ctx, httpRequest{

@@ -8,7 +8,7 @@ type Config struct {
 	AccessToken string `json:"-"`
 	// Branch is the string value of the git branch name, used by Buildkite only.
 	Branch                string `json:"BUILDKITE_BRANCH"`
-	BuildId               string `json:"BUILDKITE_BUILD_ID"`
+	BuildID               string `json:"BUILDKITE_BUILD_ID"`
 	BuildkiteAgentCommand string `json:"-"`
 	// CollectGitMetadata enables git metadata auto-collection on plan without requiring --selection-strategy to be set.
 	CollectGitMetadata bool `json:"-"`
@@ -22,7 +22,7 @@ type Config struct {
 	FailOnNoTests bool `json:"BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS"`
 	// Identifier is the identifier of the build.
 	Identifier string `json:"BUILDKITE_TEST_ENGINE_IDENTIFIER"`
-	JobId      string `json:"BUILDKITE_JOB_ID"`
+	JobID      string `json:"BUILDKITE_JOB_ID"`
 	// JobRetryCount is the count of the number of times the job has been retried.
 	JobRetryCount int `json:"BUILDKITE_RETRY_COUNT"`
 	// LocationPrefix is prepended to test file paths when requesting a test plan.
@@ -38,9 +38,9 @@ type Config struct {
 	// Node index is index of the current node.
 	NodeIndex int `json:"BUILDKITE_PARALLEL_JOB"`
 	// Enable OIDC token generation
-	Oidc bool `json:"BUILDKITE_TEST_ENGINE_OIDC"`
+	OIDC bool `json:"BUILDKITE_TEST_ENGINE_OIDC"`
 	// Lifetime of OIDC tokens
-	OidcLifetime time.Duration `json:"BUILDKITE_TEST_ENGINE_OIDC_LIFETIME"`
+	OIDCLifetime time.Duration `json:"BUILDKITE_TEST_ENGINE_OIDC_LIFETIME"`
 	// OrganizationSlug is the slug of the organization.
 	OrganizationSlug string `json:"BUILDKITE_ORGANIZATION_SLUG"`
 	// Output is the local file path for the export tarball. If set, skip S3 upload.
@@ -60,8 +60,8 @@ type Config struct {
 	SelectionParams map[string]string `json:"-"`
 	// SelectionStrategy is the selection strategy sent to the test plan API.
 	SelectionStrategy string `json:"BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"`
-	// ServerBaseUrl is the base URL of the test plan server.
-	ServerBaseUrl string `json:"-"`
+	// ServerBaseURL is the base URL of the test plan server.
+	ServerBaseURL string `json:"-"`
 	// SkipDiffs omits git_diff and git_diff_raw from the export to reduce upload size.
 	SkipDiffs bool `json:"-"`
 	// UploadFile is the path to a previously generated tarball for the --upload flag of backfill-commit-metadata.
@@ -70,7 +70,7 @@ type Config struct {
 	UploadToken string `json:"-"`
 	// SplitByExample is the flag to enable split the test by example.
 	SplitByExample bool   `json:"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE"`
-	StepId         string `json:"BUILDKITE_STEP_ID"`
+	StepID         string `json:"BUILDKITE_STEP_ID"`
 	// SuiteSlug is the slug of the suite.
 	SuiteSlug string `json:"BUILDKITE_TEST_ENGINE_SUITE_SLUG"`
 	// TagFilters filters test examples by execution tags.

@@ -115,7 +115,7 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 
 // RspecExample represents a single test example in an Rspec report.
 type RspecExample struct {
-	Id              string  `json:"id"`
+	ID              string  `json:"id"`
 	Description     string  `json:"description"`
 	FullDescription string  `json:"full_description"`
 	Status          string  `json:"status"`
@@ -236,9 +236,9 @@ func mapExampleToTestCase(example RspecExample) plan.TestCase {
 	// [Buildkite Test Collector - RSpec implementation](https://github.com/buildkite/test-collector-ruby/blob/2d641486e42f666dd07ffed4cbf2cd0f9dc97619/lib/buildkite/test_collector/rspec_plugin/trace.rb#L27)
 	scope := strings.TrimSuffix(example.FullDescription, " "+example.Description)
 	return plan.TestCase{
-		Identifier: example.Id,
+		Identifier: example.ID,
 		Name:       example.Description,
-		Path:       example.Id,
+		Path:       example.ID,
 		Scope:      scope,
 	}
 }

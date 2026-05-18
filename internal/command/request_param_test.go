@@ -36,7 +36,7 @@ func TestCreateRequestParams(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 	files := []string{
 		"testdata/rspec/spec/fruits/apple_spec.rb",
@@ -128,7 +128,7 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 			}
 
 			client := api.NewClient(api.ClientConfig{
-				ServerBaseUrl: svr.URL,
+				ServerBaseURL: svr.URL,
 			})
 			files := []string{
 				"testdata/fruits/apple.spec.js",
@@ -187,7 +187,7 @@ func TestCreateRequestParams_PytestPants(t *testing.T) {
 		}
 
 		client := api.NewClient(api.ClientConfig{
-			ServerBaseUrl: svr.URL,
+			ServerBaseURL: svr.URL,
 		})
 		files := []string{
 			"test/apple_test.py",
@@ -237,7 +237,7 @@ func TestCreateRequestParams_WithSelectionAndMetadata_NonRSpec(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: "http://example.com",
+		ServerBaseURL: "http://example.com",
 	})
 
 	files := []string{
@@ -295,7 +295,7 @@ func TestCreateRequestParams_WithSelectionAndMetadata_SplitAllFilesBranch(t *tes
 	}
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: "http://example.com",
+		ServerBaseURL: "http://example.com",
 	})
 
 	files := []string{
@@ -407,7 +407,7 @@ func TestCreateRequestParams_FilterTestsError(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 	files := []string{
 		"apple_spec.rb",
@@ -445,7 +445,7 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 	files := []string{
 		"testdata/rspec/spec/fruits/apple_spec.rb",
@@ -500,7 +500,7 @@ func TestCreateRequestParams_WithTagFilters(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: "example.com",
+		ServerBaseURL: "example.com",
 	})
 
 	files := []string{
@@ -569,7 +569,7 @@ func TestCreateRequestParams_WithTagFilters_NonPytest(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 
 	files := []string{
@@ -614,7 +614,7 @@ func TestCreateRequestParams_WithLocationPrefix(t *testing.T) {
 	defer svr.Close()
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 
 	cfg := config.Config{
@@ -758,7 +758,7 @@ func TestCreateRequestParams_WithLocationPrefix_SplitByExample(t *testing.T) {
 	}
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 	files := []string{
 		"testdata/rspec/spec/fruits/apple_spec.rb",
