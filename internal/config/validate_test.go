@@ -566,3 +566,68 @@ func TestConfigValidate_TagFiltersOnlyWorksWithPytest(t *testing.T) {
 		}
 	})
 }
+
+func TestConfigValidate_OidcTokens(t *testing.T) {
+	c := createConfig()
+	c.Oidc = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
+	c.AccessToken = ""
+	c.UploadToken = ""
+
+	err := c.ValidateForRun()
+	if err != nil {
+		t.Errorf("ValidateForRun() error = %v, want nil", err)
+	}
+
+	expectedToken := "mocktoken"
+	if c.AccessToken != expectedToken {
+		t.Errorf("c.AccessToken expected %v, got %v", expectedToken, c.AccessToken)
+	}
+	if c.UploadToken != expectedToken {
+		t.Errorf("c.UploadToken expected %v, got %v", expectedToken, c.UploadToken)
+	}
+}
+
+func TestConfigValidate_OidcTokensAccessTokenAlreadySet(t *testing.T) {
+	c := createConfig()
+	c.Oidc = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
+	c.AccessToken = "already_set"
+	c.UploadToken = ""
+
+	err := c.ValidateForRun()
+	if err != nil {
+		t.Errorf("ValidateForRun() error = %v, want nil", err)
+	}
+
+	expectedToken := "already_set"
+	if c.AccessToken != expectedToken {
+		t.Errorf("c.AccessToken expected %v, got %v", expectedToken, c.AccessToken)
+	}
+	expectedToken = "mocktoken"
+	if c.UploadToken != expectedToken {
+		t.Errorf("c.UploadToken expected %v, got %v", expectedToken, c.UploadToken)
+	}
+}
+
+func TestConfigValidate_OidcTokensUploadTokenAlreadySet(t *testing.T) {
+	c := createConfig()
+	c.Oidc = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
+	c.AccessToken = ""
+	c.UploadToken = "already_set"
+
+	err := c.ValidateForRun()
+	if err != nil {
+		t.Errorf("ValidateForRun() error = %v, want nil", err)
+	}
+
+	expectedToken := "mocktoken"
+	if c.AccessToken != expectedToken {
+		t.Errorf("c.AccessToken expected %v, got %v", expectedToken, c.AccessToken)
+	}
+	expectedToken = "already_set"
+	if c.UploadToken != expectedToken {
+		t.Errorf("c.UploadToken expected %v, got %v", expectedToken, c.UploadToken)
+	}
+}

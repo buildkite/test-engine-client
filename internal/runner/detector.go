@@ -4,17 +4,7 @@ import (
 	"fmt"
 
 	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
 )
-
-type TestRunner interface {
-	Run(result *RunResult, testCases []plan.TestCase, retry bool) error
-	GetExamples(files []string) ([]plan.TestCase, error)
-	GetFiles() ([]string, error)
-	Name() string
-	CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error)
-	LocationPrefix() string
-}
 
 func DetectRunner(cfg *config.Config) (TestRunner, error) {
 	runnerConfig := RunnerConfig{
@@ -27,6 +17,7 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		TestCommand:            cfg.TestCommand,
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		TestFilePattern:        cfg.TestFilePattern,
+		uploadToken:            cfg.UploadToken,
 	}
 
 	switch testRunner := cfg.TestRunner; testRunner {

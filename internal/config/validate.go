@@ -3,6 +3,10 @@ package config
 import (
 	"fmt"
 	"net/url"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,6 +34,17 @@ func (c *Config) validate() error {
 	} else {
 		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
+		}
+	}
+
+	if c.AccessToken == "" {
+		token, err := c.generateOidcToken()
+
+		if err != nil {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "%v", err)
+		} else {
+			c.AccessToken = token
+			c.accessTokenIsOIDC = true
 		}
 	}
 
@@ -89,6 +104,24 @@ func (c *Config) validate() error {
 // Validation for the `bktec run` command
 func (c *Config) ValidateForRun() error {
 	_ = c.validate()
+
+	// Upload token could come from the env BUILDKITE_ANALYTICS_TOKEN, but may be blank ...
+	if c.UploadToken == "" {
+		if c.accessTokenIsOIDC {
+			// If OIDC was used to generate the bktec API access token then the same token
+			// can be used for collector uploads.
+			c.UploadToken = c.AccessToken
+		} else {
+			// If OIDC was *not* used to generate the bktec API access token then we need
+			// to generate a token for collector uploads.
+			token, err := c.generateOidcToken()
+
+			if err != nil {
+				c.errs.appendFieldError("BUILDKITE_ANALYTICS_TOKEN", "%v", err)
+			}
+			c.UploadToken = token
+		}
+	}
 
 	// The order of the range validation matters.
 	// The range validation of BUILDKITE_PARALLEL_JOB depends on the result of BUILDKITE_PARALLEL_JOB_COUNT validation at the first step.
@@ -200,4 +233,27 @@ func (c *Config) ValidateForPlan() error {
 	}
 
 	return nil
+}
+
+func (c *Config) generateOidcToken() (token string, err error) {
+	if !c.Oidc {
+		return "", nil
+	}
+
+	suiteUrl := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s", c.ServerBaseUrl, c.OrganizationSlug, c.SuiteSlug)
+	var tokenWriter strings.Builder
+	var errorWriter strings.Builder
+	lifetime := strconv.Itoa(int(c.OidcLifetime.Seconds()))
+	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
+	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
+	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteUrl, "--lifetime", lifetime) //nolint:gosec
+	cmd.Stderr = &errorWriter
+	cmd.Stdout = &tokenWriter
+	cmd.Env = os.Environ()
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("error generating token: %s: %v", errorWriter.String(), err)
+	}
+
+	return strings.TrimSpace(tokenWriter.String()), nil
 }
