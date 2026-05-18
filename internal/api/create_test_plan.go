@@ -34,12 +34,12 @@ type TestPlanParams struct {
 // CreateTestPlan creates a test plan from the server.
 // ErrRetryTimeout is returned if the client failed to communicate with the server after exceeding the retry limit.
 func (c Client) CreateTestPlan(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, error) {
-	postUrl := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan", c.ServerBaseUrl, c.OrganizationSlug, suiteSlug)
+	postURL := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan", c.ServerBaseURL, c.OrganizationSlug, suiteSlug)
 
 	var testPlan plan.TestPlan
 	_, err := c.DoWithRetry(ctx, httpRequest{
 		Method: http.MethodPost,
-		URL:    postUrl,
+		URL:    postURL,
 		Body:   params,
 	}, &testPlan)
 	if err != nil {

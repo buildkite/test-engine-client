@@ -28,7 +28,7 @@ import (
 func (c Client) FetchCommitList(ctx context.Context, suiteSlug string, days int) ([]string, error) {
 	url := fmt.Sprintf(
 		"%s/v2/analytics/organizations/%s/suites/%s/commits?days=%d",
-		c.ServerBaseUrl, url.PathEscape(c.OrganizationSlug), url.PathEscape(suiteSlug), days)
+		c.ServerBaseURL, url.PathEscape(c.OrganizationSlug), url.PathEscape(suiteSlug), days)
 
 	debug.Printf("Fetching commit list: GET %s", url)
 

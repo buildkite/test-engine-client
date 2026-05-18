@@ -8,7 +8,7 @@ import (
 
 func createConfig() Config {
 	return Config{
-		ServerBaseUrl:    "http://example.com",
+		ServerBaseURL:    "http://example.com",
 		Parallelism:      10,
 		NodeIndex:        0,
 		Identifier:       "my_identifier",
@@ -41,7 +41,7 @@ func TestConfigValidate_Empty(t *testing.T) {
 func TestConfigValidate_SetsDefaults(t *testing.T) {
 	c := createConfig()
 
-	c.ServerBaseUrl = ""
+	c.ServerBaseURL = ""
 
 	err := c.validate()
 	if err != nil {
@@ -49,7 +49,7 @@ func TestConfigValidate_SetsDefaults(t *testing.T) {
 	}
 
 	want := "https://api.buildkite.com"
-	got := c.ServerBaseUrl
+	got := c.ServerBaseURL
 
 	if want != got {
 		t.Errorf("c.Validate() -> c.ServerBaseUrl want %q got %q", want, got)
@@ -94,7 +94,7 @@ func TestConfigValidate_Invalid(t *testing.T) {
 			c := createConfig()
 			switch s.name {
 			case "BUILDKITE_TEST_ENGINE_BASE_URL":
-				c.ServerBaseUrl = s.value.(string)
+				c.ServerBaseURL = s.value.(string)
 			case "BUILDKITE_PARALLEL_JOB":
 				c.NodeIndex = s.value.(int)
 			case "BUILDKITE_PARALLEL_JOB_COUNT":
@@ -144,8 +144,8 @@ func TestConfigValidate_Invalid(t *testing.T) {
 
 	t.Run("BuildId, StepId and Identifier are empty", func(t *testing.T) {
 		c := createConfig()
-		c.BuildId = ""
-		c.StepId = ""
+		c.BuildID = ""
+		c.StepID = ""
 		c.Identifier = ""
 		err := c.validate()
 
@@ -169,8 +169,8 @@ func TestConfigValidate_Invalid(t *testing.T) {
 
 func TestConfigValidate_IdentifierPresentBuildIdStepIdMissing(t *testing.T) {
 	c := createConfig()
-	c.BuildId = ""
-	c.StepId = ""
+	c.BuildID = ""
+	c.StepID = ""
 
 	if err := c.validate(); err != nil {
 		t.Errorf("config.validate() error = %v", err)
@@ -333,7 +333,7 @@ func TestMaxParallelismOutOfRange(t *testing.T) {
 	}
 }
 
-func ValidateForPlan_SkipsParallelismAndNodeIndexValidation(t *testing.T) {
+func TestValidateForPlan_SkipsParallelismAndNodeIndexValidation(t *testing.T) {
 	c := createConfig()
 
 	// These 2 fields are only required on ValidateForRun
@@ -378,7 +378,7 @@ func TestConfigValidate_SelectionParamsRequireStrategy(t *testing.T) {
 
 func createBackfillConfig() Config {
 	return Config{
-		ServerBaseUrl:    "http://example.com",
+		ServerBaseURL:    "http://example.com",
 		OrganizationSlug: "my_org",
 		SuiteSlug:        "my_suite",
 		AccessToken:      "my_token",
@@ -569,7 +569,7 @@ func TestConfigValidate_TagFiltersOnlyWorksWithPytest(t *testing.T) {
 
 func TestConfigValidate_OidcTokens(t *testing.T) {
 	c := createConfig()
-	c.Oidc = true
+	c.OIDC = true
 	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
 	c.AccessToken = ""
 	c.UploadToken = ""
@@ -590,7 +590,7 @@ func TestConfigValidate_OidcTokens(t *testing.T) {
 
 func TestConfigValidate_OidcTokensAccessTokenAlreadySet(t *testing.T) {
 	c := createConfig()
-	c.Oidc = true
+	c.OIDC = true
 	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
 	c.AccessToken = "already_set"
 	c.UploadToken = ""
@@ -612,7 +612,7 @@ func TestConfigValidate_OidcTokensAccessTokenAlreadySet(t *testing.T) {
 
 func TestConfigValidate_OidcTokensUploadTokenAlreadySet(t *testing.T) {
 	c := createConfig()
-	c.Oidc = true
+	c.OIDC = true
 	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
 	c.AccessToken = ""
 	c.UploadToken = "already_set"

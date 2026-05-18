@@ -56,7 +56,7 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return cmdErr
 	}
 
-	testResults, parseErr := loadAndParseGotestJUnitXmlResult(g.ResultPath)
+	testResults, parseErr := loadAndParseGotestJUnitXMLResult(g.ResultPath)
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read gotestsum output, tests will not be retried: %v\n", parseErr)
 		// We don't want to fail the build if we fail to parse the report,

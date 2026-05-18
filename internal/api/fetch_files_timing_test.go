@@ -50,7 +50,7 @@ func TestFetchFilesTiming(t *testing.T) {
 	c := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 	got, err := c.FetchFilesTiming(context.Background(), "rspec", files)
 	if err != nil {
@@ -76,7 +76,7 @@ func TestFetchFilesTiming_BadRequest(t *testing.T) {
 
 	c := NewClient(ClientConfig{
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	files := []string{"apple_spec.rb", "banana_spec.rb"}
@@ -105,7 +105,7 @@ func TestFetchFilesTiming_InternalServerError(t *testing.T) {
 
 	c := NewClient(ClientConfig{
 		OrganizationSlug: "my-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	files := []string{"apple_spec.rb", "banana_spec.rb"}

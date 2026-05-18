@@ -237,7 +237,7 @@ func (r *RunResult) Statistics() RunStatistics {
 //
 // Currently, only pytest and custom runner uses result from test collector.
 type TestEngineTest struct {
-	Id       string
+	ID       string
 	Name     string
 	Scope    string
 	Location string

@@ -410,10 +410,10 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		NodeIndex:     0,
 		Parallelism:   10,
 		Identifier:    "identifier",
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
 	// we want the function to return the test plan fetched from the server
@@ -477,13 +477,13 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		NodeIndex:        0,
 		Parallelism:      10,
 		Identifier:       "identifier",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 		OrganizationSlug: "org",
 		SuiteSlug:        "suite",
 		Branch:           "tat-123/my-cool-feature",
 	}
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl:    cfg.ServerBaseUrl,
+		ServerBaseURL:    cfg.ServerBaseURL,
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
@@ -529,10 +529,10 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 		Parallelism:   2,
 		Identifier:    "identifier",
 		Branch:        "tat-123/my-cool-feature",
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
 	// we want the function to return a fallback plan
@@ -572,10 +572,10 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 		Parallelism:   3,
 		Identifier:    "identifier",
 		Branch:        "tat-123/my-cool-feature",
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
 	// we want the function to return a fallback plan
@@ -612,10 +612,10 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 		Parallelism:   2,
 		Identifier:    "identifier",
 		Branch:        "",
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
 	// we want the function to return an empty test plan and an error
@@ -650,10 +650,10 @@ func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
 		Parallelism:   2,
 		Identifier:    "identifier",
 		Branch:        "",
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
 	// we want the function to return a fallback plan
@@ -691,10 +691,10 @@ func TestFetchOrCreateTestPlan_AuthError(t *testing.T) {
 		Parallelism:   2,
 		Identifier:    "identifier",
 		Branch:        "",
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
 	want := plan.TestPlan{}
@@ -728,10 +728,10 @@ func TestFetchOrCreateTestPlan_ForbiddenError(t *testing.T) {
 		Parallelism:   2,
 		Identifier:    "identifier",
 		Branch:        "",
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
 	want := plan.TestPlan{}
@@ -759,9 +759,9 @@ func TestSendMetadata(t *testing.T) {
 	}
 
 	cfg := config.Config{
-		BuildId:          "xyz",
-		JobId:            "abc",
-		StepId:           "pqr",
+		BuildID:          "xyz",
+		JobID:            "abc",
+		StepID:           "pqr",
 		OrganizationSlug: "buildkite",
 		Parallelism:      10,
 		NodeIndex:        5,
@@ -807,7 +807,7 @@ func TestSendMetadata(t *testing.T) {
 	defer svr.Close()
 
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: svr.URL,
+		ServerBaseURL: svr.URL,
 	})
 
 	statistics := runner.RunStatistics{
@@ -827,10 +827,10 @@ func TestSendMetadata_Unauthorized(t *testing.T) {
 		OrganizationSlug: "my-org",
 		SuiteSlug:        "my-suite",
 		Identifier:       "identifier",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	}
 	client := api.NewClient(api.ClientConfig{
-		ServerBaseUrl: cfg.ServerBaseUrl,
+		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
 	timeline := []api.Timeline{}

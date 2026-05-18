@@ -94,7 +94,7 @@ var buildIDFlag = &cli.StringFlag{
 	Category:    "BUILD ENVIRONMENT",
 	Usage:       "Buildkite build id",
 	Sources:     cli.EnvVars("BUILDKITE_BUILD_ID"),
-	Destination: &cfg.BuildId,
+	Destination: &cfg.BuildID,
 	Hidden:      true,
 }
 
@@ -103,7 +103,7 @@ var jobIDFlag = &cli.StringFlag{
 	Category:    "BUILD ENVIRONMENT",
 	Usage:       "Buildkite job id",
 	Sources:     cli.EnvVars("BUILDKITE_JOB_ID"),
-	Destination: &cfg.JobId,
+	Destination: &cfg.JobID,
 	Hidden:      true,
 }
 
@@ -112,7 +112,7 @@ var stepIDFlag = &cli.StringFlag{
 	Category:    "BUILD ENVIRONMENT",
 	Usage:       "Buildkite step id",
 	Sources:     cli.EnvVars("BUILDKITE_STEP_ID"),
-	Destination: &cfg.StepId,
+	Destination: &cfg.StepID,
 	Hidden:      true,
 }
 
@@ -175,7 +175,7 @@ var oidcFlag = &cli.BoolWithInverseFlag{
 	Category:    "TEST ENGINE",
 	Usage:       "When required tokens are missing, generate OIDC tokens using buildkite-agent",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_OIDC"),
-	Destination: &cfg.Oidc,
+	Destination: &cfg.OIDC,
 }
 
 var oidcLifetimeFlag = &cli.DurationFlag{
@@ -184,7 +184,7 @@ var oidcLifetimeFlag = &cli.DurationFlag{
 	Category:    "TEST ENGINE",
 	Usage:       "Specify OIDC token lifetime",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_OIDC_LIFETIME"),
-	Destination: &cfg.OidcLifetime,
+	Destination: &cfg.OIDCLifetime,
 }
 
 var suiteSlugFlag = &cli.StringFlag{
@@ -229,7 +229,7 @@ var baseURLFlag = &cli.StringFlag{
 	Usage:       "Buildkite API base URL",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_BASE_URL"),
 	Value:       "https://api.buildkite.com",
-	Destination: &cfg.ServerBaseUrl,
+	Destination: &cfg.ServerBaseURL,
 	Hidden:      true,
 }
 

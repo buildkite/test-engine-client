@@ -22,7 +22,7 @@ import (
 // It contains the organization slug, server base URL, and an HTTP client.
 type Client struct {
 	OrganizationSlug string
-	ServerBaseUrl    string
+	ServerBaseURL    string
 	httpClient       *http.Client
 }
 
@@ -30,7 +30,7 @@ type Client struct {
 type ClientConfig struct {
 	AccessToken      string
 	OrganizationSlug string
-	ServerBaseUrl    string
+	ServerBaseURL    string
 }
 
 // authTransport is a middleware for the HTTP client.
@@ -59,7 +59,7 @@ func NewClient(cfg ClientConfig) *Client {
 
 	return &Client{
 		OrganizationSlug: cfg.OrganizationSlug,
-		ServerBaseUrl:    cfg.ServerBaseUrl,
+		ServerBaseURL:    cfg.ServerBaseURL,
 		httpClient:       httpClient,
 	}
 }

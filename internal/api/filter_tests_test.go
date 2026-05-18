@@ -86,7 +86,7 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 	c := NewClient(ClientConfig{
 		AccessToken:      "asdf1234",
 		OrganizationSlug: "buildkite",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 	got, err := c.FilterTests(context.Background(), "rspec", params)
 	if err != nil {
@@ -115,7 +115,7 @@ func TestFilterTests_InternalServerError(t *testing.T) {
 
 	c := NewClient(ClientConfig{
 		OrganizationSlug: "msy-org",
-		ServerBaseUrl:    svr.URL,
+		ServerBaseURL:    svr.URL,
 	})
 
 	_, err := c.FilterTests(context.Background(), "my-suite", FilterTestsParams{

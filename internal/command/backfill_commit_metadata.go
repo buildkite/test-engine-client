@@ -35,7 +35,7 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	apiClient := api.NewClient(api.ClientConfig{
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
-		ServerBaseUrl:    cfg.ServerBaseUrl,
+		ServerBaseURL:    cfg.ServerBaseURL,
 	})
 
 	// 2. Fetch commit list from server.
@@ -257,7 +257,7 @@ func uploadOnly(ctx context.Context, cfg *config.Config) error {
 	apiClient := api.NewClient(api.ClientConfig{
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
-		ServerBaseUrl:    cfg.ServerBaseUrl,
+		ServerBaseURL:    cfg.ServerBaseURL,
 	})
 
 	// 4. Request presigned upload URL

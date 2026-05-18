@@ -24,7 +24,7 @@ func TestPlanJSON(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getConfig()
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -57,7 +57,7 @@ func TestPlanPipelineUpload(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getConfig()
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -99,7 +99,7 @@ func TestPlanJSON_BillingError(t *testing.T) {
 	cfg := getConfig()
 	cfg.Identifier = "hello"
 	cfg.MaxParallelism = 123
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -137,7 +137,7 @@ func TestPlanJSON_InternalServerError(t *testing.T) {
 	cfg := getConfig()
 	cfg.Identifier = "hello"
 	cfg.MaxParallelism = 123
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -174,7 +174,7 @@ func TestPlanJSON_Parallelism0(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getConfig()
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -217,7 +217,7 @@ func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getConfig()
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -265,7 +265,7 @@ func TestPlanPipelineUpload_InternalServerError(t *testing.T) {
 	cfg := getConfig()
 	cfg.Identifier = "hello"
 	cfg.MaxParallelism = 123
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -368,8 +368,8 @@ func getConfig() *config.Config {
 	cfg := config.New()
 
 	cfg.Branch = "tet-123-add-branch-name"
-	cfg.BuildId = "123"
-	cfg.StepId = "789"
+	cfg.BuildID = "123"
+	cfg.StepID = "789"
 	cfg.OrganizationSlug = "buildkite"
 	cfg.NodeIndex = 0
 	cfg.Parallelism = 3
@@ -470,7 +470,7 @@ func TestPlan_CollectGitMetadataWithoutSelection(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getConfig()
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 	cfg.CollectGitMetadata = true
 	cfg.SelectionStrategy = "" // no selection
 
@@ -536,7 +536,7 @@ func TestPlan_NoCollectGitMetadataByDefault(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getConfig()
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 	cfg.CollectGitMetadata = false
 	cfg.SelectionStrategy = ""
 
@@ -578,7 +578,7 @@ func TestPlanJSON_DebugLogging(t *testing.T) {
 	defer svr.Close()
 
 	cfg := getConfig()
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -643,7 +643,7 @@ func TestPlanJSON_DebugLogging_Fallback(t *testing.T) {
 	cfg := getConfig()
 	cfg.Identifier = "hello"
 	cfg.MaxParallelism = 10
-	cfg.ServerBaseUrl = svr.URL
+	cfg.ServerBaseURL = svr.URL
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)

@@ -249,7 +249,7 @@ type PlaywrightSpec struct {
 	File   string
 	Line   int
 	Column int
-	Id     string
+	ID     string
 	Title  string
 	Ok     bool
 	Tests  []PlaywrightTest

@@ -16,7 +16,7 @@ func TestGotestRun(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath: getRandomXmlTempFilename(),
+		ResultPath: getRandomXMLTempFilename(),
 	})
 	testCases := []plan.TestCase{
 		{Path: "example.com/hello"},
@@ -41,7 +41,7 @@ func TestGotestRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath: getRandomXmlTempFilename(),
+		ResultPath: getRandomXMLTempFilename(),
 	})
 	testCases := []plan.TestCase{
 		{Path: "example.com/hello/bad"},
@@ -62,7 +62,7 @@ func TestGotestRun_CommandFailed(t *testing.T) {
 
 	gotest := NewGoTest(RunnerConfig{
 		TestCommand: "gotestsum --junitfile {{resultPath}} bluhbluh",
-		ResultPath:  getRandomXmlTempFilename(),
+		ResultPath:  getRandomXMLTempFilename(),
 	})
 	testCases := []plan.TestCase{
 		{Path: "example.com/hello"},
@@ -98,7 +98,7 @@ func TestGotestGetFiles(t *testing.T) {
 	}
 }
 
-func getRandomXmlTempFilename() string {
+func getRandomXMLTempFilename() string {
 	tempDir, err := os.MkdirTemp("", "bktec-*")
 	if err != nil {
 		panic(err)

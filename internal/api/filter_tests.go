@@ -32,7 +32,7 @@ type FilteredTestResponse struct {
 // return test files that contain skipped tests, while true will also return slow test
 // files.
 func (c Client) FilterTests(ctx context.Context, suiteSlug string, params FilterTestsParams) ([]FilteredTest, error) {
-	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan/filter_tests", c.ServerBaseUrl, c.OrganizationSlug, suiteSlug)
+	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan/filter_tests", c.ServerBaseURL, c.OrganizationSlug, suiteSlug)
 
 	var response FilteredTestResponse
 	_, err := c.DoWithRetry(ctx, httpRequest{

@@ -24,7 +24,7 @@ func getBackfillConfig(serverURL string) *config.Config {
 	cfg.AccessToken = "test-token"
 	cfg.OrganizationSlug = "my-org"
 	cfg.SuiteSlug = "my-suite"
-	cfg.ServerBaseUrl = serverURL
+	cfg.ServerBaseURL = serverURL
 	cfg.Concurrency = 10
 	cfg.Days = 90
 	cfg.Remote = "origin"
@@ -585,7 +585,7 @@ func getUploadConfig(serverURL string, filePath string) *config.Config {
 	cfg.AccessToken = "test-token"
 	cfg.OrganizationSlug = "my-org"
 	cfg.SuiteSlug = "my-suite"
-	cfg.ServerBaseUrl = serverURL
+	cfg.ServerBaseURL = serverURL
 	cfg.UploadFile = filePath
 	return &cfg
 }

@@ -33,7 +33,7 @@ func TestLoadAndParseGotestJUnitXmlResult(t *testing.T) {
 	err = tmpfile.Close()
 	require.NoError(t, err)
 
-	results, err := loadAndParseGotestJUnitXmlResult(tmpfile.Name())
+	results, err := loadAndParseGotestJUnitXMLResult(tmpfile.Name())
 	require.NoError(t, err)
 
 	require.Len(t, results, 4)

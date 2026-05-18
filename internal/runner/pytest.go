@@ -84,7 +84,7 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 
 	for _, test := range tests {
 		result.RecordTestResult(plan.TestCase{
-			Identifier: test.Id,
+			Identifier: test.ID,
 			Format:     plan.TestCaseFormatExample,
 			Scope:      test.Scope,
 			Name:       test.Name,
@@ -169,29 +169,29 @@ func parsePytestCollectOutput(output string) ([]plan.TestCase, error) {
 		}
 
 		// Parse node ID: "file.py::TestClass::test_method" or "file.py::test_func"
-		testCases = append(testCases, mapNodeIdToTestCase(line))
+		testCases = append(testCases, mapNodeIDToTestCase(line))
 	}
 
 	return testCases, nil
 }
 
-// mapNodeIdToTestCase converts a pytest node ID to a TestCase.
+// mapNodeIDToTestCase converts a pytest node ID to a TestCase.
 // Node ID format: file_path::class::method or file_path::function
 // Must match the format used by buildkite-test-collector for pytest.
 // Scope is everything except the final component, Name is the last component.
-func mapNodeIdToTestCase(nodeId string) plan.TestCase {
+func mapNodeIDToTestCase(nodeID string) plan.TestCase {
 	// Split on the last :: to get scope (everything before) and name (last component)
-	lastIdx := strings.LastIndex(nodeId, "::")
+	lastIdx := strings.LastIndex(nodeID, "::")
 	scope := ""
-	name := nodeId
+	name := nodeID
 	if lastIdx != -1 {
-		scope = nodeId[:lastIdx]
-		name = nodeId[lastIdx+2:]
+		scope = nodeID[:lastIdx]
+		name = nodeID[lastIdx+2:]
 	}
 
 	return plan.TestCase{
-		Identifier: nodeId,
-		Path:       nodeId,
+		Identifier: nodeID,
+		Path:       nodeID,
 		Scope:      scope,
 		Name:       name,
 		Format:     plan.TestCaseFormatExample,

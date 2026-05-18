@@ -50,7 +50,7 @@ type JUnitXMLTestSuites struct {
 	TestSuites []JUnitXMLTestSuite `xml:"testsuite"`
 }
 
-func loadAndParseGotestJUnitXmlResult(path string) ([]GoTestJUnitResult, error) {
+func loadAndParseGotestJUnitXMLResult(path string) ([]GoTestJUnitResult, error) {
 	xmlFile, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open JUnit XML file %s: %w", path, err)

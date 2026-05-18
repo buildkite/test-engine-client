@@ -17,28 +17,28 @@ func (c *Config) validate() error {
 	}
 
 	if c.Identifier == "" {
-		if c.BuildId != "" && c.StepId != "" {
-			c.Identifier = fmt.Sprintf("%s/%s", c.BuildId, c.StepId)
+		if c.BuildID != "" && c.StepID != "" {
+			c.Identifier = fmt.Sprintf("%s/%s", c.BuildID, c.StepID)
 		} else {
-			if c.BuildId == "" {
+			if c.BuildID == "" {
 				c.errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
 			}
-			if c.StepId == "" {
+			if c.StepID == "" {
 				c.errs.appendFieldError("BUILDKITE_STEP_ID", "must not be blank")
 			}
 		}
 	}
 
-	if c.ServerBaseUrl == "" {
-		c.ServerBaseUrl = "https://api.buildkite.com"
+	if c.ServerBaseURL == "" {
+		c.ServerBaseURL = "https://api.buildkite.com"
 	} else {
-		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
+		if _, err := url.ParseRequestURI(c.ServerBaseURL); err != nil {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
 		}
 	}
 
 	if c.AccessToken == "" {
-		token, err := c.generateOidcToken()
+		token, err := c.generateOIDCToken()
 
 		if err != nil {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "%v", err)
@@ -114,7 +114,7 @@ func (c *Config) ValidateForRun() error {
 		} else {
 			// If OIDC was *not* used to generate the bktec API access token then we need
 			// to generate a token for collector uploads.
-			token, err := c.generateOidcToken()
+			token, err := c.generateOIDCToken()
 
 			if err != nil {
 				c.errs.appendFieldError("BUILDKITE_ANALYTICS_TOKEN", "%v", err)
@@ -160,10 +160,10 @@ func (c *Config) ValidateForRun() error {
 // endpoint is suite-scoped). Collection-only fields (days, concurrency) are checked when
 // --upload is not set.
 func (c *Config) ValidateForBackfillCommitMetadata() error {
-	if c.ServerBaseUrl == "" {
-		c.ServerBaseUrl = "https://api.buildkite.com"
+	if c.ServerBaseURL == "" {
+		c.ServerBaseURL = "https://api.buildkite.com"
 	} else {
-		if _, err := url.ParseRequestURI(c.ServerBaseUrl); err != nil {
+		if _, err := url.ParseRequestURI(c.ServerBaseURL); err != nil {
 			c.errs.appendFieldError("--base-url / BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
 		}
 	}
@@ -235,18 +235,18 @@ func (c *Config) ValidateForPlan() error {
 	return nil
 }
 
-func (c *Config) generateOidcToken() (token string, err error) {
-	if !c.Oidc {
+func (c *Config) generateOIDCToken() (token string, err error) {
+	if !c.OIDC {
 		return "", nil
 	}
 
-	suiteUrl := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s", c.ServerBaseUrl, c.OrganizationSlug, c.SuiteSlug)
+	suiteURL := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s", c.ServerBaseURL, c.OrganizationSlug, c.SuiteSlug)
 	var tokenWriter strings.Builder
 	var errorWriter strings.Builder
-	lifetime := strconv.Itoa(int(c.OidcLifetime.Seconds()))
+	lifetime := strconv.Itoa(int(c.OIDCLifetime.Seconds()))
 	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
 	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
-	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteUrl, "--lifetime", lifetime) //nolint:gosec
+	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime) //nolint:gosec
 	cmd.Stderr = &errorWriter
 	cmd.Stdout = &tokenWriter
 	cmd.Env = os.Environ()
