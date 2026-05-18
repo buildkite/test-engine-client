@@ -5,6 +5,19 @@ linters:
   enable:
     - gosec
     - govet
+  settings:
+    staticcheck:
+      # Terms for which identifiers must be all caps. Defaults with the addition of OIDC
+      initialisms: ["ACL", "API", "ASCII", "CPU", "CSS", "DNS", "EOF", "GUID", "HTML", "HTTP", "HTTPS", "ID", "IP", "JSON", "OIDC", "QPS", "RAM", "RPC", "SLA", "SMTP", "SQL", "SSH", "TCP", "TLS", "TTL", "UDP", "UI", "GID", "UID", "UUID", "URI", "URL", "UTF8", "VM", "XML", "XMPP", "XSRF", "XSS", "SIP", "RTP", "AMQP", "DB", "TS"]
+      # Checks to run. Minus prefix means exclude this check.
+      # This is the default list except we enable ST1003 to enforce the initialisms above.
+      checks:
+        - all
+        - -ST1000
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
   exclusions:
     presets:
       - comments
