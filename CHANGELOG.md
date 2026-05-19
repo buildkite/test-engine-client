@@ -1,4 +1,6 @@
 # Changelog
+## 2.6.0 - 2026-05-20
+- Generate OIDC tokens using `buildkite-agent` when either `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` or `BUILDKITE_ANALYTIC_TOKEN` are not provided.
 
 ## 2.5.1 - 2026-05-15
 - `bktec tools backfill-commit-metadata` accepts OIDC tokens from `buildkite-agent oidc request-token`. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
