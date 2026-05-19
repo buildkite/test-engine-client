@@ -58,6 +58,12 @@ func TestCollectGitMetadataFlagIsGatedByPreviewEnv(t *testing.T) {
 	}
 }
 
+func TestPlanCommandIncludesParallelismFlag(t *testing.T) {
+	if !hasFlag(planCommandFlags(), "parallelism") {
+		t.Fatalf("planCommandFlags() missing --parallelism flag; BUILDKITE_PARALLEL_JOB_COUNT will not be bound to cfg.Parallelism for `bktec plan`, breaking split-by-example slow-file detection")
+	}
+}
+
 func TestApplyPlanRequestContext_ClearsCollectGitMetadataWhenPreviewDisabled(t *testing.T) {
 	t.Setenv(previewSelectionEnvVar, "")
 

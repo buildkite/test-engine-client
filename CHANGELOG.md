@@ -11,6 +11,7 @@
 - Print the split summary (file count, parallelism, slow-file detection) to stderr from both `plan` and `run` so the information is visible without polluting stdout consumers.
 - Treat `none`, `off`, and `false` as empty values in `--selection-*` flags and `BUILDKITE_TEST_ENGINE_SELECTION_*` env vars, making it easier to disable selection params from CI without unsetting variables. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Remove Pact contract testing for the Test Engine API. Consumer tests now use plain `httptest` fixtures (no behaviour change for users); the `internal/api/pacts/` directory, `pact-go` dependency, and `bin/{publish-pact,release-pact-version,pact-record-support-ended}` scripts have been deleted.
+- Fix `bktec plan` so it honors `BUILDKITE_PARALLEL_JOB_COUNT` (and the `--parallelism` flag). Previously the value was dropped before being sent to the `filter_tests` API, which caused split-by-example to never identify slow files when planning.
 
 ## 2.4.0 - 2026-04-17
 - Add `bktec tools backfill-commit-metadata` subcommand to collect and upload historical git commit metadata to the Test Engine API, so test selection has the signal it needs for repositories that pre-date bktec rollout. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
