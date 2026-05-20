@@ -474,3 +474,73 @@ func TestRspecGetExamples_WithSharedExamples(t *testing.T) {
 		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
 	}
 }
+
+func TestFormatReportToTestEngineTestResults(t *testing.T) {
+	rspec := NewRspec(RunnerConfig{})
+	report, err := rspec.ParseReport("./testdata/rspec/test-results/rspec.json")
+	if err != nil {
+		t.Errorf("rspec.ParseReport() error = %v", err)
+	}
+
+	testResults, err := report.ToTestEngineTestResults()
+	if err != nil {
+		t.Errorf("report.ToTestEngineTestResults() error = %v", err)
+	}
+
+	want := []TestEngineTest{
+		{
+			Scope:    "Expelliarmus",
+			Name:     "disarms the opponent",
+			Location: "./testdata/rspec/spec/spells/expelliarmus_spec.rb:2",
+			FileName: "./testdata/rspec/spec/spells/expelliarmus_spec.rb",
+			Result:   TestStatusPassed,
+			History: []TestEngineTestHistory{
+				{
+					Section:  "top",
+					Duration: 0.000069,
+				},
+			},
+		},
+		{
+			Scope:    "Expelliarmus",
+			Name:     "knocks the wand out of the opponents hand",
+			Location: "./testdata/rspec/spec/spells/expelliarmus_spec.rb:6",
+			FileName: "./testdata/rspec/spec/spells/expelliarmus_spec.rb",
+			Result:   TestStatusPassed,
+			History: []TestEngineTestHistory{
+				{
+					Section:  "top",
+					Duration: 0.000022,
+				},
+			},
+		},
+		{
+			Scope:         "Failure",
+			Name:          "fails",
+			Location:      "./testdata/rspec/spec/failure_spec.rb:2",
+			FileName:      "./testdata/rspec/spec/failure_spec.rb",
+			Result:        TestStatusFailed,
+			FailureReason: "RSpec::Expectations::ExpectationNotMetError",
+			FailureExpanded: []TestEngineTestFailureExpanded{
+				{
+					Expanded: []string{
+						"\nexpected: 3\n     got: 2\n\n(compared using ==)\n",
+					},
+					Backtrace: []string{
+						"./testdata/rspec/spec/failure_spec.rb:3:in 'block (2 levels) in <top (required)>'",
+					},
+				},
+			},
+			History: []TestEngineTestHistory{
+				{
+					Section:  "top",
+					Duration: 0.004838,
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(testResults, want); diff != "" {
+		t.Errorf("report.ToTestEngineTestResults() diff (-got +want):\n%s", diff)
+	}
+}

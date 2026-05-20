@@ -236,13 +236,30 @@ func (r *RunResult) Statistics() RunStatistics {
 // Ref: https://buildkite.com/docs/test-engine/importing-json#json-test-results-data-reference-test-result-objects
 //
 // Currently, only pytest and custom runner uses result from test collector.
+type TestEngineTestHistory struct {
+	Section string `json:"section"`
+	StartAt int64  `json:"start_at"`
+	// EndAt is optional because some test engines might not provide it.
+	EndAt    *int64  `json:"end_at,omitempty"`
+	Duration float64 `json:"duration"`
+	Children []any   `json:"children,omitempty"`
+}
+
+type TestEngineTestFailureExpanded struct {
+	Expanded  []string `json:"expanded"`
+	Backtrace []string `json:"backtrace"`
+}
+
 type TestEngineTest struct {
-	ID       string
-	Name     string
-	Scope    string
-	Location string
-	FileName string `json:"file_name,omitempty"`
-	Result   TestStatus
+	ID              string
+	Name            string
+	Scope           string
+	Location        string
+	FileName        string `json:"file_name,omitempty"`
+	Result          TestStatus
+	FailureReason   string                          `json:"failure_reason,omitempty"`
+	FailureExpanded []TestEngineTestFailureExpanded `json:"failure_expanded,omitempty"`
+	History         []TestEngineTestHistory         `json:"history,omitempty"`
 }
 
 func parseTestEngineTestResult(path string) ([]TestEngineTest, error) {

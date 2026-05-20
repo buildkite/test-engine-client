@@ -113,15 +113,22 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 	return cmdErr
 }
 
+type RspecException struct {
+	Class     string   `json:"class"`
+	Message   string   `json:"message"`
+	Backtrace []string `json:"backtrace"`
+}
+
 // RspecExample represents a single test example in an Rspec report.
 type RspecExample struct {
-	ID              string  `json:"id"`
-	Description     string  `json:"description"`
-	FullDescription string  `json:"full_description"`
-	Status          string  `json:"status"`
-	FilePath        string  `json:"file_path"`
-	LineNumber      int     `json:"line_number"`
-	RunTime         float64 `json:"run_time"`
+	ID              string          `json:"id"`
+	Description     string          `json:"description"`
+	FullDescription string          `json:"full_description"`
+	Status          string          `json:"status"`
+	FilePath        string          `json:"file_path"`
+	LineNumber      int             `json:"line_number"`
+	RunTime         float64         `json:"run_time"`
+	Exception       *RspecException `json:"exception,omitempty"`
 }
 
 // RspecReport is the structure for Rspec JSON report.
@@ -241,4 +248,50 @@ func mapExampleToTestCase(example RspecExample) plan.TestCase {
 		Path:       example.ID,
 		Scope:      scope,
 	}
+}
+
+func (report RspecReport) ToTestEngineTestResults() (testResults []TestEngineTest, err error) {
+	for _, example := range report.Examples {
+		var status TestStatus
+		switch example.Status {
+		case "failed":
+			status = TestStatusFailed
+		case "passed":
+			status = TestStatusPassed
+		case "pending":
+			status = TestStatusSkipped
+		default:
+			status = TestStatusUnknown
+		}
+
+		formattedTest := TestEngineTest{
+			Name:  example.Description,
+			Scope: strings.TrimSuffix(example.FullDescription, " "+example.Description),
+			// TODO: Apply location prefix from config to the Location and FileName
+			Location: fmt.Sprintf("%s:%d", example.FilePath, example.LineNumber),
+			FileName: example.FilePath,
+			Result:   status,
+			History: []TestEngineTestHistory{
+				{
+					Section:  "top",
+					EndAt:    nil,
+					Duration: example.RunTime,
+				},
+			},
+		}
+
+		if status == TestStatusFailed && example.Exception != nil {
+			formattedTest.FailureReason = example.Exception.Class
+			formattedTest.FailureExpanded = []TestEngineTestFailureExpanded{
+				{
+					Expanded:  []string{example.Exception.Message},
+					Backtrace: example.Exception.Backtrace,
+				},
+			}
+		}
+
+		testResults = append(testResults, formattedTest)
+	}
+
+	return testResults, nil
 }

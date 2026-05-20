@@ -1,0 +1,50 @@
+{
+  "version": "3.13.6",
+  "examples": [
+    {
+      "id": "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:1]",
+      "description": "disarms the opponent",
+      "full_description": "Expelliarmus disarms the opponent",
+      "status": "passed",
+      "file_path": "./testdata/rspec/spec/spells/expelliarmus_spec.rb",
+      "line_number": 2,
+      "run_time": 0.000069,
+      "pending_message": null
+    },
+    {
+      "id": "./testdata/rspec/spec/spells/expelliarmus_spec.rb[1:2]",
+      "description": "knocks the wand out of the opponents hand",
+      "full_description": "Expelliarmus knocks the wand out of the opponents hand",
+      "status": "passed",
+      "file_path": "./testdata/rspec/spec/spells/expelliarmus_spec.rb",
+      "line_number": 6,
+      "run_time": 0.000022,
+      "pending_message": null
+    },
+    {
+      "id": "./testdata/rspec/spec/failure_spec.rb[1:1]",
+      "description": "fails",
+      "full_description": "Failure fails",
+      "status": "failed",
+      "file_path": "./testdata/rspec/spec/failure_spec.rb",
+      "line_number": 2,
+      "run_time": 0.004838,
+      "pending_message": null,
+      "exception": {
+        "class": "RSpec::Expectations::ExpectationNotMetError",
+        "message": "\nexpected: 3\n     got: 2\n\n(compared using ==)\n",
+        "backtrace": [
+          "./testdata/rspec/spec/failure_spec.rb:3:in 'block (2 levels) in <top (required)>'"
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "duration": 0.00596,
+    "example_count": 3,
+    "failure_count": 1,
+    "pending_count": 0,
+    "errors_outside_of_examples_count": 0
+  },
+  "summary_line": "3 examples, 1 failure"
+}
