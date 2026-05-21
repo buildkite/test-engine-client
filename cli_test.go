@@ -148,6 +148,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_CMD", "go test -run .")
 	t.Setenv("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER", "my-plan")
 	t.Setenv("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC", "false")
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC_LIFETIME", "1h")
 
 	cmd := &cli.Command{
@@ -199,6 +200,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"RetryCommand", cfg.RetryCommand, "go test -run ."},
 		{"Identifier", cfg.Identifier, "my-plan"},
 		{"DebugEnabled", cfg.DebugEnabled, true},
+		{"OIDC", cfg.OIDC, false},
 		{"OIDCLifetime", cfg.OIDCLifetime, time.Hour},
 	}
 
