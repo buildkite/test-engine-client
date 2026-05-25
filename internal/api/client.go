@@ -23,14 +23,14 @@ import (
 type Client struct {
 	OrganizationSlug string
 	ServerBaseURL    string
-	UploadBaseURL string
+	UploadBaseURL    string
 	httpClient       *http.Client
 }
 
 // ClientConfig is the configuration for the test plan API client.
 type ClientConfig struct {
 	AccessToken      string
-	UploadBaseURL string
+	UploadBaseURL    string
 	OrganizationSlug string
 	ServerBaseURL    string
 }
@@ -66,7 +66,7 @@ func NewClient(cfg ClientConfig) *Client {
 	return &Client{
 		OrganizationSlug: cfg.OrganizationSlug,
 		ServerBaseURL:    cfg.ServerBaseURL,
-		UploadBaseURL: cfg.UploadBaseURL,
+		UploadBaseURL:    cfg.UploadBaseURL,
 		httpClient:       httpClient,
 	}
 }
