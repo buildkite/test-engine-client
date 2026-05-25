@@ -16,7 +16,7 @@ import (
 // UploadTestResults POSTs the raw result file from the runner to the
 // Test Engine analytics API at <c.UploadBaseURL>/v1/uploads.
 // The format parameter tells the ingestion gear how to parse the file
-// (e.g. "rspec_json", "jest_json").
+// (e.g. "rspec-json", "jest-json").
 // Errors are returned to the caller to be logged and suppressed — this upload
 // is best-effort and must not fail the build.
 func (c *Client) UploadTestResults(ctx context.Context, token string, filePath string, format string, locationPrefix string) error {

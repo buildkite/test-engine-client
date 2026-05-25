@@ -23,6 +23,9 @@ func (p Playwright) Name() string {
 }
 
 func (p Playwright) ResultFormat() string {
+	if p.ResultPath == "" {
+		return ""
+	}
 	return "playwright-json"
 }
 
