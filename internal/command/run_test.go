@@ -35,7 +35,7 @@ func TestRunTestsWithRetry(t *testing.T) {
 		},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -79,7 +79,7 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 		},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -135,7 +135,7 @@ func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 		},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -199,7 +199,7 @@ func TestRunTestsWithRetry_NoRetryForMutedTest(t *testing.T) {
 		{Path: "tomato_spec.rb:6", Scope: "Tomato", Name: "is vegetable"},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, mutedTests, &timeline, false, false)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, mutedTests, &timeline, false, false)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -245,7 +245,7 @@ func TestRunTestsWithRetry_RetryForMutedTest(t *testing.T) {
 		{Path: "tomato_spec.rb:6", Scope: "Tomato", Name: "is vegetable"},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, mutedTests, &timeline, true, false)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, mutedTests, &timeline, true, false)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -295,7 +295,7 @@ func TestRunTestsWithRetry_ExecError(t *testing.T) {
 		{Path: "testdata/rspec/spec/fruits/fig_spec.rb"},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, 0, []plan.TestCase{}, &timeline, true, false)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, 0, []plan.TestCase{}, &timeline, true, false)
 
 	var execError *exec.Error
 	if !errors.As(err, &execError) {
@@ -316,7 +316,7 @@ func TestRunTestsWithRetry_CommandError(t *testing.T) {
 		{Path: "testdata/rspec/spec/fruits/fig_spec.rb"},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
 
 	exitError := new(exec.ExitError)
 	if !errors.As(err, &exitError) {
@@ -356,7 +356,7 @@ func TestRunTestsWithRetry_RunResultError(t *testing.T) {
 		},
 	}
 	timeline := []api.Timeline{}
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, false)
 
 	t.Cleanup(func() {
 		os.Remove(testRunner.ResultPath)
@@ -852,7 +852,7 @@ func TestRunTestsWithRetry_NoTestCases_Success(t *testing.T) {
 	timeline := []api.Timeline{}
 	failOnNoTests := false
 
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, failOnNoTests)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, failOnNoTests)
 	if err != nil {
 		t.Errorf("runTestsWithRetry(...) error = %v, want nil", err)
 	}
@@ -876,7 +876,7 @@ func TestRunTestsWithRetry_NoTestCases_Error(t *testing.T) {
 	timeline := []api.Timeline{}
 	failOnNoTests := true
 
-	testResult, err := runTestsWithRetry(testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, failOnNoTests)
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, true, failOnNoTests)
 
 	if err == nil {
 		t.Errorf("runTestsWithRetry(...) error = nil, want error")

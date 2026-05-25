@@ -109,6 +109,13 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 		result.error = fmt.Errorf("RSpec reported %d errors outside of examples", report.Summary.ErrorsOutsideOfExamplesCount)
 	}
 
+	teResults, formatErr := report.ToTestEngineTestResults()
+	if formatErr != nil {
+		fmt.Printf("Buildkite Test Engine Client: Failed to format test results: %v\n", formatErr)
+	} else {
+		result.SetTestEngineResults(teResults)
+	}
+
 	// Return any command error after processing the report
 	return cmdErr
 }

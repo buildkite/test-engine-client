@@ -31,6 +31,20 @@ type RunResult struct {
 	// This list might contain tests that are not part of the current run (i.e. belong to a different node).
 	mutedTestLookup map[string]bool
 	error           error
+	// testEngineResults holds the formatted results from the most recent run attempt,
+	// ready to be uploaded to the Test Engine analytics API.
+	testEngineResults []TestEngineTest
+}
+
+// SetTestEngineResults stores formatted results from the latest run attempt.
+// It replaces any results stored from a previous attempt.
+func (r *RunResult) SetTestEngineResults(results []TestEngineTest) {
+	r.testEngineResults = results
+}
+
+// TestEngineResults returns the formatted results from the most recent run attempt.
+func (r *RunResult) TestEngineResults() []TestEngineTest {
+	return r.testEngineResults
 }
 
 func NewRunResult(mutedTests []plan.TestCase) *RunResult {
@@ -251,12 +265,12 @@ type TestEngineTestFailureExpanded struct {
 }
 
 type TestEngineTest struct {
-	ID              string
-	Name            string
-	Scope           string
-	Location        string
-	FileName        string `json:"file_name,omitempty"`
-	Result          TestStatus
+	ID              string                          `json:"id,omitempty"`
+	Name            string                          `json:"name"`
+	Scope           string                          `json:"scope"`
+	Location        string                          `json:"location"`
+	FileName        string                          `json:"file_name,omitempty"`
+	Result          TestStatus                      `json:"result"`
 	FailureReason   string                          `json:"failure_reason,omitempty"`
 	FailureExpanded []TestEngineTestFailureExpanded `json:"failure_expanded,omitempty"`
 	History         []TestEngineTestHistory         `json:"history,omitempty"`
