@@ -253,7 +253,7 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 		if cfg.UploadResults && cfg.UploadToken != "" {
 			if format := testRunner.ResultFormat(); format != "" {
 				fmt.Println("Buildkite Test Engine Client: Uploading test results to Test Engine")
-				if uploadErr := apiClient.UploadTestResults(ctx, cfg.UploadToken, testRunner.ResultFilePath(), format); uploadErr != nil {
+				if uploadErr := apiClient.UploadTestResults(ctx, cfg.UploadToken, testRunner.ResultFilePath(), format, testRunner.LocationPrefix()); uploadErr != nil {
 					fmt.Printf("Buildkite Test Engine Client: Failed to upload test results to Test Engine: %v\n", uploadErr)
 				}
 			}
