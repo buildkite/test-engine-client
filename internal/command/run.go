@@ -43,6 +43,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	// get plan
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseURL:    cfg.ServerBaseURL,
+		UploadBaseURL:    cfg.UploadBaseURL,
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
@@ -74,7 +75,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	// execute tests
 	var timeline []api.Timeline
-	runResult, runErr := runTestsWithRetry(testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
+	runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
 
 	// Abort immediately and propagate the error if the process was terminated by a signal,
 	// since the test results may be unreliable and cannot be trusted.
@@ -213,7 +214,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg *config.Config
 // For next reader, there is a small caveat with current implementation:
 // - testCases and timeline are both expected to be mutated.
 // - testCases in this case serve both as input and output -> we should probably change it.
-func runTestsWithRetry(testRunner runner.TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest bool, failOnNoTests bool) (runner.RunResult, error) {
+func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.Config, testRunner runner.TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest bool, failOnNoTests bool) (runner.RunResult, error) {
 	attemptCount := 0
 
 	// Create a new run result with muted tests to keep track of the results.
@@ -226,6 +227,10 @@ func runTestsWithRetry(testRunner runner.TestRunner, testsCases *[]plan.TestCase
 		}
 		fmt.Printf("+++ Buildkite Test Engine Client: No tests to run on this node\n")
 		return *runResult, nil
+	}
+
+	if cfg.UploadResults && cfg.UploadToken == "" {
+		fmt.Println("Buildkite Test Engine Client: Warning: upload-results is enabled but no upload token was provided. Test results will not be uploaded.")
 	}
 
 	for attemptCount <= maxRetries {
@@ -244,6 +249,15 @@ func runTestsWithRetry(testRunner runner.TestRunner, testsCases *[]plan.TestCase
 		}
 
 		err := testRunner.Run(runResult, *testsCases, attemptCount > 0)
+
+		if cfg.UploadResults && cfg.UploadToken != "" {
+			if format := testRunner.ResultFormat(); format != "" {
+				fmt.Println("Buildkite Test Engine Client: Uploading test results to Test Engine")
+				if uploadErr := apiClient.UploadTestResults(ctx, cfg.UploadToken, testRunner.ResultFilePath(), format); uploadErr != nil {
+					fmt.Printf("Buildkite Test Engine Client: Failed to upload test results to Test Engine: %v\n", uploadErr)
+				}
+			}
+		}
 
 		if attemptCount == 0 {
 			*timeline = append(*timeline, api.Timeline{

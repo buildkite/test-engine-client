@@ -11,4 +11,10 @@ type TestRunner interface {
 	LocationPrefix() string
 	SupportedFeatures() SupportedFeatures
 	UploadToken() string
+	// ResultFormat returns the format identifier for the runner's raw result file
+	// (e.g. "rspec_json"), used when uploading results to Test Engine.
+	// Returns an empty string if the runner does not support raw result uploads.
+	ResultFormat() string
+	// ResultFilePath returns the path to the runner's raw result file.
+	ResultFilePath() string
 }

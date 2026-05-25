@@ -58,6 +58,10 @@ func (r Rspec) Name() string {
 	return "RSpec"
 }
 
+func (r Rspec) ResultFormat() string {
+	return "rspec-json"
+}
+
 // GetFiles returns an array of file names using the discovery pattern.
 func (r Rspec) GetFiles() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
