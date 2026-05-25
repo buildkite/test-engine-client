@@ -243,6 +243,14 @@ var uploadBaseURLFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+var uploadResultsFlag = &cli.BoolFlag{
+	Name:        "upload-results",
+	Category:    "TEST ENGINE",
+	Usage:       "Upload test results to Test Engine after each run",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS"),
+	Destination: &cfg.UploadResults,
+}
+
 // Test Runner specific flags
 var filesFlag = &cli.StringFlag{
 	Name:     "files",
@@ -506,6 +514,7 @@ var buildEnvironmentFlags = []cli.Flag{
 var testEngineFlags = []cli.Flag{
 	accessTokenFlag,
 	uploadTokenFlag,
+	uploadResultsFlag,
 	suiteSlugFlag,
 	baseURLFlag,
 	uploadBaseURLFlag,

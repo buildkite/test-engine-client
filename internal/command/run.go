@@ -220,6 +220,10 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 	// Create a new run result with muted tests to keep track of the results.
 	runResult := runner.NewRunResult(mutedTests)
 
+	if cfg.UploadResults && cfg.UploadToken == "" {
+		fmt.Printf("Buildkite Test Engine Client: Warning: upload-results is enabled but no upload token was provided. Test results will not be uploaded.\n")
+	}
+
 	// If there are no test cases to run, skip invoking the test runner
 	if len(*testsCases) == 0 {
 		if failOnNoTests {
@@ -246,8 +250,9 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 
 		err := testRunner.Run(runResult, *testsCases, attemptCount > 0)
 
-		if os.Getenv("BUILDKITE") == "true" && cfg.UploadToken != "" {
+		if cfg.UploadResults && cfg.UploadToken != "" {
 			if teResults := runResult.TestEngineResults(); len(teResults) > 0 {
+				fmt.Printf("Buildkite Test Engine Client: Uploading test results to Test Engine\n")
 				if uploadErr := apiClient.UploadTestResults(ctx, cfg.UploadToken, teResults); uploadErr != nil {
 					fmt.Printf("Buildkite Test Engine Client: Failed to upload test results to Test Engine: %v\n", uploadErr)
 				}
