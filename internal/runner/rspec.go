@@ -278,12 +278,9 @@ func (report RspecReport) ToTestEngineTestResults() (testResults []TestEngineTes
 			Location: fmt.Sprintf("%s:%d", example.FilePath, example.LineNumber),
 			FileName: example.FilePath,
 			Result:   status,
-			History: []TestEngineTestHistory{
-				{
-					Section:  "top",
-					EndAt:    nil,
-					Duration: example.RunTime,
-				},
+			History: &TestEngineTestHistory{
+				Section:  "top",
+				Duration: example.RunTime,
 			},
 		}
 
@@ -291,7 +288,7 @@ func (report RspecReport) ToTestEngineTestResults() (testResults []TestEngineTes
 			formattedTest.FailureReason = example.Exception.Class
 			formattedTest.FailureExpanded = []TestEngineTestFailureExpanded{
 				{
-					Expanded:  []string{example.Exception.Message},
+					Expanded:  []string{strings.TrimSpace(example.Exception.Message)},
 					Backtrace: example.Exception.Backtrace,
 				},
 			}

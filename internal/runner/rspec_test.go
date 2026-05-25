@@ -494,11 +494,9 @@ func TestFormatReportToTestEngineTestResults(t *testing.T) {
 			Location: "./testdata/rspec/spec/spells/expelliarmus_spec.rb:2",
 			FileName: "./testdata/rspec/spec/spells/expelliarmus_spec.rb",
 			Result:   TestStatusPassed,
-			History: []TestEngineTestHistory{
-				{
-					Section:  "top",
-					Duration: 0.000069,
-				},
+			History: &TestEngineTestHistory{
+				Section:  "top",
+				Duration: 0.000069,
 			},
 		},
 		{
@@ -507,11 +505,9 @@ func TestFormatReportToTestEngineTestResults(t *testing.T) {
 			Location: "./testdata/rspec/spec/spells/expelliarmus_spec.rb:6",
 			FileName: "./testdata/rspec/spec/spells/expelliarmus_spec.rb",
 			Result:   TestStatusPassed,
-			History: []TestEngineTestHistory{
-				{
-					Section:  "top",
-					Duration: 0.000022,
-				},
+			History: &TestEngineTestHistory{
+				Section:  "top",
+				Duration: 0.000022,
 			},
 		},
 		{
@@ -524,18 +520,16 @@ func TestFormatReportToTestEngineTestResults(t *testing.T) {
 			FailureExpanded: []TestEngineTestFailureExpanded{
 				{
 					Expanded: []string{
-						"\nexpected: 3\n     got: 2\n\n(compared using ==)\n",
+						"expected: 3\n     got: 2\n\n(compared using ==)",
 					},
 					Backtrace: []string{
 						"./testdata/rspec/spec/failure_spec.rb:3:in 'block (2 levels) in <top (required)>'",
 					},
 				},
 			},
-			History: []TestEngineTestHistory{
-				{
-					Section:  "top",
-					Duration: 0.004838,
-				},
+			History: &TestEngineTestHistory{
+				Section:  "top",
+				Duration: 0.004838,
 			},
 		},
 	}

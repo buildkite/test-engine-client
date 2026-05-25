@@ -251,12 +251,11 @@ func (r *RunResult) Statistics() RunStatistics {
 //
 // Currently, only pytest and custom runner uses result from test collector.
 type TestEngineTestHistory struct {
-	Section string `json:"section"`
-	StartAt int64  `json:"start_at"`
-	// EndAt is optional because some test engines might not provide it.
-	EndAt    *int64  `json:"end_at,omitempty"`
-	Duration float64 `json:"duration"`
-	Children []any   `json:"children,omitempty"`
+	Section  string   `json:"section"`
+	StartAt  *float64 `json:"start_at,omitempty"`
+	EndAt    *float64 `json:"end_at,omitempty"`
+	Duration float64  `json:"duration"`
+	Children []any    `json:"children,omitempty"`
 }
 
 type TestEngineTestFailureExpanded struct {
@@ -273,7 +272,7 @@ type TestEngineTest struct {
 	Result          TestStatus                      `json:"result"`
 	FailureReason   string                          `json:"failure_reason,omitempty"`
 	FailureExpanded []TestEngineTestFailureExpanded `json:"failure_expanded,omitempty"`
-	History         []TestEngineTestHistory         `json:"history,omitempty"`
+	History         *TestEngineTestHistory          `json:"history,omitempty"`
 }
 
 func parseTestEngineTestResult(path string) ([]TestEngineTest, error) {
