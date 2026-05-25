@@ -22,6 +22,10 @@ func (p Playwright) Name() string {
 	return "Playwright"
 }
 
+func (p Playwright) ResultFormat() string {
+	return "playwright-json"
+}
+
 func NewPlaywright(p RunnerConfig) Playwright {
 	if p.TestCommand == "" {
 		p.TestCommand = "npx playwright test"
