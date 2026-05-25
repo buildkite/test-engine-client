@@ -48,13 +48,6 @@ func (r Custom) Name() string {
 	return "Custom test runner"
 }
 
-func (r Custom) ResultFormat() string {
-	if r.ResultPath == "" {
-		return ""
-	}
-	return "junit"
-}
-
 // GetFiles returns an array of file names using the discovery pattern.
 func (r Custom) GetFiles() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
