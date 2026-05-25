@@ -894,3 +894,130 @@ func TestRunTestsWithRetry_NoTestCases_Error(t *testing.T) {
 		t.Errorf("timeline length = %v, want 0", len(timeline))
 	}
 }
+
+func TestRunTestsWithRetry_UploadsResults(t *testing.T) {
+	var uploadRequests int
+	var gotFormat, gotLocationPrefix string
+
+	uploadSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/uploads" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		uploadRequests++
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatalf("parsing multipart form: %v", err)
+		}
+		gotFormat = r.FormValue("format")
+		gotLocationPrefix = r.FormValue("run_env[location_prefix]")
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer uploadSvr.Close()
+
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:  "tmp/rspec-upload-test.json",
+	})
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/fruits/apple_spec.rb"},
+	}
+	timeline := []api.Timeline{}
+	cfg := &config.Config{
+		UploadResults: true,
+		UploadToken:   "test-token",
+		UploadBaseURL: uploadSvr.URL,
+	}
+	apiClient := api.NewClient(api.ClientConfig{UploadBaseURL: uploadSvr.URL})
+
+	t.Cleanup(func() { os.Remove(testRunner.ResultPath) })
+
+	_, err := runTestsWithRetry(context.Background(), apiClient, cfg, testRunner, &testCases, 0, []plan.TestCase{}, &timeline, true, false)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, uploadRequests, "expected one upload request")
+	assert.Equal(t, "rspec-json", gotFormat)
+	assert.Equal(t, "./", gotLocationPrefix)
+}
+
+func TestRunTestsWithRetry_SkipsUploadWhenNoToken(t *testing.T) {
+	var uploadRequests int
+	uploadSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uploadRequests++
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer uploadSvr.Close()
+
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:  "tmp/rspec-no-token-test.json",
+	})
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/fruits/apple_spec.rb"},
+	}
+	timeline := []api.Timeline{}
+	cfg := &config.Config{
+		UploadResults: true,
+		UploadToken:   "",
+	}
+
+	t.Cleanup(func() { os.Remove(testRunner.ResultPath) })
+
+	_, err := runTestsWithRetry(context.Background(), nil, cfg, testRunner, &testCases, 0, []plan.TestCase{}, &timeline, true, false)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, uploadRequests, "expected no upload requests when token is missing")
+}
+
+func TestRunTestsWithRetry_SkipsUploadWhenUploadResultsFalse(t *testing.T) {
+	var uploadRequests int
+	uploadSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uploadRequests++
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer uploadSvr.Close()
+
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:  "tmp/rspec-no-upload-test.json",
+	})
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/fruits/apple_spec.rb"},
+	}
+	timeline := []api.Timeline{}
+	cfg := &config.Config{
+		UploadResults: false,
+		UploadToken:   "test-token",
+	}
+
+	t.Cleanup(func() { os.Remove(testRunner.ResultPath) })
+
+	_, err := runTestsWithRetry(context.Background(), nil, cfg, testRunner, &testCases, 0, []plan.TestCase{}, &timeline, true, false)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, uploadRequests, "expected no upload requests when UploadResults is false")
+}
+
+func TestRunTestsWithRetry_UploadErrorDoesNotFailBuild(t *testing.T) {
+	uploadSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer uploadSvr.Close()
+
+	testRunner := runner.NewRspec(runner.RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:  "tmp/rspec-upload-error-test.json",
+	})
+	testCases := []plan.TestCase{
+		{Path: "./testdata/rspec/spec/fruits/apple_spec.rb"},
+	}
+	timeline := []api.Timeline{}
+	cfg := &config.Config{
+		UploadResults: true,
+		UploadToken:   "test-token",
+		UploadBaseURL: uploadSvr.URL,
+	}
+	apiClient := api.NewClient(api.ClientConfig{UploadBaseURL: uploadSvr.URL})
+
+	t.Cleanup(func() { os.Remove(testRunner.ResultPath) })
+
+	result, err := runTestsWithRetry(context.Background(), apiClient, cfg, testRunner, &testCases, 0, []plan.TestCase{}, &timeline, true, false)
+	assert.NoError(t, err)
+	assert.Equal(t, runner.RunStatusPassed, result.Status(), "build should pass even when upload fails")
+}
