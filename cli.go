@@ -233,6 +233,16 @@ var baseURLFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+var uploadBaseURLFlag = &cli.StringFlag{
+	Name:        "upload-base-url",
+	Category:    "TEST ENGINE",
+	Usage:       "Test Engine upload API base URL",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_BASE_URL"),
+	Value:       "https://analytics-api.buildkite.com",
+	Destination: &cfg.UploadBaseURL,
+	Hidden:      true,
+}
+
 // Test Runner specific flags
 var filesFlag = &cli.StringFlag{
 	Name:     "files",
@@ -498,6 +508,7 @@ var testEngineFlags = []cli.Flag{
 	uploadTokenFlag,
 	suiteSlugFlag,
 	baseURLFlag,
+	uploadBaseURLFlag,
 	oidcFlag,
 	oidcLifetimeFlag,
 }

@@ -23,12 +23,14 @@ import (
 type Client struct {
 	OrganizationSlug string
 	ServerBaseURL    string
+	UploadBaseURL string
 	httpClient       *http.Client
 }
 
 // ClientConfig is the configuration for the test plan API client.
 type ClientConfig struct {
 	AccessToken      string
+	UploadBaseURL string
 	OrganizationSlug string
 	ServerBaseURL    string
 }
@@ -38,9 +40,13 @@ type authTransport struct {
 	accessToken string
 }
 
-// RoundTrip adds the Authorization header to all requests made by the HTTP client.
+// RoundTrip adds the Authorization and User-Agent headers to all requests made
+// by the HTTP client. If Authorization is already set on the request it is left
+// unchanged, allowing callers to supply a different auth scheme (e.g. Token).
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "Bearer "+t.accessToken)
+	if req.Header.Get("Authorization") == "" {
+		req.Header.Set("Authorization", "Bearer "+t.accessToken)
+	}
 	req.Header.Set("User-Agent", fmt.Sprintf(
 		"Buildkite Test Engine Client/%s (%s/%s)",
 		version.Version, runtime.GOOS, runtime.GOARCH,
@@ -60,6 +66,7 @@ func NewClient(cfg ClientConfig) *Client {
 	return &Client{
 		OrganizationSlug: cfg.OrganizationSlug,
 		ServerBaseURL:    cfg.ServerBaseURL,
+		UploadBaseURL: cfg.UploadBaseURL,
 		httpClient:       httpClient,
 	}
 }

@@ -6,6 +6,8 @@ import "time"
 type Config struct {
 	// AccessToken is the access token for the API.
 	AccessToken string `json:"-"`
+	// UploadBaseURL is the base URL for the Test Engine analytics API.
+	UploadBaseURL string `json:"-"`
 	// Branch is the string value of the git branch name, used by Buildkite only.
 	Branch                string `json:"BUILDKITE_BRANCH"`
 	BuildID               string `json:"BUILDKITE_BUILD_ID"`
