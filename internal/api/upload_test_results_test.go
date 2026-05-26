@@ -55,7 +55,7 @@ func TestUploadTestResults(t *testing.T) {
 	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "./")
 	require.NoError(t, err)
 
-	assert.Equal(t, `Token token="my-token"`, gotToken)
+	assert.Equal(t, "Token token=my-token", gotToken)
 	assert.Equal(t, "rspec-json", gotFormat)
 	assert.Equal(t, "./", gotLocationPrefix)
 }
