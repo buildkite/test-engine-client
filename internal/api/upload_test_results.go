@@ -33,7 +33,7 @@ func (c *Client) UploadTestResults(ctx context.Context, token string, filePath s
 	if err != nil {
 		return fmt.Errorf("creating upload request: %w", err)
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Token token=%q", token))
+	req.Header.Set("Authorization", fmt.Sprintf("Token token=%s", token))
 	req.Header.Set("Content-Type", contentType)
 
 	resp, err := c.httpClient.Do(req)
