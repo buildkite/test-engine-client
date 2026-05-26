@@ -16,6 +16,7 @@ import (
 
 type Pytest struct {
 	RunnerConfig
+	useJUnit bool
 }
 
 func (p Pytest) Name() string {
@@ -23,23 +24,39 @@ func (p Pytest) Name() string {
 }
 
 func NewPytest(c RunnerConfig) Pytest {
-	if !checkPythonPackageInstalled("buildkite_test_collector") { // python import only use underscore
-		fmt.Fprintln(os.Stderr, "Error: Required Python package 'buildkite-test-collector' is not installed.")
-		fmt.Fprintln(os.Stderr, "Please install it with: pip install buildkite-test-collector.")
-		os.Exit(1)
-	}
+	pluginInstalled := checkPythonPackageInstalled("buildkite_test_collector") // python import only uses underscore
 
-	// Ensure buildkite-test-collector version is >1.2.0 for --tag-filters support
-	if c.TagFilters != "" {
-		if err := checkBuildkiteTestCollectorVersion("1.2.0"); err != nil {
-			fmt.Fprintln(os.Stderr, "Error:", err)
-			fmt.Fprintln(os.Stderr, "Please upgrade with: pip install --upgrade buildkite-test-collector")
+	useJUnit := !pluginInstalled
+
+	if pluginInstalled {
+		// Ensure buildkite-test-collector version is >1.2.0 for --tag-filters support
+		if c.TagFilters != "" {
+			if err := checkBuildkiteTestCollectorVersion("1.2.0"); err != nil {
+				fmt.Fprintln(os.Stderr, "Error:", err)
+				fmt.Fprintln(os.Stderr, "Please upgrade with: pip install --upgrade buildkite-test-collector")
+				os.Exit(1)
+			}
+		}
+		fmt.Println("Buildkite Test Engine Client: buildkite-test-collector found, using JSON output for pytest results.")
+		if c.TestCommand == "" {
+			c.TestCommand = "pytest {{testExamples}} --json={{resultPath}}"
+		}
+		if c.ResultPath == "" {
+			c.ResultPath = getRandomTempFilename("pytest-results.json")
+		}
+	} else {
+		if c.TagFilters != "" {
+			fmt.Fprintln(os.Stderr, "Error: --tag-filters requires the 'buildkite-test-collector' package.")
+			fmt.Fprintln(os.Stderr, "Please install it with: pip install buildkite-test-collector.")
 			os.Exit(1)
 		}
-	}
-
-	if c.TestCommand == "" {
-		c.TestCommand = "pytest {{testExamples}} --json={{resultPath}}"
+		fmt.Println("Buildkite Test Engine Client: buildkite-test-collector not found, using JUnit XML output for pytest results.")
+		if c.TestCommand == "" {
+			c.TestCommand = "pytest {{testExamples}} --junit-xml={{resultPath}}"
+		}
+		if c.ResultPath == "" {
+			c.ResultPath = getRandomTempFilename("pytest-results.xml")
+		}
 	}
 
 	if c.TestFilePattern == "" {
@@ -50,12 +67,9 @@ func NewPytest(c RunnerConfig) Pytest {
 		c.RetryTestCommand = c.TestCommand
 	}
 
-	if c.ResultPath == "" {
-		c.ResultPath = getRandomTempFilename()
-	}
-
 	return Pytest{
 		RunnerConfig: c,
+		useJUnit:     useJUnit,
 	}
 }
 
@@ -85,12 +99,16 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return cmdErr
 	}
 
-	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
+	if p.useJUnit {
+		return p.runParseJUnit(result, cmdErr)
+	}
+	return p.runParseJSON(result, cmdErr)
+}
 
+func (p Pytest) runParseJSON(result *RunResult, cmdErr error) error {
+	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried: %v\n", parseErr)
-		// We don't want to fail the build if we fail to parse the report,
-		// therefore we return the command error (which can be nil), instead of the parse error.
 		return cmdErr
 	}
 
@@ -106,8 +124,64 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		}, test.Result)
 	}
 
-	// Return any command error after processing the report
 	return cmdErr
+}
+
+func (p Pytest) runParseJUnit(result *RunResult, cmdErr error) error {
+	tests, parseErr := loadAndParseJUnitXML(p.ResultPath)
+	if parseErr != nil {
+		fmt.Printf("Buildkite Test Engine Client: Failed to read JUnit XML output, failed tests will not be retried: %v\n", parseErr)
+		return cmdErr
+	}
+
+	for _, test := range tests {
+		scope, path := pytestNodeIDFromJUnit(test.Classname, test.Name)
+		result.RecordTestResult(plan.TestCase{
+			Identifier: path,
+			Format:     plan.TestCaseFormatExample,
+			Scope:      scope,
+			Name:       test.Name,
+			Path:       path,
+		}, test.Result)
+	}
+
+	return cmdErr
+}
+
+// pytestNodeIDFromJUnit reconstructs a pytest node ID (scope and path) from a JUnit XML
+// classname and test name. pytest encodes the module path in the classname using dots as
+// separators, with any class names appended after the module.
+//
+// Examples:
+//
+//	classname="test_sample",             name="test_happy"   → scope="test_sample.py",               path="test_sample.py::test_happy"
+//	classname="tests.test_sample",       name="test_happy"   → scope="tests/test_sample.py",          path="tests/test_sample.py::test_happy"
+//	classname="tests.test_auth.TestLogin", name="test_success" → scope="tests/test_auth.py::TestLogin", path="tests/test_auth.py::TestLogin::test_success"
+func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
+	parts := strings.Split(classname, ".")
+
+	// Everything up to the first uppercase component is the module (file) path.
+	// Class names in Python use CamelCase; module/directory names use snake_case.
+	moduleEnd := len(parts)
+	for i, p := range parts {
+		if len(p) > 0 && p[0] >= 'A' && p[0] <= 'Z' {
+			moduleEnd = i
+			break
+		}
+	}
+
+	modulePath := strings.Join(parts[:moduleEnd], "/") + ".py"
+	classParts := parts[moduleEnd:]
+
+	if len(classParts) == 0 {
+		scope = modulePath
+		path = modulePath + "::" + name
+	} else {
+		classPath := strings.Join(classParts, "::")
+		scope = modulePath + "::" + classPath
+		path = modulePath + "::" + classPath + "::" + name
+	}
+	return
 }
 
 func (p Pytest) GetFiles() ([]string, error) {
@@ -236,12 +310,12 @@ func (p Pytest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 	return args[0], args[1:], nil
 }
 
-func getRandomTempFilename() string {
+func getRandomTempFilename(filename string) string {
 	tempDir, err := os.MkdirTemp("", "bktec-pytest-*")
 	if err != nil {
 		panic(err)
 	}
-	return filepath.Join(tempDir, "pytest-results.json")
+	return filepath.Join(tempDir, filename)
 }
 
 // getPythonPackageVersion retrieves the version of a Python package using importlib.metadata.
