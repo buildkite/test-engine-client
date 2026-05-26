@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/buildkite/test-engine-client/v2/internal/config"
 	"github.com/urfave/cli/v3"
 )
 
@@ -110,4 +113,100 @@ func hasFlag(flags []cli.Flag, name string) bool {
 		}
 	}
 	return false
+}
+
+// TestRunCommandEnvVarsBindToConfig verifies that every env var wired to a run
+// command flag actually lands in the cfg struct. This guards against accidental
+// removal of the Destination field from a flag definition.
+func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+
+	t.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my-org")
+	t.Setenv("BUILDKITE_BUILD_ID", "build-1")
+	t.Setenv("BUILDKITE_JOB_ID", "job-2")
+	t.Setenv("BUILDKITE_STEP_ID", "step-3")
+	t.Setenv("BUILDKITE_BRANCH", "main")
+	t.Setenv("BUILDKITE_RETRY_COUNT", "2")
+	t.Setenv("BUILDKITE_PARALLEL_JOB", "1")
+	t.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", "4")
+	t.Setenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "access-token")
+	t.Setenv("BUILDKITE_ANALYTICS_TOKEN", "upload-token")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "my-suite")
+	t.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", "https://example.com")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TAG_FILTERS", "fast")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "go test ./...")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN", "**/*_test.go")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN", "vendor/**")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "gotest")
+	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "/tmp/results.json")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "app/")
+	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "3")
+	t.Setenv("BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_CMD", "go test -run .")
+	t.Setenv("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER", "my-plan")
+	t.Setenv("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC", "false")
+	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC_LIFETIME", "1h")
+
+	cmd := &cli.Command{
+		Name:  "bktec",
+		Flags: []cli.Flag{debugFlag},
+		Commands: []*cli.Command{
+			{
+				Name:                      "run",
+				DisableSliceFlagSeparator: true,
+				Action:                    func(ctx context.Context, cmd *cli.Command) error { return nil },
+				Flags:                     runCommandFlags(),
+			},
+		},
+	}
+
+	if err := cmd.Run(context.Background(), []string{"bktec", "run"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	checks := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"OrganizationSlug", cfg.OrganizationSlug, "my-org"},
+		{"BuildID", cfg.BuildID, "build-1"},
+		{"JobID", cfg.JobID, "job-2"},
+		{"StepID", cfg.StepID, "step-3"},
+		{"Branch", cfg.Branch, "main"},
+		{"JobRetryCount", cfg.JobRetryCount, 2},
+		{"NodeIndex", cfg.NodeIndex, 1},
+		{"Parallelism", cfg.Parallelism, 4},
+		{"AccessToken", cfg.AccessToken, "access-token"},
+		{"UploadToken", cfg.UploadToken, "upload-token"},
+		{"SuiteSlug", cfg.SuiteSlug, "my-suite"},
+		{"ServerBaseURL", cfg.ServerBaseURL, "https://example.com"},
+		{"TagFilters", cfg.TagFilters, "fast"},
+		{"TestCommand", cfg.TestCommand, "go test ./..."},
+		{"TestFilePattern", cfg.TestFilePattern, "**/*_test.go"},
+		{"TestFileExcludePattern", cfg.TestFileExcludePattern, "vendor/**"},
+		{"TestRunner", cfg.TestRunner, "gotest"},
+		{"ResultPath", cfg.ResultPath, "/tmp/results.json"},
+		{"SplitByExample", cfg.SplitByExample, true},
+		{"FailOnNoTests", cfg.FailOnNoTests, true},
+		{"LocationPrefix", cfg.LocationPrefix, "app/"},
+		{"MaxRetries", cfg.MaxRetries, 3},
+		// DISABLE_RETRY_FOR_MUTED_TEST=true means RetryForMutedTest should be false (flag Action inverts the bool)
+		{"RetryForMutedTest", cfg.RetryForMutedTest, false},
+		{"RetryCommand", cfg.RetryCommand, "go test -run ."},
+		{"Identifier", cfg.Identifier, "my-plan"},
+		{"DebugEnabled", cfg.DebugEnabled, true},
+		{"OIDC", cfg.OIDC, false},
+		{"OIDCLifetime", cfg.OIDCLifetime, time.Hour},
+	}
+
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("cfg.%s = %v, want %v", c.name, c.got, c.want)
+		}
+	}
 }
