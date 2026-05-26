@@ -40,6 +40,18 @@ func NewPlaywright(p RunnerConfig) Playwright {
 	}
 }
 
+func (p Playwright) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  true,
+		FilterTestFiles: true,
+		FilterTestByTag: false,
+		AutoRetry:       true,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	cmd, err := buildCommand(p, testCases, retry)
 	if err != nil {

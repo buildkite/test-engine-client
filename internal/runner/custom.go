@@ -32,6 +32,18 @@ func NewCustom(r RunnerConfig) (Custom, error) {
 	}, nil
 }
 
+func (c Custom) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  false,
+		FilterTestFiles: true,
+		FilterTestByTag: false,
+		AutoRetry:       false,
+		Mute:            true,
+		Skip:            false,
+	}
+}
+
 func (r Custom) Name() string {
 	return "Custom test runner"
 }

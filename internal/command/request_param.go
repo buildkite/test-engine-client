@@ -32,8 +32,8 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 		})
 	}
 
-	// Splitting files by example is only supported for rspec, cucumber, pytest, and playwright runners
-	if runner.Name() != "RSpec" && runner.Name() != "Cucumber" && runner.Name() != "pytest" && runner.Name() != "Playwright" {
+	// Short circuit here if the runner doesn't support split by example
+	if !runner.SupportedFeatures().SplitByExample {
 		params := api.TestPlanParams{
 			Identifier:     cfg.Identifier,
 			Parallelism:    cfg.Parallelism,

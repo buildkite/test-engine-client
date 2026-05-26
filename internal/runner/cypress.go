@@ -36,6 +36,18 @@ func NewCypress(c RunnerConfig) Cypress {
 	}
 }
 
+func (c Cypress) SupportedFeatures() SupportedFeatures {
+	return SupportedFeatures{
+		SplitByFile:     true,
+		SplitByExample:  false,
+		FilterTestFiles: true,
+		FilterTestByTag: false,
+		AutoRetry:       false,
+		Mute:            false,
+		Skip:            false,
+	}
+}
+
 func (c Cypress) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	cmd, err := buildCommand(c, testCases, retry)
 	if err != nil {
