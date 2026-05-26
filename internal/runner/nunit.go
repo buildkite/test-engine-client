@@ -83,7 +83,7 @@ func (n NUnit) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 
 	cmdErr := runAndForwardSignal(cmd)
 
-	testResults, parseErr := loadAndParseJUnitXMLResult(n.ResultPath)
+	testResults, parseErr := loadAndParseJUnitXML(n.ResultPath)
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read NUnit output, tests will not be retried: %v\n", parseErr)
 		return cmdErr

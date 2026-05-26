@@ -23,7 +23,7 @@ const exampleJUnitXML = `<?xml version="1.0" encoding="UTF-8"?>
 	</testsuite>
 </testsuites>`
 
-func TestLoadAndParseGotestJUnitXmlResult(t *testing.T) {
+func TestLoadAndParseJUnitXML(t *testing.T) {
 	tmpfile, err := os.CreateTemp("", "junit.*.xml")
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name()) // clean up
@@ -33,7 +33,7 @@ func TestLoadAndParseGotestJUnitXmlResult(t *testing.T) {
 	err = tmpfile.Close()
 	require.NoError(t, err)
 
-	results, err := loadAndParseGotestJUnitXMLResult(tmpfile.Name())
+	results, err := loadAndParseJUnitXML(tmpfile.Name())
 	require.NoError(t, err)
 
 	require.Len(t, results, 4)
