@@ -34,7 +34,7 @@ export BUILDKITE_TEST_ENGINE_TEST_CMD="pytest --cache-clear --json={{resultPath}
 ```
 
 > [!IMPORTANT]
-> Make sure to include the appropriate result flag (`--json={{resultPath}}` or `--junit-xml={{resultPath}}`) in your custom test command, as bktec requires this to read the test results for retries and verification purposes.
+> bktec determines the output format by detecting `--junit-xml` or `--json=` in your test command, so the flag you include controls which parser is used — regardless of whether `buildkite-test-collector` is installed. Make sure your command includes exactly one of these flags so bktec can read the results for retries and verification. If neither flag is present, bktec falls back to the collector-based default.
 
 ## Filter test files
 By default, bktec runs test files that match the `**/{*_test,test_*}.py` pattern. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable. For instance, to configure bktec to only run test files inside the `tests` directory, use:

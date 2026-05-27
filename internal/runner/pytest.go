@@ -37,7 +37,6 @@ func NewPytest(c RunnerConfig) Pytest {
 				os.Exit(1)
 			}
 		}
-		fmt.Println("Buildkite Test Engine Client: buildkite-test-collector found, using JSON output for pytest results.")
 		if c.TestCommand == "" {
 			c.TestCommand = "pytest {{testExamples}} --json={{resultPath}}"
 		}
@@ -50,13 +49,26 @@ func NewPytest(c RunnerConfig) Pytest {
 			fmt.Fprintln(os.Stderr, "Please install it with: pip install buildkite-test-collector.")
 			os.Exit(1)
 		}
-		fmt.Println("Buildkite Test Engine Client: buildkite-test-collector not found, using JUnit XML output for pytest results.")
 		if c.TestCommand == "" {
 			c.TestCommand = "pytest {{testExamples}} --junit-xml={{resultPath}}"
 		}
 		if c.ResultPath == "" {
 			c.ResultPath = getRandomTempFilename("pytest-results.xml")
 		}
+	}
+
+	// Detect output format from the result flag in the command, so a custom command
+	// with --junit-xml works even when buildkite-test-collector is installed (and vice versa).
+	if strings.Contains(c.TestCommand, "--junit-xml") {
+		useJUnit = true
+	} else if strings.Contains(c.TestCommand, "--json=") {
+		useJUnit = false
+	}
+
+	if useJUnit {
+		fmt.Println("Buildkite Test Engine Client: Using JUnit XML output for pytest results.")
+	} else {
+		fmt.Println("Buildkite Test Engine Client: Using JSON output for pytest results.")
 	}
 
 	if c.TestFilePattern == "" {
@@ -99,17 +111,23 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return cmdErr
 	}
 
+	var parseErr error
 	if p.useJUnit {
-		return p.runParseJUnit(result, cmdErr)
+		parseErr = p.runParseJUnit(result)
+	} else {
+		parseErr = p.runParseJSON(result)
 	}
-	return p.runParseJSON(result, cmdErr)
+	if parseErr != nil {
+		fmt.Printf("Buildkite Test Engine Client: Failed to read test output, failed tests will not be retried: %v\n", parseErr)
+	}
+
+	return cmdErr
 }
 
-func (p Pytest) runParseJSON(result *RunResult, cmdErr error) error {
+func (p Pytest) runParseJSON(result *RunResult) error {
 	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
 	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried: %v\n", parseErr)
-		return cmdErr
+		return parseErr
 	}
 
 	for _, test := range tests {
@@ -124,14 +142,13 @@ func (p Pytest) runParseJSON(result *RunResult, cmdErr error) error {
 		}, test.Result)
 	}
 
-	return cmdErr
+	return nil
 }
 
-func (p Pytest) runParseJUnit(result *RunResult, cmdErr error) error {
+func (p Pytest) runParseJUnit(result *RunResult) error {
 	tests, parseErr := loadAndParseJUnitXML(p.ResultPath)
 	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read JUnit XML output, failed tests will not be retried: %v\n", parseErr)
-		return cmdErr
+		return parseErr
 	}
 
 	for _, test := range tests {
@@ -145,7 +162,7 @@ func (p Pytest) runParseJUnit(result *RunResult, cmdErr error) error {
 		}, test.Result)
 	}
 
-	return cmdErr
+	return nil
 }
 
 // pytestNodeIDFromJUnit reconstructs a pytest node ID (scope and path) from a JUnit XML
