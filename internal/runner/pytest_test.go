@@ -33,11 +33,13 @@ func TestPytestRun(t *testing.T) {
 func TestPytestRun_RetryCommand(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
-	pytest := NewPytest(RunnerConfig{
-		TestCommand:      "pytest failed_test.py",
-		RetryTestCommand: "pytest",
-		ResultPath:       "result-passed.json",
-	})
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand:      "pytest failed_test.py",
+			RetryTestCommand: "pytest",
+			ResultPath:       "result-passed.json",
+		},
+	}
 
 	testCases := []plan.TestCase{
 		{Path: "test_sample.py"},
@@ -53,10 +55,12 @@ func TestPytestRun_RetryCommand(t *testing.T) {
 func TestPytestRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
-	pytest := NewPytest(RunnerConfig{
-		TestCommand: "pytest",
-		ResultPath:  "result-failed.json",
-	})
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "pytest",
+			ResultPath:  "result-failed.json",
+		},
+	}
 	testCases := []plan.TestCase{
 		{Path: "failed_test.py"},
 	}
@@ -80,6 +84,69 @@ func TestPytestRun_TestFailed(t *testing.T) {
 		{
 			Format:     "example",
 			Identifier: "a1be7e52-0dba-4018-83ce-a1598ca68807",
+			Name:       "test_failed",
+			Path:       "tests/failed_test.py::test_failed",
+			Scope:      "tests/failed_test.py",
+		},
+	}
+
+	if diff := cmp.Diff(failedTest, wantFailedTests); diff != "" {
+		t.Errorf("Pytest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+	}
+}
+
+func TestPytestRun_JUnit_TestPassed(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "pytest",
+			ResultPath:  "result-passed.xml",
+		},
+		useJUnit: true,
+	}
+	testCases := []plan.TestCase{{Path: "test_sample.py"}}
+	result := NewRunResult([]plan.TestCase{})
+	err := pytest.Run(result, testCases, false)
+	if err != nil {
+		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+}
+
+func TestPytestRun_JUnit_TestFailed(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "pytest",
+			ResultPath:  "result-failed.xml",
+		},
+		useJUnit: true,
+	}
+	testCases := []plan.TestCase{{Path: "failed_test.py"}}
+	result := NewRunResult([]plan.TestCase{})
+	err := pytest.Run(result, testCases, false)
+
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+	}
+
+	failedTest := result.FailedTests()
+	if len(failedTest) != 1 {
+		t.Errorf("len(result.FailedTests()) = %d, want 1", len(failedTest))
+	}
+
+	wantFailedTests := []plan.TestCase{
+		{
+			Format:     "example",
+			Identifier: "tests/failed_test.py::test_failed",
 			Name:       "test_failed",
 			Path:       "tests/failed_test.py::test_failed",
 			Scope:      "tests/failed_test.py",
@@ -331,6 +398,58 @@ func TestPytestGetExamples_TagFilter(t *testing.T) {
 
 	if got[1].Name != "test_happy" {
 		t.Errorf("got[0].Name = %q, want %q", got[0].Name, "test_happy")
+	}
+}
+
+func TestPytestNodeIDFromJUnit(t *testing.T) {
+	tests := []struct {
+		classname string
+		name      string
+		wantScope string
+		wantPath  string
+	}{
+		{
+			classname: "test_sample",
+			name:      "test_happy",
+			wantScope: "test_sample.py",
+			wantPath:  "test_sample.py::test_happy",
+		},
+		{
+			classname: "tests.test_sample",
+			name:      "test_happy",
+			wantScope: "tests/test_sample.py",
+			wantPath:  "tests/test_sample.py::test_happy",
+		},
+		{
+			classname: "tests.failed_test",
+			name:      "test_failed",
+			wantScope: "tests/failed_test.py",
+			wantPath:  "tests/failed_test.py::test_failed",
+		},
+		{
+			classname: "test_auth.TestLogin",
+			name:      "test_success",
+			wantScope: "test_auth.py::TestLogin",
+			wantPath:  "test_auth.py::TestLogin::test_success",
+		},
+		{
+			classname: "tests.test_auth.TestLogin",
+			name:      "test_success",
+			wantScope: "tests/test_auth.py::TestLogin",
+			wantPath:  "tests/test_auth.py::TestLogin::test_success",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.classname+"::"+tt.name, func(t *testing.T) {
+			gotScope, gotPath := pytestNodeIDFromJUnit(tt.classname, tt.name)
+			if gotScope != tt.wantScope {
+				t.Errorf("pytestNodeIDFromJUnit(%q, %q) scope = %q, want %q", tt.classname, tt.name, gotScope, tt.wantScope)
+			}
+			if gotPath != tt.wantPath {
+				t.Errorf("pytestNodeIDFromJUnit(%q, %q) path = %q, want %q", tt.classname, tt.name, gotPath, tt.wantPath)
+			}
+		})
 	}
 }
 

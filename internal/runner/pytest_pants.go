@@ -42,7 +42,7 @@ func NewPytestPants(c RunnerConfig) PytestPants {
 	}
 
 	if c.ResultPath == "" {
-		c.ResultPath = getRandomTempFilename()
+		c.ResultPath = getRandomTempFilename("pytest-results.json")
 	}
 
 	return PytestPants{
