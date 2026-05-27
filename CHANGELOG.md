@@ -1,5 +1,5 @@
 # Changelog
-## Unreleased
+## 2.6.1 - 2026-05-28
 - Extend the OIDC token fallback added in 2.6.0 to cover `bktec tools backfill-commit-metadata`. When `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` is blank, the backfill subcommand now mints a token via `buildkite-agent oidc request-token` instead of failing config validation.
 
 ## 2.6.0 - 2026-05-20
