@@ -1,19 +1,32 @@
 # Using bktec with pytest
-To integrate bktec with pytest, you need to [install and configure Buildkite Test Collector for pytest](https://buildkite.com/docs/test-engine/python-collectors#pytest-collector) first. Then set the `BUILDKITE_TEST_ENGINE_TEST_RUNNER` environment variable to `pytest`.
+Set the `BUILDKITE_TEST_ENGINE_TEST_RUNNER` environment variable to `pytest` to use bktec with pytest.
 
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=pytest
 bktec run
 ```
 
-## Configure test command
-By default, bktec runs pytest with the following command:
+bktec works with pytest in two modes depending on whether [Buildkite Test Collector for pytest](https://buildkite.com/docs/test-engine/python-collectors#pytest-collector) is installed:
 
+- **With `buildkite-test-collector`** (recommended): bktec uses the collector's JSON output for richer test result data and supports `--tag-filters`.
+- **Without `buildkite-test-collector`**: bktec falls back to JUnit XML output. This is sufficient for basic parallelisation and retry, but `--tag-filters` is not available.
+
+bktec logs which mode it is using on startup.
+
+## Configure test command
+By default, bktec runs pytest with one of the following commands depending on which mode is active:
+
+**With `buildkite-test-collector`:**
 ```sh
 pytest {{testExamples}} --json={{resultPath}}
 ```
 
-In this command, `{{testExamples}}` is replaced by bktec with the list of test files or tests to run, and `{{resultPath}}` is replaced with a unique temporary path created by bktec. `--json` option is a custom option added by Buildkite Test Collector to save the result into a JSON file at given path. You can customize this command using the `BUILDKITE_TEST_ENGINE_TEST_CMD` environment variable. 
+**Without `buildkite-test-collector` (JUnit fallback):**
+```sh
+pytest {{testExamples}} --junit-xml={{resultPath}}
+```
+
+In both commands, `{{testExamples}}` is replaced by bktec with the list of test files or tests to run, and `{{resultPath}}` is replaced with a unique temporary path created by bktec. You can customize this command using the `BUILDKITE_TEST_ENGINE_TEST_CMD` environment variable.
 
 To customize the test command, set the following environment variable:
 ```sh
@@ -21,7 +34,7 @@ export BUILDKITE_TEST_ENGINE_TEST_CMD="pytest --cache-clear --json={{resultPath}
 ```
 
 > [!IMPORTANT]
-> Make sure to include `--json={{resultPath}}` in your custom test command, as bktec requires this to read the test results for retries and verification purposes.
+> Make sure to include the appropriate result flag (`--json={{resultPath}}` or `--junit-xml={{resultPath}}`) in your custom test command, as bktec requires this to read the test results for retries and verification purposes.
 
 ## Filter test files
 By default, bktec runs test files that match the `**/{*_test,test_*}.py` pattern. You can customize this pattern using the `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` environment variable. For instance, to configure bktec to only run test files inside the `tests` directory, use:
@@ -47,6 +60,10 @@ export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=tests/api
 > This option accepts the pattern syntax supported by the [zzglob](https://github.com/DrJosh9000/zzglob?tab=readme-ov-file#pattern-syntax) library.
 
 ## Filter test by tags
+
+> [!NOTE]
+> Tag filtering requires `buildkite-test-collector` to be installed. bktec will exit with an error if `--tag-filters` is used without it.
+
 You can filter tests to run based on `execution_tag` markers using the `BUILDKITE_TEST_ENGINE_TAG_FILTERS` environment variable or `--tag-filters` CLI option. 
 
 ```py

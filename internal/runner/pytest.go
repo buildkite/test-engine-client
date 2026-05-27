@@ -158,6 +158,10 @@ func (p Pytest) runParseJUnit(result *RunResult, cmdErr error) error {
 //	classname="tests.test_sample",         name="test_happy"   → scope="tests/test_sample.py",          path="tests/test_sample.py::test_happy"
 //	classname="tests.test_auth.TestLogin", name="test_success" → scope="tests/test_auth.py::TestLogin", path="tests/test_auth.py::TestLogin::test_success"
 func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
+	if classname == "" {
+		return name, name
+	}
+
 	parts := strings.Split(classname, ".")
 
 	// Everything up to the first uppercase component is the module (file) path.

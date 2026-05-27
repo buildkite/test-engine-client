@@ -115,6 +115,25 @@ func TestPytestRun_JUnit_TestPassed(t *testing.T) {
 	if result.Status() != RunStatusPassed {
 		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
+
+	var passedTests []plan.TestCase
+	for _, tr := range result.tests {
+		if tr.Status == TestStatusPassed {
+			passedTests = append(passedTests, tr.TestCase)
+		}
+	}
+	wantPassedTests := []plan.TestCase{
+		{
+			Format:     "example",
+			Identifier: "test_sample.py::test_happy",
+			Name:       "test_happy",
+			Path:       "test_sample.py::test_happy",
+			Scope:      "test_sample.py",
+		},
+	}
+	if diff := cmp.Diff(passedTests, wantPassedTests); diff != "" {
+		t.Errorf("Pytest.Run(%q) passed tests diff (-got +want):\n%s", testCases, diff)
+	}
 }
 
 func TestPytestRun_JUnit_TestFailed(t *testing.T) {
@@ -437,6 +456,12 @@ func TestPytestNodeIDFromJUnit(t *testing.T) {
 			name:      "test_success",
 			wantScope: "tests/test_auth.py::TestLogin",
 			wantPath:  "tests/test_auth.py::TestLogin::test_success",
+		},
+		{
+			classname: "",
+			name:      "test_something",
+			wantScope: "test_something",
+			wantPath:  "test_something",
 		},
 	}
 
