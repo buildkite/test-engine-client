@@ -7,9 +7,8 @@ import (
 	"os"
 )
 
-// NUnitJUnitResult represents a single test case from a JUnit XML report
-// produced by dotnet test --logger junit.
-type NUnitJUnitResult struct {
+// JUnitXMLTestCase represents a single <testcase> element in JUnit XML.
+type JUnitXMLTestCase struct {
 	Classname string           `xml:"classname,attr"`
 	Name      string           `xml:"name,attr"`
 	Result    TestStatus       // passed | failed | skipped
@@ -17,20 +16,30 @@ type NUnitJUnitResult struct {
 	Skipped   *JUnitXMLSkipped `xml:"skipped"`
 }
 
-// nunitJUnitTestSuite represents a <testsuite> element in JUnit XML from dotnet test.
-type nunitJUnitTestSuite struct {
+// JUnitXMLFailure represents the <failure> element in JUnit XML
+type JUnitXMLFailure struct {
+	Message string `xml:"message,attr"`
+	Type    string `xml:"type,attr"`
+	Content string `xml:",chardata"`
+}
+
+// JUnitXMLSkipped represents the <skipped> element in JUnit XML
+type JUnitXMLSkipped struct {
+	Message string `xml:"message,attr"`
+}
+
+type junitXMLTestSuite struct {
 	XMLName   xml.Name           `xml:"testsuite"`
 	Name      string             `xml:"name,attr"`
-	TestCases []NUnitJUnitResult `xml:"testcase"`
+	TestCases []JUnitXMLTestCase `xml:"testcase"`
 }
 
-// nunitJUnitTestSuites represents the root <testsuites> element in JUnit XML from dotnet test.
-type nunitJUnitTestSuites struct {
-	XMLName    xml.Name              `xml:"testsuites"`
-	TestSuites []nunitJUnitTestSuite `xml:"testsuite"`
+type junitXMLTestSuites struct {
+	XMLName    xml.Name            `xml:"testsuites"`
+	TestSuites []junitXMLTestSuite `xml:"testsuite"`
 }
 
-func loadAndParseJUnitXMLResult(path string) ([]NUnitJUnitResult, error) {
+func loadAndParseJUnitXML(path string) ([]JUnitXMLTestCase, error) {
 	xmlFile, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open JUnit XML file %s: %w", path, err)
@@ -42,13 +51,13 @@ func loadAndParseJUnitXMLResult(path string) ([]NUnitJUnitResult, error) {
 		return nil, fmt.Errorf("failed to read JUnit XML file %s: %w", path, err)
 	}
 
-	var testSuites nunitJUnitTestSuites
+	var testSuites junitXMLTestSuites
 	err = xml.Unmarshal(byteValue, &testSuites)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JUnit XML file %s: %w", path, err)
 	}
 
-	var results []NUnitJUnitResult
+	var results []JUnitXMLTestCase
 	for _, suite := range testSuites.TestSuites {
 		for _, tc := range suite.TestCases {
 			testCase := tc
