@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -528,6 +529,81 @@ func TestConfigValidateForBackfill_UploadOnlySkipsDaysAndConcurrency(t *testing.
 	err := c.ValidateForBackfillCommitMetadata()
 	if err != nil {
 		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil (upload mode skips days/concurrency)", err)
+	}
+}
+
+func TestConfigValidateForBackfill_OidcFallback(t *testing.T) {
+	// When AccessToken is unset and OIDC is enabled, the validator should
+	// mint a token via buildkite-agent (mirrors the validate() path used
+	// by run/plan, added in test-engine-client#507).
+	c := createBackfillConfig()
+	c.AccessToken = ""
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
+
+	err := c.ValidateForBackfillCommitMetadata()
+	if err != nil {
+		t.Errorf("ValidateForBackfillCommitMetadata() error = %v, want nil", err)
+	}
+
+	expectedToken := "mocktoken"
+	if c.AccessToken != expectedToken {
+		t.Errorf("c.AccessToken expected %v, got %v", expectedToken, c.AccessToken)
+	}
+}
+
+func TestConfigValidateForBackfill_OidcDisabled(t *testing.T) {
+	// --no-oidc (OIDC=false) disables the fallback. With AccessToken
+	// also blank, validation should surface the blank-token error rather
+	// than attempting to mint.
+	c := createBackfillConfig()
+	c.AccessToken = ""
+	c.OIDC = false
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
+
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--access-token / BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN"
+	if len(invConfigError[key]) != 1 {
+		t.Errorf("ValidateForBackfillCommitMetadata() error for %s length = %d, want 1", key, len(invConfigError[key]))
+	}
+
+	expectedMsg := "must not be blank"
+	if invConfigError[key][0].Error() != expectedMsg {
+		t.Errorf("ValidateForBackfillCommitMetadata() error message = %q, want %q", invConfigError[key][0].Error(), expectedMsg)
+	}
+}
+
+func TestConfigValidateForBackfill_OidcMintError(t *testing.T) {
+	// When buildkite-agent fails (here: the binary doesn't exist), the
+	// mint error should surface as an --access-token validation error,
+	// not as a generic "must not be blank".
+	c := createBackfillConfig()
+	c.AccessToken = ""
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "/nonexistent/buildkite-agent"
+
+	err := c.ValidateForBackfillCommitMetadata()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error = %v, want InvalidConfigError", err)
+	}
+
+	key := "--access-token / BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN"
+	// Expect two errors keyed under --access-token: the mint failure, then
+	// the blank-token check that follows it. The first is the actionable one.
+	if len(invConfigError[key]) < 1 {
+		t.Fatalf("ValidateForBackfillCommitMetadata() error for %s length = %d, want >= 1", key, len(invConfigError[key]))
+	}
+
+	if !strings.Contains(invConfigError[key][0].Error(), "error generating token") {
+		t.Errorf("ValidateForBackfillCommitMetadata() first error = %q, want substring %q", invConfigError[key][0].Error(), "error generating token")
 	}
 }
 
