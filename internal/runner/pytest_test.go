@@ -463,6 +463,20 @@ func TestPytestNodeIDFromJUnit(t *testing.T) {
 			wantScope: "test_something",
 			wantPath:  "test_something",
 		},
+		{
+			// Uppercase package directory: MyTest is a directory, TestSubtract is a class.
+			classname: "tests.MyTest.test_subtract.TestSubtract",
+			name:      "test_positive",
+			wantScope: "tests/MyTest/test_subtract.py::TestSubtract",
+			wantPath:  "tests/MyTest/test_subtract.py::TestSubtract::test_positive",
+		},
+		{
+			// Uppercase package directory with no class: MyTest is a directory.
+			classname: "tests.MyTest.test_add",
+			name:      "test_add",
+			wantScope: "tests/MyTest/test_add.py",
+			wantPath:  "tests/MyTest/test_add.py::test_add",
+		},
 	}
 
 	for _, tt := range tests {

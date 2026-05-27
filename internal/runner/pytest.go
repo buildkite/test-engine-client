@@ -62,6 +62,11 @@ func NewPytest(c RunnerConfig) Pytest {
 	if strings.Contains(c.TestCommand, "--junit-xml") {
 		useJUnit = true
 	} else if strings.Contains(c.TestCommand, "--json=") {
+		if !pluginInstalled {
+			fmt.Fprintln(os.Stderr, "Error: --json requires the 'buildkite-test-collector' package to be installed.")
+			fmt.Fprintln(os.Stderr, "Please install it with: pip install buildkite-test-collector.")
+			os.Exit(1)
+		}
 		useJUnit = false
 	}
 
@@ -171,9 +176,11 @@ func (p Pytest) runParseJUnit(result *RunResult) error {
 //
 // Examples:
 //
-//	classname="test_sample",               name="test_happy"   → scope="test_sample.py",               path="test_sample.py::test_happy"
-//	classname="tests.test_sample",         name="test_happy"   → scope="tests/test_sample.py",          path="tests/test_sample.py::test_happy"
-//	classname="tests.test_auth.TestLogin", name="test_success" → scope="tests/test_auth.py::TestLogin", path="tests/test_auth.py::TestLogin::test_success"
+//	classname="test_sample",                          name="test_happy"   → scope="test_sample.py",                          path="test_sample.py::test_happy"
+//	classname="tests.test_sample",                    name="test_happy"   → scope="tests/test_sample.py",                    path="tests/test_sample.py::test_happy"
+//	classname="tests.test_auth.TestLogin",            name="test_success" → scope="tests/test_auth.py::TestLogin",           path="tests/test_auth.py::TestLogin::test_success"
+//	classname="tests.MyTest.test_subtract.TestClass", name="test_positive"→ scope="tests/MyTest/test_subtract.py::TestClass",path="tests/MyTest/test_subtract.py::TestClass::test_positive"
+//	classname="tests.MyTest.test_add",                name="test_add"     → scope="tests/MyTest/test_add.py",                path="tests/MyTest/test_add.py::test_add"
 func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
 	if classname == "" {
 		return name, name
@@ -181,13 +188,25 @@ func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
 
 	parts := strings.Split(classname, ".")
 
-	// Everything up to the first uppercase component is the module (file) path.
-	// Class names in Python use CamelCase; module/directory names use snake_case.
-	moduleEnd := len(parts)
+	// Identify the module (test file) as the last component that matches pytest's test file
+	// naming convention (test_* or *_test). This correctly handles uppercase package directories
+	// such as tests.MyTest.test_foo.TestClass, where MyTest is a directory, not a class.
+	// If no such component is found (non-standard naming), fall back to stopping at the first
+	// CamelCase component.
+	moduleEnd := -1
 	for i, p := range parts {
-		if len(p) > 0 && p[0] >= 'A' && p[0] <= 'Z' {
-			moduleEnd = i
-			break
+		if strings.HasPrefix(p, "test_") || strings.HasSuffix(p, "_test") {
+			moduleEnd = i + 1
+		}
+	}
+
+	if moduleEnd == -1 {
+		moduleEnd = len(parts)
+		for i, p := range parts {
+			if len(p) > 0 && p[0] >= 'A' && p[0] <= 'Z' {
+				moduleEnd = i
+				break
+			}
 		}
 	}
 
