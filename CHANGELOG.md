@@ -1,4 +1,7 @@
 # Changelog
+## Unreleased
+- Extend the OIDC token fallback added in 2.6.0 to cover `bktec tools backfill-commit-metadata`. When `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` is blank, the backfill subcommand now mints a token via `buildkite-agent oidc request-token` instead of failing config validation.
+
 ## 2.6.0 - 2026-05-20
 - Generate OIDC tokens using `buildkite-agent` when either `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` or `BUILDKITE_ANALYTIC_TOKEN` are not provided.
 - Fix `bktec plan` so it honors `BUILDKITE_PARALLEL_JOB_COUNT` (and the `--parallelism` flag). Previously the value was dropped before being sent to the `filter_tests` API, which caused split-by-example to never identify slow files when planning.
