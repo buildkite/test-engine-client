@@ -168,10 +168,6 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 		}
 	}
 
-	if c.AccessToken == "" {
-		c.errs.appendFieldError("--access-token / BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "must not be blank")
-	}
-
 	if c.OrganizationSlug == "" {
 		c.errs.appendFieldError("--organization-slug / BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
 	}
@@ -180,6 +176,22 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 	// suite-scoped, so even upload-only needs the suite to construct the URL.
 	if c.SuiteSlug == "" {
 		c.errs.appendFieldError("--suite-slug / BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
+	}
+
+	// OIDC fallback, mirrors validate(). Mint needs org and suite slug,
+	// so the slug checks above must run first.
+	if c.AccessToken == "" {
+		token, err := c.generateOIDCToken()
+
+		if err != nil {
+			c.errs.appendFieldError("--access-token / BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "%v", err)
+		} else {
+			c.AccessToken = token
+		}
+	}
+
+	if c.AccessToken == "" {
+		c.errs.appendFieldError("--access-token / BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "must not be blank")
 	}
 
 	// Upload-only mode: skip days/concurrency checks (those govern collection).
