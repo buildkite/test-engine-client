@@ -122,10 +122,45 @@ func TestBuildTestResultsMultipartBody(t *testing.T) {
 		}
 	}
 
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
 	assert.Equal(t, "rspec-json", fields["format"])
 	assert.Equal(t, "buildkite", fields["run_env[CI]"])
 	assert.Equal(t, "build-123", fields["run_env[key]"])
 	assert.Equal(t, "main", fields["run_env[branch]"])
 	assert.Equal(t, "abc123", fields["run_env[commit_sha]"])
 	assert.Equal(t, "my/prefix", fields["run_env[location_prefix]"])
+	assert.Equal(t, cwd, fields["run_env[cwd]"])
+}
+
+func TestBuildTestResultsMultipartBody_NoCwdOutsideBuildkite(t *testing.T) {
+	t.Setenv("BUILDKITE_BUILD_ID", "")
+
+	resultFile, err := os.CreateTemp("", "results-*.json")
+	require.NoError(t, err)
+	defer os.Remove(resultFile.Name())
+	resultFile.Close()
+
+	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "")
+	require.NoError(t, err)
+
+	_, params, err := mime.ParseMediaType(contentType)
+	require.NoError(t, err)
+
+	fields := map[string]string{}
+	mr := multipart.NewReader(buf, params["boundary"])
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		val, _ := io.ReadAll(part)
+		if part.FormName() != "" {
+			fields[part.FormName()] = string(val)
+		}
+	}
+
+	assert.NotContains(t, fields, "run_env[cwd]")
 }
