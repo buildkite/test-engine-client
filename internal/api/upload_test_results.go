@@ -58,10 +58,10 @@ func buildTestResultsMultipartBody(filePath string, format string, locationPrefi
 		return nil, "", fmt.Errorf("writing format field: %w", err)
 	}
 
-	buildId := os.Getenv("BUILDKITE_BUILD_ID")
+	buildID := os.Getenv("BUILDKITE_BUILD_ID")
 	runEnv := map[string]string{
 		"CI":              "buildkite",
-		"key":             buildId,
+		"key":             buildID,
 		"branch":          os.Getenv("BUILDKITE_BRANCH"),
 		"commit_sha":      os.Getenv("BUILDKITE_COMMIT"),
 		"number":          os.Getenv("BUILDKITE_BUILD_NUMBER"),
@@ -70,7 +70,7 @@ func buildTestResultsMultipartBody(filePath string, format string, locationPrefi
 		"message":         os.Getenv("BUILDKITE_MESSAGE"),
 		"location_prefix": locationPrefix,
 	}
-	if buildId != "" {
+	if buildID != "" {
 		cwd, _ := os.Getwd()
 		runEnv["cwd"] = cwd
 	}
