@@ -48,6 +48,10 @@ func (g GoTest) Name() string {
 	return "gotest"
 }
 
+func (g GoTest) ResultFormat() string {
+	return "junit"
+}
+
 func (g GoTest) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in go test")
 }

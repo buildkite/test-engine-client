@@ -233,6 +233,24 @@ var baseURLFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+var uploadBaseURLFlag = &cli.StringFlag{
+	Name:        "upload-base-url",
+	Category:    "TEST ENGINE",
+	Usage:       "Test Engine upload API base URL",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_BASE_URL"),
+	Value:       "https://analytics-api.buildkite.com",
+	Destination: &cfg.UploadBaseURL,
+	Hidden:      true,
+}
+
+var uploadResultsFlag = &cli.BoolFlag{
+	Name:        "upload-results",
+	Category:    "TEST ENGINE",
+	Usage:       "Upload test results to Test Engine after each run",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS"),
+	Destination: &cfg.UploadResults,
+}
+
 // Test Runner specific flags
 var filesFlag = &cli.StringFlag{
 	Name:     "files",
@@ -496,8 +514,10 @@ var buildEnvironmentFlags = []cli.Flag{
 var testEngineFlags = []cli.Flag{
 	accessTokenFlag,
 	uploadTokenFlag,
+	uploadResultsFlag,
 	suiteSlugFlag,
 	baseURLFlag,
+	uploadBaseURLFlag,
 	oidcFlag,
 	oidcLifetimeFlag,
 }

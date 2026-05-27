@@ -52,6 +52,10 @@ func (j Jest) Name() string {
 	return "Jest"
 }
 
+func (j Jest) ResultFormat() string {
+	return "jest-json"
+}
+
 // GetFiles returns an array of file names using the discovery pattern.
 func (j Jest) GetFiles() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", j.TestFilePattern, "exclude pattern:", j.TestFileExcludePattern)

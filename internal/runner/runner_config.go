@@ -23,3 +23,14 @@ func (rc RunnerConfig) LocationPrefix() string {
 func (rc RunnerConfig) UploadToken() string {
 	return rc.uploadToken
 }
+
+// ResultFormat returns an empty string by default.
+// Runners that support raw result uploads should override this.
+func (rc RunnerConfig) ResultFormat() string {
+	return ""
+}
+
+// ResultFilePath returns the path to the runner's raw result file.
+func (rc RunnerConfig) ResultFilePath() string {
+	return rc.ResultPath
+}

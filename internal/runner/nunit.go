@@ -51,6 +51,10 @@ func (n NUnit) Name() string {
 	return "NUnit"
 }
 
+func (n NUnit) ResultFormat() string {
+	return "junit"
+}
+
 // GetFiles returns an array of .cs test file names using the discovery pattern.
 func (n NUnit) GetFiles() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", n.TestFilePattern, "exclude pattern:", n.TestFileExcludePattern)

@@ -60,6 +60,10 @@ func (c Cucumber) Name() string {
 	return "Cucumber"
 }
 
+func (c Cucumber) ResultFormat() string {
+	return "cucumber-json"
+}
+
 // GetFiles returns the list of feature files based on include / exclude pattern.
 func (c Cucumber) GetFiles() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", c.TestFilePattern, "exclude pattern:", c.TestFileExcludePattern)
