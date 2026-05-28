@@ -90,6 +90,13 @@ func NewPytest(c RunnerConfig) Pytest {
 	}
 }
 
+func (p Pytest) ResultFormat() string {
+	if p.useJUnit {
+		return "junit"
+	}
+	return ""
+}
+
 func (p Pytest) SupportedFeatures() SupportedFeatures {
 	return SupportedFeatures{
 		SplitByFile:     true,
