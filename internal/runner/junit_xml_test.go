@@ -23,6 +23,16 @@ const exampleJUnitXML = `<?xml version="1.0" encoding="UTF-8"?>
 	</testsuite>
 </testsuites>`
 
+const exampleJUnitXMLWithError = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" errors="1" time="0.5">
+	<testsuite tests="2" failures="0" errors="1" time="0.5" name="mypackage">
+		<testcase classname="mypackage" name="TestSetupCrash" time="0.000000">
+			<error message="panic in setup" type="RuntimeError">goroutine 1 [running]: panic...</error>
+		</testcase>
+		<testcase classname="mypackage" name="TestOK" time="0.000000"></testcase>
+	</testsuite>
+</testsuites>`
+
 func TestLoadAndParseJUnitXML(t *testing.T) {
 	tmpfile, err := os.CreateTemp("", "junit.*.xml")
 	require.NoError(t, err)
@@ -61,4 +71,32 @@ func TestLoadAndParseJUnitXML(t *testing.T) {
 	assert.Equal(t, TestStatusPassed, results[3].Result)
 	assert.Nil(t, results[3].Failure)
 	assert.Nil(t, results[3].Skipped)
+}
+
+func TestLoadAndParseJUnitXML_Error(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "junit.*.xml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(exampleJUnitXMLWithError)
+	require.NoError(t, err)
+	err = tmpfile.Close()
+	require.NoError(t, err)
+
+	results, err := loadAndParseJUnitXML(tmpfile.Name())
+	require.NoError(t, err)
+
+	require.Len(t, results, 2)
+
+	assert.Equal(t, "TestSetupCrash", results[0].Name)
+	assert.Equal(t, TestStatusFailed, results[0].Result)
+	assert.Nil(t, results[0].Failure)
+	assert.NotNil(t, results[0].Error)
+	assert.Equal(t, "panic in setup", results[0].Error.Message)
+	assert.Equal(t, "RuntimeError", results[0].Error.Type)
+
+	assert.Equal(t, "TestOK", results[1].Name)
+	assert.Equal(t, TestStatusPassed, results[1].Result)
+	assert.Nil(t, results[1].Failure)
+	assert.Nil(t, results[1].Error)
 }
