@@ -13,11 +13,19 @@ type JUnitXMLTestCase struct {
 	Name      string           `xml:"name,attr"`
 	Result    TestStatus       // passed | failed | skipped
 	Failure   *JUnitXMLFailure `xml:"failure"`
+	Error     *JUnitXMLError   `xml:"error"`
 	Skipped   *JUnitXMLSkipped `xml:"skipped"`
 }
 
 // JUnitXMLFailure represents the <failure> element in JUnit XML
 type JUnitXMLFailure struct {
+	Message string `xml:"message,attr"`
+	Type    string `xml:"type,attr"`
+	Content string `xml:",chardata"`
+}
+
+// JUnitXMLError represents the <error> element in JUnit XML
+type JUnitXMLError struct {
 	Message string `xml:"message,attr"`
 	Type    string `xml:"type,attr"`
 	Content string `xml:",chardata"`
@@ -61,7 +69,7 @@ func loadAndParseJUnitXML(path string) ([]JUnitXMLTestCase, error) {
 	for _, suite := range testSuites.TestSuites {
 		for _, tc := range suite.TestCases {
 			testCase := tc
-			if testCase.Failure != nil {
+			if testCase.Failure != nil || testCase.Error != nil {
 				testCase.Result = TestStatusFailed
 			} else if testCase.Skipped != nil {
 				testCase.Result = TestStatusSkipped
