@@ -514,3 +514,17 @@ test_auth.py::test_param[value1]
 		t.Errorf("parsePytestCollectOutput() diff (-got +want):\n%s", diff)
 	}
 }
+
+func TestPytestResultFormat_JUnit(t *testing.T) {
+	pytest := Pytest{useJUnit: true}
+	if got := pytest.ResultFormat(); got != "junit" {
+		t.Errorf("ResultFormat() = %q, want %q", got, "junit")
+	}
+}
+
+func TestPytestResultFormat_JSON(t *testing.T) {
+	pytest := Pytest{useJUnit: false}
+	if got := pytest.ResultFormat(); got != "" {
+		t.Errorf("ResultFormat() = %q, want %q (empty, test collector handles upload)", got, "")
+	}
+}
