@@ -82,9 +82,9 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return cmdErr
 	}
 
-	tests, parseErr := parseTestEngineTestResult(r.ResultPath)
+	tests, parseErr := loadAndParseJUnitXML(r.ResultPath)
 	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read json output: %v\n", parseErr)
+		fmt.Printf("Buildkite Test Engine Client: Failed to read JUnit XML output: %v\n", parseErr)
 		// We don't want to fail the build if we fail to parse the report,
 		// therefore we return the command error (which can be nil), instead of the parse error.
 		return cmdErr
@@ -92,13 +92,10 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 
 	for _, test := range tests {
 		result.RecordTestResult(plan.TestCase{
-			Identifier: test.ID,
-			Format:     plan.TestCaseFormatExample,
-			Scope:      test.Scope,
-			Name:       test.Name,
-			// We don't support retry for custom runner because each runner may have different way to target individual test cases.
-			// Therefore, we just use file name and line number as the test path for now.
-			Path: fmt.Sprintf("%s:%s", test.FileName, test.Location),
+			Format: plan.TestCaseFormatExample,
+			Scope:  test.Classname,
+			Name:   test.Name,
+			Path:   test.Classname,
 		}, test.Result)
 	}
 

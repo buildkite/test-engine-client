@@ -182,7 +182,7 @@ func TestCustom_Run_TestFailedWithResult(t *testing.T) {
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "./test {{testExamples}}",
 		TestFilePattern: "./tests/**/test_*.sh",
-		ResultPath:      "./test-result.json",
+		ResultPath:      "./test-result.xml",
 	})
 
 	if err != nil {
