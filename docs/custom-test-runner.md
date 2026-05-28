@@ -30,13 +30,30 @@ export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=tests/api
 ## Muting test results
 If you have [Test state and quarantine](https://buildkite.com/docs/test-engine/test-suites/test-state-and-quarantine#lifecycle-states-mute-recommended) enabled in your Buildkite Test Suite, you can configure bktec to mute test results. When this is configured, failure from muted tests will not cause the build to fail.
 
-To configure test muting, your test runner must output a json file containing the test results in the Test Engine [test result format](https://buildkite.com/docs/test-engine/test-collection/importing-json#json-test-results-data-reference). Then, set the `BUILDKITE_TEST_ENGINE_RESULT_PATH` environment variable to the path of the json file output by your test runner.
+To configure test muting, your test runner must output a file containing the test results, and you must set the `BUILDKITE_TEST_ENGINE_RESULT_PATH` environment variable to the path of that file.
+
+Two result file formats are supported:
+
+- **Test Engine JSON** (default): a JSON file in the Test Engine [test result format](https://buildkite.com/docs/test-engine/test-collection/importing-json#json-test-results-data-reference). Used when the result path does not end in `.xml`.
+- **JUnit XML**: a standard JUnit XML file. Used when the result path ends in `.xml`.
+
+### Test Engine JSON example
 
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=custom
 export BUILDKITE_TEST_ENGINE_TEST_CMD="bin/test {{testExamples}}"
 export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="tests/**/test_*.js"
 export BUILDKITE_TEST_ENGINE_RESULT_PATH="path/to/test-result.json"
+bktec run
+```
+
+### JUnit XML example
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER=custom
+export BUILDKITE_TEST_ENGINE_TEST_CMD="bin/test {{testExamples}}"
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="tests/**/test_*.js"
+export BUILDKITE_TEST_ENGINE_RESULT_PATH="path/to/test-result.xml"
 bktec run
 ```
 
