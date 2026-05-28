@@ -490,6 +490,9 @@ func backfillCommitMetadataFlags() []cli.Flag {
 		daysFlag,
 		remoteFlag,
 		concurrencyFlag,
+		oidcFlag,
+		oidcLifetimeFlag,
+		buildkiteAgentCommandFlag,
 	}
 }
 
