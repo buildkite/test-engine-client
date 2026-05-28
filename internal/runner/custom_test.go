@@ -177,7 +177,7 @@ func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 }
 
-func TestCustom_Run_TestFailedWithResult(t *testing.T) {
+func TestCustom_Run_TestFailedWithXMLResult(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "./test {{testExamples}}",
@@ -189,7 +189,6 @@ func TestCustom_Run_TestFailedWithResult(t *testing.T) {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}
 
-	// no need to care about actual test files here, just testing result parsing
 	testCases := []plan.TestCase{
 		{Path: "./tests/test_a.sh"},
 		{Path: "./tests/fail_test.sh"},
@@ -200,7 +199,37 @@ func TestCustom_Run_TestFailedWithResult(t *testing.T) {
 	exitError := new(exec.ExitError)
 	assert.ErrorAs(t, err, &exitError)
 
-	// See test-result.json for expected results
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Custom.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
+	}
+
+	if len(result.tests) != 2 {
+		t.Errorf("Custom.Run() len(RunResult.tests) = %d, want %d", len(result.tests), 2)
+	}
+}
+
+func TestCustom_Run_TestFailedWithJSONResult(t *testing.T) {
+	changeCwd(t, "./testdata/custom")
+	custom, err := NewCustom(RunnerConfig{
+		TestCommand:     "./test {{testExamples}}",
+		TestFilePattern: "./tests/**/test_*.sh",
+		ResultPath:      "./test-result.json",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to create Custom runner: %v", err)
+	}
+
+	testCases := []plan.TestCase{
+		{Path: "./tests/test_a.sh"},
+		{Path: "./tests/fail_test.sh"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err = custom.Run(result, testCases, false)
+
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Custom.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
 	}

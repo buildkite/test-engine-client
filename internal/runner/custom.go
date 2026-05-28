@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
@@ -82,25 +84,62 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return cmdErr
 	}
 
-	tests, parseErr := loadAndParseJUnitXML(r.ResultPath)
-	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read JUnit XML output: %v\n", parseErr)
-		// We don't want to fail the build if we fail to parse the report,
-		// therefore we return the command error (which can be nil), instead of the parse error.
-		return cmdErr
-	}
-
-	for _, test := range tests {
-		result.RecordTestResult(plan.TestCase{
-			Format: plan.TestCaseFormatExample,
-			Scope:  test.Classname,
-			Name:   test.Name,
-			Path:   test.Classname,
-		}, test.Result)
+	if strings.HasSuffix(r.ResultPath, ".xml") {
+		tests, parseErr := loadAndParseJUnitXML(r.ResultPath)
+		if parseErr != nil {
+			fmt.Printf("Buildkite Test Engine Client: Failed to read JUnit XML output: %v\n", parseErr)
+			return cmdErr
+		}
+		for _, test := range tests {
+			result.RecordTestResult(plan.TestCase{
+				Format: plan.TestCaseFormatExample,
+				Scope:  test.Classname,
+				Name:   test.Name,
+				Path:   test.Classname,
+			}, test.Result)
+		}
+	} else {
+		tests, parseErr := loadAndParseTestEngineJSON(r.ResultPath)
+		if parseErr != nil {
+			fmt.Printf("Buildkite Test Engine Client: Failed to read test engine JSON output: %v\n", parseErr)
+			return cmdErr
+		}
+		for _, test := range tests {
+			result.RecordTestResult(plan.TestCase{
+				Identifier: test.ID,
+				Format:     plan.TestCaseFormatExample,
+				Scope:      test.Scope,
+				Name:       test.Name,
+				Path:       test.FileName,
+			}, test.Result)
+		}
 	}
 
 	// Return any command error after processing the report
 	return cmdErr
+}
+
+type testEngineJSONTestResult struct {
+	ID            string     `json:"id"`
+	Scope         string     `json:"scope"`
+	Name          string     `json:"name"`
+	FileName      string     `json:"file_name"`
+	Result        TestStatus `json:"result"`
+	FailureReason string     `json:"failure_reason"`
+}
+
+func loadAndParseTestEngineJSON(path string) ([]testEngineJSONTestResult, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open test engine JSON file %s: %w", path, err)
+	}
+
+	var results []testEngineJSONTestResult
+	if err := json.Unmarshal(data, &results); err != nil {
+		return nil, fmt.Errorf("failed to parse test engine JSON file %s: %w", path, err)
+	}
+
+	return results, nil
 }
 
 func (r Custom) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
