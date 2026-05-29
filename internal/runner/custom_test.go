@@ -238,3 +238,25 @@ func TestCustom_Run_TestFailedWithJSONResult(t *testing.T) {
 		t.Errorf("Custom.Run() len(RunResult.tests) = %d, want %d", len(result.tests), 2)
 	}
 }
+
+func TestCustom_ResultFormat(t *testing.T) {
+	cases := []struct {
+		resultPath string
+		want       string
+	}{
+		{"", ""},
+		{"results.json", "json"},
+		{"results.xml", "junit"},
+		{"./path/to/results.xml", "junit"},
+	}
+	for _, tc := range cases {
+		custom, _ := NewCustom(RunnerConfig{
+			TestCommand:     "echo",
+			TestFilePattern: "*.sh",
+			ResultPath:      tc.resultPath,
+		})
+		if got := custom.ResultFormat(); got != tc.want {
+			t.Errorf("ResultFormat(%q) = %q, want %q", tc.resultPath, got, tc.want)
+		}
+	}
+}
