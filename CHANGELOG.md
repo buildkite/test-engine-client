@@ -1,6 +1,10 @@
 # Changelog
-## Unreleased
+## 2.7.0 - 2026-05-29
+- Upload test results to the Test Engine Upload API after each run, replacing the need to install `buildkite-test-collector` alongside `bktec`. Opt-in via `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS`; disabled by default to avoid double-uploading for customers already running the collector.
+- Change the Pytest runner default output to JUnit XML when `buildkite-test-collector` is not installed. When the plugin is present, the existing Test Engine JSON output and `--tag-filters` behaviour are unchanged. Using `--tag-filters` without the plugin now exits with a clear error.
+- Handle `<error>` elements in JUnit XML test reports as failures. Previously, tests that errored during setup/teardown or raised uncaught exceptions were misclassified as passed and were never retried.
 - Extend the OIDC token fallback added in 2.6.0 to cover `bktec tools backfill-commit-metadata`. When `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` is blank, the backfill subcommand now mints a token via `buildkite-agent oidc request-token` instead of failing config validation.
+- Include the working directory (`cwd`) in the `run_env` field of uploaded test results when running inside Buildkite, so the receiving side can resolve absolute file paths emitted by runners like Jest back to repo-relative paths.
 - Custom runner now accepts both Test Engine JSON (default) and JUnit XML result files. Set `BUILDKITE_TEST_ENGINE_RESULT_PATH` to a path ending in `.xml` to use JUnit XML; any other extension uses Test Engine JSON.
 
 ## 2.6.0 - 2026-05-20
