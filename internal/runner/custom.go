@@ -1,10 +1,8 @@
 package runner
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
@@ -99,7 +97,7 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 			}, test.Result)
 		}
 	} else {
-		tests, parseErr := loadAndParseTestEngineJSON(r.ResultPath)
+		tests, parseErr := parseTestEngineTestResult(r.ResultPath)
 		if parseErr != nil {
 			fmt.Printf("Buildkite Test Engine Client: Failed to read test engine JSON output: %v\n", parseErr)
 			return cmdErr
@@ -110,36 +108,13 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 				Format:     plan.TestCaseFormatExample,
 				Scope:      test.Scope,
 				Name:       test.Name,
-				Path:       test.FileName,
+				Path:       fmt.Sprintf("%s:%s", test.FileName, test.Location),
 			}, test.Result)
 		}
 	}
 
 	// Return any command error after processing the report
 	return cmdErr
-}
-
-type testEngineJSONTestResult struct {
-	ID            string     `json:"id"`
-	Scope         string     `json:"scope"`
-	Name          string     `json:"name"`
-	FileName      string     `json:"file_name"`
-	Result        TestStatus `json:"result"`
-	FailureReason string     `json:"failure_reason"`
-}
-
-func loadAndParseTestEngineJSON(path string) ([]testEngineJSONTestResult, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open test engine JSON file %s: %w", path, err)
-	}
-
-	var results []testEngineJSONTestResult
-	if err := json.Unmarshal(data, &results); err != nil {
-		return nil, fmt.Errorf("failed to parse test engine JSON file %s: %w", path, err)
-	}
-
-	return results, nil
 }
 
 func (r Custom) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
