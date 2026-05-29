@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="My test" tests="2" errors="0" failures="1" skipped="0">
+    <testcase classname="My test" name="test a" time="0.726" />
+    <testcase classname="My test" name="failed test" time="0.726">
+      <failure message="Failure/Error: expect(true).to eq false">AssertionError: expected true to equal false</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

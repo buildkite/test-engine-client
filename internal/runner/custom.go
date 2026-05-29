@@ -48,6 +48,16 @@ func (r Custom) Name() string {
 	return "Custom test runner"
 }
 
+func (r Custom) ResultFormat() string {
+	if r.ResultPath == "" {
+		return ""
+	}
+	if strings.HasSuffix(r.ResultPath, ".xml") {
+		return "junit"
+	}
+	return "json"
+}
+
 // GetFiles returns an array of file names using the discovery pattern.
 func (r Custom) GetFiles() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
@@ -82,24 +92,35 @@ func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return cmdErr
 	}
 
-	tests, parseErr := parseTestEngineTestResult(r.ResultPath)
-	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read json output: %v\n", parseErr)
-		// We don't want to fail the build if we fail to parse the report,
-		// therefore we return the command error (which can be nil), instead of the parse error.
-		return cmdErr
-	}
-
-	for _, test := range tests {
-		result.RecordTestResult(plan.TestCase{
-			Identifier: test.ID,
-			Format:     plan.TestCaseFormatExample,
-			Scope:      test.Scope,
-			Name:       test.Name,
-			// We don't support retry for custom runner because each runner may have different way to target individual test cases.
-			// Therefore, we just use file name and line number as the test path for now.
-			Path: fmt.Sprintf("%s:%s", test.FileName, test.Location),
-		}, test.Result)
+	if strings.HasSuffix(r.ResultPath, ".xml") {
+		tests, parseErr := loadAndParseJUnitXML(r.ResultPath)
+		if parseErr != nil {
+			fmt.Printf("Buildkite Test Engine Client: Failed to read JUnit XML output: %v\n", parseErr)
+			return cmdErr
+		}
+		for _, test := range tests {
+			result.RecordTestResult(plan.TestCase{
+				Format: plan.TestCaseFormatExample,
+				Scope:  test.Classname,
+				Name:   test.Name,
+				Path:   test.Classname,
+			}, test.Result)
+		}
+	} else {
+		tests, parseErr := parseTestEngineTestResult(r.ResultPath)
+		if parseErr != nil {
+			fmt.Printf("Buildkite Test Engine Client: Failed to read test engine JSON output: %v\n", parseErr)
+			return cmdErr
+		}
+		for _, test := range tests {
+			result.RecordTestResult(plan.TestCase{
+				Identifier: test.ID,
+				Format:     plan.TestCaseFormatExample,
+				Scope:      test.Scope,
+				Name:       test.Name,
+				Path:       fmt.Sprintf("%s:%s", test.FileName, test.Location),
+			}, test.Result)
+		}
 	}
 
 	// Return any command error after processing the report
