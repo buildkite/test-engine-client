@@ -46,8 +46,11 @@ bktec uses the following Buildkite Pipeline provided environment variables.
 > [!IMPORTANT]
 > Please make sure that the above environment variables are available in your testing environment, particularly if you use Docker or some other type of containerization to run your tests.
 
-### Create API access token
-To use bktec, you need a Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes. You can generate this token from your [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite. After creating the token, set the `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` environment variable with the token value.
+### Authentication
+
+From bktec 2.6.0, bktec automatically requests a [Buildkite Agent OIDC token](https://buildkite.com/docs/agent/cli/reference/oidc) for authentication. You don't need to create or configure an API access token. You will need to [configure an OIDC policy for your Test Engine suite](https://buildkite.com/docs/test-engine/test-collection/oidc) to allow this.
+
+If you're running bktec older than 2.6.0, or if you want to use an API access token instead, you can create a Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes from your [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite, then set:
 
 ```sh
 export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN=token
@@ -208,7 +211,6 @@ steps:
     parallelism: 10
     env:
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
-      BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: your-secret-token
       BUILDKITE_TEST_ENGINE_TEST_RUNNER: rspec
       BUILDKITE_TEST_ENGINE_RESULT_PATH: tmp/result.json
 ```
