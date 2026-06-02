@@ -90,7 +90,7 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 	})
 
 	for {
-		leaseID, leasedEntries, drained, err := queueClient.PopBatch(ctx, queueUUID, cfg.QueueBatchSize, cfg.QueueLeaseSeconds, cfg.JobID)
+		leaseID, leasedEntries, drained, err := queueClient.PopBatch(ctx, queueUUID, cfg.QueueBatchSize, cfg.QueueLeaseSeconds, "")
 		if err != nil {
 			return err
 		}

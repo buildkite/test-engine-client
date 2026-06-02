@@ -181,3 +181,32 @@ func TestClientReturnsQueueError(t *testing.T) {
 		t.Fatalf("PushBatch() error = nil, want error")
 	}
 }
+
+func TestClientPopBatchOmitsEmptyLeaseOwner(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/queues/pop" {
+			http.NotFound(w, r)
+			return
+		}
+
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decoding pop request: %v", err)
+		}
+		if _, ok := request["lease_owner"]; ok {
+			t.Fatalf("pop request included lease_owner: %#v", request)
+		}
+		if request["queue_uuid"] != "queue-uuid" || request["limit"] != float64(1) || request["lease_duration_seconds"] != float64(60) {
+			t.Fatalf("pop request = %#v, want queue UUID, limit, and lease duration", request)
+		}
+
+		_, _ = w.Write([]byte(`{"lease_id":"lease-uuid","entries":[],"drained":true}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "queue-token")
+	_, _, _, err := client.PopBatch(context.Background(), "queue-uuid", 1, 60, "")
+	if err != nil {
+		t.Fatalf("PopBatch() error = %v", err)
+	}
+}

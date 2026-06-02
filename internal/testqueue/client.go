@@ -101,12 +101,16 @@ func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leas
 		Entries []LeasedEntry `json:"entries"`
 		Drained bool          `json:"drained"`
 	}
-	err := c.do(ctx, http.MethodPost, "/v1/queues/pop", map[string]any{
+	request := map[string]any{
 		"queue_uuid":             queueUUID,
 		"limit":                  limit,
 		"lease_duration_seconds": leaseDurationSeconds,
-		"lease_owner":            leaseOwner,
-	}, &response)
+	}
+	if leaseOwner != "" {
+		request["lease_owner"] = leaseOwner
+	}
+
+	err := c.do(ctx, http.MethodPost, "/v1/queues/pop", request, &response)
 	return response.LeaseID, response.Entries, response.Drained, err
 }
 

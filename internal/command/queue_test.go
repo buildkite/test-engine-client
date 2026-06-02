@@ -50,6 +50,14 @@ exit 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/queues/pop":
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decoding pop request: %v", err)
+			}
+			if _, ok := request["lease_owner"]; ok {
+				t.Fatalf("worker pop request included lease_owner: %#v", request)
+			}
+
 			popCount++
 			switch popCount {
 			case 1:
