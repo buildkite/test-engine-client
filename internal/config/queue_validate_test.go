@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func createQueueConfig() Config {
 	c := createConfig()
@@ -47,6 +52,46 @@ func TestValidateForQueuePushOIDC(t *testing.T) {
 	}
 	if c.QueueAccessToken != "mocktoken" {
 		t.Fatalf("QueueAccessToken = %q, want mocktoken", c.QueueAccessToken)
+	}
+}
+
+func TestValidateForQueuePushOIDCUsesQueueAudienceAndKeepsAPIToken(t *testing.T) {
+	agentPath := filepath.Join(t.TempDir(), "buildkite-agent")
+	argsPath := filepath.Join(t.TempDir(), "agent-args")
+	t.Setenv("BKTEC_QUEUE_TEST_AGENT_ARGS", argsPath)
+	if err := os.WriteFile(agentPath, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$BKTEC_QUEUE_TEST_AGENT_ARGS\"\necho queue-token\n"), 0o755); err != nil {
+		t.Fatalf("writing fake buildkite-agent: %v", err)
+	}
+
+	c := createQueueConfig()
+	c.OIDC = true
+	c.AccessToken = "api-token"
+	c.QueueAccessToken = ""
+	c.BuildkiteAgentCommand = agentPath
+
+	if err := c.ValidateForQueuePush(); err != nil {
+		t.Fatalf("ValidateForQueuePush() error = %v", err)
+	}
+	if c.AccessToken != "api-token" {
+		t.Fatalf("AccessToken = %q, want existing API token to remain unchanged", c.AccessToken)
+	}
+	if c.QueueAccessToken != "queue-token" {
+		t.Fatalf("QueueAccessToken = %q, want queue-token", c.QueueAccessToken)
+	}
+
+	argsBytes, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("reading fake buildkite-agent args: %v", err)
+	}
+	args := "\n" + string(argsBytes)
+	expectedAudience := "\nhttp://example.com/v2/analytics/organizations/my_org/suites/my_suite/test_queue\n"
+	if !strings.Contains(args, expectedAudience) {
+		t.Fatalf("OIDC args missing queue audience %q:\n%s", strings.TrimSpace(expectedAudience), argsBytes)
+	}
+	for _, expected := range []string{"\nbuild_id\n", "\norganization_id\n"} {
+		if !strings.Contains(args, expected) {
+			t.Fatalf("OIDC args missing claim %q:\n%s", strings.TrimSpace(expected), argsBytes)
+		}
 	}
 }
 
