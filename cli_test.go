@@ -90,9 +90,16 @@ func TestPreviewQueueEnabled(t *testing.T) {
 	if !hasQueueSubcommand("uuid") {
 		t.Fatalf("queue command missing uuid subcommand")
 	}
+	if !hasQueueSubcommand("env") {
+		t.Fatalf("queue command missing env subcommand")
+	}
 	uuidCommand := queueSubcommand("uuid")
 	if uuidCommand == nil || !hasFlag(uuidCommand.Flags, "queue-name") {
 		t.Fatalf("queue uuid command missing --queue-name")
+	}
+	envCommand := queueSubcommand("env")
+	if envCommand == nil || !hasFlag(envCommand.Flags, "queue-name") {
+		t.Fatalf("queue env command missing --queue-name")
 	}
 }
 
@@ -156,6 +163,46 @@ func TestQueueUUIDSanitizesQueueNameForEnvFile(t *testing.T) {
 	}
 	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY='test-engine-queue-rspec-smoke-test-env'\n") {
 		t.Fatalf("queue uuid output missing sanitized queue metadata key export:\n%s", out)
+	}
+}
+
+func TestQueueEnvPrintsQueueNameDerivedExports(t *testing.T) {
+	cfg = config.New()
+	cfg.QueueName = "rspec/smoke test"
+	t.Cleanup(func() { cfg = config.New() })
+
+	out := captureStdout(t, func() error {
+		return queueEnv(context.Background(), &cli.Command{})
+	})
+
+	if strings.Contains(out, "BUILDKITE_TEST_ENGINE_QUEUE_UUID") {
+		t.Fatalf("queue env output should not mint a queue UUID:\n%s", out)
+	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_NAME='rspec/smoke test'\n") {
+		t.Fatalf("queue env output missing raw queue name export:\n%s", out)
+	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE='test-engine-queue-rspec-smoke-test.env'\n") {
+		t.Fatalf("queue env output missing sanitized queue env file export:\n%s", out)
+	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY='test-engine-queue-rspec-smoke-test-env'\n") {
+		t.Fatalf("queue env output missing sanitized queue metadata key export:\n%s", out)
+	}
+}
+
+func TestQueueEnvDefaultsQueueNameFromStepKey(t *testing.T) {
+	cfg = config.New()
+	cfg.QueueStepKey = "test-step"
+	t.Cleanup(func() { cfg = config.New() })
+
+	out := captureStdout(t, func() error {
+		return queueEnv(context.Background(), &cli.Command{})
+	})
+
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_NAME='test-step'\n") {
+		t.Fatalf("queue env output missing defaulted queue name export:\n%s", out)
+	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY='test-engine-queue-test-step-env'\n") {
+		t.Fatalf("queue env output missing defaulted queue metadata key export:\n%s", out)
 	}
 }
 

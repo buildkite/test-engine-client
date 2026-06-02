@@ -819,6 +819,12 @@ var cliCommand = &cli.Command{
 					Action: queueUUID,
 					Flags:  queueCommandFlags(),
 				},
+				{
+					Name:   "env",
+					Usage:  "Print sourceable Test Engine queue env names for a queue name",
+					Action: queueEnv,
+					Flags:  queueCommandFlags(),
+				},
 			},
 		},
 	},

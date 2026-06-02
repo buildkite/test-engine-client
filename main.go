@@ -92,6 +92,15 @@ func queueMetrics(ctx context.Context, cmd *cli.Command) error {
 	return command.QueueMetrics(ctx, &cfg)
 }
 
+func queueEnv(context.Context, *cli.Command) error {
+	if err := cfg.ValidateForQueueUUID(); err != nil {
+		return fmt.Errorf("invalid configuration...\n%w", err)
+	}
+
+	printQueueNameEnv(cfg.QueueName)
+	return nil
+}
+
 func queueUUID(context.Context, *cli.Command) error {
 	if err := cfg.ValidateForQueueUUID(); err != nil {
 		return fmt.Errorf("invalid configuration...\n%w", err)
@@ -102,10 +111,14 @@ func queueUUID(context.Context, *cli.Command) error {
 		return err
 	}
 	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_UUID=%s\n", shellQuote(queueUUID))
-	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_NAME=%s\n", shellQuote(cfg.QueueName))
-	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE=%s\n", shellQuote(queueEnvFileName(cfg.QueueName)))
-	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY=%s\n", shellQuote(queueMetadataKey(cfg.QueueName)))
+	printQueueNameEnv(cfg.QueueName)
 	return nil
+}
+
+func printQueueNameEnv(queueName string) {
+	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_NAME=%s\n", shellQuote(queueName))
+	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE=%s\n", shellQuote(queueEnvFileName(queueName)))
+	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY=%s\n", shellQuote(queueMetadataKey(queueName)))
 }
 
 func shellQuote(value string) string {
