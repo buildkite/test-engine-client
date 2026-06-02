@@ -112,9 +112,10 @@ steps:
   - label: "Discover RSpec files"
     command: |
       queue_name=rspec
-      bktec queue uuid --queue-name "$queue_name" > test-engine-queue.env
-      source test-engine-queue.env
-      mv test-engine-queue.env "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
+      bktec queue env --queue-name "$queue_name" > test-engine-queue.lookup.env
+      source test-engine-queue.lookup.env
+      bktec queue uuid --queue-name "$queue_name" > "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
+      source "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
       buildkite-agent meta-data set "$BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY" "$(cat "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE")"
       bktec queue push
     env:

@@ -91,9 +91,26 @@ cat >"$TMPDIR/runner.sh" <<'SH'
 set -euo pipefail
 
 test_path="${1:?expected test path}"
-if [ "$test_path" != "smoke.test" ]; then
+case "$test_path" in
+  smoke.test|smoke.test:smoke.test) ;;
+  *)
   echo "unexpected test path: $test_path" >&2
   exit 2
+    ;;
+esac
+
+count=0
+if [ -f "$TEST_QUEUE_SMOKE_RUN_COUNT_PATH" ]; then
+  count="$(cat "$TEST_QUEUE_SMOKE_RUN_COUNT_PATH")"
+fi
+count=$((count + 1))
+printf "%s" "$count" >"$TEST_QUEUE_SMOKE_RUN_COUNT_PATH"
+
+result="passed"
+exit_code=0
+if [ "$count" -eq 1 ]; then
+  result="failed"
+  exit_code=1
 fi
 
 cat >"$BUILDKITE_TEST_ENGINE_RESULT_PATH" <<JSON
@@ -104,10 +121,12 @@ cat >"$BUILDKITE_TEST_ENGINE_RESULT_PATH" <<JSON
     "name": "smoke.test",
     "location": "smoke.test",
     "file_name": "smoke.test",
-    "result": "passed"
+    "result": "$result"
   }
 ]
 JSON
+
+exit "$exit_code"
 SH
 chmod +x "$TMPDIR/runner.sh"
 
@@ -130,10 +149,13 @@ export BUILDKITE_TEST_ENGINE_TEST_RUNNER="custom"
 export BUILDKITE_TEST_ENGINE_TEST_CMD="$TMPDIR/runner.sh {{testExamples}}"
 export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="*.test"
 export BUILDKITE_TEST_ENGINE_RESULT_PATH="$TMPDIR/result.json"
+export BUILDKITE_TEST_ENGINE_RETRY_COUNT=1
 export BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=false
 export BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE=1
 export BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS=30
 export BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS=1
+export BUILDKITE_TEST_ENGINE_QUEUE_RETRY_POSITION=front
+export TEST_QUEUE_SMOKE_RUN_COUNT_PATH="$TMPDIR/run-count"
 
 run_bktec() {
   env -i \
@@ -159,17 +181,23 @@ run_bktec() {
     BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL="$BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL" \
     BUILDKITE_TEST_ENGINE_QUEUE_SUITE_UUID="$BUILDKITE_TEST_ENGINE_QUEUE_SUITE_UUID" \
     BUILDKITE_TEST_ENGINE_QUEUE_UUID="${BUILDKITE_TEST_ENGINE_QUEUE_UUID:-}" \
+    BUILDKITE_TEST_ENGINE_RETRY_COUNT="$BUILDKITE_TEST_ENGINE_RETRY_COUNT" \
     BUILDKITE_TEST_ENGINE_RESULT_PATH="$BUILDKITE_TEST_ENGINE_RESULT_PATH" \
     BUILDKITE_TEST_ENGINE_SUITE_SLUG="$BUILDKITE_TEST_ENGINE_SUITE_SLUG" \
     BUILDKITE_TEST_ENGINE_TEST_CMD="$BUILDKITE_TEST_ENGINE_TEST_CMD" \
     BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="$BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN" \
     BUILDKITE_TEST_ENGINE_TEST_RUNNER="$BUILDKITE_TEST_ENGINE_TEST_RUNNER" \
     BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS="$BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS" \
+    BUILDKITE_TEST_ENGINE_QUEUE_RETRY_POSITION="$BUILDKITE_TEST_ENGINE_QUEUE_RETRY_POSITION" \
+    TEST_QUEUE_SMOKE_RUN_COUNT_PATH="$TEST_QUEUE_SMOKE_RUN_COUNT_PATH" \
     "$TMPDIR/bktec" "$@"
 }
 
-run_bktec queue uuid --queue-name "$QUEUE_NAME" >"$TMPDIR/queue.env"
-source "$TMPDIR/queue.env"
+run_bktec queue env --queue-name "$QUEUE_NAME" >"$TMPDIR/queue.lookup.env"
+source "$TMPDIR/queue.lookup.env"
+QUEUE_ENV_PATH="$TMPDIR/$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
+run_bktec queue uuid --queue-name "$QUEUE_NAME" >"$QUEUE_ENV_PATH"
+source "$QUEUE_ENV_PATH"
 
 echo "--- Pushing queue entries"
 run_bktec queue push --file "$TMPDIR/entries.jsonl"
@@ -195,6 +223,12 @@ fi
 
 if [ ! -f "$TMPDIR/result.json" ]; then
   echo "worker did not write result file" >&2
+  sed -n '1,160p' "$TMPDIR/worker-1.log" >&2
+  sed -n '1,160p' "$TMPDIR/worker-2.log" >&2
+  exit 1
+fi
+if [ "$(cat "$TEST_QUEUE_SMOKE_RUN_COUNT_PATH")" != "2" ]; then
+  echo "runner executed $(cat "$TEST_QUEUE_SMOKE_RUN_COUNT_PATH") times, want 2 for failed original plus retry" >&2
   sed -n '1,160p' "$TMPDIR/worker-1.log" >&2
   sed -n '1,160p' "$TMPDIR/worker-2.log" >&2
   exit 1
