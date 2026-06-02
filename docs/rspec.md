@@ -105,7 +105,7 @@ export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/rspec-result.json
 
 By default, queue commands connect to `http://127.0.0.1:9998`. Set `BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL` when `bkgo test-queue` is running somewhere else.
 
-Generate one queue env file in the discovery step and pass that same file to every worker step. The example uses a filename-safe queue name so the env filename and metadata key can use the queue name directly.
+Generate one queue env file in the discovery step and pass that same file to every worker step. The example uses a filename-safe queue name so the env filename and metadata key can use the queue name directly, then sources the generated file so subsequent commands use the exported queue identity.
 
 ```yaml
 steps:
@@ -115,8 +115,8 @@ steps:
       queue_env_file="test-engine-queue-${queue_name}.env"
       queue_metadata_key="test-engine-queue-${queue_name}-env"
       bktec queue uuid --queue-name "$queue_name" > "$queue_env_file"
-      buildkite-agent meta-data set "$queue_metadata_key" "$(cat "$queue_env_file")"
       source "$queue_env_file"
+      buildkite-agent meta-data set "$queue_metadata_key" "$(cat "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE")"
       bktec queue push
     env:
       BKTEC_PREVIEW_TEST_QUEUE: "true"
@@ -134,6 +134,7 @@ steps:
       queue_metadata_key="test-engine-queue-${queue_name}-env"
       buildkite-agent meta-data get "$queue_metadata_key" > "$queue_env_file"
       source "$queue_env_file"
+      test "$queue_env_file" = "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
       bktec queue worker
     parallelism: 100
     env:
