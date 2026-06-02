@@ -193,8 +193,7 @@ run_bktec() {
     "$TMPDIR/bktec" "$@"
 }
 
-run_bktec queue env --queue-name "$QUEUE_NAME" >"$TMPDIR/queue.lookup.env"
-source "$TMPDIR/queue.lookup.env"
+eval "$(run_bktec queue env --queue-name "$QUEUE_NAME")"
 QUEUE_ENV_PATH="$TMPDIR/$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
 run_bktec queue uuid --queue-name "$QUEUE_NAME" >"$QUEUE_ENV_PATH"
 source "$QUEUE_ENV_PATH"

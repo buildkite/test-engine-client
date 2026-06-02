@@ -105,15 +105,14 @@ export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/rspec-result.json
 
 By default, queue commands connect to `http://127.0.0.1:9998`. Set `BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL` when `bkgo test-queue` is running somewhere else.
 
-Generate one queue env file in the discovery step and pass that same file to every worker step. The example keeps the queue name in the CI file for discovery and worker lookup, then asks bktec for the sourceable env filename and metadata key so names are sanitized consistently.
+Generate one queue env file in the discovery step and pass that same file to every worker step. The example keeps the queue name in the CI file for discovery and worker lookup, then asks bktec for the sourceable env filename and metadata key so the CLI file name is derived from that queue name consistently.
 
 ```yaml
 steps:
   - label: "Discover RSpec files"
     command: |
       queue_name=rspec
-      bktec queue env --queue-name "$queue_name" > test-engine-queue.lookup.env
-      source test-engine-queue.lookup.env
+      eval "$(bktec queue env --queue-name "$queue_name")"
       bktec queue uuid --queue-name "$queue_name" > "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
       source "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
       buildkite-agent meta-data set "$BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY" "$(cat "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE")"
@@ -130,8 +129,7 @@ steps:
   - label: "Run queued RSpec files"
     command: |
       queue_name=rspec
-      bktec queue env --queue-name "$queue_name" > test-engine-queue.lookup.env
-      source test-engine-queue.lookup.env
+      eval "$(bktec queue env --queue-name "$queue_name")"
       buildkite-agent meta-data get "$BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY" > "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
       source "$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
       bktec queue worker
