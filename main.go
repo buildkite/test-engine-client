@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/command"
 	"github.com/buildkite/test-engine-client/v2/internal/config"
@@ -90,12 +91,21 @@ func queueMetrics(ctx context.Context, cmd *cli.Command) error {
 }
 
 func queueUUID(context.Context, *cli.Command) error {
+	if err := cfg.ValidateForQueueUUID(); err != nil {
+		return fmt.Errorf("invalid configuration...\n%w", err)
+	}
+
 	queueUUID, err := testqueue.NewQueueUUID()
 	if err != nil {
 		return err
 	}
-	fmt.Println(queueUUID)
+	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_UUID=%s\n", shellQuote(queueUUID))
+	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_NAME=%s\n", shellQuote(cfg.QueueName))
 	return nil
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {

@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,6 +96,37 @@ func TestPreviewQueueEnabled(t *testing.T) {
 	}
 }
 
+func TestQueueUUIDPrintsQueueCLIFile(t *testing.T) {
+	cfg = config.New()
+	cfg.QueueName = "rspec's"
+	t.Cleanup(func() { cfg = config.New() })
+
+	out := captureStdout(t, func() error {
+		return queueUUID(context.Background(), &cli.Command{})
+	})
+
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_UUID='") {
+		t.Fatalf("queue uuid output missing queue UUID export:\n%s", out)
+	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_NAME='rspec'\\''s'\n") {
+		t.Fatalf("queue uuid output missing shell-quoted queue name export:\n%s", out)
+	}
+}
+
+func TestQueueUUIDDefaultsQueueNameFromStepKey(t *testing.T) {
+	cfg = config.New()
+	cfg.QueueStepKey = "test-step"
+	t.Cleanup(func() { cfg = config.New() })
+
+	out := captureStdout(t, func() error {
+		return queueUUID(context.Background(), &cli.Command{})
+	})
+
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_NAME='test-step'\n") {
+		t.Fatalf("queue uuid output missing defaulted queue name export:\n%s", out)
+	}
+}
+
 func TestPlanCommandIncludesParallelismFlag(t *testing.T) {
 	if !hasFlag(planCommandFlags(), "parallelism") {
 		t.Fatalf("planCommandFlags() missing --parallelism flag; BUILDKITE_PARALLEL_JOB_COUNT will not be bound to cfg.Parallelism for `bktec plan`, breaking split-by-example slow-file detection")
@@ -163,6 +197,34 @@ func hasFlag(flags []cli.Flag, name string) bool {
 		}
 	}
 	return false
+}
+
+func captureStdout(t *testing.T, fn func() error) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	os.Stdout = write
+
+	fnErr := fn()
+	closeErr := write.Close()
+	os.Stdout = oldStdout
+
+	out, readErr := io.ReadAll(read)
+	if readErr != nil {
+		t.Fatalf("io.ReadAll() error = %v", readErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("stdout close error = %v", closeErr)
+	}
+	if fnErr != nil {
+		t.Fatalf("captured function error = %v", fnErr)
+	}
+
+	return string(out)
 }
 
 // TestRunCommandEnvVarsBindToConfig verifies that every env var wired to a run

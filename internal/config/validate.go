@@ -249,13 +249,7 @@ func (c *Config) ValidateForPlan() error {
 
 func (c *Config) validateQueueCommon() error {
 	c.validateQueueTransportAndAuth()
-
-	if c.QueueName == "" {
-		c.QueueName = c.QueueStepKey
-	}
-	if c.QueueName == "" {
-		c.QueueName = "tests"
-	}
+	c.defaultQueueName()
 
 	if c.QueueBatchSize == 0 {
 		c.QueueBatchSize = 100
@@ -339,6 +333,15 @@ func (c *Config) validateQueueCommon() error {
 	return nil
 }
 
+func (c *Config) defaultQueueName() {
+	if c.QueueName == "" {
+		c.QueueName = c.QueueStepKey
+	}
+	if c.QueueName == "" {
+		c.QueueName = "tests"
+	}
+}
+
 func (c *Config) validateQueueTransportAndAuth() {
 	if c.ServerBaseURL == "" {
 		c.ServerBaseURL = "https://api.buildkite.com"
@@ -380,6 +383,13 @@ func (c *Config) ValidateForQueueMetrics() error {
 	if len(c.errs) > 0 {
 		return c.errs
 	}
+
+	return nil
+}
+
+// ValidateForQueueUUID validates config for `bktec queue uuid`.
+func (c *Config) ValidateForQueueUUID() error {
+	c.defaultQueueName()
 
 	return nil
 }
