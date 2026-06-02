@@ -36,6 +36,16 @@ func TestClientPushPopComplete(t *testing.T) {
 			_, _ = w.Write([]byte(`{"queue_uuid":"queue-uuid","inserted":1}`))
 
 		case "/v1/queues/pop":
+			var request struct {
+				QueueUUID  string `json:"queue_uuid"`
+				LeaseOwner string `json:"lease_owner"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decoding pop request: %v", err)
+			}
+			if request.QueueUUID != "queue-uuid" || request.LeaseOwner != "job-uuid" {
+				t.Fatalf("pop request = %#v, want queue UUID and lease owner", request)
+			}
 			_, _ = w.Write([]byte(`{"lease_id":"lease-uuid","entries":[{"uuid":"entry-uuid","test":{"path":"spec/example_spec.rb"},"metadata":{},"attempt":1,"lease_id":"lease-uuid","lease_expires_at":"2026-06-02T00:00:00Z"}],"drained":false}`))
 
 		case "/v1/queues/complete":

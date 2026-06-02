@@ -95,7 +95,7 @@ func (c *Client) PushBatch(ctx context.Context, queue QueueRef, entries []QueueE
 }
 
 // PopBatch leases entries from a queue.
-func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leaseDurationSeconds int, leaseOwnerJobUUID string) (string, []LeasedEntry, bool, error) {
+func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leaseDurationSeconds int, leaseOwner string) (string, []LeasedEntry, bool, error) {
 	var response struct {
 		LeaseID string        `json:"lease_id"`
 		Entries []LeasedEntry `json:"entries"`
@@ -105,7 +105,7 @@ func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leas
 		"queue_uuid":             queueUUID,
 		"limit":                  limit,
 		"lease_duration_seconds": leaseDurationSeconds,
-		"lease_owner_job_uuid":   leaseOwnerJobUUID,
+		"lease_owner":            leaseOwner,
 	}, &response)
 	return response.LeaseID, response.Entries, response.Drained, err
 }
