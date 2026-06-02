@@ -41,6 +41,24 @@ func TestClientPushPopComplete(t *testing.T) {
 		case "/v1/queues/complete":
 			_, _ = w.Write([]byte(`{"deleted":1}`))
 
+		case "/v1/queues/complete_and_push":
+			var request struct {
+				QueueUUID  string       `json:"queue_uuid"`
+				LeaseID    string       `json:"lease_id"`
+				EntryUUIDs []string     `json:"entry_uuids"`
+				Entries    []QueueEntry `json:"entries"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decoding complete_and_push request: %v", err)
+			}
+			if request.QueueUUID != "queue-uuid" || request.LeaseID != "lease-uuid" || len(request.EntryUUIDs) != 1 {
+				t.Fatalf("complete_and_push request = %#v, want queue/lease/entry UUIDs", request)
+			}
+			if len(request.Entries) != 1 || request.Entries[0].UUID != "retry-entry-uuid" {
+				t.Fatalf("complete_and_push entries = %#v, want retry entry", request.Entries)
+			}
+			_, _ = w.Write([]byte(`{"deleted":1,"inserted":1}`))
+
 		case "/v1/queues/requeue":
 			_, _ = w.Write([]byte(`{"requeued":1}`))
 
@@ -100,6 +118,16 @@ func TestClientPushPopComplete(t *testing.T) {
 	}
 	if deleted != 1 {
 		t.Fatalf("CompleteLease() = %d, want 1", deleted)
+	}
+	deleted, retryInserted, err := client.CompleteLeaseAndPush(context.Background(), queueUUID, leaseID, []string{entries[0].UUID}, []QueueEntry{{
+		UUID: "retry-entry-uuid",
+		Test: plan.TestCase{Path: "spec/example_spec.rb"},
+	}})
+	if err != nil {
+		t.Fatalf("CompleteLeaseAndPush() error = %v", err)
+	}
+	if deleted != 1 || retryInserted != 1 {
+		t.Fatalf("CompleteLeaseAndPush() = %d, %d; want 1, 1", deleted, retryInserted)
 	}
 	requeued, err := client.RequeueLease(context.Background(), queueUUID, leaseID)
 	if err != nil {

@@ -123,6 +123,21 @@ func (c *Client) CompleteLease(ctx context.Context, queueUUID string, leaseID st
 	return response.Deleted, err
 }
 
+// CompleteLeaseAndPush atomically completes leased entries and enqueues follow-up entries.
+func (c *Client) CompleteLeaseAndPush(ctx context.Context, queueUUID string, leaseID string, entryUUIDs []string, entries []QueueEntry) (int, int, error) {
+	var response struct {
+		Deleted  int `json:"deleted"`
+		Inserted int `json:"inserted"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/queues/complete_and_push", map[string]any{
+		"queue_uuid":  queueUUID,
+		"lease_id":    leaseID,
+		"entry_uuids": entryUUIDs,
+		"entries":     entries,
+	}, &response)
+	return response.Deleted, response.Inserted, err
+}
+
 // RequeueLease returns leased entries to the queue.
 func (c *Client) RequeueLease(ctx context.Context, queueUUID string, leaseID string) (int, error) {
 	var response struct {

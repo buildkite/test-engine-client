@@ -817,6 +817,7 @@ var cliCommand = &cli.Command{
 					Name:   "uuid",
 					Usage:  "Generate a shared UUIDv7 for a Test Engine queue",
 					Action: queueUUID,
+					Flags:  queueCommandFlags(),
 				},
 			},
 		},

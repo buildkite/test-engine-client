@@ -78,11 +78,18 @@ func TestPreviewQueueEnabled(t *testing.T) {
 	if !hasFlag(queueCommandFlags(), "queue-uuid") {
 		t.Fatalf("queueCommandFlags() missing --queue-uuid")
 	}
+	if !hasFlag(queueCommandFlags(), "queue-name") {
+		t.Fatalf("queueCommandFlags() missing --queue-name")
+	}
 	if !hasFlag(queueCommandFlags(), "queue-retry-position") {
 		t.Fatalf("queueCommandFlags() missing --queue-retry-position")
 	}
 	if !hasQueueSubcommand("uuid") {
 		t.Fatalf("queue command missing uuid subcommand")
+	}
+	uuidCommand := queueSubcommand("uuid")
+	if uuidCommand == nil || !hasFlag(uuidCommand.Flags, "queue-name") {
+		t.Fatalf("queue uuid command missing --queue-name")
 	}
 }
 
@@ -130,17 +137,21 @@ func hasSelectionFlag(flags []cli.Flag) bool {
 }
 
 func hasQueueSubcommand(name string) bool {
+	return queueSubcommand(name) != nil
+}
+
+func queueSubcommand(name string) *cli.Command {
 	for _, command := range cliCommand.Commands {
 		if command.Name != "queue" {
 			continue
 		}
 		for _, subcommand := range command.Commands {
 			if subcommand.Name == name {
-				return true
+				return subcommand
 			}
 		}
 	}
-	return false
+	return nil
 }
 
 func hasFlag(flags []cli.Flag, name string) bool {

@@ -127,17 +127,20 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 
 		if exitError := new(exec.ExitError); errors.As(runErr, &exitError) {
 			if exitError.ExitCode() == 1 {
-				if err := completeQueueLease(ctx, queueClient, queueUUID, leaseID, entryUUIDs); err != nil {
-					return err
-				}
 				if runResult.OnlyMutedFailures() {
-					continue
-				}
-				if retryEntries := queueRetryEntries(cfg, runResult.FailedTests(), leasedEntries); len(retryEntries) > 0 {
-					if err := pushQueueRetryEntries(ctx, queueClient, cfg, retryEntries); err != nil {
+					if err := completeQueueLease(ctx, queueClient, queueUUID, leaseID, entryUUIDs); err != nil {
 						return err
 					}
 					continue
+				}
+				if retryEntries := queueRetryEntries(cfg, runResult.FailedTests(), leasedEntries); len(retryEntries) > 0 {
+					if err := completeAndPushQueueRetryEntries(ctx, queueClient, cfg, queueUUID, leaseID, entryUUIDs, retryEntries); err != nil {
+						return err
+					}
+					continue
+				}
+				if err := completeQueueLease(ctx, queueClient, queueUUID, leaseID, entryUUIDs); err != nil {
+					return err
 				}
 			}
 			return fmt.Errorf("%s exited with error: %w", testRunner.Name(), runErr)
@@ -166,17 +169,19 @@ func queueInlineRetryCount(cfg *config.Config) int {
 	return 0
 }
 
-func pushQueueRetryEntries(ctx context.Context, queueClient *testqueue.Client, cfg *config.Config, entries []testqueue.QueueEntry) error {
-	queue := queueRef(cfg)
-	queueUUID, inserted, err := queueClient.PushBatch(ctx, queue, entries)
+func completeAndPushQueueRetryEntries(ctx context.Context, queueClient *testqueue.Client, cfg *config.Config, queueUUID string, leaseID string, entryUUIDs []string, entries []testqueue.QueueEntry) error {
+	deleted, inserted, err := queueClient.CompleteLeaseAndPush(ctx, queueUUID, leaseID, entryUUIDs, entries)
 	if err != nil {
 		return err
 	}
 	if queueUUID != cfg.QueueUUID {
-		return fmt.Errorf("queue retry push returned %s, expected %s", queueUUID, cfg.QueueUUID)
+		return fmt.Errorf("queue retry completion used %s, expected %s", queueUUID, cfg.QueueUUID)
+	}
+	if deleted != len(entryUUIDs) {
+		return fmt.Errorf("queue retry completion deleted %d entries, expected %d", deleted, len(entryUUIDs))
 	}
 
-	fmt.Printf("+++ Buildkite Test Engine Queue: pushed %d retry entries (%d inserted) to %s\n", len(entries), inserted, queueUUID)
+	fmt.Printf("+++ Buildkite Test Engine Queue: completed %d entries and pushed %d retry entries (%d inserted) to %s\n", deleted, len(entries), inserted, queueUUID)
 	return nil
 }
 
