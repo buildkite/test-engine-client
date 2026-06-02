@@ -111,6 +111,9 @@ func TestQueueUUIDPrintsQueueCLIFile(t *testing.T) {
 	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_NAME='rspec'\\''s'\n") {
 		t.Fatalf("queue uuid output missing shell-quoted queue name export:\n%s", out)
 	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE='test-engine-queue-rspec-s.env'\n") {
+		t.Fatalf("queue uuid output missing queue-name-derived env file export:\n%s", out)
+	}
 }
 
 func TestQueueUUIDDefaultsQueueNameFromStepKey(t *testing.T) {
@@ -124,6 +127,26 @@ func TestQueueUUIDDefaultsQueueNameFromStepKey(t *testing.T) {
 
 	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_NAME='test-step'\n") {
 		t.Fatalf("queue uuid output missing defaulted queue name export:\n%s", out)
+	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE='test-engine-queue-test-step.env'\n") {
+		t.Fatalf("queue uuid output missing defaulted queue env file export:\n%s", out)
+	}
+}
+
+func TestQueueUUIDSanitizesQueueNameForEnvFile(t *testing.T) {
+	cfg = config.New()
+	cfg.QueueName = "rspec/smoke test"
+	t.Cleanup(func() { cfg = config.New() })
+
+	out := captureStdout(t, func() error {
+		return queueUUID(context.Background(), &cli.Command{})
+	})
+
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_NAME='rspec/smoke test'\n") {
+		t.Fatalf("queue uuid output missing raw queue name export:\n%s", out)
+	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE='test-engine-queue-rspec-smoke-test.env'\n") {
+		t.Fatalf("queue uuid output missing sanitized queue env file export:\n%s", out)
 	}
 }
 

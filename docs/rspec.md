@@ -105,15 +105,18 @@ export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/rspec-result.json
 
 By default, queue commands connect to `http://127.0.0.1:9998`. Set `BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL` when `bkgo test-queue` is running somewhere else.
 
-Generate one queue env file in the discovery step and pass that same file to every worker step:
+Generate one queue env file in the discovery step and pass that same file to every worker step. The example uses a filename-safe queue name so the env filename and metadata key can use the queue name directly.
 
 ```yaml
 steps:
   - label: "Discover RSpec files"
     command: |
-      bktec queue uuid --queue-name rspec > test-engine-queue-rspec.env
-      buildkite-agent meta-data set test-engine-queue-rspec-env "$(cat test-engine-queue-rspec.env)"
-      source test-engine-queue-rspec.env
+      queue_name=rspec
+      queue_env_file="test-engine-queue-${queue_name}.env"
+      queue_metadata_key="test-engine-queue-${queue_name}-env"
+      bktec queue uuid --queue-name "$queue_name" > "$queue_env_file"
+      buildkite-agent meta-data set "$queue_metadata_key" "$(cat "$queue_env_file")"
+      source "$queue_env_file"
       bktec queue push
     env:
       BKTEC_PREVIEW_TEST_QUEUE: "true"
@@ -126,8 +129,11 @@ steps:
 
   - label: "Run queued RSpec files"
     command: |
-      buildkite-agent meta-data get test-engine-queue-rspec-env > test-engine-queue-rspec.env
-      source test-engine-queue-rspec.env
+      queue_name=rspec
+      queue_env_file="test-engine-queue-${queue_name}.env"
+      queue_metadata_key="test-engine-queue-${queue_name}-env"
+      buildkite-agent meta-data get "$queue_metadata_key" > "$queue_env_file"
+      source "$queue_env_file"
       bktec queue worker
     parallelism: 100
     env:
@@ -138,7 +144,7 @@ steps:
       BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL: "http://127.0.0.1:9998"
 ```
 
-`bktec queue uuid` writes both `BUILDKITE_TEST_ENGINE_QUEUE_UUID` and `BUILDKITE_TEST_ENGINE_QUEUE_NAME`. Keep those values together and include the queue name in the env filename; the UUID is the shared queue identity, and the name is used for display and deterministic entry IDs.
+`bktec queue uuid` writes `BUILDKITE_TEST_ENGINE_QUEUE_UUID`, `BUILDKITE_TEST_ENGINE_QUEUE_NAME`, and `BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE`. Keep those values together and include a filename-safe queue name in the env filename and metadata key; the UUID is the shared queue identity, and the name is used for display, deterministic entry IDs, and human-readable file names.
 
 In the current preview, `bktec queue push` uses raw local file discovery. It does not call the Test Engine test-plan API and does not add Test Engine timing-based planning metadata, muted-test, skipped-test, or split-by-example enrichment. To populate custom entries, pass a JSON Lines file:
 
