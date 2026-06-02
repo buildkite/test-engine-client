@@ -220,7 +220,15 @@ func queueEntryForTestCase(cfg *config.Config, testCase plan.TestCase) testqueue
 
 func deterministicEntryUUID(cfg *config.Config, testCase plan.TestCase) string {
 	encodedTest, _ := json.Marshal(testCase)
-	hash := sha256.Sum256([]byte(cfg.QueueOrganizationUUID + "\x00" + cfg.QueueSuiteUUID + "\x00" + cfg.BuildID + "\x00" + cfg.QueueName + "\x00" + string(encodedTest)))
+	organizationID := cfg.QueueOrganizationUUID
+	if organizationID == "" {
+		organizationID = cfg.OrganizationSlug
+	}
+	suiteID := cfg.QueueSuiteUUID
+	if suiteID == "" {
+		suiteID = cfg.SuiteSlug
+	}
+	hash := sha256.Sum256([]byte(organizationID + "\x00" + suiteID + "\x00" + cfg.BuildID + "\x00" + cfg.QueueName + "\x00" + string(encodedTest)))
 	bytes := hash[:16]
 	bytes[6] = (bytes[6] & 0x0f) | 0x50
 	bytes[8] = (bytes[8] & 0x3f) | 0x80
@@ -231,7 +239,9 @@ func deterministicEntryUUID(cfg *config.Config, testCase plan.TestCase) string {
 func queueRef(cfg *config.Config) testqueue.QueueRef {
 	return testqueue.QueueRef{
 		OrganizationUUID: cfg.QueueOrganizationUUID,
+		OrganizationSlug: cfg.OrganizationSlug,
 		SuiteUUID:        cfg.QueueSuiteUUID,
+		SuiteSlug:        cfg.SuiteSlug,
 		BuildUUID:        cfg.BuildID,
 		PipelineSlug:     cfg.QueuePipelineSlug,
 		StepKey:          cfg.QueueStepKey,

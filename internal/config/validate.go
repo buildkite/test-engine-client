@@ -291,10 +291,10 @@ func (c *Config) validateQueueCommon() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS", "was %d, must be greater than or equal to 0", c.QueuePollSeconds)
 	}
 
-	if c.QueueOrganizationUUID == "" {
+	if c.QueueOrganizationUUID == "" && !queueOIDCIdentityAvailable(c) {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_ORGANIZATION_UUID", "must not be blank")
 	}
-	if c.QueueSuiteUUID == "" {
+	if c.QueueSuiteUUID == "" && !queueOIDCIdentityAvailable(c) {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_SUITE_UUID", "must not be blank")
 	}
 	if c.BuildID == "" {
@@ -359,6 +359,10 @@ func (c *Config) ValidateForQueueWorker() error {
 	return c.validateQueueCommon()
 }
 
+func queueOIDCIdentityAvailable(c *Config) bool {
+	return c.OIDC
+}
+
 func (c *Config) generateOIDCToken() (token string, err error) {
 	if !c.OIDC {
 		return "", nil
@@ -374,7 +378,7 @@ func (c *Config) generateOIDCTokenForAudience(audience string, includeBuildIDCla
 	lifetime := strconv.Itoa(int(c.OIDCLifetime.Seconds()))
 	args := []string{"oidc", "request-token", "--audience", audience, "--lifetime", lifetime}
 	if includeBuildIDClaim {
-		args = append(args, "--claim", "build_id")
+		args = append(args, "--claim", "build_id", "--claim", "organization_id")
 	}
 	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
 	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.

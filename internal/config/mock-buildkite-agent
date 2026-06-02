@@ -10,4 +10,16 @@ if [ "$2" != "request-token" ] ; then
   exit 1
 fi
 
+if [[ "$*" == *test_queue* ]] ; then
+  if [[ "$*" != *"--claim build_id"* ]] ; then
+    echo "mock-buildkite-agent did not get build_id claim request" >&2
+    exit 1
+  fi
+
+  if [[ "$*" != *"--claim organization_id"* ]] ; then
+    echo "mock-buildkite-agent did not get organization_id claim request" >&2
+    exit 1
+  fi
+fi
+
 echo "mocktoken"

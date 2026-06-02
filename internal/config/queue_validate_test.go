@@ -45,3 +45,28 @@ func TestValidateForQueuePushOIDC(t *testing.T) {
 		t.Fatalf("QueueAccessToken = %q, want mocktoken", c.QueueAccessToken)
 	}
 }
+
+func TestValidateForQueuePushOIDCDoesNotRequireExplicitUUIDs(t *testing.T) {
+	c := createQueueConfig()
+	c.OIDC = true
+	c.QueueAccessToken = ""
+	c.QueueOrganizationUUID = ""
+	c.QueueSuiteUUID = ""
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent"
+
+	if err := c.ValidateForQueuePush(); err != nil {
+		t.Fatalf("ValidateForQueuePush() error = %v", err)
+	}
+}
+
+func TestValidateForQueuePushExplicitTokenStillRequiresUUIDsWithoutOIDCMode(t *testing.T) {
+	c := createQueueConfig()
+	c.OIDC = false
+	c.QueueAccessToken = "token"
+	c.QueueOrganizationUUID = ""
+	c.QueueSuiteUUID = ""
+
+	if err := c.ValidateForQueuePush(); err == nil {
+		t.Fatalf("ValidateForQueuePush() error = nil, want UUID validation error")
+	}
+}
