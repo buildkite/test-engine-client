@@ -92,3 +92,64 @@ To enable split by example, set the following environment variable:
 ```sh
 export BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true
 ```
+
+## Preview: Test Engine queue
+
+`bktec queue` is an experimental Test Engine queue workflow for builds where one job discovers RSpec files and many workers lease work until the queue is drained. Enable it with:
+
+```sh
+export BKTEC_PREVIEW_TEST_QUEUE=true
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER=rspec
+export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/rspec-result.json
+```
+
+By default, queue commands connect to `http://127.0.0.1:9998`. Set `BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL` when `bkgo test-queue` is running somewhere else.
+
+Generate one queue env file in the discovery step and pass that same file to every worker step:
+
+```yaml
+steps:
+  - label: "Discover RSpec files"
+    command: |
+      bktec queue uuid --queue-name rspec > test-engine-queue.env
+      buildkite-agent meta-data set test-engine-queue-env "$(cat test-engine-queue.env)"
+      source test-engine-queue.env
+      bktec queue push
+    env:
+      BKTEC_PREVIEW_TEST_QUEUE: "true"
+      BUILDKITE_TEST_ENGINE_SUITE_SLUG: "my-suite"
+      BUILDKITE_TEST_ENGINE_TEST_RUNNER: "rspec"
+      BUILDKITE_TEST_ENGINE_RESULT_PATH: "tmp/rspec-result.json"
+      BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL: "http://127.0.0.1:9998"
+
+  - wait
+
+  - label: "Run queued RSpec files"
+    command: |
+      buildkite-agent meta-data get test-engine-queue-env > test-engine-queue.env
+      source test-engine-queue.env
+      bktec queue worker
+    parallelism: 100
+    env:
+      BKTEC_PREVIEW_TEST_QUEUE: "true"
+      BUILDKITE_TEST_ENGINE_SUITE_SLUG: "my-suite"
+      BUILDKITE_TEST_ENGINE_TEST_RUNNER: "rspec"
+      BUILDKITE_TEST_ENGINE_RESULT_PATH: "tmp/rspec-result.json"
+      BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL: "http://127.0.0.1:9998"
+```
+
+`bktec queue uuid` writes both `BUILDKITE_TEST_ENGINE_QUEUE_UUID` and `BUILDKITE_TEST_ENGINE_QUEUE_NAME`. Keep those values together; the UUID is the shared queue identity, and the name is used for display and deterministic entry IDs.
+
+In the current preview, `bktec queue push` uses raw local file discovery. It does not call the Test Engine test-plan API and does not add Test Engine timing-based planning metadata, muted-test, skipped-test, or split-by-example enrichment. To populate custom entries, pass a JSON Lines file:
+
+```sh
+bktec queue push --file queue-entries.jsonl
+```
+
+Each line should be a queue entry. If `uuid` is omitted, bktec generates a deterministic UUID from the queue identity and test payload:
+
+```json
+{"test":{"format":"file","path":"spec/models/user_spec.rb"},"metadata":{}}
+```
+
+Workers lease batches with `BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE`, heartbeat leases while RSpec runs, complete successful or normally failing test executions, and can enqueue retry entries atomically when `BUILDKITE_TEST_ENGINE_RETRY_COUNT` is set. `BUILDKITE_TEST_ENGINE_QUEUE_RETRY_POSITION` controls where retry entries are placed: `front`, `back`, or `inline`.
