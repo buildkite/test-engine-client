@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/buildkite/test-engine-client/v2/internal/api"
@@ -19,6 +20,8 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/runner"
 	"github.com/buildkite/test-engine-client/v2/internal/testqueue"
 )
+
+const queueRetryCountMetadataKey = "queue_retry_count"
 
 // QueuePush discovers or reads tests and pushes them into the Test Engine queue.
 func QueuePush(ctx context.Context, cfg *config.Config, testFileList string, queueEntryFile string) error {
@@ -112,7 +115,8 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 
 		var timeline []api.Timeline
 		stopHeartbeat := startQueueLeaseHeartbeat(ctx, queueClient, queueUUID, leaseID, cfg.QueueLeaseSeconds)
-		runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &tests, cfg.MaxRetries, nil, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
+		maxInlineRetries := queueInlineRetryCount(cfg)
+		runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &tests, maxInlineRetries, nil, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
 		_ = stopHeartbeat()
 
 		if processSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &processSignaledError) {
@@ -127,6 +131,12 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 					return err
 				}
 				if runResult.OnlyMutedFailures() {
+					continue
+				}
+				if retryEntries := queueRetryEntries(cfg, runResult.FailedTests(), leasedEntries); len(retryEntries) > 0 {
+					if err := pushQueueRetryEntries(ctx, queueClient, cfg, retryEntries); err != nil {
+						return err
+					}
 					continue
 				}
 			}
@@ -147,6 +157,114 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 	}
+}
+
+func queueInlineRetryCount(cfg *config.Config) int {
+	if cfg.QueueRetryPosition == "inline" {
+		return cfg.MaxRetries
+	}
+	return 0
+}
+
+func pushQueueRetryEntries(ctx context.Context, queueClient *testqueue.Client, cfg *config.Config, entries []testqueue.QueueEntry) error {
+	queue := queueRef(cfg)
+	queueUUID, inserted, err := queueClient.PushBatch(ctx, queue, entries)
+	if err != nil {
+		return err
+	}
+	if queueUUID != cfg.QueueUUID {
+		return fmt.Errorf("queue retry push returned %s, expected %s", queueUUID, cfg.QueueUUID)
+	}
+
+	fmt.Printf("+++ Buildkite Test Engine Queue: pushed %d retry entries (%d inserted) to %s\n", len(entries), inserted, queueUUID)
+	return nil
+}
+
+func queueRetryEntries(cfg *config.Config, failedTests []plan.TestCase, leasedEntries []testqueue.LeasedEntry) []testqueue.QueueEntry {
+	if cfg.MaxRetries <= 0 || cfg.QueueRetryPosition == "inline" || len(failedTests) == 0 {
+		return nil
+	}
+
+	entries := make([]testqueue.QueueEntry, 0, len(failedTests))
+	for _, testCase := range failedTests {
+		matches := matchingQueueLeasedEntries(testCase, leasedEntries)
+		if len(matches) == 0 {
+			entries = appendQueueRetryEntry(entries, cfg, testCase, 0, "")
+			continue
+		}
+		for _, entry := range matches {
+			entries = appendQueueRetryEntry(entries, cfg, testCase, queueRetryCount(entry.Metadata), entry.UUID)
+		}
+	}
+
+	return entries
+}
+
+func appendQueueRetryEntry(entries []testqueue.QueueEntry, cfg *config.Config, testCase plan.TestCase, previousRetryCount int, sourceEntryUUID string) []testqueue.QueueEntry {
+	retryCount := previousRetryCount + 1
+	if retryCount > cfg.MaxRetries {
+		return entries
+	}
+	return append(entries, testqueue.QueueEntry{
+		UUID:          queueRetryEntryUUID(cfg, testCase, retryCount, sourceEntryUUID),
+		Test:          testCase,
+		Metadata:      map[string]any{queueRetryCountMetadataKey: retryCount},
+		IsRetry:       true,
+		QueuePriority: queueRetryPriority(cfg.QueueRetryPosition),
+	})
+}
+
+func matchingQueueLeasedEntries(testCase plan.TestCase, leasedEntries []testqueue.LeasedEntry) []testqueue.LeasedEntry {
+	matches := []testqueue.LeasedEntry{}
+	for _, entry := range leasedEntries {
+		if queueTestMatches(testCase, entry.Test) {
+			matches = append(matches, entry)
+		}
+	}
+	return matches
+}
+
+func queueTestMatches(failed plan.TestCase, leased plan.TestCase) bool {
+	failedPath := normalizeQueueTestPath(failed.Path)
+	leasedPath := normalizeQueueTestPath(leased.Path)
+	if failedPath == leasedPath {
+		return true
+	}
+	return leasedPath != "" && (strings.HasPrefix(failedPath, leasedPath+"[") ||
+		strings.HasPrefix(failedPath, leasedPath+"::") ||
+		strings.HasPrefix(failedPath, leasedPath+":"))
+}
+
+func normalizeQueueTestPath(path string) string {
+	return strings.TrimPrefix(path, "./")
+}
+
+func queueRetryCount(metadata map[string]any) int {
+	switch value := metadata[queueRetryCountMetadataKey].(type) {
+	case int:
+		return value
+	case int32:
+		return int(value)
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	case json.Number:
+		parsed, err := value.Int64()
+		if err != nil {
+			return 0
+		}
+		return int(parsed)
+	default:
+		return 0
+	}
+}
+
+func queueRetryPriority(position string) int {
+	if position == "back" {
+		return -1
+	}
+	return 1
 }
 
 // QueueMetrics prints the current queue metrics as JSON.
@@ -318,6 +436,24 @@ func deterministicEntryUUID(cfg *config.Config, testCase plan.TestCase) string {
 		suiteID = cfg.SuiteSlug
 	}
 	hash := sha256.Sum256([]byte(organizationID + "\x00" + suiteID + "\x00" + cfg.BuildID + "\x00" + cfg.QueueName + "\x00" + string(encodedTest)))
+	bytes := hash[:16]
+	bytes[6] = (bytes[6] & 0x0f) | 0x50
+	bytes[8] = (bytes[8] & 0x3f) | 0x80
+	hexed := hex.EncodeToString(bytes)
+	return hexed[0:8] + "-" + hexed[8:12] + "-" + hexed[12:16] + "-" + hexed[16:20] + "-" + hexed[20:32]
+}
+
+func queueRetryEntryUUID(cfg *config.Config, testCase plan.TestCase, retryCount int, sourceEntryUUID string) string {
+	encodedTest, _ := json.Marshal(testCase)
+	organizationID := cfg.QueueOrganizationUUID
+	if organizationID == "" {
+		organizationID = cfg.OrganizationSlug
+	}
+	suiteID := cfg.QueueSuiteUUID
+	if suiteID == "" {
+		suiteID = cfg.SuiteSlug
+	}
+	hash := sha256.Sum256([]byte(organizationID + "\x00" + suiteID + "\x00" + cfg.BuildID + "\x00" + cfg.QueueName + "\x00retry\x00" + fmt.Sprint(retryCount) + "\x00" + sourceEntryUUID + "\x00" + string(encodedTest)))
 	bytes := hash[:16]
 	bytes[6] = (bytes[6] & 0x0f) | 0x50
 	bytes[8] = (bytes[8] & 0x3f) | 0x80

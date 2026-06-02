@@ -269,6 +269,9 @@ func (c *Config) validateQueueCommon() error {
 	if c.QueuePollSeconds == 0 {
 		c.QueuePollSeconds = 5
 	}
+	if c.QueueRetryPosition == "" {
+		c.QueueRetryPosition = "front"
+	}
 
 	if c.QueueBatchSize < 1 || c.QueueBatchSize > 1000 {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE", "was %d, must be between 1 and 1000", c.QueueBatchSize)
@@ -276,11 +279,19 @@ func (c *Config) validateQueueCommon() error {
 	if c.QueuePushBatchSize < 1 || c.QueuePushBatchSize > 10000 {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_PUSH_BATCH_SIZE", "was %d, must be between 1 and 10000", c.QueuePushBatchSize)
 	}
+	if c.MaxRetries < 0 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "was %d, must be greater than or equal to 0", c.MaxRetries)
+	}
 	if c.QueueLeaseSeconds < 1 {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS", "was %d, must be greater than 0", c.QueueLeaseSeconds)
 	}
 	if c.QueuePollSeconds < 0 {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS", "was %d, must be greater than or equal to 0", c.QueuePollSeconds)
+	}
+	switch c.QueueRetryPosition {
+	case "front", "back", "inline":
+	default:
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_RETRY_POSITION", "was %q, must be front, back, or inline", c.QueueRetryPosition)
 	}
 
 	if c.QueueOrganizationUUID == "" && !queueOIDCIdentityAvailable(c) {

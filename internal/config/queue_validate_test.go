@@ -31,6 +31,9 @@ func TestValidateForQueuePushDefaults(t *testing.T) {
 	if c.QueueBatchSize != 100 || c.QueuePushBatchSize != 1000 || c.QueueLeaseSeconds != 600 || c.QueuePollSeconds != 5 {
 		t.Fatalf("queue defaults = batch %d push %d lease %d poll %d", c.QueueBatchSize, c.QueuePushBatchSize, c.QueueLeaseSeconds, c.QueuePollSeconds)
 	}
+	if c.QueueRetryPosition != "front" {
+		t.Fatalf("QueueRetryPosition = %q, want front", c.QueueRetryPosition)
+	}
 }
 
 func TestValidateForQueuePushOIDC(t *testing.T) {
@@ -134,5 +137,23 @@ func TestValidateForQueueWorkerAcceptsQueueUUID(t *testing.T) {
 
 	if err := c.ValidateForQueueWorker(); err != nil {
 		t.Fatalf("ValidateForQueueWorker() error = %v", err)
+	}
+}
+
+func TestValidateForQueueWorkerRejectsInvalidRetryPosition(t *testing.T) {
+	c := createQueueConfig()
+	c.QueueRetryPosition = "middle"
+
+	if err := c.ValidateForQueueWorker(); err == nil {
+		t.Fatalf("ValidateForQueueWorker() error = nil, want retry position validation error")
+	}
+}
+
+func TestValidateForQueueWorkerRejectsNegativeRetries(t *testing.T) {
+	c := createQueueConfig()
+	c.MaxRetries = -1
+
+	if err := c.ValidateForQueueWorker(); err == nil {
+		t.Fatalf("ValidateForQueueWorker() error = nil, want retry count validation error")
 	}
 }

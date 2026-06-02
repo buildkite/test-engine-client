@@ -78,6 +78,9 @@ func TestPreviewQueueEnabled(t *testing.T) {
 	if !hasFlag(queueCommandFlags(), "queue-uuid") {
 		t.Fatalf("queueCommandFlags() missing --queue-uuid")
 	}
+	if !hasFlag(queueCommandFlags(), "queue-retry-position") {
+		t.Fatalf("queueCommandFlags() missing --queue-retry-position")
+	}
 	if !hasQueueSubcommand("uuid") {
 		t.Fatalf("queue command missing uuid subcommand")
 	}

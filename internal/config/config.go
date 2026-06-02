@@ -86,6 +86,8 @@ type Config struct {
 	QueuePollSeconds int `json:"-"`
 	// QueuePushBatchSize is the number of entries sent per queue push request.
 	QueuePushBatchSize int `json:"-"`
+	// QueueRetryPosition controls where failed tests are re-enqueued by queue workers.
+	QueueRetryPosition string `json:"-"`
 	// QueueServerBaseURL is the base URL of the Test Engine queue service.
 	QueueServerBaseURL string `json:"-"`
 	// QueueStepKey is used as the default queue name when present.

@@ -360,6 +360,15 @@ var queuePushBatchSizeFlag = &cli.IntFlag{
 	Destination: &cfg.QueuePushBatchSize,
 }
 
+var queueRetryPositionFlag = &cli.StringFlag{
+	Name:        "queue-retry-position",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Where failed queue tests are re-enqueued: front, back, or inline",
+	Value:       "front",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_RETRY_POSITION"),
+	Destination: &cfg.QueueRetryPosition,
+}
+
 var queueServerURLFlag = &cli.StringFlag{
 	Name:        "queue-server-url",
 	Category:    "PREVIEW: TEST QUEUE",
@@ -724,6 +733,7 @@ func queueCommandFlags() []cli.Flag {
 		queueOrganizationUUIDFlag,
 		queuePollSecondsFlag,
 		queuePushBatchSizeFlag,
+		queueRetryPositionFlag,
 		queueServerURLFlag,
 		queueSuiteUUIDFlag,
 		queueUUIDFlag,
