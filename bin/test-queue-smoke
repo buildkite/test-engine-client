@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILDKITE_ROOT="${TEST_QUEUE_SMOKE_BUILDKITE_ROOT:-"$ROOT/../buildkite"}"
+BKGO_ROOT="$BUILDKITE_ROOT/bkgo"
+DATABASE_URL="${TEST_QUEUE_SMOKE_DATABASE_URL:-postgres://postgres@localhost:5433/buildkite_analytics_development?sslmode=disable}"
+QUEUE_NAME="${TEST_QUEUE_SMOKE_QUEUE_NAME:-custom/smoke test}"
+
+if [ ! -d "$BKGO_ROOT" ]; then
+  echo "bkgo repo not found at $BKGO_ROOT; set TEST_QUEUE_SMOKE_BUILDKITE_ROOT" >&2
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required for port selection and metrics validation" >&2
+  exit 1
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl is required for health checks" >&2
+  exit 1
+fi
+
+TMPDIR="$(mktemp -d)"
+SERVER_PID=""
+WORKER_1_PID=""
+WORKER_2_PID=""
+
+cleanup() {
+  if [ -n "$WORKER_1_PID" ] && kill -0 "$WORKER_1_PID" >/dev/null 2>&1; then
+    kill "$WORKER_1_PID" >/dev/null 2>&1 || true
+    wait "$WORKER_1_PID" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$WORKER_2_PID" ] && kill -0 "$WORKER_2_PID" >/dev/null 2>&1; then
+    kill "$WORKER_2_PID" >/dev/null 2>&1 || true
+    wait "$WORKER_2_PID" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+    kill "$SERVER_PID" >/dev/null 2>&1 || true
+    wait "$SERVER_PID" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$TMPDIR"
+}
+trap cleanup EXIT
+
+PORT="${TEST_QUEUE_SMOKE_PORT:-$(python3 - <<'PY'
+import socket
+
+sock = socket.socket()
+sock.bind(("127.0.0.1", 0))
+print(sock.getsockname()[1])
+sock.close()
+PY
+)}"
+
+echo "--- Building local bktec and bkgo binaries"
+(cd "$ROOT" && go build -o "$TMPDIR/bktec" .)
+(cd "$BKGO_ROOT" && go build -o "$TMPDIR/bkgo" .)
+
+echo "--- Starting bkgo test-queue on port $PORT"
+env -i \
+  HOME="${HOME:-}" \
+  PATH="$PATH" \
+  "$TMPDIR/bkgo" test-queue \
+  --analytics-database-url "$DATABASE_URL" \
+  --auth-mode disabled \
+  --cleanup-interval-seconds 0 \
+  --host 127.0.0.1 \
+  --log-format json \
+  --port "$PORT" \
+  >"$TMPDIR/bkgo.log" 2>&1 &
+SERVER_PID=$!
+
+for _ in $(seq 1 100); do
+  if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    break
+  fi
+  if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+    echo "bkgo test-queue exited early" >&2
+    sed -n '1,160p' "$TMPDIR/bkgo.log" >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null
+
+cat >"$TMPDIR/runner.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+test_path="${1:?expected test path}"
+if [ "$test_path" != "smoke.test" ]; then
+  echo "unexpected test path: $test_path" >&2
+  exit 2
+fi
+
+cat >"$BUILDKITE_TEST_ENGINE_RESULT_PATH" <<JSON
+[
+  {
+    "id": "smoke.test",
+    "scope": "smoke",
+    "name": "smoke.test",
+    "location": "smoke.test",
+    "file_name": "smoke.test",
+    "result": "passed"
+  }
+]
+JSON
+SH
+chmod +x "$TMPDIR/runner.sh"
+
+cat >"$TMPDIR/entries.jsonl" <<'JSONL'
+{"test":{"format":"file","path":"smoke.test"},"metadata":{"source":"test-queue-smoke"}}
+JSONL
+
+export BKTEC_PREVIEW_TEST_QUEUE=true
+export BUILDKITE_TEST_ENGINE_OIDC=false
+export BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL="http://127.0.0.1:$PORT"
+export BUILDKITE_TEST_ENGINE_QUEUE_ORGANIZATION_UUID="019e8713-0000-7000-8000-000000000010"
+export BUILDKITE_TEST_ENGINE_QUEUE_SUITE_UUID="019e8713-0000-7000-8000-000000000011"
+export BUILDKITE_ORGANIZATION_SLUG="test-org"
+export BUILDKITE_TEST_ENGINE_SUITE_SLUG="test-suite"
+export BUILDKITE_PIPELINE_SLUG="test-pipeline"
+export BUILDKITE_BUILD_ID="019e8713-0000-7000-8000-000000000012"
+export BUILDKITE_JOB_ID="019e8713-0000-7000-8000-000000000013"
+export BUILDKITE_STEP_KEY="test-queue-smoke"
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER="custom"
+export BUILDKITE_TEST_ENGINE_TEST_CMD="$TMPDIR/runner.sh {{testExamples}}"
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="*.test"
+export BUILDKITE_TEST_ENGINE_RESULT_PATH="$TMPDIR/result.json"
+export BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=false
+export BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE=1
+export BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS=30
+export BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS=1
+
+run_bktec() {
+  env -i \
+    HOME="${HOME:-}" \
+    PATH="$PATH" \
+    BKTEC_PREVIEW_TEST_QUEUE="$BKTEC_PREVIEW_TEST_QUEUE" \
+    BUILDKITE_ANALYTICS_TOKEN= \
+    BUILDKITE_BUILD_ID="$BUILDKITE_BUILD_ID" \
+    BUILDKITE_JOB_ID="$BUILDKITE_JOB_ID" \
+    BUILDKITE_ORGANIZATION_SLUG="$BUILDKITE_ORGANIZATION_SLUG" \
+    BUILDKITE_PIPELINE_SLUG="$BUILDKITE_PIPELINE_SLUG" \
+    BUILDKITE_STEP_KEY="$BUILDKITE_STEP_KEY" \
+    BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN= \
+    BUILDKITE_TEST_ENGINE_OIDC="$BUILDKITE_TEST_ENGINE_OIDC" \
+    BUILDKITE_TEST_ENGINE_QUEUE_ACCESS_TOKEN= \
+    BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE="$BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE" \
+    BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE="${BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE:-}" \
+    BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS="$BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS" \
+    BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY="${BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY:-}" \
+    BUILDKITE_TEST_ENGINE_QUEUE_NAME="${BUILDKITE_TEST_ENGINE_QUEUE_NAME:-}" \
+    BUILDKITE_TEST_ENGINE_QUEUE_ORGANIZATION_UUID="$BUILDKITE_TEST_ENGINE_QUEUE_ORGANIZATION_UUID" \
+    BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS="$BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS" \
+    BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL="$BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL" \
+    BUILDKITE_TEST_ENGINE_QUEUE_SUITE_UUID="$BUILDKITE_TEST_ENGINE_QUEUE_SUITE_UUID" \
+    BUILDKITE_TEST_ENGINE_QUEUE_UUID="${BUILDKITE_TEST_ENGINE_QUEUE_UUID:-}" \
+    BUILDKITE_TEST_ENGINE_RESULT_PATH="$BUILDKITE_TEST_ENGINE_RESULT_PATH" \
+    BUILDKITE_TEST_ENGINE_SUITE_SLUG="$BUILDKITE_TEST_ENGINE_SUITE_SLUG" \
+    BUILDKITE_TEST_ENGINE_TEST_CMD="$BUILDKITE_TEST_ENGINE_TEST_CMD" \
+    BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="$BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN" \
+    BUILDKITE_TEST_ENGINE_TEST_RUNNER="$BUILDKITE_TEST_ENGINE_TEST_RUNNER" \
+    BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS="$BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS" \
+    "$TMPDIR/bktec" "$@"
+}
+
+run_bktec queue uuid --queue-name "$QUEUE_NAME" >"$TMPDIR/queue.env"
+source "$TMPDIR/queue.env"
+
+echo "--- Pushing queue entries"
+run_bktec queue push --file "$TMPDIR/entries.jsonl"
+
+echo "--- Running two queue workers"
+run_bktec queue worker >"$TMPDIR/worker-1.log" 2>&1 &
+WORKER_1_PID=$!
+run_bktec queue worker >"$TMPDIR/worker-2.log" 2>&1 &
+WORKER_2_PID=$!
+
+WORKER_STATUS=0
+wait "$WORKER_1_PID" || WORKER_STATUS=$?
+wait "$WORKER_2_PID" || WORKER_STATUS=$?
+WORKER_1_PID=""
+WORKER_2_PID=""
+
+if [ "$WORKER_STATUS" -ne 0 ]; then
+  echo "worker failed with status $WORKER_STATUS" >&2
+  sed -n '1,160p' "$TMPDIR/worker-1.log" >&2
+  sed -n '1,160p' "$TMPDIR/worker-2.log" >&2
+  exit "$WORKER_STATUS"
+fi
+
+if [ ! -f "$TMPDIR/result.json" ]; then
+  echo "worker did not write result file" >&2
+  sed -n '1,160p' "$TMPDIR/worker-1.log" >&2
+  sed -n '1,160p' "$TMPDIR/worker-2.log" >&2
+  exit 1
+fi
+
+echo "--- Checking drained queue metrics"
+run_bktec queue metrics >"$TMPDIR/metrics.json"
+python3 - "$TMPDIR/metrics.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    metrics = json.load(handle)
+
+expected = {
+    "state": "closed",
+    "queued_entries": 0,
+    "leased_entries": 0,
+    "expired_leased_entries": 0,
+    "total_entries": 0,
+}
+for key, value in expected.items():
+    if metrics.get(key) != value:
+        raise SystemExit(f"{key}={metrics.get(key)!r}, want {value!r}; metrics={metrics!r}")
+PY
+
+echo "+++ Test Queue smoke passed for queue $BUILDKITE_TEST_ENGINE_QUEUE_UUID"
