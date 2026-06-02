@@ -290,7 +290,7 @@ var queueBatchSizeFlag = &cli.IntFlag{
 	Name:        "queue-batch-size",
 	Category:    "PREVIEW: TEST QUEUE",
 	Usage:       "Number of tests leased per worker pop",
-	Value:       1,
+	Value:       100,
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE"),
 	Destination: &cfg.QueueBatchSize,
 }

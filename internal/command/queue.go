@@ -53,6 +53,10 @@ func QueuePush(ctx context.Context, cfg *config.Config, testFileList string, que
 		totalInserted += inserted
 	}
 
+	if err := client.CloseQueue(ctx, queueUUID); err != nil {
+		return err
+	}
+
 	fmt.Printf("+++ Buildkite Test Engine Queue: pushed %d entries (%d inserted) to %s\n", len(entries), totalInserted, queueUUID)
 	return nil
 }
@@ -79,22 +83,22 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
-	emptyPolls := 0
 	for {
-		leaseID, leasedEntries, err := queueClient.PopBatch(ctx, queueUUID, cfg.QueueBatchSize, cfg.QueueLeaseSeconds, cfg.JobID)
+		leaseID, leasedEntries, drained, err := queueClient.PopBatch(ctx, queueUUID, cfg.QueueBatchSize, cfg.QueueLeaseSeconds, cfg.JobID)
 		if err != nil {
 			return err
 		}
 		if len(leasedEntries) == 0 {
-			if cfg.QueuePollSeconds > 0 && emptyPolls == 0 {
-				emptyPolls++
-				time.Sleep(time.Duration(cfg.QueuePollSeconds) * time.Second)
-				continue
+			if drained {
+				fmt.Printf("+++ Buildkite Test Engine Queue: queue %s is drained\n", queueUUID)
+				return nil
 			}
-			fmt.Printf("+++ Buildkite Test Engine Queue: queue %s is drained\n", queueUUID)
-			return nil
+
+			if cfg.QueuePollSeconds > 0 {
+				time.Sleep(time.Duration(cfg.QueuePollSeconds) * time.Second)
+			}
+			continue
 		}
-		emptyPolls = 0
 
 		tests := make([]plan.TestCase, 0, len(leasedEntries))
 		entryUUIDs := make([]string, 0, len(leasedEntries))
@@ -106,24 +110,29 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 		var timeline []api.Timeline
 		runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &tests, cfg.MaxRetries, nil, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
 
-		if _, err := queueClient.CompleteLease(ctx, queueUUID, leaseID, entryUUIDs); err != nil {
-			return err
-		}
-
-		printReport(runResult, nil, testRunner.Name())
-
 		if processSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &processSignaledError) {
 			logSignalAndExit(testRunner.Name(), processSignaledError.Signal)
 		}
 
+		printReport(runResult, nil, testRunner.Name())
+
 		if exitError := new(exec.ExitError); errors.As(runErr, &exitError) {
-			if exitError.ExitCode() == 1 && runResult.OnlyMutedFailures() {
-				continue
+			if exitError.ExitCode() == 1 {
+				if _, err := queueClient.CompleteLease(ctx, queueUUID, leaseID, entryUUIDs); err != nil {
+					return err
+				}
+				if runResult.OnlyMutedFailures() {
+					continue
+				}
 			}
 			return fmt.Errorf("%s exited with error: %w", testRunner.Name(), runErr)
 		}
 		if runErr != nil {
 			return runErr
+		}
+
+		if _, err := queueClient.CompleteLease(ctx, queueUUID, leaseID, entryUUIDs); err != nil {
+			return err
 		}
 	}
 }

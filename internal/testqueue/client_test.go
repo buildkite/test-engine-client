@@ -33,10 +33,13 @@ func TestClientPushPopComplete(t *testing.T) {
 			_, _ = w.Write([]byte(`{"queue_uuid":"queue-uuid","inserted":1}`))
 
 		case "/v1/queues/pop":
-			_, _ = w.Write([]byte(`{"lease_id":"lease-uuid","entries":[{"uuid":"entry-uuid","test":{"path":"spec/example_spec.rb"},"metadata":{},"attempt":1,"lease_id":"lease-uuid","lease_expires_at":"2026-06-02T00:00:00Z"}]}`))
+			_, _ = w.Write([]byte(`{"lease_id":"lease-uuid","entries":[{"uuid":"entry-uuid","test":{"path":"spec/example_spec.rb"},"metadata":{},"attempt":1,"lease_id":"lease-uuid","lease_expires_at":"2026-06-02T00:00:00Z"}],"drained":false}`))
 
 		case "/v1/queues/complete":
 			_, _ = w.Write([]byte(`{"deleted":1}`))
+
+		case "/v1/queues/close":
+			w.WriteHeader(http.StatusNoContent)
 
 		default:
 			http.NotFound(w, r)
@@ -56,12 +59,15 @@ func TestClientPushPopComplete(t *testing.T) {
 		t.Fatalf("PushBatch() = %q, %d; want queue-uuid, 1", queueUUID, inserted)
 	}
 
-	leaseID, entries, err := client.PopBatch(context.Background(), queueUUID, 1, 60, "job-uuid")
+	leaseID, entries, drained, err := client.PopBatch(context.Background(), queueUUID, 1, 60, "job-uuid")
 	if err != nil {
 		t.Fatalf("PopBatch() error = %v", err)
 	}
 	if leaseID != "lease-uuid" || len(entries) != 1 {
 		t.Fatalf("PopBatch() = %q, %d entries; want lease-uuid, 1", leaseID, len(entries))
+	}
+	if drained {
+		t.Fatalf("PopBatch() drained = true, want false")
 	}
 
 	deleted, err := client.CompleteLease(context.Background(), queueUUID, leaseID, []string{entries[0].UUID})
@@ -70,6 +76,9 @@ func TestClientPushPopComplete(t *testing.T) {
 	}
 	if deleted != 1 {
 		t.Fatalf("CompleteLease() = %d, want 1", deleted)
+	}
+	if err := client.CloseQueue(context.Background(), queueUUID); err != nil {
+		t.Fatalf("CloseQueue() error = %v", err)
 	}
 	if !sawAuthorization {
 		t.Fatalf("client did not send bearer token")

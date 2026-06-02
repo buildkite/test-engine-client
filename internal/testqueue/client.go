@@ -76,10 +76,11 @@ func (c *Client) PushBatch(ctx context.Context, queue QueueRef, entries []QueueE
 }
 
 // PopBatch leases entries from a queue.
-func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leaseDurationSeconds int, leaseOwnerJobUUID string) (string, []LeasedEntry, error) {
+func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leaseDurationSeconds int, leaseOwnerJobUUID string) (string, []LeasedEntry, bool, error) {
 	var response struct {
 		LeaseID string        `json:"lease_id"`
 		Entries []LeasedEntry `json:"entries"`
+		Drained bool          `json:"drained"`
 	}
 	err := c.do(ctx, http.MethodPost, "/v1/queues/pop", map[string]any{
 		"queue_uuid":             queueUUID,
@@ -87,7 +88,7 @@ func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leas
 		"lease_duration_seconds": leaseDurationSeconds,
 		"lease_owner_job_uuid":   leaseOwnerJobUUID,
 	}, &response)
-	return response.LeaseID, response.Entries, err
+	return response.LeaseID, response.Entries, response.Drained, err
 }
 
 // CompleteLease deletes completed leased entries.
@@ -101,6 +102,13 @@ func (c *Client) CompleteLease(ctx context.Context, queueUUID string, leaseID st
 		"entry_uuids": entryUUIDs,
 	}, &response)
 	return response.Deleted, err
+}
+
+// CloseQueue marks a queue as closed after producers have finished pushing entries.
+func (c *Client) CloseQueue(ctx context.Context, queueUUID string) error {
+	return c.do(ctx, http.MethodPost, "/v1/queues/close", map[string]any{
+		"queue_uuid": queueUUID,
+	}, nil)
 }
 
 func (c *Client) do(ctx context.Context, method string, path string, body any, out any) error {

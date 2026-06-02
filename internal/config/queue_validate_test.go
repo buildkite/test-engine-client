@@ -27,7 +27,7 @@ func TestValidateForQueuePushDefaults(t *testing.T) {
 	if c.QueueServerBaseURL != "http://127.0.0.1:9998" {
 		t.Fatalf("QueueServerBaseURL = %q, want local default", c.QueueServerBaseURL)
 	}
-	if c.QueueBatchSize != 1 || c.QueuePushBatchSize != 1000 || c.QueueLeaseSeconds != 600 || c.QueuePollSeconds != 5 {
+	if c.QueueBatchSize != 100 || c.QueuePushBatchSize != 1000 || c.QueueLeaseSeconds != 600 || c.QueuePollSeconds != 5 {
 		t.Fatalf("queue defaults = batch %d push %d lease %d poll %d", c.QueueBatchSize, c.QueuePushBatchSize, c.QueueLeaseSeconds, c.QueuePollSeconds)
 	}
 }

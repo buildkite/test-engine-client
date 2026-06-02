@@ -266,7 +266,7 @@ func (c *Config) validateQueueCommon() error {
 	}
 
 	if c.QueueBatchSize == 0 {
-		c.QueueBatchSize = 1
+		c.QueueBatchSize = 100
 	}
 	if c.QueuePushBatchSize == 0 {
 		c.QueuePushBatchSize = 1000
