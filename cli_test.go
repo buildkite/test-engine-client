@@ -61,6 +61,22 @@ func TestCollectGitMetadataFlagIsGatedByPreviewEnv(t *testing.T) {
 	}
 }
 
+func TestPreviewQueueEnabled(t *testing.T) {
+	t.Setenv(previewQueueEnvVar, "")
+	if previewQueueEnabled() {
+		t.Fatalf("previewQueueEnabled() = true, want false")
+	}
+
+	t.Setenv(previewQueueEnvVar, "true")
+	if !previewQueueEnabled() {
+		t.Fatalf("previewQueueEnabled() = false, want true")
+	}
+
+	if !hasFlag(queueCommandFlags(), "queue-server-url") {
+		t.Fatalf("queueCommandFlags() missing queue flags")
+	}
+}
+
 func TestPlanCommandIncludesParallelismFlag(t *testing.T) {
 	if !hasFlag(planCommandFlags(), "parallelism") {
 		t.Fatalf("planCommandFlags() missing --parallelism flag; BUILDKITE_PARALLEL_JOB_COUNT will not be bound to cfg.Parallelism for `bktec plan`, breaking split-by-example slow-file detection")
@@ -125,7 +141,9 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my-org")
 	t.Setenv("BUILDKITE_BUILD_ID", "build-1")
 	t.Setenv("BUILDKITE_JOB_ID", "job-2")
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "pipeline")
 	t.Setenv("BUILDKITE_STEP_ID", "step-3")
+	t.Setenv("BUILDKITE_STEP_KEY", "test-step")
 	t.Setenv("BUILDKITE_BRANCH", "main")
 	t.Setenv("BUILDKITE_RETRY_COUNT", "2")
 	t.Setenv("BUILDKITE_PARALLEL_JOB", "1")
@@ -176,7 +194,9 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"OrganizationSlug", cfg.OrganizationSlug, "my-org"},
 		{"BuildID", cfg.BuildID, "build-1"},
 		{"JobID", cfg.JobID, "job-2"},
+		{"QueuePipelineSlug", cfg.QueuePipelineSlug, "pipeline"},
 		{"StepID", cfg.StepID, "step-3"},
+		{"QueueStepKey", cfg.QueueStepKey, "test-step"},
 		{"Branch", cfg.Branch, "main"},
 		{"JobRetryCount", cfg.JobRetryCount, 2},
 		{"NodeIndex", cfg.NodeIndex, 1},

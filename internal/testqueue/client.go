@@ -1,0 +1,155 @@
+// Package testqueue implements the experimental Test Engine queue API client.
+package testqueue
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/buildkite/test-engine-client/v2/internal/plan"
+)
+
+// Client is a JSON HTTP client for the queue service.
+type Client struct {
+	AccessToken   string
+	ServerBaseURL string
+	httpClient    *http.Client
+}
+
+// NewClient creates a queue API client.
+func NewClient(serverBaseURL, accessToken string) *Client {
+	return &Client{
+		AccessToken:   accessToken,
+		ServerBaseURL: strings.TrimRight(serverBaseURL, "/"),
+		httpClient:    &http.Client{Timeout: 30 * time.Second},
+	}
+}
+
+// QueueRef identifies a logical queue.
+type QueueRef struct {
+	OrganizationUUID string `json:"organization_uuid"`
+	SuiteUUID        string `json:"suite_uuid"`
+	RunUUID          string `json:"run_uuid,omitempty"`
+	BuildUUID        string `json:"build_uuid"`
+	PipelineSlug     string `json:"pipeline_slug"`
+	StepKey          string `json:"step_key,omitempty"`
+	QueueName        string `json:"queue_name"`
+}
+
+// QueueEntry is a test case to enqueue.
+type QueueEntry struct {
+	UUID          string         `json:"uuid"`
+	Test          plan.TestCase  `json:"test"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+	IsRetry       bool           `json:"is_retry,omitempty"`
+	QueuePriority int            `json:"queue_priority,omitempty"`
+}
+
+// LeasedEntry is a test case leased from the queue.
+type LeasedEntry struct {
+	UUID           string         `json:"uuid"`
+	Test           plan.TestCase  `json:"test"`
+	Metadata       map[string]any `json:"metadata"`
+	IsRetry        bool           `json:"is_retry"`
+	QueuePriority  int            `json:"queue_priority"`
+	Attempt        int            `json:"attempt"`
+	LeaseID        string         `json:"lease_id"`
+	LeaseExpiresAt time.Time      `json:"lease_expires_at"`
+}
+
+// PushBatch creates or finds a queue and inserts entries.
+func (c *Client) PushBatch(ctx context.Context, queue QueueRef, entries []QueueEntry) (string, int, error) {
+	var response struct {
+		QueueUUID string `json:"queue_uuid"`
+		Inserted  int    `json:"inserted"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/queues/push", map[string]any{
+		"queue":   queue,
+		"entries": entries,
+	}, &response)
+	return response.QueueUUID, response.Inserted, err
+}
+
+// PopBatch leases entries from a queue.
+func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leaseDurationSeconds int, leaseOwnerJobUUID string) (string, []LeasedEntry, error) {
+	var response struct {
+		LeaseID string        `json:"lease_id"`
+		Entries []LeasedEntry `json:"entries"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/queues/pop", map[string]any{
+		"queue_uuid":             queueUUID,
+		"limit":                  limit,
+		"lease_duration_seconds": leaseDurationSeconds,
+		"lease_owner_job_uuid":   leaseOwnerJobUUID,
+	}, &response)
+	return response.LeaseID, response.Entries, err
+}
+
+// CompleteLease deletes completed leased entries.
+func (c *Client) CompleteLease(ctx context.Context, queueUUID string, leaseID string, entryUUIDs []string) (int, error) {
+	var response struct {
+		Deleted int `json:"deleted"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/queues/complete", map[string]any{
+		"queue_uuid":  queueUUID,
+		"lease_id":    leaseID,
+		"entry_uuids": entryUUIDs,
+	}, &response)
+	return response.Deleted, err
+}
+
+func (c *Client) do(ctx context.Context, method string, path string, body any, out any) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("encoding queue request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.ServerBaseURL+path, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("creating queue request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.AccessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.AccessToken)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("sending queue request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading queue response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		var responseError struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(responseBody, &responseError); err == nil {
+			if responseError.Error != "" {
+				return fmt.Errorf("queue request failed: %s", responseError.Error)
+			}
+			if responseError.Message != "" {
+				return fmt.Errorf("queue request failed: %s", responseError.Message)
+			}
+		}
+		return fmt.Errorf("queue request failed with status %d", resp.StatusCode)
+	}
+
+	if out != nil && len(responseBody) > 0 {
+		if err := json.Unmarshal(responseBody, out); err != nil {
+			return fmt.Errorf("decoding queue response: %w", err)
+		}
+	}
+
+	return nil
+}

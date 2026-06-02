@@ -247,18 +247,138 @@ func (c *Config) ValidateForPlan() error {
 	return nil
 }
 
+func (c *Config) validateQueueCommon() error {
+	if c.ServerBaseURL == "" {
+		c.ServerBaseURL = "https://api.buildkite.com"
+	}
+
+	if c.QueueServerBaseURL == "" {
+		c.QueueServerBaseURL = "http://127.0.0.1:9998"
+	} else if _, err := url.ParseRequestURI(c.QueueServerBaseURL); err != nil {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL", "must be a valid URL")
+	}
+
+	if c.QueueName == "" {
+		c.QueueName = c.QueueStepKey
+	}
+	if c.QueueName == "" {
+		c.QueueName = "tests"
+	}
+
+	if c.QueueBatchSize == 0 {
+		c.QueueBatchSize = 1
+	}
+	if c.QueuePushBatchSize == 0 {
+		c.QueuePushBatchSize = 1000
+	}
+	if c.QueueLeaseSeconds == 0 {
+		c.QueueLeaseSeconds = 600
+	}
+	if c.QueuePollSeconds == 0 {
+		c.QueuePollSeconds = 5
+	}
+
+	if c.QueueBatchSize < 1 || c.QueueBatchSize > 1000 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE", "was %d, must be between 1 and 1000", c.QueueBatchSize)
+	}
+	if c.QueuePushBatchSize < 1 || c.QueuePushBatchSize > 10000 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_PUSH_BATCH_SIZE", "was %d, must be between 1 and 10000", c.QueuePushBatchSize)
+	}
+	if c.QueueLeaseSeconds < 1 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS", "was %d, must be greater than 0", c.QueueLeaseSeconds)
+	}
+	if c.QueuePollSeconds < 0 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS", "was %d, must be greater than or equal to 0", c.QueuePollSeconds)
+	}
+
+	if c.QueueOrganizationUUID == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_ORGANIZATION_UUID", "must not be blank")
+	}
+	if c.QueueSuiteUUID == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_SUITE_UUID", "must not be blank")
+	}
+	if c.BuildID == "" {
+		c.errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank")
+	}
+	if c.JobID == "" {
+		c.errs.appendFieldError("BUILDKITE_JOB_ID", "must not be blank")
+	}
+	if c.QueuePipelineSlug == "" {
+		c.errs.appendFieldError("BUILDKITE_PIPELINE_SLUG", "must not be blank")
+	}
+	if c.TestRunner == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "must not be blank")
+	}
+
+	if c.TestRunner == "custom" {
+		if c.TestCommand == "" {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_CMD", "must not be blank when using the custom test runner")
+		}
+		if c.TestFilePattern == "" {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN", "must not be blank when using the custom test runner")
+		}
+	}
+
+	runnersWithoutResultPath := map[string]bool{
+		"cypress":      true,
+		"pytest":       true,
+		"pytest-pants": true,
+		"custom":       true,
+	}
+	if c.ResultPath == "" && !runnersWithoutResultPath[c.TestRunner] {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
+	}
+
+	if c.QueueOIDCAudience == "" {
+		c.QueueOIDCAudience = fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_queue", c.ServerBaseURL, c.OrganizationSlug, c.SuiteSlug)
+	}
+
+	if c.QueueAccessToken == "" && c.OIDC {
+		token, err := c.generateOIDCTokenForAudience(c.QueueOIDCAudience, true)
+		if err != nil {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_ACCESS_TOKEN", "%v", err)
+		} else {
+			c.QueueAccessToken = token
+		}
+	}
+
+	if len(c.errs) > 0 {
+		return c.errs
+	}
+
+	return nil
+}
+
+// ValidateForQueuePush validates config for `bktec queue push`.
+func (c *Config) ValidateForQueuePush() error {
+	return c.validateQueueCommon()
+}
+
+// ValidateForQueueWorker validates config for `bktec queue worker`.
+func (c *Config) ValidateForQueueWorker() error {
+	return c.validateQueueCommon()
+}
+
 func (c *Config) generateOIDCToken() (token string, err error) {
 	if !c.OIDC {
 		return "", nil
 	}
 
 	suiteURL := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s", c.ServerBaseURL, c.OrganizationSlug, c.SuiteSlug)
+	return c.generateOIDCTokenForAudience(suiteURL, false)
+}
+
+func (c *Config) generateOIDCTokenForAudience(audience string, includeBuildIDClaim bool) (token string, err error) {
 	var tokenWriter strings.Builder
 	var errorWriter strings.Builder
 	lifetime := strconv.Itoa(int(c.OIDCLifetime.Seconds()))
+	args := []string{"oidc", "request-token", "--audience", audience, "--lifetime", lifetime}
+	if includeBuildIDClaim {
+		args = append(args, "--claim", "build_id")
+	}
 	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
 	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
-	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime) //nolint:gosec
+	cmd := exec.Command(c.BuildkiteAgentCommand, args...) //nolint:gosec
 	cmd.Stderr = &errorWriter
 	cmd.Stdout = &tokenWriter
 	cmd.Env = os.Environ()

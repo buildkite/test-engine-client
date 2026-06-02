@@ -58,6 +58,26 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 	}
 }
 
+func queuePush(ctx context.Context, cmd *cli.Command) error {
+	debug.SetDebug(cmd.Root().Bool("debug"))
+
+	if err := cfg.ValidateForQueuePush(); err != nil {
+		return fmt.Errorf("invalid configuration...\n%w", err)
+	}
+
+	return command.QueuePush(ctx, &cfg, cmd.String("files"), cmd.String("file"))
+}
+
+func queueWorker(ctx context.Context, cmd *cli.Command) error {
+	debug.SetDebug(cmd.Root().Bool("debug"))
+
+	if err := cfg.ValidateForQueueWorker(); err != nil {
+		return fmt.Errorf("invalid configuration...\n%w", err)
+	}
+
+	return command.QueueWorker(ctx, &cfg)
+}
+
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 	debug.SetDebug(cmd.Root().Bool("debug"))
 	debug.SetOutput(os.Stderr)

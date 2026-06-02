@@ -1,0 +1,91 @@
+package testqueue
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/buildkite/test-engine-client/v2/internal/plan"
+)
+
+func TestClientPushPopComplete(t *testing.T) {
+	var sawAuthorization bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuthorization = r.Header.Get("Authorization") == "Bearer queue-token"
+
+		switch r.URL.Path {
+		case "/v1/queues/push":
+			var request struct {
+				Queue   QueueRef     `json:"queue"`
+				Entries []QueueEntry `json:"entries"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decoding push request: %v", err)
+			}
+			if request.Queue.QueueName != "rspec" {
+				t.Fatalf("QueueName = %q, want rspec", request.Queue.QueueName)
+			}
+			if len(request.Entries) != 1 {
+				t.Fatalf("len(Entries) = %d, want 1", len(request.Entries))
+			}
+			_, _ = w.Write([]byte(`{"queue_uuid":"queue-uuid","inserted":1}`))
+
+		case "/v1/queues/pop":
+			_, _ = w.Write([]byte(`{"lease_id":"lease-uuid","entries":[{"uuid":"entry-uuid","test":{"path":"spec/example_spec.rb"},"metadata":{},"attempt":1,"lease_id":"lease-uuid","lease_expires_at":"2026-06-02T00:00:00Z"}]}`))
+
+		case "/v1/queues/complete":
+			_, _ = w.Write([]byte(`{"deleted":1}`))
+
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "queue-token")
+	queueUUID, inserted, err := client.PushBatch(context.Background(), QueueRef{QueueName: "rspec"}, []QueueEntry{{
+		UUID: "entry-uuid",
+		Test: plan.TestCase{Path: "spec/example_spec.rb"},
+	}})
+	if err != nil {
+		t.Fatalf("PushBatch() error = %v", err)
+	}
+	if queueUUID != "queue-uuid" || inserted != 1 {
+		t.Fatalf("PushBatch() = %q, %d; want queue-uuid, 1", queueUUID, inserted)
+	}
+
+	leaseID, entries, err := client.PopBatch(context.Background(), queueUUID, 1, 60, "job-uuid")
+	if err != nil {
+		t.Fatalf("PopBatch() error = %v", err)
+	}
+	if leaseID != "lease-uuid" || len(entries) != 1 {
+		t.Fatalf("PopBatch() = %q, %d entries; want lease-uuid, 1", leaseID, len(entries))
+	}
+
+	deleted, err := client.CompleteLease(context.Background(), queueUUID, leaseID, []string{entries[0].UUID})
+	if err != nil {
+		t.Fatalf("CompleteLease() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("CompleteLease() = %d, want 1", deleted)
+	}
+	if !sawAuthorization {
+		t.Fatalf("client did not send bearer token")
+	}
+}
+
+func TestClientReturnsQueueError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"queue is invalid"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "")
+	_, _, err := client.PushBatch(context.Background(), QueueRef{}, nil)
+	if err == nil {
+		t.Fatalf("PushBatch() error = nil, want error")
+	}
+}

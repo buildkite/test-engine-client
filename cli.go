@@ -12,10 +12,19 @@ import (
 
 const (
 	previewSelectionEnvVar = "BKTEC_PREVIEW_SELECTION"
+	previewQueueEnvVar     = "BKTEC_PREVIEW_TEST_QUEUE"
 )
 
 func previewSelectionEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(previewSelectionEnvVar))) {
+	return envTruthy(previewSelectionEnvVar)
+}
+
+func previewQueueEnabled() bool {
+	return envTruthy(previewQueueEnvVar)
+}
+
+func envTruthy(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
 	case "1", "t", "true", "y", "yes", "on":
 		return true
 	default:
@@ -104,6 +113,24 @@ var jobIDFlag = &cli.StringFlag{
 	Usage:       "Buildkite job id",
 	Sources:     cli.EnvVars("BUILDKITE_JOB_ID"),
 	Destination: &cfg.JobID,
+	Hidden:      true,
+}
+
+var pipelineSlugFlag = &cli.StringFlag{
+	Name:        "pipeline-slug",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite pipeline slug",
+	Sources:     cli.EnvVars("BUILDKITE_PIPELINE_SLUG"),
+	Destination: &cfg.QueuePipelineSlug,
+	Hidden:      true,
+}
+
+var stepKeyFlag = &cli.StringFlag{
+	Name:        "step-key",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite step key",
+	Sources:     cli.EnvVars("BUILDKITE_STEP_KEY"),
+	Destination: &cfg.QueueStepKey,
 	Hidden:      true,
 }
 
@@ -249,6 +276,97 @@ var uploadResultsFlag = &cli.BoolFlag{
 	Usage:       "Upload test results to Test Engine after each run",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS"),
 	Destination: &cfg.UploadResults,
+}
+
+var queueAccessTokenFlag = &cli.StringFlag{
+	Name:        "queue-access-token",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Test Engine queue API access token",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_ACCESS_TOKEN"),
+	Destination: &cfg.QueueAccessToken,
+}
+
+var queueBatchSizeFlag = &cli.IntFlag{
+	Name:        "queue-batch-size",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Number of tests leased per worker pop",
+	Value:       1,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE"),
+	Destination: &cfg.QueueBatchSize,
+}
+
+var queueEntryFileFlag = &cli.StringFlag{
+	Name:     "file",
+	Category: "PREVIEW: TEST QUEUE",
+	Usage:    "Read queue entries from a JSON Lines file, or '-' for stdin",
+}
+
+var queueLeaseSecondsFlag = &cli.IntFlag{
+	Name:        "queue-lease-seconds",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Queue lease duration in seconds",
+	Value:       600,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS"),
+	Destination: &cfg.QueueLeaseSeconds,
+}
+
+var queueNameFlag = &cli.StringFlag{
+	Name:        "queue-name",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Test Engine queue name",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_NAME"),
+	Destination: &cfg.QueueName,
+}
+
+var queueOIDCAudienceFlag = &cli.StringFlag{
+	Name:        "queue-oidc-audience",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "OIDC audience for queue API tokens",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_OIDC_AUDIENCE"),
+	Destination: &cfg.QueueOIDCAudience,
+}
+
+var queueOrganizationUUIDFlag = &cli.StringFlag{
+	Name:        "queue-organization-uuid",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Organization UUID for the queue service",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_ORGANIZATION_UUID"),
+	Destination: &cfg.QueueOrganizationUUID,
+}
+
+var queuePollSecondsFlag = &cli.IntFlag{
+	Name:        "queue-poll-seconds",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Seconds to wait between empty worker polls",
+	Value:       5,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS"),
+	Destination: &cfg.QueuePollSeconds,
+}
+
+var queuePushBatchSizeFlag = &cli.IntFlag{
+	Name:        "queue-push-batch-size",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Number of queue entries per push request",
+	Value:       1000,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_PUSH_BATCH_SIZE"),
+	Destination: &cfg.QueuePushBatchSize,
+}
+
+var queueServerURLFlag = &cli.StringFlag{
+	Name:        "queue-server-url",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Test Engine queue server URL",
+	Value:       "http://127.0.0.1:9998",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL"),
+	Destination: &cfg.QueueServerBaseURL,
+}
+
+var queueSuiteUUIDFlag = &cli.StringFlag{
+	Name:        "queue-suite-uuid",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Suite UUID for the queue service",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_SUITE_UUID"),
+	Destination: &cfg.QueueSuiteUUID,
 }
 
 // Test Runner specific flags
@@ -508,7 +626,9 @@ var buildEnvironmentFlags = []cli.Flag{
 	organizationSlugFlag,
 	buildIDFlag,
 	jobIDFlag,
+	pipelineSlugFlag,
 	stepIDFlag,
+	stepKeyFlag,
 	branchFlag,
 	retryCountFlag,
 	parallelJobFlag,
@@ -586,6 +706,26 @@ func planCommandFlags() []cli.Flag {
 	return flags
 }
 
+func queueCommandFlags() []cli.Flag {
+	flags := []cli.Flag{
+		queueAccessTokenFlag,
+		queueBatchSizeFlag,
+		queueLeaseSecondsFlag,
+		queueNameFlag,
+		queueOIDCAudienceFlag,
+		queueOrganizationUUIDFlag,
+		queuePollSecondsFlag,
+		queuePushBatchSizeFlag,
+		queueServerURLFlag,
+		queueSuiteUUIDFlag,
+		filesFlag,
+	}
+	flags = append(flags, buildEnvironmentFlags...)
+	flags = append(flags, testEngineFlags...)
+	flags = append(flags, runnerEnvironmentFlags...)
+	return flags
+}
+
 var cliCommand = &cli.Command{
 	Name:  "bktec",
 	Usage: "Buildkite Test Engine Client",
@@ -625,6 +765,27 @@ var cliCommand = &cli.Command{
 					Usage:  "Collect historical git commit metadata and upload to Buildkite",
 					Action: backfillCommitMetadata,
 					Flags:  backfillCommitMetadataFlags(),
+				},
+			},
+		},
+		{
+			Name:   "queue",
+			Usage:  "Preview Test Engine queue commands",
+			Hidden: !previewQueueEnabled(),
+			Commands: []*cli.Command{
+				{
+					Name:                      "push",
+					Usage:                     "Discover tests and push them into a queue",
+					Action:                    queuePush,
+					DisableSliceFlagSeparator: true,
+					Flags:                     append(queueCommandFlags(), queueEntryFileFlag),
+				},
+				{
+					Name:                      "worker",
+					Usage:                     "Lease and run tests from a queue",
+					Action:                    queueWorker,
+					DisableSliceFlagSeparator: true,
+					Flags:                     queueCommandFlags(),
 				},
 			},
 		},
