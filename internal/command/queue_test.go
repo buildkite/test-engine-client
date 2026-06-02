@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/config"
@@ -149,6 +150,76 @@ exit 0
 	}
 	if completeCalls != 1 {
 		t.Fatalf("completeCalls = %d, want 1 for retry success", completeCalls)
+	}
+}
+
+func TestQueueWorkerRequeuesLeaseOnGenericRunnerError(t *testing.T) {
+	queueUUID := "019e8713-0000-7000-8000-000000000020"
+	entryUUID := "019e8713-0000-7000-8000-000000000021"
+	leaseID := "019e8713-0000-7000-8000-000000000030"
+	requeueCalls := 0
+	completeCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/queues/pop":
+			_, _ = w.Write([]byte(`{"lease_id":"` + leaseID + `","entries":[{"uuid":"` + entryUUID + `","test":{"format":"file","path":"smoke.test"},"metadata":{},"attempt":1,"lease_id":"` + leaseID + `","lease_expires_at":"2026-06-02T00:00:00Z"}],"drained":false}`))
+		case "/v1/queues/requeue":
+			requeueCalls++
+			var request struct {
+				QueueUUID string `json:"queue_uuid"`
+				LeaseID   string `json:"lease_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decoding requeue request: %v", err)
+			}
+			if request.QueueUUID != queueUUID || request.LeaseID != leaseID {
+				t.Fatalf("requeue request = %#v, want queue and lease IDs", request)
+			}
+			_, _ = w.Write([]byte(`{"requeued":1}`))
+		case "/v1/queues/complete", "/v1/queues/complete_and_push":
+			completeCalls++
+			t.Fatalf("worker completed lease after generic runner error")
+		case "/v1/queues/heartbeat":
+			_, _ = w.Write([]byte(`{"lease_expires_at":"2026-06-02T00:01:00Z"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	missingRunner := filepath.Join(t.TempDir(), "missing-runner")
+	cfg := &config.Config{
+		AccessToken:           "token",
+		JobID:                 "019e8713-0000-7000-8000-000000000013",
+		QueueAccessToken:      "queue-token",
+		QueueBatchSize:        1,
+		QueueLeaseSeconds:     60,
+		QueuePollSeconds:      0,
+		QueueRetryPosition:    "front",
+		QueueServerBaseURL:    server.URL,
+		QueueUUID:             queueUUID,
+		TestCommand:           missingRunner + " {{testExamples}}",
+		TestFilePattern:       "*.test",
+		TestRunner:            "custom",
+		UploadResults:         false,
+		OrganizationSlug:      "test-org",
+		SuiteSlug:             "test-suite",
+		BuildID:               "019e8713-0000-7000-8000-000000000012",
+		QueueName:             "smoke-step",
+		QueueOrganizationUUID: "019e8713-0000-7000-8000-000000000010",
+		QueueSuiteUUID:        "019e8713-0000-7000-8000-000000000011",
+	}
+
+	if err := QueueWorker(context.Background(), cfg); err == nil {
+		t.Fatalf("QueueWorker() error = nil, want runner error")
+	} else if !strings.Contains(err.Error(), missingRunner) {
+		t.Fatalf("QueueWorker() error = %v, want missing runner error for %s", err, missingRunner)
+	}
+	if requeueCalls != 1 {
+		t.Fatalf("requeueCalls = %d, want 1", requeueCalls)
+	}
+	if completeCalls != 0 {
+		t.Fatalf("completeCalls = %d, want 0", completeCalls)
 	}
 }
 
