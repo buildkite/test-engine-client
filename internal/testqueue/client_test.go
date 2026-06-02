@@ -38,6 +38,21 @@ func TestClientPushPopComplete(t *testing.T) {
 		case "/v1/queues/complete":
 			_, _ = w.Write([]byte(`{"deleted":1}`))
 
+		case "/v1/queues/requeue":
+			_, _ = w.Write([]byte(`{"requeued":1}`))
+
+		case "/v1/queues/heartbeat":
+			var request struct {
+				ExtendSeconds int `json:"extend_seconds"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decoding heartbeat request: %v", err)
+			}
+			if request.ExtendSeconds != 60 {
+				t.Fatalf("ExtendSeconds = %d, want 60", request.ExtendSeconds)
+			}
+			_, _ = w.Write([]byte(`{"lease_expires_at":"2026-06-02T00:01:00Z"}`))
+
 		case "/v1/queues/close":
 			w.WriteHeader(http.StatusNoContent)
 
@@ -76,6 +91,20 @@ func TestClientPushPopComplete(t *testing.T) {
 	}
 	if deleted != 1 {
 		t.Fatalf("CompleteLease() = %d, want 1", deleted)
+	}
+	requeued, err := client.RequeueLease(context.Background(), queueUUID, leaseID)
+	if err != nil {
+		t.Fatalf("RequeueLease() error = %v", err)
+	}
+	if requeued != 1 {
+		t.Fatalf("RequeueLease() = %d, want 1", requeued)
+	}
+	leaseExpiresAt, err := client.HeartbeatLease(context.Background(), queueUUID, leaseID, 60)
+	if err != nil {
+		t.Fatalf("HeartbeatLease() error = %v", err)
+	}
+	if leaseExpiresAt.IsZero() {
+		t.Fatalf("HeartbeatLease() returned zero expiry")
 	}
 	if err := client.CloseQueue(context.Background(), queueUUID); err != nil {
 		t.Fatalf("CloseQueue() error = %v", err)

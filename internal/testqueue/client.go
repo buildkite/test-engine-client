@@ -106,6 +106,31 @@ func (c *Client) CompleteLease(ctx context.Context, queueUUID string, leaseID st
 	return response.Deleted, err
 }
 
+// RequeueLease returns leased entries to the queue.
+func (c *Client) RequeueLease(ctx context.Context, queueUUID string, leaseID string) (int, error) {
+	var response struct {
+		Requeued int `json:"requeued"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/queues/requeue", map[string]any{
+		"queue_uuid": queueUUID,
+		"lease_id":   leaseID,
+	}, &response)
+	return response.Requeued, err
+}
+
+// HeartbeatLease extends an active lease.
+func (c *Client) HeartbeatLease(ctx context.Context, queueUUID string, leaseID string, extendSeconds int) (time.Time, error) {
+	var response struct {
+		LeaseExpiresAt time.Time `json:"lease_expires_at"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/queues/heartbeat", map[string]any{
+		"queue_uuid":     queueUUID,
+		"lease_id":       leaseID,
+		"extend_seconds": extendSeconds,
+	}, &response)
+	return response.LeaseExpiresAt, err
+}
+
 // CloseQueue marks a queue as closed after producers have finished pushing entries.
 func (c *Client) CloseQueue(ctx context.Context, queueUUID string) error {
 	return c.do(ctx, http.MethodPost, "/v1/queues/close", map[string]any{

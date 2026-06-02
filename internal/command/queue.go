@@ -108,7 +108,9 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 		}
 
 		var timeline []api.Timeline
+		stopHeartbeat := startQueueLeaseHeartbeat(ctx, queueClient, queueUUID, leaseID, cfg.QueueLeaseSeconds)
 		runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &tests, cfg.MaxRetries, nil, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
+		_ = stopHeartbeat()
 
 		if processSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &processSignaledError) {
 			logSignalAndExit(testRunner.Name(), processSignaledError.Signal)
@@ -118,7 +120,7 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 
 		if exitError := new(exec.ExitError); errors.As(runErr, &exitError) {
 			if exitError.ExitCode() == 1 {
-				if _, err := queueClient.CompleteLease(ctx, queueUUID, leaseID, entryUUIDs); err != nil {
+				if err := completeQueueLease(ctx, queueClient, queueUUID, leaseID, entryUUIDs); err != nil {
 					return err
 				}
 				if runResult.OnlyMutedFailures() {
@@ -128,11 +130,78 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 			return fmt.Errorf("%s exited with error: %w", testRunner.Name(), runErr)
 		}
 		if runErr != nil {
+			requeued, err := queueClient.RequeueLease(ctx, queueUUID, leaseID)
+			if err != nil {
+				return err
+			}
+			if requeued == 0 {
+				return fmt.Errorf("queue lease %s was not requeued", leaseID)
+			}
 			return runErr
 		}
 
-		if _, err := queueClient.CompleteLease(ctx, queueUUID, leaseID, entryUUIDs); err != nil {
+		if err := completeQueueLease(ctx, queueClient, queueUUID, leaseID, entryUUIDs); err != nil {
 			return err
+		}
+	}
+}
+
+func completeQueueLease(ctx context.Context, queueClient *testqueue.Client, queueUUID string, leaseID string, entryUUIDs []string) error {
+	deleted, err := queueClient.CompleteLease(ctx, queueUUID, leaseID, entryUUIDs)
+	if err != nil {
+		return err
+	}
+	if deleted != len(entryUUIDs) {
+		return fmt.Errorf("queue lease %s completed %d entries, expected %d", leaseID, deleted, len(entryUUIDs))
+	}
+	return nil
+}
+
+func startQueueLeaseHeartbeat(ctx context.Context, queueClient *testqueue.Client, queueUUID string, leaseID string, leaseSeconds int) func() error {
+	extendSeconds := leaseSeconds
+	if extendSeconds <= 0 {
+		extendSeconds = 600
+	}
+
+	intervalSeconds := extendSeconds / 2
+	if intervalSeconds < 1 {
+		intervalSeconds = 1
+	}
+
+	heartbeatCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	errs := make(chan error, 1)
+
+	go func() {
+		defer close(done)
+
+		ticker := time.NewTicker(time.Duration(intervalSeconds) * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-heartbeatCtx.Done():
+				return
+			case <-ticker.C:
+				if _, err := queueClient.HeartbeatLease(heartbeatCtx, queueUUID, leaseID, extendSeconds); err != nil {
+					select {
+					case errs <- err:
+					default:
+					}
+					return
+				}
+			}
+		}
+	}()
+
+	return func() error {
+		cancel()
+		<-done
+		select {
+		case err := <-errs:
+			return err
+		default:
+			return nil
 		}
 	}
 }
