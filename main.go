@@ -104,6 +104,7 @@ func queueUUID(context.Context, *cli.Command) error {
 	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_UUID=%s\n", shellQuote(queueUUID))
 	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_NAME=%s\n", shellQuote(cfg.QueueName))
 	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE=%s\n", shellQuote(queueEnvFileName(cfg.QueueName)))
+	fmt.Printf("export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY=%s\n", shellQuote(queueMetadataKey(cfg.QueueName)))
 	return nil
 }
 
@@ -112,11 +113,19 @@ func shellQuote(value string) string {
 }
 
 func queueEnvFileName(queueName string) string {
+	return "test-engine-queue-" + sanitizedQueueName(queueName) + ".env"
+}
+
+func queueMetadataKey(queueName string) string {
+	return "test-engine-queue-" + sanitizedQueueName(queueName) + "-env"
+}
+
+func sanitizedQueueName(queueName string) string {
 	name := strings.Trim(queueEnvFileNameUnsafeChars.ReplaceAllString(queueName, "-"), "-")
 	if name == "" {
 		name = "tests"
 	}
-	return "test-engine-queue-" + name + ".env"
+	return name
 }
 
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {

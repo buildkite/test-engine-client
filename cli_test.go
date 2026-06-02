@@ -114,6 +114,9 @@ func TestQueueUUIDPrintsQueueCLIFile(t *testing.T) {
 	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE='test-engine-queue-rspec-s.env'\n") {
 		t.Fatalf("queue uuid output missing queue-name-derived env file export:\n%s", out)
 	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY='test-engine-queue-rspec-s-env'\n") {
+		t.Fatalf("queue uuid output missing queue-name-derived metadata key export:\n%s", out)
+	}
 }
 
 func TestQueueUUIDDefaultsQueueNameFromStepKey(t *testing.T) {
@@ -131,6 +134,9 @@ func TestQueueUUIDDefaultsQueueNameFromStepKey(t *testing.T) {
 	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE='test-engine-queue-test-step.env'\n") {
 		t.Fatalf("queue uuid output missing defaulted queue env file export:\n%s", out)
 	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY='test-engine-queue-test-step-env'\n") {
+		t.Fatalf("queue uuid output missing defaulted queue metadata key export:\n%s", out)
+	}
 }
 
 func TestQueueUUIDSanitizesQueueNameForEnvFile(t *testing.T) {
@@ -147,6 +153,9 @@ func TestQueueUUIDSanitizesQueueNameForEnvFile(t *testing.T) {
 	}
 	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE='test-engine-queue-rspec-smoke-test.env'\n") {
 		t.Fatalf("queue uuid output missing sanitized queue env file export:\n%s", out)
+	}
+	if !strings.Contains(out, "export BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY='test-engine-queue-rspec-smoke-test-env'\n") {
+		t.Fatalf("queue uuid output missing sanitized queue metadata key export:\n%s", out)
 	}
 }
 
