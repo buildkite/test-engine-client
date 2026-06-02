@@ -1,0 +1,434 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILDKITE_ROOT="${TEST_QUEUE_SMOKE_BUILDKITE_ROOT:-"$ROOT/../buildkite"}"
+BKGO_ROOT="$BUILDKITE_ROOT/bkgo"
+DATABASE_URL="${TEST_QUEUE_SMOKE_DATABASE_URL:-postgres://postgres@localhost:5433/buildkite_analytics_development?sslmode=disable}"
+QUEUE_NAME="${TEST_QUEUE_SMOKE_QUEUE_NAME:-custom/oidc smoke}"
+
+if [ ! -d "$BKGO_ROOT" ]; then
+  echo "bkgo repo not found at $BKGO_ROOT; set TEST_QUEUE_SMOKE_BUILDKITE_ROOT" >&2
+  exit 1
+fi
+
+for command in python3 curl psql; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "$command is required for the OIDC smoke" >&2
+    exit 1
+  fi
+done
+
+TMPDIR="$(mktemp -d)"
+ISSUER_PID=""
+SERVER_PID=""
+
+cleanup() {
+  local queue_uuid="${BUILDKITE_TEST_ENGINE_QUEUE_UUID:-}"
+  local organization_id="${BUILDKITE_ORGANIZATION_ID:-}"
+  local suite_slug="${BUILDKITE_TEST_ENGINE_SUITE_SLUG:-}"
+  if [ -n "$queue_uuid" ]; then
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null <<SQL || true
+DELETE FROM test_queue_entries WHERE test_queue_uuid = '$queue_uuid';
+DELETE FROM test_queues WHERE uuid = '$queue_uuid';
+SQL
+  fi
+  if [ -n "$organization_id" ] && [ -n "$suite_slug" ]; then
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null <<SQL || true
+DELETE FROM suites WHERE organization_id = '$organization_id' AND slug = '$suite_slug';
+SQL
+  fi
+  if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+    kill "$SERVER_PID" >/dev/null 2>&1 || true
+    wait "$SERVER_PID" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$ISSUER_PID" ] && kill -0 "$ISSUER_PID" >/dev/null 2>&1; then
+    kill "$ISSUER_PID" >/dev/null 2>&1 || true
+    wait "$ISSUER_PID" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$TMPDIR"
+}
+trap cleanup EXIT
+
+free_port() {
+  python3 - <<'PY'
+import socket
+
+sock = socket.socket()
+sock.bind(("127.0.0.1", 0))
+print(sock.getsockname()[1])
+sock.close()
+PY
+}
+
+PORT="${TEST_QUEUE_SMOKE_PORT:-$(free_port)}"
+ISSUER_PORT="${TEST_QUEUE_SMOKE_OIDC_ISSUER_PORT:-$(free_port)}"
+ISSUER_URL="http://127.0.0.1:$ISSUER_PORT"
+
+export BUILDKITE_ORGANIZATION_ID="019e8713-0000-7000-8000-000000000110"
+export BUILDKITE_ORGANIZATION_SLUG="test-org"
+export BUILDKITE_TEST_ENGINE_SUITE_SLUG="test-queue-oidc-smoke-$$"
+export BUILDKITE_PIPELINE_SLUG="test-pipeline"
+export BUILDKITE_BUILD_ID="019e8713-0000-7000-8000-000000000112"
+export BUILDKITE_JOB_ID="019e8713-0000-7000-8000-000000000113"
+export BUILDKITE_STEP_KEY="test-queue-producer"
+
+echo "--- Building local bktec, bkgo, and fake OIDC helper"
+(cd "$ROOT" && go build -o "$TMPDIR/bktec" .)
+(cd "$BKGO_ROOT" && go build -o "$TMPDIR/bkgo" .)
+
+cat >"$TMPDIR/fake-oidc.go" <<'GO'
+package main
+
+import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"math/big"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		fatal("usage: fake-oidc keygen|issuer|agent ...")
+	}
+
+	switch os.Args[1] {
+	case "keygen":
+		if len(os.Args) != 3 {
+			fatal("usage: fake-oidc keygen KEY_PATH")
+		}
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		must(err)
+		block := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}
+		must(os.WriteFile(os.Args[2], pem.EncodeToMemory(block), 0o600))
+	case "issuer":
+		if len(os.Args) != 5 {
+			fatal("usage: fake-oidc issuer KEY_PATH ISSUER_URL ADDR")
+		}
+		key := readKey(os.Args[2])
+		issuerURL := os.Args[3]
+		mux := http.NewServeMux()
+		mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(w, map[string]any{"jwks_uri": issuerURL + "/.well-known/jwks"})
+		})
+		mux.HandleFunc("/.well-known/jwks", func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(w, map[string]any{"keys": []any{rsaJWK(key.PublicKey)}})
+		})
+		must(http.ListenAndServe(os.Args[4], mux))
+	case "agent":
+		if len(os.Args) < 6 {
+			fatal("usage: fake-oidc agent KEY_PATH ISSUER_URL oidc request-token ...")
+		}
+		key := readKey(os.Args[2])
+		fmt.Println(signToken(key, os.Args[3], os.Args[4:]))
+	default:
+		fatal("unknown mode: " + os.Args[1])
+	}
+}
+
+func signToken(key *rsa.PrivateKey, issuerURL string, args []string) string {
+	if len(args) < 2 || args[0] != "oidc" || args[1] != "request-token" {
+		fatal("fake buildkite-agent expected oidc request-token")
+	}
+
+	audience := ""
+	lifetimeSeconds := 7200
+	claimsRequested := map[string]bool{}
+	for i := 2; i < len(args); i++ {
+		switch args[i] {
+		case "--audience":
+			i++
+			audience = args[i]
+		case "--lifetime":
+			i++
+			value, err := strconv.Atoi(args[i])
+			must(err)
+			lifetimeSeconds = value
+		case "--claim":
+			i++
+			claimsRequested[args[i]] = true
+		}
+	}
+	if audience == "" {
+		fatal("missing --audience")
+	}
+	if strings.Contains(audience, "/test_queue") && (!claimsRequested["build_id"] || !claimsRequested["organization_id"]) {
+		fatal("queue token did not request build_id and organization_id claims")
+	}
+
+	now := time.Now()
+	claims := map[string]any{
+		"iss":               issuerURL,
+		"aud":               audience,
+		"iat":               now.Add(-time.Minute).Unix(),
+		"nbf":               now.Add(-time.Minute).Unix(),
+		"exp":               now.Add(time.Duration(lifetimeSeconds) * time.Second).Unix(),
+		"organization_slug": os.Getenv("BUILDKITE_ORGANIZATION_SLUG"),
+		"pipeline_slug":     os.Getenv("BUILDKITE_PIPELINE_SLUG"),
+		"step_key":          os.Getenv("BUILDKITE_STEP_KEY"),
+		"job_id":            os.Getenv("BUILDKITE_JOB_ID"),
+	}
+	if claimsRequested["organization_id"] {
+		claims["organization_id"] = os.Getenv("BUILDKITE_ORGANIZATION_ID")
+	}
+	if claimsRequested["build_id"] {
+		claims["build_id"] = os.Getenv("BUILDKITE_BUILD_ID")
+	}
+
+	headerJSON := mustJSON(map[string]any{"alg": "RS256", "typ": "JWT", "kid": "test-queue-smoke"})
+	claimsJSON := mustJSON(claims)
+	signingInput := base64.RawURLEncoding.EncodeToString(headerJSON) + "." + base64.RawURLEncoding.EncodeToString(claimsJSON)
+	digest := sha256.Sum256([]byte(signingInput))
+	signature, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
+	must(err)
+	return signingInput + "." + base64.RawURLEncoding.EncodeToString(signature)
+}
+
+func readKey(path string) *rsa.PrivateKey {
+	bytes, err := os.ReadFile(path)
+	must(err)
+	block, _ := pem.Decode(bytes)
+	if block == nil {
+		fatal("failed to decode private key PEM")
+	}
+	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	must(err)
+	return key
+}
+
+func rsaJWK(publicKey rsa.PublicKey) map[string]any {
+	return map[string]any{
+		"kty": "RSA",
+		"use": "sig",
+		"alg": "RS256",
+		"kid": "test-queue-smoke",
+		"n":   base64.RawURLEncoding.EncodeToString(publicKey.N.Bytes()),
+		"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(publicKey.E)).Bytes()),
+	}
+}
+
+func writeJSON(w http.ResponseWriter, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	must(json.NewEncoder(w).Encode(value))
+}
+
+func mustJSON(value any) []byte {
+	bytes, err := json.Marshal(value)
+	must(err)
+	return bytes
+}
+
+func must(err error) {
+	if err != nil {
+		fatal(err.Error())
+	}
+}
+
+func fatal(message string) {
+	fmt.Fprintln(os.Stderr, message)
+	os.Exit(1)
+}
+GO
+go build -o "$TMPDIR/fake-oidc" "$TMPDIR/fake-oidc.go"
+"$TMPDIR/fake-oidc" keygen "$TMPDIR/oidc-key.pem"
+cat >"$TMPDIR/fake-buildkite-agent" <<SH
+#!/usr/bin/env bash
+exec "$TMPDIR/fake-oidc" agent "$TMPDIR/oidc-key.pem" "$ISSUER_URL" "\$@"
+SH
+chmod +x "$TMPDIR/fake-buildkite-agent"
+
+echo "--- Starting fake OIDC issuer on port $ISSUER_PORT"
+"$TMPDIR/fake-oidc" issuer "$TMPDIR/oidc-key.pem" "$ISSUER_URL" "127.0.0.1:$ISSUER_PORT" >"$TMPDIR/issuer.log" 2>&1 &
+ISSUER_PID=$!
+for _ in $(seq 1 100); do
+  if curl -fsS "$ISSUER_URL/.well-known/openid-configuration" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.1
+done
+curl -fsS "$ISSUER_URL/.well-known/openid-configuration" >/dev/null
+
+echo "--- Seeding Analytics suite OIDC policy"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null <<SQL
+INSERT INTO suites (
+  name,
+  api_key,
+  slug,
+  organization_id,
+  created_at,
+  updated_at,
+  default_branch,
+  oidc_policy
+) VALUES (
+  'Test Queue OIDC Smoke',
+  'test-queue-oidc-smoke-$$',
+  '$BUILDKITE_TEST_ENGINE_SUITE_SLUG',
+  '$BUILDKITE_ORGANIZATION_ID',
+  now(),
+  now(),
+  'main',
+  '- iss: $ISSUER_URL
+  scopes:
+    - write_test_queue
+  claims:
+    organization_slug: $BUILDKITE_ORGANIZATION_SLUG
+    pipeline_slug: $BUILDKITE_PIPELINE_SLUG
+'
+) ON CONFLICT (organization_id, slug) WHERE destroyed_at IS NULL DO UPDATE
+SET oidc_policy = EXCLUDED.oidc_policy, updated_at = now();
+SQL
+
+echo "--- Starting bkgo test-queue with OIDC auth on port $PORT"
+env -i \
+  HOME="${HOME:-}" \
+  PATH="$PATH" \
+  "$TMPDIR/bkgo" test-queue \
+  --analytics-database-url "$DATABASE_URL" \
+  --auth-mode oidc \
+  --cleanup-interval-seconds 0 \
+  --host 127.0.0.1 \
+  --log-format json \
+  --oidc-issuer "$ISSUER_URL" \
+  --port "$PORT" \
+  >"$TMPDIR/bkgo.log" 2>&1 &
+SERVER_PID=$!
+
+for _ in $(seq 1 100); do
+  if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    break
+  fi
+  if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+    echo "bkgo test-queue exited early" >&2
+    sed -n '1,160p' "$TMPDIR/bkgo.log" >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null
+
+cat >"$TMPDIR/runner.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+test_path="${1:?expected test path}"
+if [ "$test_path" != "smoke.test" ]; then
+  echo "unexpected test path: $test_path" >&2
+  exit 2
+fi
+
+cat >"$BUILDKITE_TEST_ENGINE_RESULT_PATH" <<JSON
+[
+  {
+    "id": "smoke.test",
+    "scope": "smoke",
+    "name": "smoke.test",
+    "location": "smoke.test",
+    "file_name": "smoke.test",
+    "result": "passed"
+  }
+]
+JSON
+SH
+chmod +x "$TMPDIR/runner.sh"
+
+cat >"$TMPDIR/entries.jsonl" <<'JSONL'
+{"test":{"format":"file","path":"smoke.test"},"metadata":{"source":"test-queue-oidc-smoke"}}
+JSONL
+
+export BKTEC_PREVIEW_TEST_QUEUE=true
+export BUILDKITE_TEST_ENGINE_OIDC=true
+export BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL="http://127.0.0.1:$PORT"
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER="custom"
+export BUILDKITE_TEST_ENGINE_TEST_CMD="$TMPDIR/runner.sh {{testExamples}}"
+export BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="*.test"
+export BUILDKITE_TEST_ENGINE_RESULT_PATH="$TMPDIR/result.json"
+export BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=false
+export BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE=1
+export BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS=30
+export BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS=1
+
+run_bktec() {
+  env -i \
+    HOME="${HOME:-}" \
+    PATH="$PATH" \
+    BKTEC_PREVIEW_TEST_QUEUE="$BKTEC_PREVIEW_TEST_QUEUE" \
+    BUILDKITE_ANALYTICS_TOKEN= \
+    BUILDKITE_BUILD_ID="$BUILDKITE_BUILD_ID" \
+    BUILDKITE_JOB_ID="$BUILDKITE_JOB_ID" \
+    BUILDKITE_ORGANIZATION_ID="$BUILDKITE_ORGANIZATION_ID" \
+    BUILDKITE_ORGANIZATION_SLUG="$BUILDKITE_ORGANIZATION_SLUG" \
+    BUILDKITE_PIPELINE_SLUG="$BUILDKITE_PIPELINE_SLUG" \
+    BUILDKITE_STEP_KEY="$BUILDKITE_STEP_KEY" \
+    BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN= \
+    BUILDKITE_TEST_ENGINE_OIDC="$BUILDKITE_TEST_ENGINE_OIDC" \
+    BUILDKITE_TEST_ENGINE_QUEUE_ACCESS_TOKEN= \
+    BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE="$BUILDKITE_TEST_ENGINE_QUEUE_BATCH_SIZE" \
+    BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE="${BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE:-}" \
+    BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS="$BUILDKITE_TEST_ENGINE_QUEUE_LEASE_SECONDS" \
+    BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY="${BUILDKITE_TEST_ENGINE_QUEUE_METADATA_KEY:-}" \
+    BUILDKITE_TEST_ENGINE_QUEUE_NAME="${BUILDKITE_TEST_ENGINE_QUEUE_NAME:-}" \
+    BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS="$BUILDKITE_TEST_ENGINE_QUEUE_POLL_SECONDS" \
+    BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL="$BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL" \
+    BUILDKITE_TEST_ENGINE_QUEUE_UUID="${BUILDKITE_TEST_ENGINE_QUEUE_UUID:-}" \
+    BUILDKITE_TEST_ENGINE_RESULT_PATH="$BUILDKITE_TEST_ENGINE_RESULT_PATH" \
+    BUILDKITE_TEST_ENGINE_SUITE_SLUG="$BUILDKITE_TEST_ENGINE_SUITE_SLUG" \
+    BUILDKITE_TEST_ENGINE_TEST_CMD="$BUILDKITE_TEST_ENGINE_TEST_CMD" \
+    BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN="$BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN" \
+    BUILDKITE_TEST_ENGINE_TEST_RUNNER="$BUILDKITE_TEST_ENGINE_TEST_RUNNER" \
+    BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS="$BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS" \
+    "$TMPDIR/bktec" "$@" --buildkite-agent-command "$TMPDIR/fake-buildkite-agent"
+}
+
+run_bktec queue env --queue-name "$QUEUE_NAME" >"$TMPDIR/queue.lookup.env"
+source "$TMPDIR/queue.lookup.env"
+QUEUE_ENV_PATH="$TMPDIR/$BUILDKITE_TEST_ENGINE_QUEUE_ENV_FILE"
+run_bktec queue uuid --queue-name "$QUEUE_NAME" >"$QUEUE_ENV_PATH"
+source "$QUEUE_ENV_PATH"
+
+echo "--- Pushing queue entries with producer step key"
+run_bktec queue push --file "$TMPDIR/entries.jsonl"
+
+echo "--- Running queue worker with a different step key"
+export BUILDKITE_JOB_ID="019e8713-0000-7000-8000-000000000114"
+export BUILDKITE_STEP_KEY="test-queue-worker"
+run_bktec queue worker
+
+if [ ! -f "$TMPDIR/result.json" ]; then
+  echo "worker did not write result file" >&2
+  exit 1
+fi
+
+echo "--- Checking drained queue metrics"
+run_bktec queue metrics >"$TMPDIR/metrics.json"
+python3 - "$TMPDIR/metrics.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    metrics = json.load(handle)
+
+expected = {
+    "state": "closed",
+    "queued_entries": 0,
+    "leased_entries": 0,
+    "expired_leased_entries": 0,
+    "total_entries": 0,
+}
+for key, value in expected.items():
+    if metrics.get(key) != value:
+        raise SystemExit(f"{key}={metrics.get(key)!r}, want {value!r}; metrics={metrics!r}")
+PY
+
+echo "+++ Test Queue OIDC smoke passed for queue $BUILDKITE_TEST_ENGINE_QUEUE_UUID"

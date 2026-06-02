@@ -738,6 +738,7 @@ func queueCommandFlags() []cli.Flag {
 		queueSuiteUUIDFlag,
 		queueUUIDFlag,
 		filesFlag,
+		buildkiteAgentCommandFlag,
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)

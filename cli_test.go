@@ -87,6 +87,9 @@ func TestPreviewQueueEnabled(t *testing.T) {
 	if !hasFlag(queueCommandFlags(), "queue-retry-position") {
 		t.Fatalf("queueCommandFlags() missing --queue-retry-position")
 	}
+	if !hasFlag(queueCommandFlags(), "buildkite-agent-command") {
+		t.Fatalf("queueCommandFlags() missing hidden --buildkite-agent-command for OIDC token generation")
+	}
 	if !hasQueueSubcommand("uuid") {
 		t.Fatalf("queue command missing uuid subcommand")
 	}
