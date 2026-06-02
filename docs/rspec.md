@@ -111,9 +111,9 @@ Generate one queue env file in the discovery step and pass that same file to eve
 steps:
   - label: "Discover RSpec files"
     command: |
-      bktec queue uuid --queue-name rspec > test-engine-queue.env
-      buildkite-agent meta-data set test-engine-queue-env "$(cat test-engine-queue.env)"
-      source test-engine-queue.env
+      bktec queue uuid --queue-name rspec > test-engine-queue-rspec.env
+      buildkite-agent meta-data set test-engine-queue-rspec-env "$(cat test-engine-queue-rspec.env)"
+      source test-engine-queue-rspec.env
       bktec queue push
     env:
       BKTEC_PREVIEW_TEST_QUEUE: "true"
@@ -126,8 +126,8 @@ steps:
 
   - label: "Run queued RSpec files"
     command: |
-      buildkite-agent meta-data get test-engine-queue-env > test-engine-queue.env
-      source test-engine-queue.env
+      buildkite-agent meta-data get test-engine-queue-rspec-env > test-engine-queue-rspec.env
+      source test-engine-queue-rspec.env
       bktec queue worker
     parallelism: 100
     env:
@@ -138,7 +138,7 @@ steps:
       BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL: "http://127.0.0.1:9998"
 ```
 
-`bktec queue uuid` writes both `BUILDKITE_TEST_ENGINE_QUEUE_UUID` and `BUILDKITE_TEST_ENGINE_QUEUE_NAME`. Keep those values together; the UUID is the shared queue identity, and the name is used for display and deterministic entry IDs.
+`bktec queue uuid` writes both `BUILDKITE_TEST_ENGINE_QUEUE_UUID` and `BUILDKITE_TEST_ENGINE_QUEUE_NAME`. Keep those values together and include the queue name in the env filename; the UUID is the shared queue identity, and the name is used for display and deterministic entry IDs.
 
 In the current preview, `bktec queue push` uses raw local file discovery. It does not call the Test Engine test-plan API and does not add Test Engine timing-based planning metadata, muted-test, skipped-test, or split-by-example enrichment. To populate custom entries, pass a JSON Lines file:
 

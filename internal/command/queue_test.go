@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,31 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/buildkite/test-engine-client/v2/internal/testqueue"
 )
+
+func captureCommandStdout(t *testing.T, fn func() error) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("creating stdout pipe: %v", err)
+	}
+	defer func() { _ = read.Close() }()
+	os.Stdout = write
+	defer func() { os.Stdout = oldStdout }()
+
+	if err := fn(); err != nil {
+		t.Fatalf("command error: %v", err)
+	}
+	if err := write.Close(); err != nil {
+		t.Fatalf("closing stdout pipe: %v", err)
+	}
+	out, err := io.ReadAll(read)
+	if err != nil {
+		t.Fatalf("reading stdout: %v", err)
+	}
+	return string(out)
+}
 
 func TestQueueWorkerCompletesAndPushesRetryEntriesAtomically(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -263,6 +289,53 @@ func TestQueueEntriesReadsJSONLAndGeneratesMissingUUIDs(t *testing.T) {
 	}
 	if entries[1].Metadata["source"] != "jsonl" {
 		t.Fatalf("entries[1].Metadata = %#v, want source=jsonl", entries[1].Metadata)
+	}
+}
+
+func TestQueueMetricsPrintsJSON(t *testing.T) {
+	queueUUID := "019e8713-0000-7000-8000-000000000020"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/queues/metrics" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("metrics method = %s, want POST", r.Method)
+		}
+
+		var request struct {
+			QueueUUID string `json:"queue_uuid"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decoding metrics request: %v", err)
+		}
+		if request.QueueUUID != queueUUID {
+			t.Fatalf("QueueUUID = %q, want %s", request.QueueUUID, queueUUID)
+		}
+
+		_, _ = w.Write([]byte(`{"queue_uuid":"` + queueUUID + `","state":"closed","created_at":"2026-06-02T00:00:00Z","updated_at":"2026-06-02T00:01:00Z","expires_at":"2026-06-02T06:00:00Z","queued_entries":2,"leased_entries":1,"expired_leased_entries":0,"total_entries":3}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		QueueAccessToken:   "queue-token",
+		QueueServerBaseURL: server.URL,
+		QueueUUID:          queueUUID,
+	}
+
+	out := captureCommandStdout(t, func() error {
+		return QueueMetrics(context.Background(), cfg)
+	})
+
+	var metrics testqueue.QueueMetrics
+	if err := json.Unmarshal([]byte(out), &metrics); err != nil {
+		t.Fatalf("decoding metrics output %q: %v", out, err)
+	}
+	if metrics.QueueUUID != queueUUID || metrics.State != "closed" || metrics.TotalEntries != 3 {
+		t.Fatalf("metrics output = %#v, want closed queue with 3 total entries", metrics)
+	}
+	if !strings.Contains(out, "\n  \"queued_entries\": 2,") {
+		t.Fatalf("metrics output was not pretty-printed JSON:\n%s", out)
 	}
 }
 
