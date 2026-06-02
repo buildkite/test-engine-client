@@ -803,6 +803,11 @@ var cliCommand = &cli.Command{
 					DisableSliceFlagSeparator: true,
 					Flags:                     queueCommandFlags(),
 				},
+				{
+					Name:   "uuid",
+					Usage:  "Generate a shared UUIDv7 for a Test Engine queue",
+					Action: queueUUID,
+				},
 			},
 		},
 	},

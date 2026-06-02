@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/config"
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
 	"github.com/buildkite/test-engine-client/v2/internal/git"
+	"github.com/buildkite/test-engine-client/v2/internal/testqueue"
 	"github.com/buildkite/test-engine-client/v2/internal/version"
 	"github.com/urfave/cli/v3"
 )
@@ -86,6 +87,15 @@ func queueMetrics(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return command.QueueMetrics(ctx, &cfg)
+}
+
+func queueUUID(context.Context, *cli.Command) error {
+	queueUUID, err := testqueue.NewQueueUUID()
+	if err != nil {
+		return err
+	}
+	fmt.Println(queueUUID)
+	return nil
 }
 
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {

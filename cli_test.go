@@ -78,6 +78,9 @@ func TestPreviewQueueEnabled(t *testing.T) {
 	if !hasFlag(queueCommandFlags(), "queue-uuid") {
 		t.Fatalf("queueCommandFlags() missing --queue-uuid")
 	}
+	if !hasQueueSubcommand("uuid") {
+		t.Fatalf("queue command missing uuid subcommand")
+	}
 }
 
 func TestPlanCommandIncludesParallelismFlag(t *testing.T) {
@@ -120,6 +123,20 @@ func hasSelectionFlag(flags []cli.Flag) bool {
 		}
 	}
 
+	return false
+}
+
+func hasQueueSubcommand(name string) bool {
+	for _, command := range cliCommand.Commands {
+		if command.Name != "queue" {
+			continue
+		}
+		for _, subcommand := range command.Commands {
+			if subcommand.Name == name {
+				return true
+			}
+		}
+	}
 	return false
 }
 
