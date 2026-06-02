@@ -726,6 +726,7 @@ func queueCommandFlags() []cli.Flag {
 		queuePushBatchSizeFlag,
 		queueServerURLFlag,
 		queueSuiteUUIDFlag,
+		queueUUIDFlag,
 		filesFlag,
 	}
 	flags = append(flags, buildEnvironmentFlags...)
@@ -800,7 +801,7 @@ var cliCommand = &cli.Command{
 					Usage:                     "Print current queue metrics as JSON",
 					Action:                    queueMetrics,
 					DisableSliceFlagSeparator: true,
-					Flags:                     append(queueCommandFlags(), queueUUIDFlag),
+					Flags:                     queueCommandFlags(),
 				},
 			},
 		},

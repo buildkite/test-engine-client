@@ -75,8 +75,8 @@ func TestPreviewQueueEnabled(t *testing.T) {
 	if !hasFlag(queueCommandFlags(), "queue-server-url") {
 		t.Fatalf("queueCommandFlags() missing queue flags")
 	}
-	if !hasFlag(append(queueCommandFlags(), queueUUIDFlag), "queue-uuid") {
-		t.Fatalf("queue metrics flags missing --queue-uuid")
+	if !hasFlag(queueCommandFlags(), "queue-uuid") {
+		t.Fatalf("queueCommandFlags() missing --queue-uuid")
 	}
 }
 

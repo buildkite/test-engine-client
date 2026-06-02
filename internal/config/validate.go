@@ -364,11 +364,7 @@ func (c *Config) validateQueueTransportAndAuth() {
 // ValidateForQueueMetrics validates config for `bktec queue metrics`.
 func (c *Config) ValidateForQueueMetrics() error {
 	c.validateQueueTransportAndAuth()
-	if c.QueueUUID == "" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_UUID", "must not be blank")
-	} else if !validUUIDString(c.QueueUUID) {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_UUID", "must be a valid UUID")
-	}
+	c.validateQueueUUID()
 
 	if len(c.errs) > 0 {
 		return c.errs
@@ -379,12 +375,36 @@ func (c *Config) ValidateForQueueMetrics() error {
 
 // ValidateForQueuePush validates config for `bktec queue push`.
 func (c *Config) ValidateForQueuePush() error {
-	return c.validateQueueCommon()
+	if err := c.validateQueueCommon(); err != nil {
+		return err
+	}
+	c.validateQueueUUID()
+	if len(c.errs) > 0 {
+		return c.errs
+	}
+	return nil
 }
 
 // ValidateForQueueWorker validates config for `bktec queue worker`.
 func (c *Config) ValidateForQueueWorker() error {
-	return c.validateQueueCommon()
+	if err := c.validateQueueCommon(); err != nil {
+		return err
+	}
+	c.validateQueueUUID()
+	if len(c.errs) > 0 {
+		return c.errs
+	}
+	return nil
+}
+
+func (c *Config) validateQueueUUID() {
+	if c.QueueUUID == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_UUID", "must not be blank")
+	} else if !validUUIDString(c.QueueUUID) {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_UUID", "must be a valid UUID")
+	} else if !validUUIDv7String(c.QueueUUID) {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_UUID", "must be a UUIDv7")
+	}
 }
 
 func validUUIDString(value string) bool {
@@ -403,6 +423,10 @@ func validUUIDString(value string) bool {
 		}
 	}
 	return true
+}
+
+func validUUIDv7String(value string) bool {
+	return validUUIDString(value) && value[14] == '7'
 }
 
 func queueOIDCIdentityAvailable(c *Config) bool {

@@ -30,15 +30,18 @@ func QueuePush(ctx context.Context, cfg *config.Config, testFileList string, que
 	}
 
 	client := testqueue.NewClient(cfg.QueueServerBaseURL, cfg.QueueAccessToken)
-	queueUUID := ""
 	totalInserted := 0
 	queue := queueRef(cfg)
+	queueUUID := queue.QueueUUID
 
 	for offset := 0; offset < len(entries); offset += cfg.QueuePushBatchSize {
 		end := min(offset+cfg.QueuePushBatchSize, len(entries))
 		pushedQueueUUID, inserted, err := client.PushBatch(ctx, queue, entries[offset:end])
 		if err != nil {
 			return err
+		}
+		if pushedQueueUUID != queueUUID {
+			return fmt.Errorf("queue push returned %s, expected %s", pushedQueueUUID, queueUUID)
 		}
 		queueUUID = pushedQueueUUID
 		totalInserted += inserted
@@ -48,6 +51,9 @@ func QueuePush(ctx context.Context, cfg *config.Config, testFileList string, que
 		pushedQueueUUID, inserted, err := client.PushBatch(ctx, queue, nil)
 		if err != nil {
 			return err
+		}
+		if pushedQueueUUID != queueUUID {
+			return fmt.Errorf("queue push returned %s, expected %s", pushedQueueUUID, queueUUID)
 		}
 		queueUUID = pushedQueueUUID
 		totalInserted += inserted
@@ -71,10 +77,7 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 	}
 
 	queueClient := testqueue.NewClient(cfg.QueueServerBaseURL, cfg.QueueAccessToken)
-	queueUUID, _, err := queueClient.PushBatch(ctx, queueRef(cfg), nil)
-	if err != nil {
-		return err
-	}
+	queueUUID := cfg.QueueUUID
 
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseURL:    cfg.ServerBaseURL,
@@ -324,6 +327,7 @@ func deterministicEntryUUID(cfg *config.Config, testCase plan.TestCase) string {
 
 func queueRef(cfg *config.Config) testqueue.QueueRef {
 	return testqueue.QueueRef{
+		QueueUUID:        cfg.QueueUUID,
 		OrganizationUUID: cfg.QueueOrganizationUUID,
 		OrganizationSlug: cfg.OrganizationSlug,
 		SuiteUUID:        cfg.QueueSuiteUUID,

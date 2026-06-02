@@ -27,6 +27,9 @@ func TestClientPushPopComplete(t *testing.T) {
 			if request.Queue.QueueName != "rspec" {
 				t.Fatalf("QueueName = %q, want rspec", request.Queue.QueueName)
 			}
+			if request.Queue.QueueUUID != "019e8713-0000-7000-8000-000000000020" {
+				t.Fatalf("QueueUUID = %q, want explicit queue UUID", request.Queue.QueueUUID)
+			}
 			if len(request.Entries) != 1 {
 				t.Fatalf("len(Entries) = %d, want 1", len(request.Entries))
 			}
@@ -66,7 +69,10 @@ func TestClientPushPopComplete(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "queue-token")
-	queueUUID, inserted, err := client.PushBatch(context.Background(), QueueRef{QueueName: "rspec"}, []QueueEntry{{
+	queueUUID, inserted, err := client.PushBatch(context.Background(), QueueRef{
+		QueueUUID: "019e8713-0000-7000-8000-000000000020",
+		QueueName: "rspec",
+	}, []QueueEntry{{
 		UUID: "entry-uuid",
 		Test: plan.TestCase{Path: "spec/example_spec.rb"},
 	}})

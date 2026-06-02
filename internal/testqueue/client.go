@@ -32,6 +32,7 @@ func NewClient(serverBaseURL, accessToken string) *Client {
 
 // QueueRef identifies a logical queue.
 type QueueRef struct {
+	QueueUUID        string `json:"queue_uuid,omitempty"`
 	OrganizationUUID string `json:"organization_uuid"`
 	OrganizationSlug string `json:"organization_slug,omitempty"`
 	SuiteUUID        string `json:"suite_uuid"`

@@ -10,6 +10,7 @@ func createQueueConfig() Config {
 	c.QueueSuiteUUID = "019e8713-0000-7000-8000-000000000011"
 	c.QueuePipelineSlug = "pipeline"
 	c.QueueStepKey = "rspec"
+	c.QueueUUID = "019e8713-0000-7000-8000-000000000020"
 	c.OIDC = false
 	return c
 }
@@ -46,7 +47,7 @@ func TestValidateForQueuePushOIDC(t *testing.T) {
 	}
 }
 
-func TestValidateForQueuePushOIDCDoesNotRequireExplicitUUIDs(t *testing.T) {
+func TestValidateForQueuePushOIDCDoesNotRequireOrganizationOrSuiteUUIDs(t *testing.T) {
 	c := createQueueConfig()
 	c.OIDC = true
 	c.QueueAccessToken = ""
@@ -56,6 +57,15 @@ func TestValidateForQueuePushOIDCDoesNotRequireExplicitUUIDs(t *testing.T) {
 
 	if err := c.ValidateForQueuePush(); err != nil {
 		t.Fatalf("ValidateForQueuePush() error = %v", err)
+	}
+}
+
+func TestValidateForQueuePushRequiresQueueUUID(t *testing.T) {
+	c := createQueueConfig()
+	c.QueueUUID = ""
+
+	if err := c.ValidateForQueuePush(); err == nil {
+		t.Fatalf("ValidateForQueuePush() error = nil, want queue UUID validation error")
 	}
 }
 
@@ -84,6 +94,7 @@ func TestValidateForQueueMetrics(t *testing.T) {
 
 func TestValidateForQueueMetricsRequiresQueueUUID(t *testing.T) {
 	c := createQueueConfig()
+	c.QueueUUID = ""
 
 	if err := c.ValidateForQueueMetrics(); err == nil {
 		t.Fatalf("ValidateForQueueMetrics() error = nil, want queue UUID validation error")
@@ -96,5 +107,32 @@ func TestValidateForQueueMetricsRejectsInvalidQueueUUID(t *testing.T) {
 
 	if err := c.ValidateForQueueMetrics(); err == nil {
 		t.Fatalf("ValidateForQueueMetrics() error = nil, want invalid queue UUID error")
+	}
+}
+
+func TestValidateForQueueMetricsRejectsNonV7QueueUUID(t *testing.T) {
+	c := createQueueConfig()
+	c.QueueUUID = "123e4567-e89b-12d3-a456-426614174000"
+
+	if err := c.ValidateForQueueMetrics(); err == nil {
+		t.Fatalf("ValidateForQueueMetrics() error = nil, want UUIDv7 validation error")
+	}
+}
+
+func TestValidateForQueueWorkerRequiresQueueUUID(t *testing.T) {
+	c := createQueueConfig()
+	c.QueueUUID = ""
+
+	if err := c.ValidateForQueueWorker(); err == nil {
+		t.Fatalf("ValidateForQueueWorker() error = nil, want queue UUID validation error")
+	}
+}
+
+func TestValidateForQueueWorkerAcceptsQueueUUID(t *testing.T) {
+	c := createQueueConfig()
+	c.QueueUUID = "019e8713-0000-7000-8000-000000000020"
+
+	if err := c.ValidateForQueueWorker(); err != nil {
+		t.Fatalf("ValidateForQueueWorker() error = %v", err)
 	}
 }
