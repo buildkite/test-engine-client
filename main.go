@@ -78,6 +78,16 @@ func queueWorker(ctx context.Context, cmd *cli.Command) error {
 	return command.QueueWorker(ctx, &cfg)
 }
 
+func queueMetrics(ctx context.Context, cmd *cli.Command) error {
+	debug.SetDebug(cmd.Root().Bool("debug"))
+
+	if err := cfg.ValidateForQueueMetrics(); err != nil {
+		return fmt.Errorf("invalid configuration...\n%w", err)
+	}
+
+	return command.QueueMetrics(ctx, &cfg)
+}
+
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 	debug.SetDebug(cmd.Root().Bool("debug"))
 	debug.SetOutput(os.Stderr)

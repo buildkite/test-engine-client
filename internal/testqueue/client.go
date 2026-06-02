@@ -64,6 +64,22 @@ type LeasedEntry struct {
 	LeaseExpiresAt time.Time      `json:"lease_expires_at"`
 }
 
+// QueueMetrics is the current operational state of a queue.
+type QueueMetrics struct {
+	QueueUUID            string     `json:"queue_uuid"`
+	State                string     `json:"state"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	ExpiresAt            time.Time  `json:"expires_at"`
+	QueuedEntries        int64      `json:"queued_entries"`
+	LeasedEntries        int64      `json:"leased_entries"`
+	ExpiredLeasedEntries int64      `json:"expired_leased_entries"`
+	TotalEntries         int64      `json:"total_entries"`
+	OldestQueuedAt       *time.Time `json:"oldest_queued_at,omitempty"`
+	OldestLeasedAt       *time.Time `json:"oldest_leased_at,omitempty"`
+	OldestLeaseExpiresAt *time.Time `json:"oldest_lease_expires_at,omitempty"`
+}
+
 // PushBatch creates or finds a queue and inserts entries.
 func (c *Client) PushBatch(ctx context.Context, queue QueueRef, entries []QueueEntry) (string, int, error) {
 	var response struct {
@@ -129,6 +145,15 @@ func (c *Client) HeartbeatLease(ctx context.Context, queueUUID string, leaseID s
 		"extend_seconds": extendSeconds,
 	}, &response)
 	return response.LeaseExpiresAt, err
+}
+
+// GetMetrics returns the current operational state of a queue.
+func (c *Client) GetMetrics(ctx context.Context, queueUUID string) (QueueMetrics, error) {
+	var response QueueMetrics
+	err := c.do(ctx, http.MethodPost, "/v1/queues/metrics", map[string]any{
+		"queue_uuid": queueUUID,
+	}, &response)
+	return response, err
 }
 
 // CloseQueue marks a queue as closed after producers have finished pushing entries.

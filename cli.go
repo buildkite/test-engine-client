@@ -318,6 +318,14 @@ var queueNameFlag = &cli.StringFlag{
 	Destination: &cfg.QueueName,
 }
 
+var queueUUIDFlag = &cli.StringFlag{
+	Name:        "queue-uuid",
+	Category:    "PREVIEW: TEST QUEUE",
+	Usage:       "Existing Test Engine queue UUID",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_UUID"),
+	Destination: &cfg.QueueUUID,
+}
+
 var queueOIDCAudienceFlag = &cli.StringFlag{
 	Name:        "queue-oidc-audience",
 	Category:    "PREVIEW: TEST QUEUE",
@@ -786,6 +794,13 @@ var cliCommand = &cli.Command{
 					Action:                    queueWorker,
 					DisableSliceFlagSeparator: true,
 					Flags:                     queueCommandFlags(),
+				},
+				{
+					Name:                      "metrics",
+					Usage:                     "Print current queue metrics as JSON",
+					Action:                    queueMetrics,
+					DisableSliceFlagSeparator: true,
+					Flags:                     append(queueCommandFlags(), queueUUIDFlag),
 				},
 			},
 		},

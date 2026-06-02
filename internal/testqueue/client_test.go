@@ -53,6 +53,9 @@ func TestClientPushPopComplete(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"lease_expires_at":"2026-06-02T00:01:00Z"}`))
 
+		case "/v1/queues/metrics":
+			_, _ = w.Write([]byte(`{"queue_uuid":"queue-uuid","state":"closed","created_at":"2026-06-02T00:00:00Z","updated_at":"2026-06-02T00:02:00Z","expires_at":"2026-06-02T06:00:00Z","queued_entries":0,"leased_entries":0,"expired_leased_entries":0,"total_entries":0}`))
+
 		case "/v1/queues/close":
 			w.WriteHeader(http.StatusNoContent)
 
@@ -105,6 +108,13 @@ func TestClientPushPopComplete(t *testing.T) {
 	}
 	if leaseExpiresAt.IsZero() {
 		t.Fatalf("HeartbeatLease() returned zero expiry")
+	}
+	metrics, err := client.GetMetrics(context.Background(), queueUUID)
+	if err != nil {
+		t.Fatalf("GetMetrics() error = %v", err)
+	}
+	if metrics.QueueUUID != queueUUID || metrics.State != "closed" || metrics.TotalEntries != 0 {
+		t.Fatalf("GetMetrics() = %#v, want closed empty queue", metrics)
 	}
 	if err := client.CloseQueue(context.Background(), queueUUID); err != nil {
 		t.Fatalf("CloseQueue() error = %v", err)

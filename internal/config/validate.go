@@ -248,15 +248,7 @@ func (c *Config) ValidateForPlan() error {
 }
 
 func (c *Config) validateQueueCommon() error {
-	if c.ServerBaseURL == "" {
-		c.ServerBaseURL = "https://api.buildkite.com"
-	}
-
-	if c.QueueServerBaseURL == "" {
-		c.QueueServerBaseURL = "http://127.0.0.1:9998"
-	} else if _, err := url.ParseRequestURI(c.QueueServerBaseURL); err != nil {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL", "must be a valid URL")
-	}
+	c.validateQueueTransportAndAuth()
 
 	if c.QueueName == "" {
 		c.QueueName = c.QueueStepKey
@@ -329,17 +321,53 @@ func (c *Config) validateQueueCommon() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 
+	if len(c.errs) > 0 {
+		return c.errs
+	}
+
+	return nil
+}
+
+func (c *Config) validateQueueTransportAndAuth() {
+	if c.ServerBaseURL == "" {
+		c.ServerBaseURL = "https://api.buildkite.com"
+	}
+
+	if c.QueueServerBaseURL == "" {
+		c.QueueServerBaseURL = "http://127.0.0.1:9998"
+	} else if _, err := url.ParseRequestURI(c.QueueServerBaseURL); err != nil {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_SERVER_URL", "must be a valid URL")
+	}
+
 	if c.QueueOIDCAudience == "" {
+		if c.OIDC && c.QueueAccessToken == "" {
+			if c.OrganizationSlug == "" {
+				c.errs.appendFieldError("BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
+			}
+			if c.SuiteSlug == "" {
+				c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
+			}
+		}
 		c.QueueOIDCAudience = fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_queue", c.ServerBaseURL, c.OrganizationSlug, c.SuiteSlug)
 	}
 
-	if c.QueueAccessToken == "" && c.OIDC {
+	if c.QueueAccessToken == "" && c.OIDC && len(c.errs) == 0 {
 		token, err := c.generateOIDCTokenForAudience(c.QueueOIDCAudience, true)
 		if err != nil {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_ACCESS_TOKEN", "%v", err)
 		} else {
 			c.QueueAccessToken = token
 		}
+	}
+}
+
+// ValidateForQueueMetrics validates config for `bktec queue metrics`.
+func (c *Config) ValidateForQueueMetrics() error {
+	c.validateQueueTransportAndAuth()
+	if c.QueueUUID == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_UUID", "must not be blank")
+	} else if !validUUIDString(c.QueueUUID) {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_UUID", "must be a valid UUID")
 	}
 
 	if len(c.errs) > 0 {
@@ -357,6 +385,24 @@ func (c *Config) ValidateForQueuePush() error {
 // ValidateForQueueWorker validates config for `bktec queue worker`.
 func (c *Config) ValidateForQueueWorker() error {
 	return c.validateQueueCommon()
+}
+
+func validUUIDString(value string) bool {
+	if len(value) != 36 {
+		return false
+	}
+	for i, char := range value {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if char != '-' {
+				return false
+			}
+			continue
+		}
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') && (char < 'A' || char > 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 func queueOIDCIdentityAvailable(c *Config) bool {

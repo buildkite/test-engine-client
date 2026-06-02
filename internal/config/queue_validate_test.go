@@ -70,3 +70,31 @@ func TestValidateForQueuePushExplicitTokenStillRequiresUUIDsWithoutOIDCMode(t *t
 		t.Fatalf("ValidateForQueuePush() error = nil, want UUID validation error")
 	}
 }
+
+func TestValidateForQueueMetrics(t *testing.T) {
+	c := createQueueConfig()
+	c.QueueUUID = "019e8713-0000-7000-8000-000000000020"
+	c.TestRunner = ""
+	c.ResultPath = ""
+
+	if err := c.ValidateForQueueMetrics(); err != nil {
+		t.Fatalf("ValidateForQueueMetrics() error = %v", err)
+	}
+}
+
+func TestValidateForQueueMetricsRequiresQueueUUID(t *testing.T) {
+	c := createQueueConfig()
+
+	if err := c.ValidateForQueueMetrics(); err == nil {
+		t.Fatalf("ValidateForQueueMetrics() error = nil, want queue UUID validation error")
+	}
+}
+
+func TestValidateForQueueMetricsRejectsInvalidQueueUUID(t *testing.T) {
+	c := createQueueConfig()
+	c.QueueUUID = "not-a-uuid"
+
+	if err := c.ValidateForQueueMetrics(); err == nil {
+		t.Fatalf("ValidateForQueueMetrics() error = nil, want invalid queue UUID error")
+	}
+}

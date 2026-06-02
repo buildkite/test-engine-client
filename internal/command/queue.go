@@ -146,6 +146,23 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 	}
 }
 
+// QueueMetrics prints the current queue metrics as JSON.
+func QueueMetrics(ctx context.Context, cfg *config.Config) error {
+	client := testqueue.NewClient(cfg.QueueServerBaseURL, cfg.QueueAccessToken)
+	metrics, err := client.GetMetrics(ctx, cfg.QueueUUID)
+	if err != nil {
+		return err
+	}
+
+	encoded, err := json.MarshalIndent(metrics, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding queue metrics: %w", err)
+	}
+	fmt.Println(string(encoded))
+
+	return nil
+}
+
 func completeQueueLease(ctx context.Context, queueClient *testqueue.Client, queueUUID string, leaseID string, entryUUIDs []string) error {
 	deleted, err := queueClient.CompleteLease(ctx, queueUUID, leaseID, entryUUIDs)
 	if err != nil {
