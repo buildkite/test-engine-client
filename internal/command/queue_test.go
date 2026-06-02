@@ -223,6 +223,49 @@ func TestQueueWorkerRequeuesLeaseOnGenericRunnerError(t *testing.T) {
 	}
 }
 
+func TestQueueEntriesReadsJSONLAndGeneratesMissingUUIDs(t *testing.T) {
+	entryFile := filepath.Join(t.TempDir(), "queue-entries.jsonl")
+	explicitUUID := "019e8713-0000-7000-8000-000000000111"
+	if err := os.WriteFile(entryFile, []byte(`
+{"uuid":"`+explicitUUID+`","test":{"format":"file","path":"spec/models/user_spec.rb"}}
+{"test":{"format":"file","path":"spec/models/team_spec.rb"},"metadata":{"source":"jsonl"}}
+`), 0o644); err != nil {
+		t.Fatalf("writing queue entry file: %v", err)
+	}
+	cfg := &config.Config{
+		BuildID:               "019e8713-0000-7000-8000-000000000012",
+		QueueName:             "rspec",
+		QueueOrganizationUUID: "019e8713-0000-7000-8000-000000000010",
+		QueueSuiteUUID:        "019e8713-0000-7000-8000-000000000011",
+	}
+
+	entries, err := queueEntries(cfg, "", entryFile)
+	if err != nil {
+		t.Fatalf("queueEntries() error = %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("len(entries) = %d, want 2", len(entries))
+	}
+	if entries[0].UUID != explicitUUID {
+		t.Fatalf("entries[0].UUID = %q, want explicit UUID", entries[0].UUID)
+	}
+	if len(entries[0].Metadata) != 0 {
+		t.Fatalf("entries[0].Metadata = %#v, want empty map", entries[0].Metadata)
+	}
+	if entries[1].UUID != deterministicEntryUUID(cfg, entries[1].Test) {
+		t.Fatalf("entries[1].UUID = %q, want deterministic UUID", entries[1].UUID)
+	}
+	differentQueue := *cfg
+	differentQueue.QueueName = "other-rspec"
+	if entries[1].UUID == deterministicEntryUUID(&differentQueue, entries[1].Test) {
+		t.Fatalf("entries[1].UUID should change when queue identity changes")
+	}
+	if entries[1].Metadata["source"] != "jsonl" {
+		t.Fatalf("entries[1].Metadata = %#v, want source=jsonl", entries[1].Metadata)
+	}
+}
+
 func TestQueueRetryEntries(t *testing.T) {
 	cfg := &config.Config{
 		BuildID:               "019e8713-0000-7000-8000-000000000001",
