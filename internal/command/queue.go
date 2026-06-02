@@ -117,13 +117,16 @@ func QueueWorker(ctx context.Context, cfg *config.Config) error {
 		stopHeartbeat := startQueueLeaseHeartbeat(ctx, queueClient, queueUUID, leaseID, cfg.QueueLeaseSeconds)
 		maxInlineRetries := queueInlineRetryCount(cfg)
 		runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &tests, maxInlineRetries, nil, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
-		_ = stopHeartbeat()
+		heartbeatErr := stopHeartbeat()
 
 		if processSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &processSignaledError) {
 			logSignalAndExit(testRunner.Name(), processSignaledError.Signal)
 		}
 
 		printReport(runResult, nil, testRunner.Name())
+		if heartbeatErr != nil {
+			return fmt.Errorf("queue lease heartbeat failed: %w", heartbeatErr)
+		}
 
 		if exitError := new(exec.ExitError); errors.As(runErr, &exitError) {
 			if exitError.ExitCode() == 1 {
@@ -327,6 +330,9 @@ func startQueueLeaseHeartbeat(ctx context.Context, queueClient *testqueue.Client
 				return
 			case <-ticker.C:
 				if _, err := queueClient.HeartbeatLease(heartbeatCtx, queueUUID, leaseID, extendSeconds); err != nil {
+					if heartbeatCtx.Err() != nil && errors.Is(err, context.Canceled) {
+						return
+					}
 					select {
 					case errs <- err:
 					default:

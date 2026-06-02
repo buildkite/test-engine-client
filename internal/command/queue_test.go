@@ -249,6 +249,99 @@ func TestQueueWorkerRequeuesLeaseOnGenericRunnerError(t *testing.T) {
 	}
 }
 
+func TestQueueWorkerReturnsHeartbeatErrorWithoutCompletingLease(t *testing.T) {
+	tmpDir := t.TempDir()
+	heartbeatPath := filepath.Join(tmpDir, "heartbeat")
+	resultPath := filepath.Join(tmpDir, "result.json")
+	runnerPath := filepath.Join(tmpDir, "runner.sh")
+	if err := os.WriteFile(runnerPath, []byte(`#!/bin/sh
+set -eu
+for i in $(seq 1 50); do
+  if [ -f "`+heartbeatPath+`" ]; then
+    break
+  fi
+  sleep 0.1
+done
+if [ ! -f "`+heartbeatPath+`" ]; then
+  echo "heartbeat did not run" >&2
+  exit 2
+fi
+cat > "`+resultPath+`" <<'JSON'
+[{"name":"smoke.test","scope":"smoke","identifier":"smoke.test","location":"smoke.test","file_name":"smoke.test","result":"passed","history":[{"section":"main","duration":0.1,"start_at":"2026-06-02T00:00:00Z","end_at":"2026-06-02T00:00:01Z"}]}]
+JSON
+exit 0
+`), 0o755); err != nil {
+		t.Fatalf("writing runner: %v", err)
+	}
+
+	queueUUID := "019e8713-0000-7000-8000-000000000020"
+	entryUUID := "019e8713-0000-7000-8000-000000000021"
+	leaseID := "019e8713-0000-7000-8000-000000000030"
+	completeCalls := 0
+	requeueCalls := 0
+	heartbeatCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/queues/pop":
+			_, _ = w.Write([]byte(`{"lease_id":"` + leaseID + `","entries":[{"uuid":"` + entryUUID + `","test":{"format":"file","path":"smoke.test"},"metadata":{},"attempt":1,"lease_id":"` + leaseID + `","lease_expires_at":"2026-06-02T00:00:00Z"}],"drained":false}`))
+		case "/v1/queues/heartbeat":
+			heartbeatCalls++
+			if err := os.WriteFile(heartbeatPath, []byte("1"), 0o644); err != nil {
+				t.Fatalf("writing heartbeat marker: %v", err)
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":"heartbeat failed"}`))
+		case "/v1/queues/complete", "/v1/queues/complete_and_push":
+			completeCalls++
+			t.Fatalf("worker completed lease after heartbeat failure")
+		case "/v1/queues/requeue":
+			requeueCalls++
+			t.Fatalf("worker requeued lease after heartbeat failure")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		AccessToken:           "token",
+		JobID:                 "019e8713-0000-7000-8000-000000000013",
+		QueueAccessToken:      "queue-token",
+		QueueBatchSize:        1,
+		QueueLeaseSeconds:     1,
+		QueuePollSeconds:      0,
+		QueueRetryPosition:    "front",
+		QueueServerBaseURL:    server.URL,
+		QueueUUID:             queueUUID,
+		ResultPath:            resultPath,
+		TestCommand:           runnerPath + " {{testExamples}}",
+		TestFilePattern:       "*.test",
+		TestRunner:            "custom",
+		UploadResults:         false,
+		OrganizationSlug:      "test-org",
+		SuiteSlug:             "test-suite",
+		BuildID:               "019e8713-0000-7000-8000-000000000012",
+		QueueName:             "smoke-step",
+		QueueOrganizationUUID: "019e8713-0000-7000-8000-000000000010",
+		QueueSuiteUUID:        "019e8713-0000-7000-8000-000000000011",
+	}
+
+	if err := QueueWorker(context.Background(), cfg); err == nil {
+		t.Fatalf("QueueWorker() error = nil, want heartbeat error")
+	} else if !strings.Contains(err.Error(), "queue lease heartbeat failed") || !strings.Contains(err.Error(), "heartbeat failed") {
+		t.Fatalf("QueueWorker() error = %v, want heartbeat failure", err)
+	}
+	if heartbeatCalls == 0 {
+		t.Fatalf("heartbeatCalls = 0, want heartbeat attempt")
+	}
+	if completeCalls != 0 {
+		t.Fatalf("completeCalls = %d, want 0", completeCalls)
+	}
+	if requeueCalls != 0 {
+		t.Fatalf("requeueCalls = %d, want 0", requeueCalls)
+	}
+}
+
 func TestQueueEntriesReadsJSONLAndGeneratesMissingUUIDs(t *testing.T) {
 	entryFile := filepath.Join(t.TempDir(), "queue-entries.jsonl")
 	explicitUUID := "019e8713-0000-7000-8000-000000000111"
