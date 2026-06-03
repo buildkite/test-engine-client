@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -150,6 +151,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC", "false")
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC_LIFETIME", "1h")
+	t.Setenv("BUILDKITE_TEST_ENGINE_UPLOAD_TAGS", "env=production,region=us-east-1")
 
 	cmd := &cli.Command{
 		Name:  "bktec",
@@ -208,5 +210,10 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("cfg.%s = %v, want %v", c.name, c.got, c.want)
 		}
+	}
+
+	wantUploadTags := map[string]string{"env": "production", "region": "us-east-1"}
+	if !reflect.DeepEqual(cfg.UploadTags, wantUploadTags) {
+		t.Errorf("cfg.UploadTags = %v, want %v", cfg.UploadTags, wantUploadTags)
 	}
 }
