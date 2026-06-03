@@ -72,14 +72,14 @@ Set `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS` to `true`:
 export BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true
 ```
 
-You can attach key/value tags to each upload using `--upload-tag` or `BUILDKITE_TEST_ENGINE_UPLOAD_TAGS`. Tags are useful for filtering and grouping test results in Test Engine.
+You can attach key/value tags to each upload using `--tag` or `BUILDKITE_TEST_ENGINE_TAGS`. Tags are useful for filtering and grouping test results in Test Engine.
 
 ```sh
 # As CLI flags (repeatable)
-bktec run --upload-tag env=production --upload-tag region=us-east-1
+bktec run --tag env=production --tag region=us-east-1
 
 # As an environment variable (comma-separated)
-export BUILDKITE_TEST_ENGINE_UPLOAD_TAGS="env=production,region=us-east-1"
+export BUILDKITE_TEST_ENGINE_TAGS="env=production,region=us-east-1"
 ```
 
 **Option 2: Install a [Buildkite Test Collector](https://buildkite.com/docs/test-engine/test-collection)**

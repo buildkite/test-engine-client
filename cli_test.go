@@ -151,7 +151,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_DEBUG_ENABLED", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC", "false")
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC_LIFETIME", "1h")
-	t.Setenv("BUILDKITE_TEST_ENGINE_UPLOAD_TAGS", "env=production,region=us-east-1")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TAGS", "env=production,region=us-east-1")
 
 	cmd := &cli.Command{
 		Name:  "bktec",
