@@ -251,6 +251,28 @@ var uploadResultsFlag = &cli.BoolFlag{
 	Destination: &cfg.UploadResults,
 }
 
+var uploadTagsFlag = &cli.StringSliceFlag{
+	Name:     "upload-tags",
+	Category: "TEST ENGINE",
+	Usage:    "Additional key=value tags to attach to the upload. Repeat for multiple entries. When using the environment variable, separate multiple tags with commas.",
+	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_TAGS"),
+	Action: func(_ context.Context, _ *cli.Command, vals []string) error {
+		// DisableSliceFlagSeparator on the run command prevents the CLI library
+		// from splitting comma-separated env var values automatically, so we do
+		// it here to support BUILDKITE_TEST_ENGINE_UPLOAD_TAGS="key1=val1,key2=val2".
+		var entries []string
+		for _, v := range vals {
+			entries = append(entries, strings.Split(v, ",")...)
+		}
+		tags, err := parseKeyValueEntries(entries, "upload tag")
+		if err != nil {
+			return fmt.Errorf("invalid upload tags: %w", err)
+		}
+		cfg.UploadTags = tags
+		return nil
+	},
+}
+
 // Test Runner specific flags
 var filesFlag = &cli.StringFlag{
 	Name:     "files",
@@ -518,6 +540,7 @@ var testEngineFlags = []cli.Flag{
 	accessTokenFlag,
 	uploadTokenFlag,
 	uploadResultsFlag,
+	uploadTagsFlag,
 	suiteSlugFlag,
 	baseURLFlag,
 	uploadBaseURLFlag,
