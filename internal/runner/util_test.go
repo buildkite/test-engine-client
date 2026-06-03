@@ -10,7 +10,6 @@ import (
 func changeCwd(t *testing.T, path string) {
 	t.Helper()
 	origWD, err := os.Getwd()
-
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -38,7 +38,7 @@ import (
 // into an invalid value like "origin/upstream/main" and silently drop the
 // explicit override.
 // Returns the resolved ref (e.g. "origin/main") or an error.
-func ResolveBaseBranch(ctx context.Context, runner GitRunner, explicit string, remote string) (string, error) {
+func ResolveBaseBranch(ctx context.Context, runner GitRunner, explicit, remote string) (string, error) {
 	if remote == "" {
 		return "", fmt.Errorf("remote must not be empty")
 	}

@@ -187,7 +187,6 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 		req.Header.Add("Content-Type", "application/json")
 
 		resp, err := c.httpClient.Do(req)
-
 		// If we get an error before getting a response,
 		// which means there is a network error (e.g. protocol error, timeout),
 		// we should return and retry.

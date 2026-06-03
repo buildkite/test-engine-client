@@ -152,7 +152,6 @@ func TestFailedTests_ExcludeMutedTests(t *testing.T) {
 }
 
 func TestMutedTests(t *testing.T) {
-
 	apple := plan.TestCase{Scope: "apple", Name: "is red"}
 	banana := plan.TestCase{Scope: "banana", Name: "is yellow"}
 
@@ -191,7 +190,7 @@ func TestRunStatistics(t *testing.T) {
 	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is red", Path: "mango.rb:3"}, TestStatusPassed)
 	r.RecordTestResult(plan.TestCase{Scope: "mango", Name: "is red", Path: "mango.rb:7"}, TestStatusPassed) // Different tests with the same name and scope should be counted separately
 
-	//passed on retry: 1
+	// passed on retry: 1
 	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is green"}, TestStatusFailed)
 	r.RecordTestResult(plan.TestCase{Scope: "apple", Name: "is green"}, TestStatusPassed)
 

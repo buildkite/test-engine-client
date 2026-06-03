@@ -90,7 +90,6 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 
 	// Return any command error after processing the report
 	return cmdErr
-
 }
 
 // getTestCasesFromSuite recursively traverses the Playwright report suite and returns all test cases.

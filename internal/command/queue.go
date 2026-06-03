@@ -24,7 +24,7 @@ import (
 const queueRetryCountMetadataKey = "queue_retry_count"
 
 // QueuePush discovers or reads tests and pushes them into the Test Engine queue.
-func QueuePush(ctx context.Context, cfg *config.Config, testFileList string, queueEntryFile string) error {
+func QueuePush(ctx context.Context, cfg *config.Config, testFileList, queueEntryFile string) error {
 	printStartUpMessage()
 
 	entries, err := queueEntries(cfg, testFileList, queueEntryFile)
@@ -172,7 +172,7 @@ func queueInlineRetryCount(cfg *config.Config) int {
 	return 0
 }
 
-func completeAndPushQueueRetryEntries(ctx context.Context, queueClient *testqueue.Client, cfg *config.Config, queueUUID string, leaseID string, entryUUIDs []string, entries []testqueue.QueueEntry) error {
+func completeAndPushQueueRetryEntries(ctx context.Context, queueClient *testqueue.Client, cfg *config.Config, queueUUID, leaseID string, entryUUIDs []string, entries []testqueue.QueueEntry) error {
 	deleted, inserted, err := queueClient.CompleteLeaseAndPush(ctx, queueUUID, leaseID, entryUUIDs, entries)
 	if err != nil {
 		return err
@@ -232,7 +232,7 @@ func matchingQueueLeasedEntries(testCase plan.TestCase, leasedEntries []testqueu
 	return matches
 }
 
-func queueTestMatches(failed plan.TestCase, leased plan.TestCase) bool {
+func queueTestMatches(failed, leased plan.TestCase) bool {
 	failedPath := normalizeQueueTestPath(failed.Path)
 	leasedPath := normalizeQueueTestPath(leased.Path)
 	if failedPath == leasedPath {
@@ -292,7 +292,7 @@ func QueueMetrics(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-func completeQueueLease(ctx context.Context, queueClient *testqueue.Client, queueUUID string, leaseID string, entryUUIDs []string) error {
+func completeQueueLease(ctx context.Context, queueClient *testqueue.Client, queueUUID, leaseID string, entryUUIDs []string) error {
 	deleted, err := queueClient.CompleteLease(ctx, queueUUID, leaseID, entryUUIDs)
 	if err != nil {
 		return err
@@ -303,7 +303,7 @@ func completeQueueLease(ctx context.Context, queueClient *testqueue.Client, queu
 	return nil
 }
 
-func startQueueLeaseHeartbeat(ctx context.Context, queueClient *testqueue.Client, queueUUID string, leaseID string, leaseSeconds int) func() error {
+func startQueueLeaseHeartbeat(ctx context.Context, queueClient *testqueue.Client, queueUUID, leaseID string, leaseSeconds int) func() error {
 	extendSeconds := leaseSeconds
 	if extendSeconds <= 0 {
 		extendSeconds = 600
@@ -355,7 +355,7 @@ func startQueueLeaseHeartbeat(ctx context.Context, queueClient *testqueue.Client
 	}
 }
 
-func queueEntries(cfg *config.Config, testFileList string, queueEntryFile string) ([]testqueue.QueueEntry, error) {
+func queueEntries(cfg *config.Config, testFileList, queueEntryFile string) ([]testqueue.QueueEntry, error) {
 	if queueEntryFile != "" {
 		return readQueueEntries(queueEntryFile, cfg)
 	}

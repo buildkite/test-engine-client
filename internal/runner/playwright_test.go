@@ -27,7 +27,6 @@ func TestPlaywrightRun(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := playwright.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
 	}
@@ -115,7 +114,6 @@ func TestPlaywrightRun_TestSkipped(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := playwright.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Playwright.Run(%q) error = %v", testCases, err)
 	}

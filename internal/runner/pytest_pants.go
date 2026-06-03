@@ -138,7 +138,6 @@ func (p PytestPants) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (
 	cmd = strings.Replace(cmd, "{{resultPath}}", p.ResultPath, 1)
 
 	args, err := shellquote.Split(cmd)
-
 	if err != nil {
 		return "", []string{}, err
 	}

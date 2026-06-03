@@ -19,7 +19,7 @@ import (
 // (e.g. "rspec-json", "jest-json").
 // Errors are returned to the caller to be logged and suppressed — this upload
 // is best-effort and must not fail the build.
-func (c *Client) UploadTestResults(ctx context.Context, token string, filePath string, format string, locationPrefix string) error {
+func (c *Client) UploadTestResults(ctx context.Context, token, filePath, format, locationPrefix string) error {
 	body, contentType, err := buildTestResultsMultipartBody(filePath, format, locationPrefix)
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func (c *Client) UploadTestResults(ctx context.Context, token string, filePath s
 	return nil
 }
 
-func buildTestResultsMultipartBody(filePath string, format string, locationPrefix string) (*bytes.Buffer, string, error) {
+func buildTestResultsMultipartBody(filePath, format, locationPrefix string) (*bytes.Buffer, string, error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 

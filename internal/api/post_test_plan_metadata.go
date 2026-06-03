@@ -21,7 +21,7 @@ type TestPlanMetadataParams struct {
 	Statistics runner.RunStatistics `json:"statistics"`
 }
 
-func (c Client) PostTestPlanMetadata(ctx context.Context, suiteSlug string, identifier string, params TestPlanMetadataParams) error {
+func (c Client) PostTestPlanMetadata(ctx context.Context, suiteSlug, identifier string, params TestPlanMetadataParams) error {
 	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan_metadata", c.ServerBaseURL, c.OrganizationSlug, suiteSlug)
 
 	_, err := c.DoWithRetry(ctx, httpRequest{

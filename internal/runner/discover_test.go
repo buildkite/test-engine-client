@@ -9,7 +9,6 @@ import (
 func TestDiscoverTestFiles(t *testing.T) {
 	pattern := "testdata/files/**/*_test"
 	got, err := discoverTestFiles(pattern, "")
-
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, "", err)
 	}
@@ -31,7 +30,6 @@ func TestDiscoverTestFiles_WithExcludePattern(t *testing.T) {
 	pattern := "testdata/files/**/*_test"
 	excludePattern := "testdata/files/**/animals/*"
 	got, err := discoverTestFiles(pattern, excludePattern)
-
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, excludePattern, err)
 	}
@@ -51,7 +49,6 @@ func TestDiscoverTestFiles_WithExcludeDirectory(t *testing.T) {
 	pattern := "testdata/files/**/*_test"
 	excludePattern := "testdata/files/**/animals"
 	got, err := discoverTestFiles(pattern, excludePattern)
-
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, excludePattern, err)
 	}
@@ -71,7 +68,6 @@ func TestDiscoverTestFiles_ExcludeNodeModules(t *testing.T) {
 	pattern := "testdata/**/*.js"
 	excludePattern := ""
 	got, err := discoverTestFiles(pattern, excludePattern)
-
 	if err != nil {
 		t.Errorf("discoverTestFiles(%q, %q) error: %v", pattern, excludePattern, err)
 	}

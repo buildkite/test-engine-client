@@ -66,7 +66,7 @@ func TestCucumberRun(t *testing.T) {
 	})
 
 	// Create the directory for the results
-	if err := os.MkdirAll("tmp", 0755); err != nil {
+	if err := os.MkdirAll("tmp", 0o755); err != nil {
 		t.Fatalf("could not create tmp directory: %v", err)
 	}
 
@@ -75,7 +75,6 @@ func TestCucumberRun(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := cucumber.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Cucumber.Run(%q) error = %v", testCases, err)
 	}
@@ -105,7 +104,7 @@ func TestCucumberRun_TestFailed(t *testing.T) {
 	})
 
 	// Create the directory for the results
-	if err := os.MkdirAll("tmp", 0755); err != nil {
+	if err := os.MkdirAll("tmp", 0o755); err != nil {
 		t.Fatalf("could not create tmp directory: %v", err)
 	}
 
@@ -265,7 +264,7 @@ func TestCucumberRun_IndividualScenarios(t *testing.T) {
 	})
 
 	// Create the directory for the results
-	if err := os.MkdirAll("tmp", 0755); err != nil {
+	if err := os.MkdirAll("tmp", 0o755); err != nil {
 		t.Fatalf("could not create tmp directory: %v", err)
 	}
 
@@ -286,7 +285,6 @@ func TestCucumberRun_IndividualScenarios(t *testing.T) {
 
 	result := NewRunResult([]plan.TestCase{}) // No muted tests for this test
 	err := cucumber.Run(result, individualTestCases, false)
-
 	if err != nil {
 		t.Errorf("Cucumber.Run() with individual scenarios error = %v", err)
 	}
@@ -329,7 +327,7 @@ func TestCucumberRun_ScenarioStatuses(t *testing.T) {
 		os.RemoveAll("tmp")
 	})
 
-	if err := os.MkdirAll("tmp", 0755); err != nil {
+	if err := os.MkdirAll("tmp", 0o755); err != nil {
 		t.Fatalf("could not create tmp directory: %v", err)
 	}
 
@@ -529,7 +527,7 @@ func TestCucumberGetExamples_WithOtherFormatters(t *testing.T) {
 	// So we don't end up with a lot of files after running this test.
 	// We'll clean up the file after the test.
 	// Ensure tmp directory exists (it's created by other tests, but good for standalone robustness)
-	if err := os.MkdirAll("tmp", 0755); err != nil {
+	if err := os.MkdirAll("tmp", 0o755); err != nil {
 		t.Fatalf("could not create tmp directory: %v", err)
 	}
 	f, err := os.CreateTemp("tmp", "cucumber-*.html")

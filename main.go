@@ -20,8 +20,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-var cfg = config.New()
-var queueEnvFileNameUnsafeChars = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
+var (
+	cfg                         = config.New()
+	queueEnvFileNameUnsafeChars = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
+)
 
 func main() {
 	if err := cliCommand.Run(context.Background(), os.Args); err != nil {

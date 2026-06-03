@@ -223,7 +223,6 @@ func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	debug.Printf("Running `%s %s` for dry run", cmdName, strings.Join(cmdArgs, " "))
 
 	output, err := exec.Command(cmdName, cmdArgs...).CombinedOutput()
-
 	if err != nil {
 		return []plan.TestCase{}, fmt.Errorf("failed to run rspec dry run: %s", output)
 	}

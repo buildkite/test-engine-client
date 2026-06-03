@@ -18,7 +18,7 @@ func TestNewRspec(t *testing.T) {
 		input RunnerConfig
 		want  RunnerConfig
 	}{
-		//default
+		// default
 		{
 			input: RunnerConfig{},
 			want: RunnerConfig{
@@ -84,7 +84,6 @@ func TestRspecRun(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
@@ -110,7 +109,6 @@ func TestRspecRun_RetryCommand(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, true)
-
 	if err != nil {
 		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
@@ -195,7 +193,6 @@ func TestRspecRun_TestSkipped(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := rspec.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
 	}
@@ -438,7 +435,6 @@ func TestRspecGetExamples_WithOtherFormatters(t *testing.T) {
 		got, err := rspec.GetExamples(files)
 
 		t.Run(command, func(t *testing.T) {
-
 			if err != nil {
 				t.Errorf("Rspec.GetExamples(%q) error = %v", files, err)
 			}

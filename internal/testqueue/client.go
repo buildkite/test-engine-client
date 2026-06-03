@@ -95,7 +95,7 @@ func (c *Client) PushBatch(ctx context.Context, queue QueueRef, entries []QueueE
 }
 
 // PopBatch leases entries from a queue.
-func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leaseDurationSeconds int, leaseOwner string) (string, []LeasedEntry, bool, error) {
+func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit, leaseDurationSeconds int, leaseOwner string) (string, []LeasedEntry, bool, error) {
 	var response struct {
 		LeaseID string        `json:"lease_id"`
 		Entries []LeasedEntry `json:"entries"`
@@ -115,7 +115,7 @@ func (c *Client) PopBatch(ctx context.Context, queueUUID string, limit int, leas
 }
 
 // CompleteLease deletes completed leased entries.
-func (c *Client) CompleteLease(ctx context.Context, queueUUID string, leaseID string, entryUUIDs []string) (int, error) {
+func (c *Client) CompleteLease(ctx context.Context, queueUUID, leaseID string, entryUUIDs []string) (int, error) {
 	var response struct {
 		Deleted int `json:"deleted"`
 	}
@@ -128,7 +128,7 @@ func (c *Client) CompleteLease(ctx context.Context, queueUUID string, leaseID st
 }
 
 // CompleteLeaseAndPush atomically completes leased entries and enqueues follow-up entries.
-func (c *Client) CompleteLeaseAndPush(ctx context.Context, queueUUID string, leaseID string, entryUUIDs []string, entries []QueueEntry) (int, int, error) {
+func (c *Client) CompleteLeaseAndPush(ctx context.Context, queueUUID, leaseID string, entryUUIDs []string, entries []QueueEntry) (int, int, error) {
 	var response struct {
 		Deleted  int `json:"deleted"`
 		Inserted int `json:"inserted"`
@@ -143,7 +143,7 @@ func (c *Client) CompleteLeaseAndPush(ctx context.Context, queueUUID string, lea
 }
 
 // RequeueLease returns leased entries to the queue.
-func (c *Client) RequeueLease(ctx context.Context, queueUUID string, leaseID string) (int, error) {
+func (c *Client) RequeueLease(ctx context.Context, queueUUID, leaseID string) (int, error) {
 	var response struct {
 		Requeued int `json:"requeued"`
 	}
@@ -155,7 +155,7 @@ func (c *Client) RequeueLease(ctx context.Context, queueUUID string, leaseID str
 }
 
 // HeartbeatLease extends an active lease.
-func (c *Client) HeartbeatLease(ctx context.Context, queueUUID string, leaseID string, extendSeconds int) (time.Time, error) {
+func (c *Client) HeartbeatLease(ctx context.Context, queueUUID, leaseID string, extendSeconds int) (time.Time, error) {
 	var response struct {
 		LeaseExpiresAt time.Time `json:"lease_expires_at"`
 	}
@@ -183,7 +183,7 @@ func (c *Client) CloseQueue(ctx context.Context, queueUUID string) error {
 	}, nil)
 }
 
-func (c *Client) do(ctx context.Context, method string, path string, body any, out any) error {
+func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("encoding queue request: %w", err)

@@ -42,7 +42,6 @@ func TestCustom_GetExamples(t *testing.T) {
 		TestCommand:     "bin/test",
 		TestFilePattern: "tests/**/test_*.sh",
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}
@@ -59,7 +58,6 @@ func TestCustom_GetFiles(t *testing.T) {
 		TestCommand:     "./test {{testExamples}}",
 		TestFilePattern: "tests/**/test_*.sh",
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}
@@ -105,7 +103,6 @@ func TestCustom_CommandNameAndArgs(t *testing.T) {
 			TestCommand:     tc.command,
 			TestFilePattern: "tests/**/test_*.sh",
 		})
-
 		if err != nil {
 			t.Fatalf("Failed to create Custom runner: %v", err)
 		}
@@ -131,7 +128,6 @@ func TestCustom_Run(t *testing.T) {
 		TestCommand:     "./test {{testExamples}}",
 		TestFilePattern: "tests/**/test_*.sh",
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}
@@ -143,7 +139,6 @@ func TestCustom_Run(t *testing.T) {
 
 	result := NewRunResult([]plan.TestCase{})
 	err = custom.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Custom.Run(%q) error = %v", testCases, err)
 	}
@@ -158,7 +153,6 @@ func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
 		TestCommand:     "./test {{testExamples}}",
 		TestFilePattern: "./tests/**/test_*.sh",
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}
@@ -184,7 +178,6 @@ func TestCustom_Run_TestFailedWithXMLResult(t *testing.T) {
 		TestFilePattern: "./tests/**/test_*.sh",
 		ResultPath:      "./test-result.xml",
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}
@@ -215,7 +208,6 @@ func TestCustom_Run_TestFailedWithJSONResult(t *testing.T) {
 		TestFilePattern: "./tests/**/test_*.sh",
 		ResultPath:      "./test-result.json",
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}

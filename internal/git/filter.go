@@ -12,7 +12,7 @@ import (
 //
 // Uses `git cat-file --batch-check` with stdin for efficiency (single process
 // for all commits, rather than one git call per commit).
-func FilterExistingCommits(ctx context.Context, runner GitRunner, commits []string) (existing []string, missing []string, err error) {
+func FilterExistingCommits(ctx context.Context, runner GitRunner, commits []string) (existing, missing []string, err error) {
 	if len(commits) == 0 {
 		return nil, nil, nil
 	}

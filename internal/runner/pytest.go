@@ -228,7 +228,7 @@ func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
 		scope = modulePath + "::" + classPath
 		path = modulePath + "::" + classPath + "::" + name
 	}
-	return
+	return scope, path
 }
 
 func (p Pytest) GetFiles() ([]string, error) {

@@ -139,7 +139,7 @@ func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) 
 // For brevity, they are assumed here.
 
 // mapScenarioToTestCase maps a Cucumber scenario (element) to a plan.TestCase
-func mapScenarioToTestCase(featureName string, featureURI string, scenario CucumberElement) plan.TestCase {
+func mapScenarioToTestCase(featureName, featureURI string, scenario CucumberElement) plan.TestCase {
 	// Cucumber scenarios are identified by file_path:line_number
 	identifier := fmt.Sprintf("%s:%d", featureURI, scenario.Line)
 	return plan.TestCase{

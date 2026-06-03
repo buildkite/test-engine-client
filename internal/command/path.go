@@ -6,7 +6,7 @@ import (
 )
 
 // prefixFilePaths prepends the given prefix to the file paths of the test cases.
-func prefixPath(path string, prefix string) string {
+func prefixPath(path, prefix string) string {
 	if prefix == "" {
 		return path
 	}
@@ -22,7 +22,7 @@ func prefixPath(path string, prefix string) string {
 	return prefixedPath
 }
 
-func trimFilePathPrefix(path string, prefix string) (string, error) {
+func trimFilePathPrefix(path, prefix string) (string, error) {
 	if prefix == "" {
 		return path, nil
 	}

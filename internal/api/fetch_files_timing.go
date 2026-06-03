@@ -25,7 +25,6 @@ func (c Client) FetchFilesTiming(ctx context.Context, suiteSlug string, files []
 			Paths: files,
 		},
 	}, &filesTiming)
-
 	if err != nil {
 		return nil, err
 	}

@@ -147,7 +147,6 @@ func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
 
 	args, err := shellquote.Split(cmd)
-
 	if err != nil {
 		return "", []string{}, err
 	}

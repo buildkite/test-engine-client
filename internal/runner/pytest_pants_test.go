@@ -28,7 +28,6 @@ func TestPytestPantsRun(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("PytestPants.Run(%q) error = %v", testCases, err)
 	}
@@ -52,7 +51,6 @@ func TestPytestPantsRun_RetryCommand(t *testing.T) {
 
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, true)
-
 	if err != nil {
 		t.Errorf("PytestPants.Run(%q) error = %v", testCases, err)
 	}

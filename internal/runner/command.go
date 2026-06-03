@@ -72,7 +72,6 @@ func runAndForwardSignal(cmd *exec.Cmd) error {
 
 	// Wait for the command to finish.
 	err := cmd.Wait()
-
 	if err != nil {
 		// If the command was signaled, return a ProcessProcessSignaledError.
 		if exitError, ok := err.(*exec.ExitError); ok {

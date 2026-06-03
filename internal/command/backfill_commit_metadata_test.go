@@ -580,7 +580,7 @@ func TestBackfillCommitMetadata_S3PolicyConditionMismatchDoesNotRefresh(t *testi
 
 // --- Upload-only mode tests (--upload flag) ---
 
-func getUploadConfig(serverURL string, filePath string) *config.Config {
+func getUploadConfig(serverURL, filePath string) *config.Config {
 	cfg := config.New()
 	cfg.AccessToken = "test-token"
 	cfg.OrganizationSlug = "my-org"

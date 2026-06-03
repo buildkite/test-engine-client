@@ -126,7 +126,6 @@ func TestDoWithRetry_Succesful_POST(t *testing.T) {
 		URL:    svr.URL,
 		Body:   map[string]string{"message": "hello"},
 	}, &got)
-
 	if err != nil {
 		t.Errorf("DoWithRetry() error = %v", err)
 	}
@@ -153,7 +152,6 @@ func TestDoWithRetry_Succesful_GET(t *testing.T) {
 		if len(bodyBytes) > 0 {
 			t.Errorf("request body = %q, want empty", string(bodyBytes))
 		}
-
 	}))
 	defer svr.Close()
 
@@ -168,7 +166,6 @@ func TestDoWithRetry_Succesful_GET(t *testing.T) {
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, &got)
-
 	if err != nil {
 		t.Errorf("DoWithRetry() error = %v", err)
 	}

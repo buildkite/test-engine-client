@@ -115,7 +115,6 @@ func (c *Config) ValidateForRun() error {
 			// If OIDC was *not* used to generate the bktec API access token then we need
 			// to generate a token for collector uploads.
 			token, err := c.generateOIDCToken()
-
 			if err != nil {
 				c.errs.appendFieldError("BUILDKITE_ANALYTICS_TOKEN", "%v", err)
 			}

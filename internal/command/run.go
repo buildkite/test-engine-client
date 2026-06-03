@@ -217,7 +217,6 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg *config.Config
 		Version:    version.Version,
 		Statistics: statistics,
 	})
-
 	// Error is suppressed because we don't want to fail the build if we can't send metadata.
 	if err != nil {
 		fmt.Printf("Failed to send metadata to Test Engine: %v\n", err)
@@ -231,7 +230,7 @@ func sendMetadata(ctx context.Context, apiClient *api.Client, cfg *config.Config
 // For next reader, there is a small caveat with current implementation:
 // - testCases and timeline are both expected to be mutated.
 // - testCases in this case serve both as input and output -> we should probably change it.
-func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.Config, testRunner runner.TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest bool, failOnNoTests bool) (runner.RunResult, error) {
+func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.Config, testRunner runner.TestRunner, testsCases *[]plan.TestCase, maxRetries int, mutedTests []plan.TestCase, timeline *[]api.Timeline, retryForMutedTest, failOnNoTests bool) (runner.RunResult, error) {
 	attemptCount := 0
 
 	// Create a new run result with muted tests to keep track of the results.
@@ -324,7 +323,6 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 
 	// Fetch the plan from the server's cache.
 	cachedPlan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier, cfg.JobRetryCount)
-
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
 			return plan.TestPlan{}, handledErr
@@ -356,7 +354,6 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 
 	debug.Println("Creating test plan")
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
-
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
 			return plan.TestPlan{}, handledErr

@@ -19,7 +19,7 @@ func TestNewJest(t *testing.T) {
 		input RunnerConfig
 		want  RunnerConfig
 	}{
-		//default
+		// default
 		{
 			input: RunnerConfig{},
 			want: RunnerConfig{
@@ -71,7 +71,6 @@ func TestJestRun(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
@@ -103,7 +102,6 @@ func TestJestRun_Retry(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, true)
-
 	if err != nil {
 		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
@@ -197,7 +195,6 @@ func TestJestRun_TestSkipped(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := jest.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
 	}
@@ -281,7 +278,6 @@ func TestJestRun_TestTimeoutWithRetry(t *testing.T) {
 	// after the test failed due to timeout, retry the test that will eventually passed
 	failedTests := result.FailedTests()
 	err = jest.Run(result, failedTests, true)
-
 	if err != nil {
 		t.Errorf("Jest.Run() error = %v", err)
 	}

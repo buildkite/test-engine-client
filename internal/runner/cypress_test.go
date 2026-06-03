@@ -24,7 +24,6 @@ func TestCypressRun(t *testing.T) {
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err := cypress.Run(result, testCases, false)
-
 	if err != nil {
 		t.Errorf("Cypress.Run(%q) error = %v", testCases, err)
 	}

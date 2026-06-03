@@ -7,7 +7,7 @@ import (
 	"drjosh.dev/zzglob"
 )
 
-func discoverTestFiles(pattern string, excludePattern string) ([]string, error) {
+func discoverTestFiles(pattern, excludePattern string) ([]string, error) {
 	parsedPattern, err := zzglob.Parse(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing test file pattern %q", pattern)
@@ -51,7 +51,6 @@ func discoverTestFiles(pattern string, excludePattern string) ([]string, error) 
 		discoveredFiles = append(discoveredFiles, path)
 		return nil
 	}, zzglob.WalkIntermediateDirs(true))
-
 	if err != nil {
 		return nil, fmt.Errorf("error walking directory: %v", err)
 	}
