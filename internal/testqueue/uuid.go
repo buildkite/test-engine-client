@@ -14,7 +14,11 @@ func NewQueueUUID() (string, error) {
 		return "", fmt.Errorf("generating queue uuid randomness: %w", err)
 	}
 
-	millis := uint64(time.Now().UnixMilli())
+	nowMillis := time.Now().UnixMilli()
+	if nowMillis < 0 {
+		return "", fmt.Errorf("generating queue uuid timestamp: %d is before unix epoch", nowMillis)
+	}
+	millis := uint64(nowMillis)
 	bytes[0] = byte(millis >> 40)
 	bytes[1] = byte(millis >> 32)
 	bytes[2] = byte(millis >> 24)
