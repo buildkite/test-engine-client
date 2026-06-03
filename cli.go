@@ -252,7 +252,7 @@ var uploadResultsFlag = &cli.BoolFlag{
 }
 
 var uploadTagsFlag = &cli.StringSliceFlag{
-	Name:     "upload-tags",
+	Name:     "upload-tag",
 	Category: "TEST ENGINE",
 	Usage:    "Additional key=value tags to attach to the upload. Repeat for multiple entries. When using the environment variable, separate multiple tags with commas.",
 	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_UPLOAD_TAGS"),
