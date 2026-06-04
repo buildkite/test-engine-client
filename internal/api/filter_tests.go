@@ -14,8 +14,16 @@ type FilterTestsParams struct {
 	Env   *config.Config  `json:"env"`
 }
 
+// FilterReasonSkippedTests is the reason value the server attaches to a
+// filtered file when the file contains one or more skipped tests. It must match
+// TestSplitting::TestPlan::TestFilesFilter::Reason::SKIP on the server.
+const FilterReasonSkippedTests = "file contains 1 or more skipped tests"
+
 type FilteredTest struct {
 	Path string `json:"path"`
+	// Reason explains why the server returned this file, e.g. "slow file" or
+	// "file contains 1 or more skipped tests".
+	Reason string `json:"reason"`
 }
 
 type FilteredTestResponse struct {

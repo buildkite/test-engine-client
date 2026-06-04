@@ -48,6 +48,13 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
+	// Skipped tests are honoured server-side by excluding them from a node's task
+	// list, which only works for runners that skip by example. File-splitting
+	// runners (e.g. Jest) receive the whole file and run every test in it, so a
+	// test marked for skipping runs anyway and its failure fails the build. Warn
+	// loudly so the behaviour isn't silent; we don't change what runs.
+	warnIfSkipUnsupported(ctx, apiClient, cfg, files, testRunner)
+
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
 		return err
@@ -107,6 +114,63 @@ func printStartUpMessage() {
 	const reset = "\033[0m"
 	fmt.Println("+++ Buildkite Test Engine Client: bktec " + version.Version + "\n")
 	fmt.Println(green + Logo + reset)
+}
+
+// warnIfSkipUnsupported warns when the suite has tests marked for skipping but
+// the runner cannot skip them.
+//
+// Test Engine honours skips by omitting tests from a node's task list, which
+// only works for runners that split by example. File-splitting runners receive
+// the whole file and run every test in it, so a skipped test runs anyway and
+// its failure fails the build. We detect this via the filter_tests endpoint,
+// which returns the discovered test files tagged with a reason; files whose
+// reason is "file contains 1 or more skipped tests" hold tests the runner will
+// run despite the skip.
+//
+// This is advisory only: it never changes what runs and never fails the build.
+// Any error talking to filter_tests is logged to debug and otherwise ignored.
+func warnIfSkipUnsupported(ctx context.Context, apiClient *api.Client, cfg *config.Config, files []string, testRunner runner.TestRunner) {
+	if testRunner.SupportedFeatures().Skip {
+		return
+	}
+
+	prefix := testRunner.LocationPrefix()
+	testFiles := make([]plan.TestCase, len(files))
+	for i, file := range files {
+		testFiles[i] = plan.TestCase{Path: prefixPath(file, prefix)}
+	}
+
+	filtered, err := apiClient.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
+		Files: testFiles,
+		Env:   cfg,
+	})
+	if err != nil {
+		debug.Printf("Skip-support check skipped: filter_tests failed: %v", err)
+		return
+	}
+
+	var skippedFiles []string
+	for _, file := range filtered {
+		if file.Reason != api.FilterReasonSkippedTests {
+			continue
+		}
+		// Trim the prefix back off so the path matches what the user sees locally.
+		path := file.Path
+		if trimmed, trimErr := trimFilePathPrefix(path, prefix); trimErr == nil {
+			path = trimmed
+		}
+		skippedFiles = append(skippedFiles, path)
+	}
+
+	if len(skippedFiles) == 0 {
+		return
+	}
+
+	fmt.Printf("~~~ ⚠️ Buildkite Test Engine Client: %s does not support skipping tests\n", testRunner.Name())
+	fmt.Printf("Test Engine has tests marked for skipping in the following files, but %s cannot skip individual tests. These tests will run, and a failure will fail the build:\n", testRunner.Name())
+	for _, path := range skippedFiles {
+		fmt.Printf("- %s\n", path)
+	}
 }
 
 func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {
