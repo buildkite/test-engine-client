@@ -60,6 +60,22 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
 
+	// When a runner can mute tests but cannot skip them, fall back to muting the
+	// tests Test Engine wanted to skip.
+	//
+	// Test Engine excludes skipped tests from a node's task list, but runners that
+	// split by file (e.g. Jest) still receive the whole file and run every test in
+	// it, including the ones marked for skipping. Such runners have no way to skip
+	// an individual test, so the skipped test executes anyway and its failure would
+	// fail the build. Treating it as muted lets it run while suppressing its
+	// failure. Muting is matched by scope and name, so the skipped test is muted
+	// regardless of which file or node it belongs to.
+	features := testRunner.SupportedFeatures()
+	if !features.Skip && features.Mute && len(testPlan.SkippedTests) > 0 {
+		testPlan.MutedTests = append(testPlan.MutedTests, testPlan.SkippedTests...)
+		testPlan.SkippedTests = nil
+	}
+
 	// File paths sent to the API for test plan creation include the location prefix to match Test Engine records.
 	// However, the test runner expects file paths without the prefix, so we need to remove it before running the tests.
 	locationPrefix := testRunner.LocationPrefix()

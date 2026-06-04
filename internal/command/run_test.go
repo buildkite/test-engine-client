@@ -1021,3 +1021,33 @@ func TestRunTestsWithRetry_UploadErrorDoesNotFailBuild(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, runner.RunStatusPassed, result.Status(), "build should pass even when upload fails")
 }
+
+// TestSkipToMuteFallback_FailedSkippedTestDoesNotFailBuild verifies the core
+// behaviour: for a runner that mutes but cannot skip (e.g. Jest), a test that
+// Test Engine wanted to skip still executes (the runner has no way to skip it),
+// but because it is treated as muted, its failure does not fail the build.
+func TestSkipToMuteFallback_FailedSkippedTestDoesNotFailBuild(t *testing.T) {
+	// Test Engine reports this test as skipped, but Jest can't skip it.
+	skippedTest := plan.TestCase{Path: "fruits.spec.js", Scope: "Fruits", Name: "is forbidden"}
+
+	// Emulate the fallback applied in Run: skipped tests become muted tests.
+	mutedTests := []plan.TestCase{skippedTest}
+	result := runner.NewRunResult(mutedTests)
+
+	// The runner executes the test (because it couldn't be skipped) and it fails.
+	result.RecordTestResult(skippedTest, runner.TestStatusFailed)
+
+	// The failure is treated as muted, so the build still passes.
+	if got := result.Status(); got != runner.RunStatusPassed {
+		t.Errorf("Status() = %v, want %v", got, runner.RunStatusPassed)
+	}
+	if !result.OnlyMutedFailures() {
+		t.Error("OnlyMutedFailures() = false, want true")
+	}
+	if len(result.FailedTests()) != 0 {
+		t.Errorf("FailedTests() = %v, want none (failure should be muted)", result.FailedTests())
+	}
+	if len(result.FailedMutedTests()) != 1 {
+		t.Errorf("FailedMutedTests() = %v, want 1", result.FailedMutedTests())
+	}
+}
