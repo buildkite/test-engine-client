@@ -64,7 +64,12 @@ func NewPytestPants(c RunnerConfig) PytestPants {
 }
 
 func (p PytestPants) ResultFormat() string {
-	return p.resultFormat
+	if p.resultFormat == "junit" {
+		return "junit"
+	}
+	// JSON results are uploaded by buildkite-test-collector directly, so
+	// returning "" prevents bktec from double-uploading.
+	return ""
 }
 
 func (p PytestPants) SupportedFeatures() SupportedFeatures {

@@ -227,8 +227,8 @@ func TestPytestPantsResultFormat_JUnit(t *testing.T) {
 
 func TestPytestPantsResultFormat_JSON(t *testing.T) {
 	pytest := PytestPants{resultFormat: "json"}
-	if got := pytest.ResultFormat(); got != "json" {
-		t.Errorf("ResultFormat() = %q, want %q", got, "json")
+	if got := pytest.ResultFormat(); got != "" {
+		t.Errorf("ResultFormat() = %q, want %q", got, "")
 	}
 }
 
