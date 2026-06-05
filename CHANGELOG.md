@@ -1,4 +1,7 @@
 # Changelog
+## 2.8.0 - 2026-06-05
+- Add `--tag` flag and `BUILDKITE_TEST_ENGINE_TAGS` env var to `bktec run` to tag the run when uploading to Test Engine. Tags are `key=value` pairs and can be repeated.
+
 ## 2.7.0 - 2026-05-29
 - Upload test results to the Test Engine Upload API after each run, replacing the need to install `buildkite-test-collector` alongside `bktec`. Opt-in via `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS`; disabled by default to avoid double-uploading for customers already running the collector.
 - Change the Pytest runner default output to JUnit XML when `buildkite-test-collector` is not installed. When the plugin is present, the existing Test Engine JSON output and `--tag-filters` behaviour are unchanged. Using `--tag-filters` without the plugin now exits with a clear error.
