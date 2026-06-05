@@ -82,7 +82,7 @@ steps:
       - bktec run
     env:
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: your-suite-slug
-      BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS: "true" # This will upload test results to Test Engine using the BUILDKITE_ANALYTICS_TOKEN
+      BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS: "true" # This will upload test results to Test Engine
       BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: your-api-token
       BUILDKITE_TEST_ENGINE_TEST_RUNNER: nunit
       BUILDKITE_TEST_ENGINE_RESULT_PATH: test-results/results.xml
