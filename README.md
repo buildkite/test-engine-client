@@ -85,6 +85,9 @@ bktec run --tag env=production --tag region=us-east-1
 export BUILDKITE_TEST_ENGINE_TAGS="env=production,region=us-east-1"
 ```
 
+> [!NOTE]
+> `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS` is not supported for the `pytest-pants` runner. Use Option 2 below instead.
+
 **Option 2: Install a [Buildkite Test Collector](https://buildkite.com/docs/test-engine/test-collection)**
 
 Test collectors are available for many languages and frameworks. Some collectors also provide richer data collection such as execution-level tagging and span tracing. See the [test collector docs](https://buildkite.com/docs/test-engine/test-collection) for details on what's available for your framework.
