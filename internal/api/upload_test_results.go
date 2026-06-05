@@ -19,8 +19,8 @@ import (
 // (e.g. "rspec-json", "jest-json").
 // Errors are returned to the caller to be logged and suppressed — this upload
 // is best-effort and must not fail the build.
-func (c *Client) UploadTestResults(ctx context.Context, token string, filePath string, format string, locationPrefix string) error {
-	body, contentType, err := buildTestResultsMultipartBody(filePath, format, locationPrefix)
+func (c *Client) UploadTestResults(ctx context.Context, token string, filePath string, format string, locationPrefix string, tags map[string]string) error {
+	body, contentType, err := buildTestResultsMultipartBody(filePath, format, locationPrefix, tags)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (c *Client) UploadTestResults(ctx context.Context, token string, filePath s
 	return nil
 }
 
-func buildTestResultsMultipartBody(filePath string, format string, locationPrefix string) (*bytes.Buffer, string, error) {
+func buildTestResultsMultipartBody(filePath string, format string, locationPrefix string, tags map[string]string) (*bytes.Buffer, string, error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 
@@ -77,6 +77,12 @@ func buildTestResultsMultipartBody(filePath string, format string, locationPrefi
 	for k, v := range runEnv {
 		if err := w.WriteField(fmt.Sprintf("run_env[%s]", k), v); err != nil {
 			return nil, "", fmt.Errorf("writing run_env[%s]: %w", k, err)
+		}
+	}
+
+	for k, v := range tags {
+		if err := w.WriteField(fmt.Sprintf("tags[%s]", k), v); err != nil {
+			return nil, "", fmt.Errorf("writing tags[%s]: %w", k, err)
 		}
 	}
 

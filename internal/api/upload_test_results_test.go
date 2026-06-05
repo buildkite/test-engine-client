@@ -52,7 +52,7 @@ func TestUploadTestResults(t *testing.T) {
 	defer svr.Close()
 
 	client := NewClient(ClientConfig{UploadBaseURL: svr.URL})
-	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "./")
+	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "./", nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, "Token token=my-token", gotToken)
@@ -73,7 +73,7 @@ func TestUploadTestResults_ServerError(t *testing.T) {
 	defer svr.Close()
 
 	client := NewClient(ClientConfig{UploadBaseURL: svr.URL})
-	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "")
+	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "", nil)
 	assert.ErrorContains(t, err, "upload failed with status 500")
 }
 
@@ -84,7 +84,7 @@ func TestUploadTestResults_MissingFile(t *testing.T) {
 	defer svr.Close()
 
 	client := NewClient(ClientConfig{UploadBaseURL: svr.URL})
-	err := client.UploadTestResults(t.Context(), "my-token", "/nonexistent/path/results.json", "rspec-json", "")
+	err := client.UploadTestResults(t.Context(), "my-token", "/nonexistent/path/results.json", "rspec-json", "", nil)
 	assert.ErrorContains(t, err, "opening result file")
 }
 
@@ -100,7 +100,7 @@ func TestBuildTestResultsMultipartBody(t *testing.T) {
 	require.NoError(t, err)
 	resultFile.Close()
 
-	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "my/prefix")
+	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "my/prefix", nil)
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(contentType, "multipart/form-data"))
 
@@ -134,6 +134,37 @@ func TestBuildTestResultsMultipartBody(t *testing.T) {
 	assert.Equal(t, cwd, fields["run_env[cwd]"])
 }
 
+func TestBuildTestResultsMultipartBody_WithTags(t *testing.T) {
+	resultFile, err := os.CreateTemp("", "results-*.json")
+	require.NoError(t, err)
+	defer os.Remove(resultFile.Name())
+	resultFile.Close()
+
+	tags := map[string]string{"env": "production", "team": "platform"}
+	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "", tags)
+	require.NoError(t, err)
+
+	_, params, err := mime.ParseMediaType(contentType)
+	require.NoError(t, err)
+
+	fields := map[string]string{}
+	mr := multipart.NewReader(buf, params["boundary"])
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		val, _ := io.ReadAll(part)
+		if part.FormName() != "" {
+			fields[part.FormName()] = string(val)
+		}
+	}
+
+	assert.Equal(t, "production", fields["tags[env]"])
+	assert.Equal(t, "platform", fields["tags[team]"])
+}
+
 func TestBuildTestResultsMultipartBody_NoCwdOutsideBuildkite(t *testing.T) {
 	t.Setenv("BUILDKITE_BUILD_ID", "")
 
@@ -142,7 +173,7 @@ func TestBuildTestResultsMultipartBody_NoCwdOutsideBuildkite(t *testing.T) {
 	defer os.Remove(resultFile.Name())
 	resultFile.Close()
 
-	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "")
+	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "", nil)
 	require.NoError(t, err)
 
 	_, params, err := mime.ParseMediaType(contentType)

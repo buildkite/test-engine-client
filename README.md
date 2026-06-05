@@ -60,6 +60,32 @@ To use bktec, you need to configure the `BUILDKITE_TEST_ENGINE_SUITE_SLUG` envir
 export BUILDKITE_TEST_ENGINE_SUITE_SLUG=my-slug
 ```
 
+### Upload test results to Test Engine
+
+bktec needs to collect your test data to enable features like intelligent test splitting, retry, and muting. There are two ways to do this:
+
+**Option 1: Use bktec's built-in upload (requires bktec 2.7.0 or later)**
+
+Set `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS` to `true`:
+
+```sh
+export BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true
+```
+
+You can attach key/value tags to each upload using `--tag` or `BUILDKITE_TEST_ENGINE_TAGS`. Tags are useful for filtering and grouping test results in Test Engine.
+
+```sh
+# As CLI flags (repeatable)
+bktec run --tag env=production --tag region=us-east-1
+
+# As an environment variable (comma-separated)
+export BUILDKITE_TEST_ENGINE_TAGS="env=production,region=us-east-1"
+```
+
+**Option 2: Install a [Buildkite Test Collector](https://buildkite.com/docs/test-engine/test-collection)**
+
+Test collectors are available for many languages and frameworks. Some collectors also provide richer data collection such as execution-level tagging and span tracing. See the [test collector docs](https://buildkite.com/docs/test-engine/test-collection) for details on what's available for your framework.
+
 ### Preview: Test Selection
 You can pass test selection strategy configuration and additional change context to the test plan API request.
 This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).
