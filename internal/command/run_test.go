@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -1020,4 +1022,98 @@ func TestRunTestsWithRetry_UploadErrorDoesNotFailBuild(t *testing.T) {
 	result, err := runTestsWithRetry(context.Background(), apiClient, cfg, testRunner, &testCases, 0, []plan.TestCase{}, &timeline, true, false)
 	assert.NoError(t, err)
 	assert.Equal(t, runner.RunStatusPassed, result.Status(), "build should pass even when upload fails")
+}
+
+// captureStdout redirects os.Stdout to a pipe and returns a function that,
+// when called, closes the write end and returns everything written to stdout.
+func captureStdout(t *testing.T) func() string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	orig := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = orig })
+	return func() string {
+		w.Close()
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		r.Close()
+		return buf.String()
+	}
+}
+
+func TestWarnIfSkipUnsupported_WarnsForSkipReasonFiles(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		io.WriteString(w, `{"tests": [
+			{"path": "fruits.spec.js", "reason": "file contains 1 or more skipped tests"},
+			{"path": "slow.spec.js", "reason": "slow file"}
+		]}`)
+	}))
+	defer svr.Close()
+
+	cfg := &config.Config{ServerBaseURL: svr.URL, OrganizationSlug: "buildkite", SuiteSlug: "jest"}
+	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL, OrganizationSlug: "buildkite"})
+	testRunner := runner.NewJest(runner.RunnerConfig{})
+
+	getOutput := captureStdout(t)
+	warnIfSkipUnsupported(context.Background(), apiClient, cfg, []string{"fruits.spec.js", "slow.spec.js"}, testRunner)
+	out := getOutput()
+
+	if !strings.Contains(out, "does not support skipping tests") {
+		t.Errorf("expected skip-unsupported warning, got:\n%s", out)
+	}
+	if !strings.Contains(out, "fruits.spec.js") {
+		t.Errorf("expected skip-reason file in warning, got:\n%s", out)
+	}
+	if strings.Contains(out, "slow.spec.js") {
+		t.Errorf("slow file should not be named in the skip warning, got:\n%s", out)
+	}
+}
+
+func TestWarnIfSkipUnsupported_NoWarningWithoutSkipReasonFiles(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		io.WriteString(w, `{"tests": [{"path": "slow.spec.js", "reason": "slow file"}]}`)
+	}))
+	defer svr.Close()
+
+	cfg := &config.Config{ServerBaseURL: svr.URL, OrganizationSlug: "buildkite", SuiteSlug: "jest"}
+	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL, OrganizationSlug: "buildkite"})
+	testRunner := runner.NewJest(runner.RunnerConfig{})
+
+	getOutput := captureStdout(t)
+	warnIfSkipUnsupported(context.Background(), apiClient, cfg, []string{"slow.spec.js"}, testRunner)
+	out := getOutput()
+
+	if strings.Contains(out, "does not support skipping tests") {
+		t.Errorf("did not expect a warning when no skip-reason files, got:\n%s", out)
+	}
+}
+
+func TestWarnIfSkipUnsupported_SkipsCheckForSkipCapableRunner(t *testing.T) {
+	called := false
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		io.WriteString(w, `{"tests": []}`)
+	}))
+	defer svr.Close()
+
+	cfg := &config.Config{ServerBaseURL: svr.URL, OrganizationSlug: "buildkite", SuiteSlug: "rspec"}
+	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL, OrganizationSlug: "buildkite"})
+	// RSpec supports skipping (by example), so the check should be a no-op.
+	testRunner := runner.NewRspec(runner.RunnerConfig{})
+
+	getOutput := captureStdout(t)
+	warnIfSkipUnsupported(context.Background(), apiClient, cfg, []string{"fruits_spec.rb"}, testRunner)
+	out := getOutput()
+
+	if called {
+		t.Error("filter_tests should not be called for a skip-capable runner")
+	}
+	if out != "" {
+		t.Errorf("expected no output for skip-capable runner, got:\n%s", out)
+	}
 }
