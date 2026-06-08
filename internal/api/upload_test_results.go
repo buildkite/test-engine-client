@@ -19,26 +19,34 @@ import (
 // (e.g. "rspec-json", "jest-json").
 // Errors are returned to the caller to be logged and suppressed — this upload
 // is best-effort and must not fail the build.
+//
+// Transient failures (network errors, 429, 5xx) are retried via doWithRetry
+// before giving up. The multipart body is built once and re-sent on each attempt.
 func (c *Client) UploadTestResults(ctx context.Context, token string, filePath string, format string, locationPrefix string, tags map[string]string) error {
 	body, contentType, err := buildTestResultsMultipartBody(filePath, format, locationPrefix, tags)
 	if err != nil {
 		return err
 	}
+	// Keep the body content so newRequest can wrap it in a fresh bytes.Reader
+	// for each attempt. We can't reuse one reader across retries because a reader
+	// is drained once it's read, leaving nothing to re-send.
+	bodyBytes := body.Bytes()
 
 	uploadURL := strings.TrimRight(c.UploadBaseURL, "/") + "/v1/uploads"
-	uploadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
 
-	req, err := http.NewRequestWithContext(uploadCtx, http.MethodPost, uploadURL, body)
-	if err != nil {
-		return fmt.Errorf("creating upload request: %w", err)
+	newRequest := func(reqCtx context.Context) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, uploadURL, bytes.NewReader(bodyBytes))
+		if err != nil {
+			return nil, fmt.Errorf("creating upload request: %w", err)
+		}
+		req.Header.Set("Authorization", fmt.Sprintf("Token token=%s", token))
+		req.Header.Set("Content-Type", contentType)
+		return req, nil
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Token token=%s", token))
-	req.Header.Set("Content-Type", contentType)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doWithRetry(ctx, 30*time.Second, newRequest)
 	if err != nil {
-		return fmt.Errorf("uploading test results: %w", err)
+		return err
 	}
 	defer resp.Body.Close()
 
