@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+var (
+	uploadRetryTimeout = 30 * time.Second
+)
+
 // UploadTestResults POSTs the raw result file from the runner to the
 // Test Engine analytics API at <c.UploadBaseURL>/v1/uploads.
 // The format parameter tells the ingestion gear how to parse the file
@@ -44,7 +48,11 @@ func (c *Client) UploadTestResults(ctx context.Context, token string, filePath s
 		return req, nil
 	}
 
-	resp, err := c.doWithRetry(ctx, 30*time.Second, newRequest)
+	// Upload requests are usually faster than Test Plan requests, so each attempt
+	// uses a shorter timeout (5s instead of 15s).
+	// This is a best-effort call, so retries also use a smaller total budget
+	// (30s instead of 130s) to avoid delaying the build.
+	resp, err := c.doWithRetry(ctx, 5*time.Second, uploadRetryTimeout, newRequest)
 	if err != nil {
 		return err
 	}

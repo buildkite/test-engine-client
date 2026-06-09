@@ -144,9 +144,10 @@ type httpRequest struct {
 // shared retry mechanics used by doJSONWithRetry and UploadTestResults.
 //
 // The request is retried when the server returns 429, 409, or 5xx, or when there
-// is a network error. After reaching the retry timeout, the function returns
-// ErrRetryTimeout. newRequest builds a fresh request for each attempt (so a body
-// can be re-sent on retry).
+// is a network error. retryTimeout caps the total time spent across all attempts,
+// and perAttemptTimeout caps each individual attempt. After exhausting the retry
+// timeout, the function returns ErrRetryTimeout. newRequest builds a fresh request
+// for each attempt (so a body can be re-sent on retry).
 //
 // On a response that is not retried, doWithRetry returns it with a nil error
 // and the caller is responsible for reading and closing the response body. When
@@ -154,6 +155,7 @@ type httpRequest struct {
 func (c *Client) doWithRetry(
 	ctx context.Context,
 	perAttemptTimeout time.Duration,
+	retryTimeout time.Duration,
 	newRequest func(ctx context.Context) (*http.Request, error),
 ) (*http.Response, error) {
 	r := roko.NewRetrier(
@@ -249,7 +251,7 @@ func (c *Client) doJSONWithRetry(ctx context.Context, reqOptions httpRequest, v 
 
 	// Each request times out after 15 seconds, chosen to provide some
 	// headroom on top of the goal p99 time to fetch of 10s.
-	timeOut := 15 * time.Second
+	perAttemptTimeout := 15 * time.Second
 	newRequest := func(reqContext context.Context) (*http.Request, error) {
 		req, err := http.NewRequestWithContext(reqContext, reqOptions.Method, reqOptions.URL, nil)
 		if err != nil {
@@ -269,7 +271,7 @@ func (c *Client) doJSONWithRetry(ctx context.Context, reqOptions httpRequest, v 
 		return req, nil
 	}
 
-	resp, err := c.doWithRetry(ctx, timeOut, newRequest)
+	resp, err := c.doWithRetry(ctx, perAttemptTimeout, retryTimeout, newRequest)
 	if err != nil {
 		return resp, err
 	}

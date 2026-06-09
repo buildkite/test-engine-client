@@ -21,11 +21,11 @@ import (
 // via t.Cleanup.
 func shortenUploadRetries(t *testing.T) {
 	t.Helper()
-	origTimeout, origDelay := retryTimeout, initialDelay
-	retryTimeout = 1 * time.Second
+	origTimeout, origDelay := uploadRetryTimeout, initialDelay
+	uploadRetryTimeout = 1 * time.Second
 	initialDelay = 1 * time.Millisecond
 	t.Cleanup(func() {
-		retryTimeout = origTimeout
+		uploadRetryTimeout = origTimeout
 		initialDelay = origDelay
 	})
 }
