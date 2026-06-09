@@ -148,8 +148,9 @@ type httpRequest struct {
 // ErrRetryTimeout. newRequest builds a fresh request for each attempt (so a body
 // can be re-sent on retry).
 //
-// On a response that is not retried, doWithRetry returns it with a nil error;
-// the caller is responsible for reading and closing the response body.
+// On a response that is not retried, doWithRetry returns it with a nil error
+// and the caller is responsible for reading and closing the response body. When
+// it returns an error, any response body has already been closed.
 func (c *Client) doWithRetry(
 	ctx context.Context,
 	perAttemptTimeout time.Duration,
@@ -196,17 +197,20 @@ func (c *Client) doWithRetry(
 			if rateLimitReset, err := strconv.Atoi(resp.Header.Get("RateLimit-Reset")); err == nil {
 				r.SetNextInterval(time.Duration(rateLimitReset) * time.Second)
 			}
+			drainAndCloseBody(resp)
 			return resp, fmt.Errorf("response code: 429")
 		}
 
 		// If we get a 409, we aren't the first client to create the plan so return
 		// and retry
 		if resp.StatusCode == http.StatusConflict {
+			drainAndCloseBody(resp)
 			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
 		}
 
 		// If we get a 5xx, we should return and retry
 		if resp.StatusCode >= 500 {
+			drainAndCloseBody(resp)
 			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
 		}
 
@@ -221,6 +225,16 @@ func (c *Client) doWithRetry(
 	}
 
 	return resp, err
+}
+
+// drainAndCloseBody reads resp.Body to the end and closes it. An HTTP request
+// reuses an existing network connection only if the previous response body was
+// fully read and closed, so draining lets the next retry reuse the connection
+// instead of opening a new one. Errors are ignored: draining is best-effort, and
+// a failed drain just means the connection won't be reused.
+func drainAndCloseBody(resp *http.Response) {
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
 }
 
 // doJSONWithRetry sends a JSON HTTP request via doWithRetry.
