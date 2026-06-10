@@ -17,7 +17,7 @@ steps:
     artifact_paths:
       - cover.{html,out}
     plugins:
-      - docker-compose#v4.14.0:
+      - docker-compose#v5.12.1:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           run: ci
