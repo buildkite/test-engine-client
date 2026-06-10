@@ -33,6 +33,7 @@ export BUILDKITE_TEST_ENGINE_TEST_RUNNER=gotest
 export BUILDKITE_TEST_ENGINE_RESULT_PATH="junit-${BUILDKITE_JOB_ID}.xml"
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=1
 export BUILDKITE_TEST_ENGINE_TEST_CMD='gotestsum --junitfile={{resultPath}} -- -count=1 -coverprofile=cover.out -failfast -race {{packages}}'
+export BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true
 
 "${bktec_bin}" run
 
