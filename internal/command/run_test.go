@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -370,6 +371,37 @@ func TestRunTestsWithRetry_RunResultError(t *testing.T) {
 	}
 
 	// If RunResult.Status() is RunStatusError, and there are no failed tests, it shouldn't do retry.
+	if len(timeline) != 2 {
+		t.Errorf("timeline length = %v, want %d", len(timeline), 2)
+	}
+}
+
+func TestRunTestsWithRetry_GoTestBuildFailed(t *testing.T) {
+	t.Chdir("../runner/testdata/go")
+
+	testRunner := runner.NewGoTest(runner.RunnerConfig{
+		ResultPath: filepath.Join(t.TempDir(), "gotest.xml"),
+	})
+	maxRetries := 2
+	testCases := []plan.TestCase{
+		// A package with a real failing test, which on its own would be retried...
+		{Path: "example.com/hello/bad"},
+		// ...and a package that fails to build, which must make the run
+		// terminal: retrying cannot fix a build failure.
+		{Path: "example.com/hello/broken"},
+	}
+	timeline := []api.Timeline{}
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, maxRetries, []plan.TestCase{}, &timeline, false, false)
+
+	exitErr := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitErr)
+
+	if testResult.Status() != runner.RunStatusError {
+		t.Errorf("runTestsWithRetry(...) testResult.Status = %v, want %v", testResult.Status(), runner.RunStatusError)
+	}
+
+	// A build failure is terminal: no retry should happen, so the timeline
+	// should only contain test_start and test_end.
 	if len(timeline) != 2 {
 		t.Errorf("timeline length = %v, want %d", len(timeline), 2)
 	}

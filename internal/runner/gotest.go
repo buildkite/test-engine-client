@@ -81,6 +81,19 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 
 	for _, test := range testResults {
+		// A package that fails to build is reported by gotestsum as a synthetic
+		// testcase named "TestMain" with an empty classname, whose failure
+		// message contains "[build failed]" (printed by the go tool itself).
+		// A build failure cannot be fixed by retrying, so treat it as an error
+		// outside of the tests instead of recording it as a test result.
+		// Recording it would select it for retry, where its empty package path
+		// would silently drop it from the retry command, allowing the build
+		// failure to go unnoticed.
+		if isBuildFailure(test) {
+			result.error = fmt.Errorf("go test failed to build %s", test.SuiteName)
+			continue
+		}
+
 		result.RecordTestResult(plan.TestCase{
 			Format: plan.TestCaseFormatExample,
 			Scope:  test.Classname,
@@ -92,6 +105,18 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 
 	// Return any command error after processing the report
 	return cmdErr
+}
+
+// isBuildFailure reports whether a JUnit testcase is gotestsum's synthetic
+// representation of a Go package that failed to build. The "TestMain" name and
+// empty classname signature is also produced by package-level failures such as
+// a crashing TestMain or a test timeout, so the failure content is checked for
+// the "[build failed]" marker to identify build failures specifically.
+func isBuildFailure(test JUnitXMLTestCase) bool {
+	return test.Name == "TestMain" &&
+		test.Classname == "" &&
+		test.Failure != nil &&
+		strings.Contains(test.Failure.Content, "[build failed]")
 }
 
 // GetFiles discovers Go packages using `go list ./...`.
