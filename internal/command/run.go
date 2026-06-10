@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/buildkite/test-engine-client/v2/internal/agent"
 	"github.com/buildkite/test-engine-client/v2/internal/api"
 	"github.com/buildkite/test-engine-client/v2/internal/config"
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
@@ -83,6 +85,11 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
 	}
 
+	// Retries are now exhausted. If hard (non-muted) failures remain and the
+	// opt-in flag is set, declare an early failure to the Buildkite Agent API so
+	// the build can cascade to failing before this job actually exits.
+	promiseFailureIfNeeded(ctx, cfg, runResult)
+
 	printReport(runResult, testPlan.SkippedTests, testRunner.Name())
 	if !testPlan.Fallback {
 		sendMetadata(ctx, apiClient, cfg, timeline, runResult.Statistics())
@@ -100,6 +107,39 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	}
 
 	return runErr
+}
+
+// promiseFailureIfNeeded declares an early ("promised") failure to the Buildkite
+// Agent API when the run finished with hard (non-muted) failures after retries
+// and the opt-in flag is enabled.
+//
+// This is the single point that knows both that retries are exhausted and which
+// failures are hard vs muted, so it's the only correct place to promise. Muted
+// failures are excluded by FailedTests(), so a muted-only run never promises.
+//
+// It is best-effort: any error is logged and swallowed so a promise problem
+// never changes the test run's real exit status.
+func promiseFailureIfNeeded(ctx context.Context, cfg *config.Config, runResult runner.RunResult) {
+	if !cfg.PromiseFailure {
+		return
+	}
+
+	failedTests := runResult.FailedTests()
+	if len(failedTests) == 0 {
+		return
+	}
+
+	const promisedExitStatus = 1
+	reason := fmt.Sprintf("test_failure (%d failed after retries)", len(failedTests))
+
+	fmt.Printf("+++ Buildkite Test Engine Client: ⚠️  Declaring early failure: %d hard test failure(s) remain after retries\n", len(failedTests))
+
+	if err := agent.PromiseFailure(ctx, http.DefaultClient, cfg.AgentEndpoint, cfg.AgentAccessToken, cfg.JobID, promisedExitStatus, reason); err != nil {
+		fmt.Printf("Buildkite Test Engine Client: Warning: failed to declare early failure: %v\n", err)
+		return
+	}
+
+	fmt.Println("Buildkite Test Engine Client: Early failure declared to the Buildkite Agent API.")
 }
 
 func printStartUpMessage() {
