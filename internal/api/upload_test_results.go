@@ -13,48 +13,32 @@ import (
 	"time"
 )
 
-var (
-	uploadRetryTimeout = 30 * time.Second
-)
-
 // UploadTestResults POSTs the raw result file from the runner to the
 // Test Engine analytics API at <c.UploadBaseURL>/v1/uploads.
 // The format parameter tells the ingestion gear how to parse the file
 // (e.g. "rspec-json", "jest-json").
 // Errors are returned to the caller to be logged and suppressed — this upload
 // is best-effort and must not fail the build.
-//
-// Transient failures (network errors, 429, 5xx) are retried via doWithRetry
-// before giving up. The multipart body is built once and re-sent on each attempt.
 func (c *Client) UploadTestResults(ctx context.Context, token string, filePath string, format string, locationPrefix string, tags map[string]string) error {
 	body, contentType, err := buildTestResultsMultipartBody(filePath, format, locationPrefix, tags)
 	if err != nil {
 		return err
 	}
-	// Keep the body content so newRequest can wrap it in a fresh bytes.Reader
-	// for each attempt. We can't reuse one reader across retries because a reader
-	// is drained once it's read, leaving nothing to re-send.
-	bodyBytes := body.Bytes()
 
 	uploadURL := strings.TrimRight(c.UploadBaseURL, "/") + "/v1/uploads"
+	uploadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 
-	newRequest := func(reqCtx context.Context) (*http.Request, error) {
-		req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, uploadURL, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("creating upload request: %w", err)
-		}
-		req.Header.Set("Authorization", fmt.Sprintf("Token token=%s", token))
-		req.Header.Set("Content-Type", contentType)
-		return req, nil
-	}
-
-	// Upload requests are usually faster than Test Plan requests, so each attempt
-	// uses a shorter timeout (5s instead of 15s).
-	// This is a best-effort call, so retries also use a smaller total budget
-	// (30s instead of 130s) to avoid delaying the build.
-	resp, err := c.doWithRetry(ctx, 5*time.Second, uploadRetryTimeout, newRequest)
+	req, err := http.NewRequestWithContext(uploadCtx, http.MethodPost, uploadURL, body)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating upload request: %w", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Token token=%s", token))
+	req.Header.Set("Content-Type", contentType)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("uploading test results: %w", err)
 	}
 	defer resp.Body.Close()
 

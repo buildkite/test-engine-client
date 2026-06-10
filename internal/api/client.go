@@ -140,24 +140,13 @@ type httpRequest struct {
 	Body   any
 }
 
-// doWithRetry runs the request built by newRequest with retries. It holds the
-// shared retry mechanics used by doJSONWithRetry and UploadTestResults.
-//
-// The request is retried when the server returns 429, 409, or 5xx, or when there
-// is a network error. retryTimeout caps the total time spent across all attempts,
-// and perAttemptTimeout caps each individual attempt. After exhausting the retry
-// timeout, the function returns ErrRetryTimeout. newRequest builds a fresh request
-// for each attempt (so a body can be re-sent on retry).
-//
-// On a response that is not retried, doWithRetry returns it with a nil error
-// and the caller is responsible for reading and closing the response body. When
-// it returns an error, any response body has already been closed.
-func (c *Client) doWithRetry(
-	ctx context.Context,
-	perAttemptTimeout time.Duration,
-	retryTimeout time.Duration,
-	newRequest func(ctx context.Context) (*http.Request, error),
-) (*http.Response, error) {
+// DoWithRetry sends http request with retries.
+// Successful API response (status code 200) is JSON decoded and stored in the value pointed to by v.
+// The request will be retried when the server returns 429 or 5xx status code, or when there is a network error.
+// After reaching the retry timeout, the function will return ErrRetryTimeout.
+// The request will not be retried when the server returns 4xx status code,
+// and the error message will be returned as an error.
+func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v interface{}) (*http.Response, error) {
 	r := roko.NewRetrier(
 		roko.TryForever(),
 		roko.WithStrategy(roko.ExponentialSubsecond(initialDelay)),
@@ -168,19 +157,34 @@ func (c *Client) doWithRetry(
 	defer cancelRetryContext()
 
 	// retry loop
+	debug.Printf("Sending request %s %s", reqOptions.Method, reqOptions.URL)
 	resp, err := roko.DoFunc(retryContext, r, func(r *roko.Retrier) (*http.Response, error) {
 		if r.AttemptCount() > 0 {
 			debug.Printf("Retrying requests, attempt %d", r.AttemptCount())
 		}
 
-		reqContext, cancelReqContext := context.WithTimeout(ctx, perAttemptTimeout)
+		// Each request times out after 15 seconds, chosen to provide some
+		// headroom on top of the goal p99 time to fetch of 10s.
+		reqContext, cancelReqContext := context.WithTimeout(ctx, 15*time.Second)
 		defer cancelReqContext()
 
-		req, err := newRequest(reqContext)
+		req, err := http.NewRequestWithContext(reqContext, reqOptions.Method, reqOptions.URL, nil)
 		if err != nil {
 			r.Break()
-			return nil, err
+			return nil, fmt.Errorf("creating request: %w", err)
 		}
+
+		if reqOptions.Method != http.MethodGet && reqOptions.Body != nil {
+			// add body to request
+			reqBody, err := json.Marshal(reqOptions.Body)
+			if err != nil {
+				r.Break()
+				return nil, fmt.Errorf("converting body to json: %w", err)
+			}
+			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		}
+
+		req.Header.Add("Content-Type", "application/json")
 
 		resp, err := c.httpClient.Do(req)
 
@@ -199,26 +203,65 @@ func (c *Client) doWithRetry(
 			if rateLimitReset, err := strconv.Atoi(resp.Header.Get("RateLimit-Reset")); err == nil {
 				r.SetNextInterval(time.Duration(rateLimitReset) * time.Second)
 			}
-			drainAndCloseBody(resp)
 			return resp, fmt.Errorf("response code: 429")
 		}
 
 		// If we get a 409, we aren't the first client to create the plan so return
 		// and retry
 		if resp.StatusCode == http.StatusConflict {
-			drainAndCloseBody(resp)
 			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
 		}
 
 		// If we get a 5xx, we should return and retry
 		if resp.StatusCode >= 500 {
-			drainAndCloseBody(resp)
 			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
 		}
 
-		// Other than above cases, we stop retrying and let the caller handle the
-		// response.
+		// Other than above cases, we should break from the retry loop.
 		r.Break()
+
+		responseBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			var respError responseError
+			err = json.Unmarshal(responseBody, &respError)
+			if err != nil {
+				return resp, fmt.Errorf("parsing response: %w", err)
+			}
+
+			// 5xx and 429 are handled above and trigger retries; here we only
+			// classify 4xx responses into typed errors.
+			switch resp.StatusCode {
+			case http.StatusUnauthorized:
+				return resp, &AuthError{Message: respError.Message}
+			case http.StatusForbidden:
+				if strings.HasPrefix(respError.Message, "Billing Error") {
+					return resp, &BillingError{Message: respError.Message}
+				}
+				return resp, &ForbiddenError{Message: respError.Message}
+			case http.StatusNotFound:
+				return resp, &NotFoundError{Message: respError.Message}
+			case http.StatusBadRequest:
+				return resp, &BadRequestError{Message: respError.Message}
+			case http.StatusUnprocessableEntity:
+				return resp, &UnprocessableEntityError{Message: respError.Message}
+			default:
+				return resp, &respError
+			}
+		}
+
+		// parse response
+		if v != nil && len(responseBody) > 0 {
+			err = json.Unmarshal(responseBody, v)
+			if err != nil {
+				return nil, fmt.Errorf("parsing response: %w", err)
+			}
+		}
+
 		return resp, nil
 	})
 
@@ -227,96 +270,4 @@ func (c *Client) doWithRetry(
 	}
 
 	return resp, err
-}
-
-// drainAndCloseBody reads resp.Body to the end and closes it. An HTTP request
-// reuses an existing network connection only if the previous response body was
-// fully read and closed, so draining lets the next retry reuse the connection
-// instead of opening a new one. Errors are ignored: draining is best-effort, and
-// a failed drain just means the connection won't be reused.
-func drainAndCloseBody(resp *http.Response) {
-	_, _ = io.Copy(io.Discard, resp.Body)
-	_ = resp.Body.Close()
-}
-
-// doJSONWithRetry sends a JSON HTTP request via doWithRetry.
-// The request body (if any) is JSON encoded with a Content-Type of
-// application/json, and a successful API response (status code 200) is JSON
-// decoded and stored in the value pointed to by v. A non-200 response is
-// returned as a typed error.
-// For non-JSON requests (e.g. multipart uploads), use doWithRetry directly.
-// See doWithRetry for the retry behavior.
-func (c *Client) doJSONWithRetry(ctx context.Context, reqOptions httpRequest, v interface{}) (*http.Response, error) {
-	debug.Printf("Sending request %s %s", reqOptions.Method, reqOptions.URL)
-
-	// Each request times out after 15 seconds, chosen to provide some
-	// headroom on top of the goal p99 time to fetch of 10s.
-	perAttemptTimeout := 15 * time.Second
-	newRequest := func(reqContext context.Context) (*http.Request, error) {
-		req, err := http.NewRequestWithContext(reqContext, reqOptions.Method, reqOptions.URL, nil)
-		if err != nil {
-			return nil, fmt.Errorf("creating request: %w", err)
-		}
-
-		if reqOptions.Method != http.MethodGet && reqOptions.Body != nil {
-			// add body to request
-			reqBody, err := json.Marshal(reqOptions.Body)
-			if err != nil {
-				return nil, fmt.Errorf("converting body to json: %w", err)
-			}
-			req.Body = io.NopCloser(bytes.NewReader(reqBody))
-		}
-
-		req.Header.Add("Content-Type", "application/json")
-		return req, nil
-	}
-
-	resp, err := c.doWithRetry(ctx, perAttemptTimeout, retryTimeout, newRequest)
-	if err != nil {
-		return resp, err
-	}
-
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response body: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var respError responseError
-		err = json.Unmarshal(responseBody, &respError)
-		if err != nil {
-			return resp, fmt.Errorf("parsing response: %w", err)
-		}
-
-		// 5xx and 429 are handled by doWithRetry and trigger retries; here we
-		// only classify 4xx responses into typed errors.
-		switch resp.StatusCode {
-		case http.StatusUnauthorized:
-			return resp, &AuthError{Message: respError.Message}
-		case http.StatusForbidden:
-			if strings.HasPrefix(respError.Message, "Billing Error") {
-				return resp, &BillingError{Message: respError.Message}
-			}
-			return resp, &ForbiddenError{Message: respError.Message}
-		case http.StatusNotFound:
-			return resp, &NotFoundError{Message: respError.Message}
-		case http.StatusBadRequest:
-			return resp, &BadRequestError{Message: respError.Message}
-		case http.StatusUnprocessableEntity:
-			return resp, &UnprocessableEntityError{Message: respError.Message}
-		default:
-			return resp, &respError
-		}
-	}
-
-	// parse response
-	if v != nil && len(responseBody) > 0 {
-		err = json.Unmarshal(responseBody, v)
-		if err != nil {
-			return nil, fmt.Errorf("parsing response: %w", err)
-		}
-	}
-
-	return resp, nil
 }

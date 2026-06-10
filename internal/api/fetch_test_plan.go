@@ -16,7 +16,7 @@ func (c Client) FetchTestPlan(ctx context.Context, suiteSlug string, identifier 
 
 	var testPlan plan.TestPlan
 
-	_, err := c.doJSONWithRetry(ctx, httpRequest{
+	_, err := c.DoWithRetry(ctx, httpRequest{
 		Method: http.MethodGet,
 		URL:    url,
 	}, &testPlan)
