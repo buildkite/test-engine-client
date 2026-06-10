@@ -34,7 +34,7 @@ export BUILDKITE_TEST_ENGINE_RESULT_PATH="junit-${BUILDKITE_JOB_ID}.xml"
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=1
 export BUILDKITE_TEST_ENGINE_TEST_CMD='gotestsum --junitfile={{resultPath}} -- -count=1 -coverprofile=cover.out -failfast -race {{packages}}'
 
-"${bktec_bin}"
+"${bktec_bin}" run
 
 echo 'Producing coverage report'
 go tool cover -html cover.out -o cover.html
