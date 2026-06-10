@@ -99,7 +99,7 @@ func TestPostTestPlanMetadata(t *testing.T) {
 		ServerBaseURL:    svr.URL,
 	})
 
-	_, err := c.doJSONWithRetry(context.Background(), httpRequest{
+	_, err := c.DoWithRetry(context.Background(), httpRequest{
 		Method: http.MethodPost,
 		URL:    fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan_metadata", c.ServerBaseURL, c.OrganizationSlug, "rspec"),
 		Body:   params,
@@ -139,7 +139,7 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 		ServerBaseURL:    svr.URL,
 	})
 
-	_, err := c.doJSONWithRetry(context.Background(), httpRequest{
+	_, err := c.DoWithRetry(context.Background(), httpRequest{
 		Method: http.MethodPost,
 		URL:    fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan_metadata", c.ServerBaseURL, c.OrganizationSlug, "rspec"),
 		Body:   params,
