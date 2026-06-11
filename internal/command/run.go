@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -183,10 +184,16 @@ func schedulerSelectorTestCase(selector api.SchedulerSelector) (plan.TestCase, e
 	}
 
 	if exampleID != "" {
+		examplePath := file
+		exampleSuffix := fmt.Sprintf("[%s]", exampleID)
+		if file != exampleID && !strings.HasSuffix(file, exampleSuffix) {
+			examplePath = fmt.Sprintf("%s%s", file, exampleSuffix)
+		}
+
 		return plan.TestCase{
 			Format:     plan.TestCaseFormatExample,
 			Identifier: exampleID,
-			Path:       fmt.Sprintf("%s[%s]", file, exampleID),
+			Path:       examplePath,
 			Scope:      file,
 		}, nil
 	}

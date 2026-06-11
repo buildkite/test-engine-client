@@ -60,6 +60,9 @@ func TestPlanJSON_TestScheduler(t *testing.T) {
 	cfg.ServerBaseURL = svr.URL
 	cfg.SchedulerPlan = true
 	cfg.SchedulerPoolName = "rspec-main"
+	cfg.SplitByExample = true
+	cfg.TestCommand = "rspec"
+	cfg.TestFilePattern = "testdata/rspec/spec/fruits/apple_spec.rb"
 	cfg.OrganizationID = "019eb76f-6df1-7a58-b6f7-cb7d9edb9011"
 	cfg.PipelineID = "019eb76f-6df1-7bcf-a19f-8d83c5f4d522"
 	cfg.BuildID = "019eb76f-6df1-76ec-99db-31e397e723f5"
@@ -407,14 +410,31 @@ func getSchedulerHttptestServer(t *testing.T) *httptest.Server {
 
 		switch r.URL.Path {
 		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
-			if r.Method != http.MethodPost {
-				t.Errorf("filter method = %q, want POST", r.Method)
-			}
-			enc.Encode(api.FilteredTestResponse{})
+			t.Errorf("scheduler split-by-example plan should not filter files before creating the test plan")
+			w.WriteHeader(http.StatusInternalServerError)
 		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
 			if r.Method != http.MethodPost {
 				t.Errorf("test plan method = %q, want POST", r.Method)
 			}
+
+			assertCommandJSONBody(t, r.Body, `{
+				"runner": "rspec",
+				"identifier": "019eb76f-6df1-76ec-99db-31e397e723f5/789",
+				"parallelism": 3,
+				"branch": "tet-123-add-branch-name",
+				"tests": {
+					"files": null,
+					"examples": [
+						{
+							"identifier": "./testdata/rspec/spec/fruits/apple_spec.rb[1:1]",
+							"name": "is red",
+							"path": "./testdata/rspec/spec/fruits/apple_spec.rb[1:1]",
+							"scope": "Apple"
+						}
+					]
+				}
+			}`)
+
 			enc.Encode(plan.TestPlan{
 				Identifier:  "facecafe",
 				Parallelism: 42,

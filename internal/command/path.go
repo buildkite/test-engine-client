@@ -3,11 +3,12 @@ package command
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // prefixFilePaths prepends the given prefix to the file paths of the test cases.
 func prefixPath(path string, prefix string) string {
-	if prefix == "" {
+	if prefix == "" || strings.HasPrefix(path, prefix) {
 		return path
 	}
 

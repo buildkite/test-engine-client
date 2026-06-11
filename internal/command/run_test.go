@@ -68,6 +68,7 @@ func TestSchedulerGroupTestCases(t *testing.T) {
 		Selectors: []api.SchedulerSelector{
 			{Type: "file", Value: map[string]any{"file": "spec/models/user_spec.rb"}},
 			{Type: "example", Value: map[string]any{"file": "spec/models/build_spec.rb", "example_id": "1:2"}},
+			{Type: "example", Value: map[string]any{"file": "spec/models/job_spec.rb[1:3]", "example_id": "spec/models/job_spec.rb[1:3]"}},
 		},
 	})
 	if err != nil {
@@ -77,6 +78,7 @@ func TestSchedulerGroupTestCases(t *testing.T) {
 	want := []plan.TestCase{
 		{Format: plan.TestCaseFormatFile, Path: "spec/models/user_spec.rb"},
 		{Format: plan.TestCaseFormatExample, Identifier: "1:2", Path: "spec/models/build_spec.rb[1:2]", Scope: "spec/models/build_spec.rb"},
+		{Format: plan.TestCaseFormatExample, Identifier: "spec/models/job_spec.rb[1:3]", Path: "spec/models/job_spec.rb[1:3]", Scope: "spec/models/job_spec.rb[1:3]"},
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {

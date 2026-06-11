@@ -70,6 +70,11 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 	// Tag filtering is currently only supported for pytest.
 	if cfg.TagFilters != "" && runner.Name() == "pytest" {
 		testParams, err = splitAllFiles(testFiles, runner)
+	} else if cfg.SchedulerPlan && cfg.SplitByExample {
+		// The Test Scheduler pool owns distribution, so split all discovered
+		// files into independently leaseable examples instead of preserving the
+		// Test Plan API's file-level split decisions.
+		testParams, err = splitAllFiles(testFiles, runner)
 	} else {
 		// The SplitByExample flag indicates whether to split slow files into examples.
 		// Regardless of the flag's state, the API will still return other test files that need to
