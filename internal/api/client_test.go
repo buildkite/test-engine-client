@@ -141,6 +141,48 @@ func TestDoJSONWithRetry_Succesful_POST(t *testing.T) {
 	}
 }
 
+// TestDoJSONWithRetry_StreamedResponseBody guards against a regression where the
+// per-attempt request context was cancelled as soon as doWithRetry's retry
+// closure returned, before the caller read the response body. With a small,
+// fully buffered response the read still succeeds from the transport's buffer,
+// so this test streams the body in chunks with a flush and a delay to force the
+// read to happen against a live connection. If the context were cancelled early,
+// io.ReadAll would fail with "context canceled".
+func TestDoJSONWithRetry_StreamedResponseBody(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("ResponseWriter does not support flushing")
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"message":`))
+		flusher.Flush()
+		time.Sleep(50 * time.Millisecond)
+		w.Write([]byte(`"hello"}`))
+		flusher.Flush()
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{ServerBaseURL: svr.URL})
+
+	var got map[string]string
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
+		Method: http.MethodGet,
+		URL:    svr.URL,
+	}, &got)
+
+	if err != nil {
+		t.Errorf("doJSONWithRetry() error = %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusOK)
+	}
+	want := map[string]string{"message": "hello"}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("doJSONWithRetry() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestDoJSONWithRetry_Succesful_GET(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -164,6 +164,8 @@ func (c *Client) doWithRetry(
 		roko.WithJitter(),
 	)
 
+	// retryContext is the total budget across all attempts; it's checked between
+	// retries, not while a single attempt is in flight (that's perAttemptTimeout).
 	retryContext, cancelRetryContext := context.WithTimeout(ctx, retryTimeout)
 	defer cancelRetryContext()
 
@@ -173,16 +175,18 @@ func (c *Client) doWithRetry(
 			debug.Printf("Retrying requests, attempt %d", r.AttemptCount())
 		}
 
-		reqContext, cancelReqContext := context.WithTimeout(ctx, perAttemptTimeout)
-		defer cancelReqContext()
-
-		req, err := newRequest(reqContext)
+		req, err := newRequest(ctx)
 		if err != nil {
 			r.Break()
 			return nil, err
 		}
 
-		resp, err := c.httpClient.Do(req)
+		// Client.Timeout bounds each attempt, including reading the response body.
+		// Go keeps the timer running after Do returns and cleans it up when the body
+		// is closed, so the caller can safely read the returned response's body.
+		attemptClient := *c.httpClient
+		attemptClient.Timeout = perAttemptTimeout
+		resp, err := attemptClient.Do(req)
 
 		// If we get an error before getting a response,
 		// which means there is a network error (e.g. protocol error, timeout),
