@@ -24,7 +24,7 @@ func (c Client) PresignUpload(ctx context.Context, suiteSlug string) (PresignedU
 		c.ServerBaseURL, url.PathEscape(c.OrganizationSlug), url.PathEscape(suiteSlug))
 
 	var resp PresignedUploadResponse
-	_, err := c.DoWithRetry(ctx, httpRequest{Method: http.MethodPost, URL: reqURL}, &resp)
+	_, err := c.doJSONWithRetry(ctx, httpRequest{Method: http.MethodPost, URL: reqURL}, &resp)
 	if err != nil {
 		return PresignedUploadResponse{}, fmt.Errorf("presigning upload: %w", err)
 	}

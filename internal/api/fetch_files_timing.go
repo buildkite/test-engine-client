@@ -18,7 +18,7 @@ func (c Client) FetchFilesTiming(ctx context.Context, suiteSlug string, files []
 	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_files", c.ServerBaseURL, c.OrganizationSlug, suiteSlug)
 
 	var filesTiming map[string]int
-	_, err := c.DoWithRetry(ctx, httpRequest{
+	_, err := c.doJSONWithRetry(ctx, httpRequest{
 		Method: http.MethodPost,
 		URL:    url,
 		Body: fetchFilesTimingParams{

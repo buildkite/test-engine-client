@@ -107,7 +107,7 @@ func TestHttpClient_AttachUserAgentToRequest(t *testing.T) {
 	}
 }
 
-func TestDoWithRetry_Succesful_POST(t *testing.T) {
+func TestDoJSONWithRetry_Succesful_POST(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		io.Copy(w, r.Body)
@@ -121,27 +121,69 @@ func TestDoWithRetry_Succesful_POST(t *testing.T) {
 
 	var got map[string]string
 
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodPost,
 		URL:    svr.URL,
 		Body:   map[string]string{"message": "hello"},
 	}, &got)
 
 	if err != nil {
-		t.Errorf("DoWithRetry() error = %v", err)
+		t.Errorf("doJSONWithRetry() error = %v", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusOK)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusOK)
 	}
 
 	want := map[string]string{"message": "hello"}
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("DoWithRetry() diff (-got +want):\n%s", diff)
+		t.Errorf("doJSONWithRetry() diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestDoWithRetry_Succesful_GET(t *testing.T) {
+// TestDoJSONWithRetry_StreamedResponseBody guards against a regression where the
+// per-attempt request context was cancelled as soon as doWithRetry's retry
+// closure returned, before the caller read the response body. With a small,
+// fully buffered response the read still succeeds from the transport's buffer,
+// so this test streams the body in chunks with a flush and a delay to force the
+// read to happen against a live connection. If the context were cancelled early,
+// io.ReadAll would fail with "context canceled".
+func TestDoJSONWithRetry_StreamedResponseBody(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("ResponseWriter does not support flushing")
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"message":`))
+		flusher.Flush()
+		time.Sleep(50 * time.Millisecond)
+		w.Write([]byte(`"hello"}`))
+		flusher.Flush()
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{ServerBaseURL: svr.URL})
+
+	var got map[string]string
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
+		Method: http.MethodGet,
+		URL:    svr.URL,
+	}, &got)
+
+	if err != nil {
+		t.Errorf("doJSONWithRetry() error = %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusOK)
+	}
+	want := map[string]string{"message": "hello"}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("doJSONWithRetry() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestDoJSONWithRetry_Succesful_GET(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
@@ -164,21 +206,21 @@ func TestDoWithRetry_Succesful_GET(t *testing.T) {
 
 	var got map[string]string
 
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, &got)
 
 	if err != nil {
-		t.Errorf("DoWithRetry() error = %v", err)
+		t.Errorf("doJSONWithRetry() error = %v", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusOK)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusOK)
 	}
 }
 
-func TestDoWithRetry_RequestError(t *testing.T) {
+func TestDoJSONWithRetry_RequestError(t *testing.T) {
 	originalTimeout := retryTimeout
 	retryTimeout = 300 * time.Millisecond
 	t.Cleanup(func() {
@@ -191,7 +233,7 @@ func TestDoWithRetry_RequestError(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    "http://build.kite",
 	}, nil)
@@ -200,15 +242,15 @@ func TestDoWithRetry_RequestError(t *testing.T) {
 
 	// it retries the request and returns ErrRetryTimeout with nil response.
 	if !errors.Is(err, ErrRetryTimeout) {
-		t.Errorf("DoWithRetry() error = %v, want %v", err, ErrRetryTimeout)
+		t.Errorf("doJSONWithRetry() error = %v, want %v", err, ErrRetryTimeout)
 	}
 
 	if resp != nil {
-		t.Errorf("DoWithRetry() = %v, want nil", resp)
+		t.Errorf("doJSONWithRetry() = %v, want nil", resp)
 	}
 }
 
-func TestDoWithRetry_429(t *testing.T) {
+func TestDoJSONWithRetry_429(t *testing.T) {
 	originalTimeout := retryTimeout
 	retryTimeout = 1500 * time.Millisecond
 	t.Cleanup(func() {
@@ -231,7 +273,7 @@ func TestDoWithRetry_429(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
@@ -242,15 +284,15 @@ func TestDoWithRetry_429(t *testing.T) {
 	}
 
 	if !errors.Is(err, ErrRetryTimeout) {
-		t.Errorf("DoWithRetry() error = %v, want %v", err, ErrRetryTimeout)
+		t.Errorf("doJSONWithRetry() error = %v, want %v", err, ErrRetryTimeout)
 	}
 
 	if resp.StatusCode != http.StatusTooManyRequests {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusTooManyRequests)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusTooManyRequests)
 	}
 }
 
-func TestDoWithRetry_409(t *testing.T) {
+func TestDoJSONWithRetry_409(t *testing.T) {
 	originalTimeout := retryTimeout
 	originalInitialDelay := initialDelay
 
@@ -278,7 +320,7 @@ func TestDoWithRetry_409(t *testing.T) {
 
 	c := NewClient(cfg)
 
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
@@ -289,15 +331,15 @@ func TestDoWithRetry_409(t *testing.T) {
 	}
 
 	if !errors.Is(err, ErrRetryTimeout) {
-		t.Errorf("DoWithRetry() error = %v, want %v", err, ErrRetryTimeout)
+		t.Errorf("doJSONWithRetry() error = %v, want %v", err, ErrRetryTimeout)
 	}
 
 	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusConflict)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusConflict)
 	}
 }
 
-func TestDoWithRetry_500(t *testing.T) {
+func TestDoJSONWithRetry_500(t *testing.T) {
 	originalTimeout := retryTimeout
 	originalInitialDelay := initialDelay
 
@@ -325,7 +367,7 @@ func TestDoWithRetry_500(t *testing.T) {
 
 	c := NewClient(cfg)
 
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
@@ -336,15 +378,15 @@ func TestDoWithRetry_500(t *testing.T) {
 	}
 
 	if !errors.Is(err, ErrRetryTimeout) {
-		t.Errorf("DoWithRetry() error = %v, want %v", err, ErrRetryTimeout)
+		t.Errorf("doJSONWithRetry() error = %v, want %v", err, ErrRetryTimeout)
 	}
 
 	if resp.StatusCode != http.StatusInternalServerError {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusInternalServerError)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusInternalServerError)
 	}
 }
 
-func TestDoWithRetry_403(t *testing.T) {
+func TestDoJSONWithRetry_403(t *testing.T) {
 	requestCount := 0
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +402,7 @@ func TestDoWithRetry_403(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
@@ -371,19 +413,19 @@ func TestDoWithRetry_403(t *testing.T) {
 	}
 
 	if forbiddenError := new(ForbiddenError); !errors.As(err, &forbiddenError) {
-		t.Errorf("DoWithRetry() error type = %T, want %T", err, ForbiddenError{})
+		t.Errorf("doJSONWithRetry() error type = %T, want %T", err, ForbiddenError{})
 	}
 
 	if err.Error() != "forbidden" {
-		t.Errorf("DoWithRetry() error = %v, want %v", err, "forbidden")
+		t.Errorf("doJSONWithRetry() error = %v, want %v", err, "forbidden")
 	}
 
 	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusForbidden)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusForbidden)
 	}
 }
 
-func TestDoWithRetry_401(t *testing.T) {
+func TestDoJSONWithRetry_401(t *testing.T) {
 	requestCount := 0
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -399,7 +441,7 @@ func TestDoWithRetry_401(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
@@ -409,19 +451,19 @@ func TestDoWithRetry_401(t *testing.T) {
 	}
 
 	if authError := new(AuthError); !errors.As(err, &authError) {
-		t.Errorf("DoWithRetry() error type = %T, want %T", err, AuthError{})
+		t.Errorf("doJSONWithRetry() error type = %T, want %T", err, AuthError{})
 	}
 
 	if err.Error() != "Unauthorized" {
-		t.Errorf("DoWithRetry() error = %v, want %v", err, "Unauthorized")
+		t.Errorf("doJSONWithRetry() error = %v, want %v", err, "Unauthorized")
 	}
 
 	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusUnauthorized)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
 
-func TestDoWithRetry_404(t *testing.T) {
+func TestDoJSONWithRetry_404(t *testing.T) {
 	requestCount := 0
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -437,7 +479,7 @@ func TestDoWithRetry_404(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
@@ -447,19 +489,19 @@ func TestDoWithRetry_404(t *testing.T) {
 	}
 
 	if notFoundError := new(NotFoundError); !errors.As(err, &notFoundError) {
-		t.Errorf("DoWithRetry() error type = %T, want %T", err, NotFoundError{})
+		t.Errorf("doJSONWithRetry() error type = %T, want %T", err, NotFoundError{})
 	}
 
 	if err.Error() != "Not Found" {
-		t.Errorf("DoWithRetry() error = %v, want %v", err, "Not Found")
+		t.Errorf("doJSONWithRetry() error = %v, want %v", err, "Not Found")
 	}
 
 	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusNotFound)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusNotFound)
 	}
 }
 
-func TestDoWithRetry_400(t *testing.T) {
+func TestDoJSONWithRetry_400(t *testing.T) {
 	requestCount := 0
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -475,7 +517,7 @@ func TestDoWithRetry_400(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
@@ -485,19 +527,19 @@ func TestDoWithRetry_400(t *testing.T) {
 	}
 
 	if badRequestError := new(BadRequestError); !errors.As(err, &badRequestError) {
-		t.Errorf("DoWithRetry() error type = %T, want %T", err, BadRequestError{})
+		t.Errorf("doJSONWithRetry() error type = %T, want %T", err, BadRequestError{})
 	}
 
 	if err.Error() != "Bad Request" {
-		t.Errorf("DoWithRetry() error = %v, want %v", err, "Bad Request")
+		t.Errorf("doJSONWithRetry() error = %v, want %v", err, "Bad Request")
 	}
 
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusBadRequest)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusBadRequest)
 	}
 }
 
-func TestDoWithRetry_BillingError(t *testing.T) {
+func TestDoJSONWithRetry_BillingError(t *testing.T) {
 	requestCount := 0
 	message := "Billing Error: Test Splitting is not enabled in your plan"
 
@@ -514,7 +556,7 @@ func TestDoWithRetry_BillingError(t *testing.T) {
 	}
 
 	c := NewClient(cfg)
-	resp, err := c.DoWithRetry(context.Background(), httpRequest{
+	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
@@ -525,10 +567,10 @@ func TestDoWithRetry_BillingError(t *testing.T) {
 	}
 
 	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("DoWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusForbidden)
+		t.Errorf("doJSONWithRetry() status code = %v, want %v", resp.StatusCode, http.StatusForbidden)
 	}
 
 	if billingError := new(BillingError); !errors.As(err, &billingError) {
-		t.Errorf("DoWithRetry() error type = %T, want %T", err, BillingError{})
+		t.Errorf("doJSONWithRetry() error type = %T, want %T", err, BillingError{})
 	}
 }
