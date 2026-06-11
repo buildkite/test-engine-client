@@ -74,6 +74,17 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 
 	plan.PrintSplitSummary(os.Stderr, testPlan)
 
+	var schedulerPlan *api.SchedulerPlanResponse
+	if cfg.SchedulerPlan {
+		debug.Println("Creating Test Scheduler pool via API")
+		createdSchedulerPlan, err := createSchedulerPlan(ctx, cfg, apiClient, testRunner.Name(), testPlan.Identifier)
+		if err != nil {
+			return err
+		}
+		schedulerPlan = &createdSchedulerPlan
+		debug.Printf("Test Scheduler pool created. Name: %q, UUID: %q, Uploaded groups: %d", schedulerPlan.Run.QueueName, schedulerPlan.Run.UUID, schedulerPlan.UploadedGroupsCount)
+	}
+
 	switch outputFormat {
 
 	case PlanOutputJSON:
@@ -89,9 +100,15 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 			// buildkite-agent env set --input-format=json -, which requires string
 			// keys and string values.
 			Parallelism string `json:"BUILDKITE_TEST_ENGINE_PARALLELISM"`
+			PoolName    string `json:"BUILDKITE_TEST_ENGINE_POOL_NAME,omitempty"`
+			PoolID      string `json:"BUILDKITE_TEST_ENGINE_POOL_ID,omitempty"`
 		}{
 			Identifier:  testPlan.Identifier,
 			Parallelism: strconv.Itoa(testPlan.Parallelism),
+		}
+		if schedulerPlan != nil {
+			summary.PoolName = schedulerPlan.Run.QueueName
+			summary.PoolID = schedulerPlan.Run.UUID
 		}
 
 		enc := json.NewEncoder(planWriter)
@@ -111,6 +128,12 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		identifierEnv := fmt.Sprintf("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER=%s", testPlan.Identifier)
 		parallelismEnv := fmt.Sprintf("BUILDKITE_TEST_ENGINE_PARALLELISM=%d", testPlan.Parallelism)
 		env = append(env, identifierEnv, parallelismEnv)
+		if schedulerPlan != nil {
+			env = append(env,
+				fmt.Sprintf("BUILDKITE_TEST_ENGINE_POOL_NAME=%s", schedulerPlan.Run.QueueName),
+				fmt.Sprintf("BUILDKITE_TEST_ENGINE_POOL_ID=%s", schedulerPlan.Run.UUID),
+			)
+		}
 		cmd.Env = env
 
 		fmt.Fprintf(planWriter, "Executing buildkite-agent pipeline upload with %s %s\n", identifierEnv, parallelismEnv)
@@ -124,6 +147,24 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	}
 
 	return nil
+}
+
+func createSchedulerPlan(ctx context.Context, cfg *config.Config, apiClient *api.Client, runnerName, testPlanIdentifier string) (api.SchedulerPlanResponse, error) {
+	suite, err := apiClient.FetchSuite(ctx, cfg.SuiteSlug)
+	if err != nil {
+		return api.SchedulerPlanResponse{}, fmt.Errorf("fetching suite for Test Scheduler plan: %w", err)
+	}
+
+	return apiClient.CreateSchedulerPlan(ctx, api.SchedulerPlanParams{
+		OrganizationUUID:   cfg.OrganizationID,
+		SuiteUUID:          suite.ID,
+		PipelineUUID:       cfg.PipelineID,
+		BuildUUID:          cfg.BuildID,
+		QueueName:          cfg.SchedulerPoolName,
+		Ecosystem:          runnerName,
+		Framework:          runnerName,
+		TestPlanIdentifier: testPlanIdentifier,
+	})
 }
 
 func makePipelineUploadCommand(template string) *exec.Cmd {

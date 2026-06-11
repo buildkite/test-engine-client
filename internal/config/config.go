@@ -45,10 +45,14 @@ type Config struct {
 	OIDCLifetime time.Duration `json:"BUILDKITE_TEST_ENGINE_OIDC_LIFETIME"`
 	// OrganizationSlug is the slug of the organization.
 	OrganizationSlug string `json:"BUILDKITE_ORGANIZATION_SLUG"`
+	// OrganizationID is the UUID of the Buildkite organization.
+	OrganizationID string `json:"-"`
 	// Output is the local file path for the export tarball. If set, skip S3 upload.
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"BUILDKITE_PARALLEL_JOB_COUNT"`
+	// PipelineID is the UUID of the Buildkite pipeline.
+	PipelineID string `json:"-"`
 	// Remote is the git remote name for fetching missing commits and detecting default branch (default "origin").
 	Remote string `json:"-"`
 	// ResultPath is the path to the result file.
@@ -64,6 +68,10 @@ type Config struct {
 	SelectionStrategy string `json:"BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"`
 	// ServerBaseURL is the base URL of the test plan server.
 	ServerBaseURL string `json:"-"`
+	// SchedulerPoolName is the build-scoped Test Scheduler pool name.
+	SchedulerPoolName string `json:"-"`
+	// SchedulerPlan creates a Test Scheduler pool from the generated plan.
+	SchedulerPlan bool `json:"-"`
 	// SkipDiffs omits git_diff and git_diff_raw from the export to reduce upload size.
 	SkipDiffs bool `json:"-"`
 	// UploadFile is the path to a previously generated tarball for the --upload flag of backfill-commit-metadata.

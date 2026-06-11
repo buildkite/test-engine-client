@@ -240,6 +240,24 @@ func (c *Config) ValidateForPlan() error {
 		}
 	}
 
+	if c.SchedulerPlan {
+		if c.SchedulerPoolName == "" {
+			c.errs.appendFieldError("--pool / BUILDKITE_TEST_ENGINE_POOL_NAME", "must not be blank when --test-scheduler is set")
+		}
+
+		if c.OrganizationID == "" {
+			c.errs.appendFieldError("--organization-id / BUILDKITE_ORGANIZATION_ID", "must not be blank when --test-scheduler is set")
+		}
+
+		if c.BuildID == "" {
+			c.errs.appendFieldError("--build-id / BUILDKITE_BUILD_ID", "must not be blank when --test-scheduler is set")
+		}
+
+		if c.PipelineID == "" {
+			c.errs.appendFieldError("--pipeline-id / BUILDKITE_PIPELINE_ID", "must not be blank when --test-scheduler is set")
+		}
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}
@@ -258,7 +276,7 @@ func (c *Config) generateOIDCToken() (token string, err error) {
 	lifetime := strconv.Itoa(int(c.OIDCLifetime.Seconds()))
 	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
 	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
-	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime) //nolint:gosec
+	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime, "--claim", "organization_id", "--claim", "pipeline_id", "--claim", "build_id") //nolint:gosec
 	cmd.Stderr = &errorWriter
 	cmd.Stdout = &tokenWriter
 	cmd.Env = os.Environ()

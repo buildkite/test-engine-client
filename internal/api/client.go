@@ -127,10 +127,17 @@ func (e *UnprocessableEntityError) Error() string {
 }
 
 type responseError struct {
-	Message string `json:"message"`
+	Message  string `json:"message"`
+	APIError struct {
+		Message string `json:"message"`
+	} `json:"error"`
 }
 
 func (e *responseError) Error() string {
+	if e.Message == "" {
+		return e.APIError.Message
+	}
+
 	return e.Message
 }
 
@@ -226,7 +233,7 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 			var respError responseError
 			err = json.Unmarshal(responseBody, &respError)
 			if err != nil {

@@ -52,6 +52,41 @@ func TestPlanJSON(t *testing.T) {
 	}
 }
 
+func TestPlanJSON_TestScheduler(t *testing.T) {
+	svr := getSchedulerHttptestServer(t)
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+	cfg.SchedulerPlan = true
+	cfg.SchedulerPoolName = "rspec-main"
+	cfg.OrganizationID = "019eb76f-6df1-7a58-b6f7-cb7d9edb9011"
+	cfg.PipelineID = "019eb76f-6df1-7bcf-a19f-8d83c5f4d522"
+	cfg.BuildID = "019eb76f-6df1-76ec-99db-31e397e723f5"
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	err := Plan(ctx, cfg, "", PlanOutputJSON, "")
+	if err != nil {
+		t.Errorf("command.Plan(...) error = %v", err)
+	}
+
+	want := `{"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER":"facecafe","BUILDKITE_TEST_ENGINE_PARALLELISM":"42","BUILDKITE_TEST_ENGINE_POOL_NAME":"rspec-main","BUILDKITE_TEST_ENGINE_POOL_ID":"019eb76f-6df1-7dc7-9e52-940417f67e01"}
+`
+	got := buf.String()
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("command.Plan(...) diff = %s", diff)
+	}
+}
+
 func TestPlanPipelineUpload(t *testing.T) {
 	svr := getHttptestServer()
 	defer svr.Close()
@@ -362,6 +397,83 @@ func getHttptestServer() *httptest.Server {
 		}
 	}))
 	return svr
+}
+
+func getSchedulerHttptestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		enc := json.NewEncoder(w)
+
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			if r.Method != http.MethodPost {
+				t.Errorf("filter method = %q, want POST", r.Method)
+			}
+			enc.Encode(api.FilteredTestResponse{})
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			if r.Method != http.MethodPost {
+				t.Errorf("test plan method = %q, want POST", r.Method)
+			}
+			enc.Encode(plan.TestPlan{
+				Identifier:  "facecafe",
+				Parallelism: 42,
+				Tasks: map[string]*plan.Task{
+					"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
+				},
+			})
+		case "/v2/analytics/organizations/buildkite/suites/rspec":
+			if r.Method != http.MethodGet {
+				t.Errorf("suite method = %q, want GET", r.Method)
+			}
+			enc.Encode(api.Suite{ID: "019eb76f-6df1-7788-972f-5b01ddfbf6e8", Slug: "rspec"})
+		case "/v2/analytics/organizations/buildkite/scheduler/plan":
+			if r.Method != http.MethodPost {
+				t.Errorf("scheduler plan method = %q, want POST", r.Method)
+			}
+
+			assertCommandJSONBody(t, r.Body, `{
+				"organization_uuid": "019eb76f-6df1-7a58-b6f7-cb7d9edb9011",
+				"suite_uuid": "019eb76f-6df1-7788-972f-5b01ddfbf6e8",
+				"pipeline_uuid": "019eb76f-6df1-7bcf-a19f-8d83c5f4d522",
+				"build_uuid": "019eb76f-6df1-76ec-99db-31e397e723f5",
+				"queue_name": "rspec-main",
+				"ecosystem": "RSpec",
+				"framework": "RSpec",
+				"test_plan_identifier": "facecafe"
+			}`)
+
+			w.WriteHeader(http.StatusCreated)
+			enc.Encode(api.SchedulerPlanResponse{
+				Run: api.SchedulerRun{
+					UUID:      "019eb76f-6df1-7dc7-9e52-940417f67e01",
+					QueueName: "rspec-main",
+				},
+				UploadedGroupsCount: 1,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	return svr
+}
+
+func assertCommandJSONBody(t *testing.T, body io.Reader, want string) {
+	t.Helper()
+
+	var gotJSON any
+	if err := json.NewDecoder(body).Decode(&gotJSON); err != nil {
+		t.Fatalf("decoding request body: %v", err)
+	}
+
+	var wantJSON any
+	if err := json.Unmarshal([]byte(want), &wantJSON); err != nil {
+		t.Fatalf("decoding expected JSON body: %v", err)
+	}
+
+	if diff := cmp.Diff(wantJSON, gotJSON); diff != "" {
+		t.Errorf("request body diff (-want +got):\n%s", diff)
+	}
 }
 
 func getConfig() *config.Config {

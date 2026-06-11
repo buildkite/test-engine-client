@@ -77,6 +77,15 @@ var organizationSlugFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+var organizationIDFlag = &cli.StringFlag{
+	Name:        "organization-id",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite organization id",
+	Sources:     cli.EnvVars("BUILDKITE_ORGANIZATION_ID"),
+	Destination: &cfg.OrganizationID,
+	Hidden:      true,
+}
+
 // backfillOrganizationSlugFlag is a non-hidden variant of organizationSlugFlag.
 // The backfill command is CLI-first (run manually outside CI), so the flag should
 // be discoverable in --help, unlike run/plan where the Buildkite agent
@@ -95,6 +104,15 @@ var buildIDFlag = &cli.StringFlag{
 	Usage:       "Buildkite build id",
 	Sources:     cli.EnvVars("BUILDKITE_BUILD_ID"),
 	Destination: &cfg.BuildID,
+	Hidden:      true,
+}
+
+var pipelineIDFlag = &cli.StringFlag{
+	Name:        "pipeline-id",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite pipeline id",
+	Sources:     cli.EnvVars("BUILDKITE_PIPELINE_ID"),
+	Destination: &cfg.PipelineID,
 	Hidden:      true,
 }
 
@@ -443,6 +461,20 @@ var pipelineUploadFlag = &cli.StringFlag{
 	Usage: "buildkite-agent pipeline upload will be executed with the provided `template.yml`. The additional enviroment variables BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER and BUILDKITE_TEST_ENGINE_PARALLELISM from the generated plan will be available to the template.",
 }
 
+var testSchedulerFlag = &cli.BoolFlag{
+	Name:        "test-scheduler",
+	Usage:       "Create a Test Scheduler pool from the generated plan",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SCHEDULER"),
+	Destination: &cfg.SchedulerPlan,
+}
+
+var schedulerPoolFlag = &cli.StringFlag{
+	Name:        "pool",
+	Usage:       "Test Scheduler pool name",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_NAME"),
+	Destination: &cfg.SchedulerPoolName,
+}
+
 // backfill-commit-metadata flags
 var skipDiffsFlag = &cli.BoolFlag{
 	Name:        "skip-diffs",
@@ -528,7 +560,9 @@ var uploadFlag = &cli.StringFlag{
 // Groupings common to multiple commands
 var buildEnvironmentFlags = []cli.Flag{
 	organizationSlugFlag,
+	organizationIDFlag,
 	buildIDFlag,
+	pipelineIDFlag,
 	jobIDFlag,
 	stepIDFlag,
 	branchFlag,
@@ -600,6 +634,8 @@ func planCommandFlags() []cli.Flag {
 		// Dynamic Parallelism Flags
 		maxParallelismFlag,
 		targetTimeFlag,
+		testSchedulerFlag,
+		schedulerPoolFlag,
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)
