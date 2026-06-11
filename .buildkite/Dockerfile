@@ -1,12 +1,17 @@
 FROM ruby:4.0.4-slim-bookworm AS ruby
 FROM cypress/included:14.5.3 AS cypress
 FROM python:3.15.0b1-bookworm AS python
+# Latest released bktec image. This is used to split tests on `main`. On other
+# branches the test step builds bktec from source instead (see
+# .buildkite/steps/tests.sh). The `latest` tag only points at stable releases.
+FROM public.ecr.aws/buildkite/test-engine-client:latest AS bktec
 
 FROM golang:1.26.3-bookworm AS golang
 
 COPY --from=ruby / /
 COPY --from=cypress / /
 COPY --from=python / /
+COPY --from=bktec /usr/local/bin/bktec /usr/local/bin/bktec
 
 RUN gem install rspec cucumber base64
 RUN gem install bigdecimal -v 3.2.0
@@ -15,12 +20,4 @@ RUN pip install pytest
 RUN pip install buildkite-test-collector>=1.3.0
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash -s -- --bin-dir /usr/local/bin
 
-# Install curl, download bktec binary, make it executable, place it, and cleanup
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends curl && \
-  echo "Downloading bktec..." && \
-  curl -L -o /usr/local/bin/bktec "https://github.com/buildkite/test-engine-client/releases/download/v1.5.0-rc.1/bktec_1.5.0-rc.1_linux_amd64" && \
-  echo "Setting execute permissions..." && \
-  chmod +x /usr/local/bin/bktec && \
-  echo "bktec installed successfully:" && \
-  bktec --version
+RUN echo "bktec installed successfully:" && bktec --version
