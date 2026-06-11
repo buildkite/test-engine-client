@@ -1,4 +1,4 @@
-FROM ruby:4.0.4-slim-bookworm AS ruby
+FROM ruby:4.0.5-slim-bookworm AS ruby
 FROM cypress/included:14.5.3 AS cypress
 FROM python:3.15.0b1-bookworm AS python
 # Latest released bktec image. This is used to split tests on `main`. On other
