@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -38,16 +39,28 @@ type SchedulerRun struct {
 
 func (c Client) CreateSchedulerPlan(ctx context.Context, params SchedulerPlanParams) (SchedulerPlanResponse, error) {
 	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/scheduler/plan", c.ServerBaseURL, c.OrganizationSlug)
+	deadline := time.Now().Add(30 * time.Second)
 
-	var response SchedulerPlanResponse
-	_, err := c.DoWithRetry(ctx, httpRequest{
-		Method: http.MethodPost,
-		URL:    url,
-		Body:   params,
-	}, &response)
-	if err != nil {
-		return SchedulerPlanResponse{}, err
+	for {
+		var response SchedulerPlanResponse
+		_, err := c.DoWithRetry(ctx, httpRequest{
+			Method: http.MethodPost,
+			URL:    url,
+			Body:   params,
+		}, &response)
+		if err == nil {
+			return response, nil
+		}
+
+		var notFound *NotFoundError
+		if !errors.As(err, &notFound) || time.Now().After(deadline) {
+			return SchedulerPlanResponse{}, err
+		}
+
+		select {
+		case <-ctx.Done():
+			return SchedulerPlanResponse{}, ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
 	}
-
-	return response, nil
 }

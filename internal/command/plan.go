@@ -155,6 +155,8 @@ func createSchedulerPlan(ctx context.Context, cfg *config.Config, apiClient *api
 		return api.SchedulerPlanResponse{}, fmt.Errorf("fetching suite for Test Scheduler plan: %w", err)
 	}
 
+	testPlanKey := fmt.Sprintf("suite/%s/test_plan/%s", suite.ID, testPlanIdentifier)
+
 	return apiClient.CreateSchedulerPlan(ctx, api.SchedulerPlanParams{
 		OrganizationUUID:   cfg.OrganizationID,
 		SuiteUUID:          suite.ID,
@@ -163,7 +165,7 @@ func createSchedulerPlan(ctx context.Context, cfg *config.Config, apiClient *api
 		QueueName:          cfg.SchedulerPoolName,
 		Ecosystem:          runnerName,
 		Framework:          runnerName,
-		TestPlanIdentifier: testPlanIdentifier,
+		TestPlanIdentifier: testPlanKey,
 	})
 }
 

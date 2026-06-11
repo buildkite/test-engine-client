@@ -440,7 +440,7 @@ func getSchedulerHttptestServer(t *testing.T) *httptest.Server {
 				"queue_name": "rspec-main",
 				"ecosystem": "RSpec",
 				"framework": "RSpec",
-				"test_plan_identifier": "facecafe"
+				"test_plan_identifier": "suite/019eb76f-6df1-7788-972f-5b01ddfbf6e8/test_plan/facecafe"
 			}`)
 
 			w.WriteHeader(http.StatusCreated)
