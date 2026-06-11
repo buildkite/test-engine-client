@@ -35,18 +35,21 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	files, err := getTestFiles(testListFilename, testRunner)
-	if err != nil {
-		return err
-	}
-
-	// get plan
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseURL:    cfg.ServerBaseURL,
 		UploadBaseURL:    cfg.UploadBaseURL,
 		AccessToken:      cfg.AccessToken,
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
+
+	if cfg.SchedulerPoolName != "" {
+		return runSchedulerPool(ctx, apiClient, cfg, testRunner)
+	}
+
+	files, err := getTestFiles(testListFilename, testRunner)
+	if err != nil {
+		return err
+	}
 
 	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
 	if err != nil {
@@ -100,6 +103,98 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	}
 
 	return runErr
+}
+
+func runSchedulerPool(ctx context.Context, apiClient *api.Client, cfg *config.Config, testRunner runner.TestRunner) error {
+	pool, err := apiClient.FetchSchedulerPool(ctx, cfg.PipelineID, cfg.BuildID, cfg.SchedulerPoolName)
+	if err != nil {
+		return fmt.Errorf("fetching Test Scheduler pool: %w", err)
+	}
+
+	var firstRunErr error
+
+	for {
+		leases, err := apiClient.LeaseSchedulerGroups(ctx, pool.Run.UUID, api.SchedulerLeaseParams{
+			JobUUID: cfg.JobID,
+		})
+		if err != nil {
+			return fmt.Errorf("leasing Test Scheduler groups: %w", err)
+		}
+
+		if len(leases.Leases) == 0 {
+			break
+		}
+
+		for _, lease := range leases.Leases {
+			tests, err := schedulerGroupTestCases(lease.Group)
+			if err != nil {
+				return err
+			}
+
+			var timeline []api.Timeline
+			runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &tests, cfg.MaxRetries, nil, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
+
+			if processSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &processSignaledError) {
+				logSignalAndExit(testRunner.Name(), processSignaledError.Signal)
+			}
+
+			printReport(runResult, nil, testRunner.Name())
+
+			if err := apiClient.CompleteSchedulerLeases(ctx, pool.Run.UUID, api.CompleteSchedulerLeasesParams{LeaseUUIDs: []string{lease.LeaseUUID}}); err != nil {
+				return fmt.Errorf("completing Test Scheduler lease %s: %w", lease.LeaseUUID, err)
+			}
+
+			if firstRunErr == nil && runErr != nil {
+				firstRunErr = runErr
+			}
+		}
+	}
+
+	return firstRunErr
+}
+
+func schedulerGroupTestCases(group api.SchedulerGroup) ([]plan.TestCase, error) {
+	tests := make([]plan.TestCase, 0, len(group.Selectors))
+	for _, selector := range group.Selectors {
+		test, err := schedulerSelectorTestCase(selector)
+		if err != nil {
+			return nil, fmt.Errorf("converting scheduler group %s selector: %w", group.UUID, err)
+		}
+		tests = append(tests, test)
+	}
+
+	return tests, nil
+}
+
+func schedulerSelectorTestCase(selector api.SchedulerSelector) (plan.TestCase, error) {
+	value, ok := selector.Value.(map[string]any)
+	if !ok {
+		if path, ok := selector.Value.(string); ok {
+			return plan.TestCase{Path: path}, nil
+		}
+
+		return plan.TestCase{}, fmt.Errorf("value must be an object or string")
+	}
+
+	file, _ := value["file"].(string)
+	exampleID, _ := value["example_id"].(string)
+	if file == "" {
+		return plan.TestCase{}, fmt.Errorf("value.file is required")
+	}
+
+	if exampleID != "" {
+		return plan.TestCase{
+			Format:     plan.TestCaseFormatExample,
+			Identifier: exampleID,
+			Path:       fmt.Sprintf("%s[%s]", file, exampleID),
+			Scope:      file,
+		}, nil
+	}
+
+	return plan.TestCase{
+		Format: plan.TestCaseFormatFile,
+		Path:   file,
+	}, nil
 }
 
 func printStartUpMessage() {

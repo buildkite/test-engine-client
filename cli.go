@@ -615,6 +615,7 @@ func runCommandFlags() []cli.Flag {
 		filesFlag,
 		tagFiltersFlag,
 		planIdentifierFlag,
+		schedulerPoolFlag,
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)

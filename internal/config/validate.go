@@ -105,6 +105,20 @@ func (c *Config) validate() error {
 func (c *Config) ValidateForRun() error {
 	_ = c.validate()
 
+	if c.SchedulerPoolName != "" {
+		if c.BuildID == "" {
+			c.errs.appendFieldError("--build-id / BUILDKITE_BUILD_ID", "must not be blank when --pool is set")
+		}
+
+		if c.PipelineID == "" {
+			c.errs.appendFieldError("--pipeline-id / BUILDKITE_PIPELINE_ID", "must not be blank when --pool is set")
+		}
+
+		if c.JobID == "" {
+			c.errs.appendFieldError("--job-id / BUILDKITE_JOB_ID", "must not be blank when --pool is set")
+		}
+	}
+
 	// Upload token could come from the env BUILDKITE_ANALYTICS_TOKEN, but may be blank ...
 	if c.UploadToken == "" {
 		if c.accessTokenIsOIDC {

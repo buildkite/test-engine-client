@@ -62,6 +62,28 @@ func TestRunTestsWithRetry(t *testing.T) {
 	}
 }
 
+func TestSchedulerGroupTestCases(t *testing.T) {
+	got, err := schedulerGroupTestCases(api.SchedulerGroup{
+		UUID: "group-1",
+		Selectors: []api.SchedulerSelector{
+			{Type: "file", Value: map[string]any{"file": "spec/models/user_spec.rb"}},
+			{Type: "example", Value: map[string]any{"file": "spec/models/build_spec.rb", "example_id": "1:2"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("schedulerGroupTestCases() error = %v", err)
+	}
+
+	want := []plan.TestCase{
+		{Format: plan.TestCaseFormatFile, Path: "spec/models/user_spec.rb"},
+		{Format: plan.TestCaseFormatExample, Identifier: "1:2", Path: "spec/models/build_spec.rb[1:2]", Scope: "spec/models/build_spec.rb"},
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("schedulerGroupTestCases() diff (-want +got):\n%s", diff)
+	}
+}
+
 func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 	testRunner := runner.NewRspec(runner.RunnerConfig{
 		TestCommand: "rspec --format json --out {{resultPath}}",
