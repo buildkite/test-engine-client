@@ -49,6 +49,7 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 				{"path": "./turtle_spec.rb"}
 			],
 			"env": {
+				"BUILDKITE_AGENT_ENDPOINT": "",
 				"BUILDKITE_BRANCH": "",
 				"BUILDKITE_BUILD_ID": "",
 				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": false,
@@ -60,6 +61,7 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 				"BUILDKITE_TEST_ENGINE_MAX_PARALLELISM": 0,
 				"BUILDKITE_TEST_ENGINE_OIDC": false,
 				"BUILDKITE_TEST_ENGINE_OIDC_LIFETIME": 0,
+				"BUILDKITE_TEST_ENGINE_PROMISE_FAILURE": false,
 				"BUILDKITE_TEST_ENGINE_RETRY_COUNT": 0,
 				"BUILDKITE_PARALLEL_JOB": 0,
 				"BUILDKITE_ORGANIZATION_SLUG": "",

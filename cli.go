@@ -407,6 +407,31 @@ var buildkiteAgentCommandFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+var promiseFailureFlag = &cli.BoolFlag{
+	Name:        "promise-failure",
+	Category:    "TEST ENGINE",
+	Usage:       "Declare an early failure to the Buildkite Agent API once retries are exhausted and hard (non-muted) failures remain. Opt-in.",
+	Value:       false,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_PROMISE_FAILURE"),
+	Destination: &cfg.PromiseFailure,
+}
+
+var agentEndpointFlag = &cli.StringFlag{
+	Name:        "agent-endpoint",
+	Usage:       "Base URL of the Buildkite Agent API, used for promise_failure. Defaults to the job's BUILDKITE_AGENT_ENDPOINT.",
+	Sources:     cli.EnvVars("BUILDKITE_AGENT_ENDPOINT"),
+	Destination: &cfg.AgentEndpoint,
+	Hidden:      true,
+}
+
+var agentAccessTokenFlag = &cli.StringFlag{
+	Name:        "agent-access-token",
+	Usage:       "Buildkite Agent API access token, used for promise_failure. Defaults to the job's BUILDKITE_AGENT_ACCESS_TOKEN.",
+	Sources:     cli.EnvVars("BUILDKITE_AGENT_ACCESS_TOKEN"),
+	Destination: &cfg.AgentAccessToken,
+	Hidden:      true,
+}
+
 // `run` command flags
 var planIdentifierFlag = &cli.StringFlag{
 	Name:        "plan-identifier",
@@ -587,6 +612,7 @@ func runCommandFlags() []cli.Flag {
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
 	flags = append(flags, failOnNoTestsFlag)
+	flags = append(flags, promiseFailureFlag, agentEndpointFlag, agentAccessTokenFlag)
 	flags = append(flags, previewSelectionFlags()...)
 	return flags
 }
