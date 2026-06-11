@@ -6,7 +6,7 @@ FROM python:3.15.0b1-bookworm AS python
 # .buildkite/steps/tests.sh). The `latest` tag only points at stable releases.
 FROM public.ecr.aws/buildkite/test-engine-client:latest AS bktec
 
-FROM golang:1.26.3-bookworm AS golang
+FROM golang:1.26.4-bookworm AS golang
 
 COPY --from=ruby / /
 COPY --from=cypress / /
