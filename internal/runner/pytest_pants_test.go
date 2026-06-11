@@ -153,6 +153,148 @@ func TestPytestPantsGetExamples(t *testing.T) {
 	}
 }
 
+func TestPytestPantsRun_JUnit_TestPassed(t *testing.T) {
+	changeCwd(t, "./testdata/pytest_pants")
+
+	pytest := PytestPants{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "pants test //passing_test.py -- --junit-xml={{resultPath}}",
+			ResultPath:  "result-passed.xml",
+		},
+		resultFormat: "junit",
+	}
+
+	testCases := []plan.TestCase{{Path: "passing_test.py"}}
+	result := NewRunResult([]plan.TestCase{})
+	err := pytest.Run(result, testCases, false)
+	if err != nil {
+		t.Errorf("PytestPants.Run(%q) error = %v", testCases, err)
+	}
+
+	if result.Status() != RunStatusPassed {
+		t.Errorf("PytestPants.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+}
+
+func TestPytestPantsRun_JUnit_TestFailed(t *testing.T) {
+	changeCwd(t, "./testdata/pytest_pants")
+
+	pytest := PytestPants{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "pants test //:: -- --junit-xml={{resultPath}}",
+			ResultPath:  "result-failed.xml",
+		},
+		resultFormat: "junit",
+	}
+
+	testCases := []plan.TestCase{{Path: "failing_test.py"}}
+	result := NewRunResult([]plan.TestCase{})
+	err := pytest.Run(result, testCases, false)
+
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
+	if result.Status() != RunStatusFailed {
+		t.Errorf("PytestPants.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+	}
+
+	failedTest := result.FailedTests()
+	if len(failedTest) != 1 {
+		t.Errorf("len(result.FailedTests()) = %d, want 1", len(failedTest))
+	}
+
+	wantFailedTests := []plan.TestCase{
+		{
+			Format:     "example",
+			Identifier: "tests/failing_test.py::test_failed",
+			Name:       "test_failed",
+			Path:       "tests/failing_test.py::test_failed",
+			Scope:      "tests/failing_test.py",
+		},
+	}
+
+	if diff := cmp.Diff(failedTest, wantFailedTests); diff != "" {
+		t.Errorf("PytestPants.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+	}
+}
+
+func TestPytestPantsResultFormat_JUnit(t *testing.T) {
+	pytest := PytestPants{resultFormat: "junit"}
+	if got := pytest.ResultFormat(); got != "junit" {
+		t.Errorf("ResultFormat() = %q, want %q", got, "junit")
+	}
+}
+
+func TestPytestPantsResultFormat_JSON(t *testing.T) {
+	pytest := PytestPants{resultFormat: "json"}
+	if got := pytest.ResultFormat(); got != "" {
+		t.Errorf("ResultFormat() = %q, want %q", got, "")
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_JUnit_ValidCommand(t *testing.T) {
+	testCases := []plan.TestCase{{Path: "failing_test.py"}, {Path: "passing_test.py"}}
+	testCommand := "pants test //:: -- --junit-xml={{resultPath}}"
+
+	pytest := PytestPants{
+		RunnerConfig: RunnerConfig{
+			TestCommand: testCommand,
+			ResultPath:  "result.xml",
+		},
+		resultFormat: "junit",
+	}
+
+	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
+	if err != nil {
+		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+	}
+
+	wantName := "pants"
+	wantArgs := []string{"test", "//::", "--", "--junit-xml=result.xml"}
+
+	if diff := cmp.Diff(gotName, wantName); diff != "" {
+		t.Errorf("commandNameAndArgs() diff (-got +want):\n%s", diff)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_JUnit_WithoutResultPath(t *testing.T) {
+	testCases := []plan.TestCase{{Path: "failing_test.py"}}
+	testCommand := "pants test //:: -- --merge-json"
+
+	pytest := PytestPants{
+		RunnerConfig: RunnerConfig{
+			TestCommand: testCommand,
+			ResultPath:  "result.xml",
+		},
+		resultFormat: "junit",
+	}
+
+	_, _, err := pytest.CommandNameAndArgs(testCases, false)
+	if err == nil {
+		t.Error("commandNameAndArgs() error = nil, want error")
+	}
+}
+
+func TestPytestPantsCommandNameAndArgs_NeitherResultFlag(t *testing.T) {
+	testCases := []plan.TestCase{{Path: "failing_test.py"}}
+
+	pytest := PytestPants{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "pants test //:: -- --some-other-flag",
+			ResultPath:  "result.json",
+		},
+		resultFormat: "",
+	}
+
+	_, _, err := pytest.CommandNameAndArgs(testCases, false)
+	if err == nil {
+		t.Error("commandNameAndArgs() error = nil, want error")
+	}
+}
+
 func TestPytestPantsCommandNameAndArgs_WithoutMergeJson(t *testing.T) {
 	testCases := []plan.TestCase{{Path: "failing_test.py"}, {Path: "passing_test.py"}}
 	testCommand := "pants test //:: -- --json={{resultPath}}"
