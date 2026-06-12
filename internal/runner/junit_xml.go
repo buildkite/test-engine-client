@@ -15,6 +15,8 @@ type JUnitXMLTestCase struct {
 	Failure   *JUnitXMLFailure `xml:"failure"`
 	Error     *JUnitXMLError   `xml:"error"`
 	Skipped   *JUnitXMLSkipped `xml:"skipped"`
+	// SuiteName is the name attribute of the enclosing <testsuite> element.
+	SuiteName string `xml:"-"`
 }
 
 // JUnitXMLFailure represents the <failure> element in JUnit XML
@@ -69,6 +71,7 @@ func loadAndParseJUnitXML(path string) ([]JUnitXMLTestCase, error) {
 	for _, suite := range testSuites.TestSuites {
 		for _, tc := range suite.TestCases {
 			testCase := tc
+			testCase.SuiteName = suite.Name
 			if testCase.Failure != nil || testCase.Error != nil {
 				testCase.Result = TestStatusFailed
 			} else if testCase.Skipped != nil {

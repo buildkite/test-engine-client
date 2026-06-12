@@ -281,6 +281,13 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 			})
 		}
 
+		// An error outside of the tests (such as a Go compilation failure, or a
+		// runner crashing before running any tests) cannot be fixed by
+		// retrying the failed tests, so the run is terminal.
+		if runResult.Status() == runner.RunStatusError {
+			return *runResult, err
+		}
+
 		// Don't retry if we've reached max retries.
 		if attemptCount == maxRetries {
 			return *runResult, err
