@@ -719,6 +719,37 @@ func TestConfigValidateForPlan_TestSchedulerWithPool(t *testing.T) {
 	}
 }
 
+func TestConfigValidateForRun_PoolModeSkipsParallelismChecks(t *testing.T) {
+	c := createConfig()
+	c.PoolName = "default"
+	c.TargetCostLimit = 30
+	// Pool mode distributes work by leasing, so the parallel job environment
+	// variables are not required.
+	c.Parallelism = 0
+	c.NodeIndex = 0
+
+	if err := c.ValidateForRun(); err != nil {
+		t.Errorf("ValidateForRun() error = %v, want nil", err)
+	}
+}
+
+func TestConfigValidateForRun_PoolModeInvalidTargetCostLimit(t *testing.T) {
+	c := createConfig()
+	c.PoolName = "default"
+	c.TargetCostLimit = 0
+
+	err := c.ValidateForRun()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForRun() error = %v, want InvalidConfigError", err)
+	}
+
+	if len(invConfigError["target-cost-limit"]) != 1 {
+		t.Errorf("ValidateForRun() error for target-cost-limit length = %d, want 1", len(invConfigError["target-cost-limit"]))
+	}
+}
+
 func TestConfigValidate_OidcTokens(t *testing.T) {
 	c := createConfig()
 	c.OIDC = true

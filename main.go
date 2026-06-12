@@ -36,6 +36,10 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
+	if cfg.PoolName != "" {
+		return command.RunTestSchedulerPool(ctx, &cfg)
+	}
+
 	return command.Run(ctx, &cfg, cmd.String("files"))
 }
 

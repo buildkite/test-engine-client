@@ -433,6 +433,15 @@ var poolFlag = &cli.StringFlag{
 	Destination: &cfg.PoolName,
 }
 
+var targetCostLimitFlag = &cli.FloatFlag{
+	Name:        "target-cost-limit",
+	Category:    "TEST SCHEDULER",
+	Value:       30,
+	Usage:       "Target cost of work to request per Test Scheduler lease",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TARGET_COST_LIMIT"),
+	Destination: &cfg.TargetCostLimit,
+}
+
 // `plan` command flags
 var maxParallelismFlag = &cli.IntFlag{
 	Name:        "max-parallelism",
@@ -598,6 +607,9 @@ func runCommandFlags() []cli.Flag {
 		filesFlag,
 		tagFiltersFlag,
 		planIdentifierFlag,
+		// Test Scheduler Flags
+		poolFlag,
+		targetCostLimitFlag,
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)

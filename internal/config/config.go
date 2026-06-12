@@ -84,6 +84,9 @@ type Config struct {
 	SuiteSlug string `json:"BUILDKITE_TEST_ENGINE_SUITE_SLUG"`
 	// TagFilters filters test examples by execution tags.
 	TagFilters string `json:"BUILDKITE_TEST_ENGINE_TAG_FILTERS"`
+	// TargetCostLimit is the cost (estimated minutes of work) requested per
+	// Test Scheduler lease (default 30).
+	TargetCostLimit float64 `json:"-"`
 	// TargetTime is the target time in seconds for the test plan.
 	TargetTime time.Duration `json:"BUILDKITE_TEST_ENGINE_TARGET_TIME"`
 	// TestScheduler enables creating a Test Scheduler pool from the generated test plan.

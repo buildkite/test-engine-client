@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -183,6 +184,243 @@ func TestFetchSchedulerPools(t *testing.T) {
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("FetchSchedulerPools() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateSchedulerLease(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/v2/organizations/buildkite/test-scheduler/pools/pool-uuid/leases" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+
+		assertJSONBody(t, r.Body, `{"target_cost_limit": 30, "lease_ttl_seconds": 300}`)
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"lease": {
+				"id": "lease-uuid",
+				"expires_at": "2026-06-12T00:05:00Z",
+				"entries": [
+					{
+						"id": "entry-1",
+						"type": "file",
+						"selector": {"path": "spec/foo_spec.rb"},
+						"custom_cost": 1.5,
+						"priority": 2,
+						"meta_data": {"source": "plan"}
+					},
+					{
+						"id": "entry-2",
+						"type": "example",
+						"selector": {"path": "spec/bar_spec.rb[1:2]"},
+						"custom_cost": 1,
+						"priority": 1,
+						"meta_data": null
+					}
+				]
+			}
+		}`)
+	}))
+	defer svr.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	got, err := newTestSchedulerClient(svr.URL).CreateSchedulerLease(ctx, "pool-uuid", CreateSchedulerLeaseParams{
+		TargetCostLimit: 30,
+		LeaseTTLSeconds: 300,
+	})
+	if err != nil {
+		t.Fatalf("CreateSchedulerLease() error = %v", err)
+	}
+
+	want := CreateSchedulerLeaseResponse{
+		Lease: &SchedulerLease{
+			ID:        "lease-uuid",
+			ExpiresAt: "2026-06-12T00:05:00Z",
+			Entries: []SchedulerLeaseEntry{
+				{
+					ID:         "entry-1",
+					Type:       "file",
+					Selector:   json.RawMessage(`{"path": "spec/foo_spec.rb"}`),
+					CustomCost: 1.5,
+					Priority:   2,
+					MetaData:   json.RawMessage(`{"source": "plan"}`),
+				},
+				{
+					ID:         "entry-2",
+					Type:       "example",
+					Selector:   json.RawMessage(`{"path": "spec/bar_spec.rb[1:2]"}`),
+					CustomCost: 1,
+					Priority:   1,
+					MetaData:   json.RawMessage(`null`),
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("CreateSchedulerLease() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateSchedulerLease_NoWork(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{"lease": null}`)
+	}))
+	defer svr.Close()
+
+	got, err := newTestSchedulerClient(svr.URL).CreateSchedulerLease(context.Background(), "pool-uuid", CreateSchedulerLeaseParams{})
+	if err != nil {
+		t.Fatalf("CreateSchedulerLease() error = %v", err)
+	}
+
+	if got.Lease != nil {
+		t.Errorf("CreateSchedulerLease() lease = %v, want nil", got.Lease)
+	}
+}
+
+func TestCompleteSchedulerLeases(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/organizations/buildkite/test-scheduler/pools/pool-uuid/leases/complete" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+
+		assertJSONBody(t, r.Body, `{"leases": [{"id": "lease-uuid"}]}`)
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{"completed_entry_ids": ["entry-1", "entry-2"]}`)
+	}))
+	defer svr.Close()
+
+	got, err := newTestSchedulerClient(svr.URL).CompleteSchedulerLeases(context.Background(), "pool-uuid", CompleteSchedulerLeasesParams{
+		Leases: []SchedulerLeaseRef{{ID: "lease-uuid"}},
+	})
+	if err != nil {
+		t.Fatalf("CompleteSchedulerLeases() error = %v", err)
+	}
+
+	want := CompleteSchedulerLeasesResponse{CompletedEntryIDs: []string{"entry-1", "entry-2"}}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("CompleteSchedulerLeases() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCompleteSchedulerLeases_Conflict(t *testing.T) {
+	requestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, `{"message": "Lease expired"}`, http.StatusConflict)
+	}))
+	defer svr.Close()
+
+	_, err := newTestSchedulerClient(svr.URL).CompleteSchedulerLeases(context.Background(), "pool-uuid", CompleteSchedulerLeasesParams{
+		Leases: []SchedulerLeaseRef{{ID: "lease-uuid"}},
+	})
+
+	if requestCount != 1 {
+		t.Errorf("http request count = %d, want 1", requestCount)
+	}
+
+	if conflictError := new(ConflictError); !errors.As(err, &conflictError) {
+		t.Fatalf("CompleteSchedulerLeases() error type = %T, want %T", err, ConflictError{})
+	}
+
+	if err.Error() != "Lease expired" {
+		t.Errorf("CompleteSchedulerLeases() error = %q, want %q", err.Error(), "Lease expired")
+	}
+}
+
+func TestHeartbeatSchedulerLeases(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/organizations/buildkite/test-scheduler/pools/pool-uuid/leases/heartbeat" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+
+		assertJSONBody(t, r.Body, `{"lease_ids": ["lease-uuid"], "lease_ttl_seconds": 300}`)
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{"leases": [{"id": "lease-uuid", "expires_at": "2026-06-12T00:10:00Z"}]}`)
+	}))
+	defer svr.Close()
+
+	got, err := newTestSchedulerClient(svr.URL).HeartbeatSchedulerLeases(context.Background(), "pool-uuid", HeartbeatSchedulerLeasesParams{
+		LeaseIDs:        []string{"lease-uuid"},
+		LeaseTTLSeconds: 300,
+	})
+	if err != nil {
+		t.Fatalf("HeartbeatSchedulerLeases() error = %v", err)
+	}
+
+	want := HeartbeatSchedulerLeasesResponse{
+		Leases: []SchedulerLeaseExpiry{{ID: "lease-uuid", ExpiresAt: "2026-06-12T00:10:00Z"}},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("HeartbeatSchedulerLeases() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestHeartbeatSchedulerLeases_Conflict(t *testing.T) {
+	requestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, `{"message": "Lease expired"}`, http.StatusConflict)
+	}))
+	defer svr.Close()
+
+	_, err := newTestSchedulerClient(svr.URL).HeartbeatSchedulerLeases(context.Background(), "pool-uuid", HeartbeatSchedulerLeasesParams{
+		LeaseIDs: []string{"lease-uuid"},
+	})
+
+	if requestCount != 1 {
+		t.Errorf("http request count = %d, want 1", requestCount)
+	}
+
+	if conflictError := new(ConflictError); !errors.As(err, &conflictError) {
+		t.Fatalf("HeartbeatSchedulerLeases() error type = %T, want %T", err, ConflictError{})
+	}
+}
+
+func TestFetchSchedulerPoolMetrics(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodGet)
+		}
+		if r.URL.Path != "/v2/organizations/buildkite/test-scheduler/pools/pool-uuid/metrics" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"metrics": {
+				"waiting_entries_count": 0,
+				"leased_entries_count": 0,
+				"completed_entries_count": 12,
+				"total_entries_count": 12,
+				"oldest_waiting_entry_created_at": null,
+				"waiting_custom_cost_sum": 0,
+				"drained": true
+			}
+		}`)
+	}))
+	defer svr.Close()
+
+	got, err := newTestSchedulerClient(svr.URL).FetchSchedulerPoolMetrics(context.Background(), "pool-uuid")
+	if err != nil {
+		t.Fatalf("FetchSchedulerPoolMetrics() error = %v", err)
+	}
+
+	want := SchedulerPoolMetrics{
+		CompletedEntriesCount: 12,
+		TotalEntriesCount:     12,
+		Drained:               true,
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("FetchSchedulerPoolMetrics() diff (-got +want):\n%s", diff)
 	}
 }
 

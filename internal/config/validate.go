@@ -123,6 +123,20 @@ func (c *Config) ValidateForRun() error {
 		}
 	}
 
+	// In Test Scheduler pool mode, work is distributed by leasing from the
+	// pool instead of a static index/count split, so the parallel job
+	// environment variables are not required.
+	if c.PoolName != "" {
+		if c.TargetCostLimit <= 0 {
+			c.errs.appendFieldError("target-cost-limit", "was %v, must be greater than 0", c.TargetCostLimit)
+		}
+
+		if len(c.errs) > 0 {
+			return c.errs
+		}
+		return nil
+	}
+
 	// The order of the range validation matters.
 	// The range validation of BUILDKITE_PARALLEL_JOB depends on the result of BUILDKITE_PARALLEL_JOB_COUNT validation at the first step.
 	// We need to validate the range of BUILDKITE_PARALLEL_JOB first before we add the range validation error to BUILDKITE_PARALLEL_JOB_COUNT.
