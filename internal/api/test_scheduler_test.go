@@ -1,0 +1,208 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+)
+
+func newTestSchedulerClient(svrURL string) *Client {
+	return NewClient(ClientConfig{
+		AccessToken:      "oidc-token",
+		OrganizationSlug: "buildkite",
+		ServerBaseURL:    svrURL,
+	})
+}
+
+func TestCreateSchedulerPlan(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/v2/organizations/buildkite/test-scheduler/plan" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer oidc-token" {
+			t.Errorf("Authorization header = %q", got)
+		}
+
+		assertJSONBody(t, r.Body, `{
+			"organization_id": "org-uuid",
+			"suite_id": "suite-uuid",
+			"pipeline_id": "pipeline-uuid",
+			"build_id": "build-uuid",
+			"key": "default",
+			"test_plan_identifier": "build-uuid/step-uuid"
+		}`)
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{
+			"pool": {
+				"id": "pool-uuid",
+				"organization_id": "org-uuid",
+				"suite_id": "suite-uuid",
+				"pipeline_id": "pipeline-uuid",
+				"build_id": "build-uuid",
+				"key": "default",
+				"state": "consuming",
+				"expires_at": "2026-06-13T00:00:00Z",
+				"created_at": "2026-06-12T00:00:00Z"
+			},
+			"uploaded_entries_count": 42
+		}`)
+	}))
+	defer svr.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	got, err := newTestSchedulerClient(svr.URL).CreateSchedulerPlan(ctx, CreateSchedulerPlanParams{
+		OrganizationID:     "org-uuid",
+		SuiteID:            "suite-uuid",
+		PipelineID:         "pipeline-uuid",
+		BuildID:            "build-uuid",
+		Key:                "default",
+		TestPlanIdentifier: "build-uuid/step-uuid",
+	})
+	if err != nil {
+		t.Fatalf("CreateSchedulerPlan() error = %v", err)
+	}
+
+	want := CreateSchedulerPlanResponse{
+		Pool: SchedulerPool{
+			ID:             "pool-uuid",
+			OrganizationID: "org-uuid",
+			SuiteID:        "suite-uuid",
+			PipelineID:     "pipeline-uuid",
+			BuildID:        "build-uuid",
+			Key:            "default",
+			State:          "consuming",
+			ExpiresAt:      "2026-06-13T00:00:00Z",
+			CreatedAt:      "2026-06-12T00:00:00Z",
+		},
+		UploadedEntriesCount: 42,
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("CreateSchedulerPlan() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateSchedulerPlan_Conflict(t *testing.T) {
+	requestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		http.Error(w, `{"message": "Pool already exists"}`, http.StatusConflict)
+	}))
+	defer svr.Close()
+
+	_, err := newTestSchedulerClient(svr.URL).CreateSchedulerPlan(context.Background(), CreateSchedulerPlanParams{})
+
+	// A 409 from the scheduler plan endpoint must not be retried; it surfaces
+	// immediately as a ConflictError so the caller can resolve the existing pool.
+	if requestCount != 1 {
+		t.Errorf("http request count = %d, want 1", requestCount)
+	}
+
+	if conflictError := new(ConflictError); !errors.As(err, &conflictError) {
+		t.Fatalf("CreateSchedulerPlan() error type = %T, want %T", err, ConflictError{})
+	}
+
+	if err.Error() != "Pool already exists" {
+		t.Errorf("CreateSchedulerPlan() error = %q, want %q", err.Error(), "Pool already exists")
+	}
+}
+
+func TestFetchSchedulerPools(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("request method = %q, want %q", r.Method, http.MethodGet)
+		}
+		if r.URL.Path != "/v2/organizations/buildkite/test-scheduler/pools" {
+			t.Errorf("request path = %q", r.URL.Path)
+		}
+
+		query := r.URL.Query()
+		if got := query.Get("pipeline_id"); got != "pipeline-uuid" {
+			t.Errorf("pipeline_id query = %q", got)
+		}
+		if got := query.Get("build_id"); got != "build-uuid" {
+			t.Errorf("build_id query = %q", got)
+		}
+		if got := query.Get("key"); got != "default" {
+			t.Errorf("key query = %q", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"pools": [{
+				"id": "pool-uuid",
+				"organization_id": "org-uuid",
+				"suite_id": "suite-uuid",
+				"pipeline_id": "pipeline-uuid",
+				"build_id": "build-uuid",
+				"key": "default",
+				"state": "consuming",
+				"expires_at": "2026-06-13T00:00:00Z",
+				"created_at": "2026-06-12T00:00:00Z"
+			}]
+		}`)
+	}))
+	defer svr.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	got, err := newTestSchedulerClient(svr.URL).FetchSchedulerPools(ctx, FetchSchedulerPoolsParams{
+		PipelineID: "pipeline-uuid",
+		BuildID:    "build-uuid",
+		Key:        "default",
+	})
+	if err != nil {
+		t.Fatalf("FetchSchedulerPools() error = %v", err)
+	}
+
+	want := []SchedulerPool{{
+		ID:             "pool-uuid",
+		OrganizationID: "org-uuid",
+		SuiteID:        "suite-uuid",
+		PipelineID:     "pipeline-uuid",
+		BuildID:        "build-uuid",
+		Key:            "default",
+		State:          "consuming",
+		ExpiresAt:      "2026-06-13T00:00:00Z",
+		CreatedAt:      "2026-06-12T00:00:00Z",
+	}}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("FetchSchedulerPools() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestFetchSchedulerPools_Empty(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{"pools": []}`)
+	}))
+	defer svr.Close()
+
+	got, err := newTestSchedulerClient(svr.URL).FetchSchedulerPools(context.Background(), FetchSchedulerPoolsParams{
+		PipelineID: "pipeline-uuid",
+		BuildID:    "build-uuid",
+		Key:        "default",
+	})
+	if err != nil {
+		t.Fatalf("FetchSchedulerPools() error = %v", err)
+	}
+
+	if len(got) != 0 {
+		t.Errorf("FetchSchedulerPools() = %v, want empty", got)
+	}
+}

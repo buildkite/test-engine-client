@@ -110,6 +110,14 @@ func (e *NotFoundError) Error() string {
 	return e.Message
 }
 
+type ConflictError struct {
+	Message string
+}
+
+func (e *ConflictError) Error() string {
+	return e.Message
+}
+
 type BadRequestError struct {
 	Message string
 }
@@ -138,6 +146,12 @@ type httpRequest struct {
 	Method string
 	URL    string
 	Body   any
+	// noRetryConflict disables retrying on 409 responses. By default a 409 is
+	// retried because the test plan create endpoint returns it while another
+	// node is concurrently creating the plan. The Test Scheduler endpoints use
+	// 409 to signal a semantic conflict (e.g. pool already exists, lease
+	// expired), which must surface to the caller as a ConflictError instead.
+	noRetryConflict bool
 }
 
 // DoWithRetry sends http request with retries.
@@ -207,8 +221,8 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 		}
 
 		// If we get a 409, we aren't the first client to create the plan so return
-		// and retry
-		if resp.StatusCode == http.StatusConflict {
+		// and retry, unless the caller opted out (see httpRequest.noRetryConflict).
+		if resp.StatusCode == http.StatusConflict && !reqOptions.noRetryConflict {
 			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
 		}
 
@@ -226,7 +240,9 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
+		// Treat any 2xx as success. Most endpoints return 200, but the Test
+		// Scheduler plan endpoint returns 201 Created.
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			var respError responseError
 			err = json.Unmarshal(responseBody, &respError)
 			if err != nil {
@@ -245,6 +261,8 @@ func (c *Client) DoWithRetry(ctx context.Context, reqOptions httpRequest, v inte
 				return resp, &ForbiddenError{Message: respError.Message}
 			case http.StatusNotFound:
 				return resp, &NotFoundError{Message: respError.Message}
+			case http.StatusConflict:
+				return resp, &ConflictError{Message: respError.Message}
 			case http.StatusBadRequest:
 				return resp, &BadRequestError{Message: respError.Message}
 			case http.StatusUnprocessableEntity:

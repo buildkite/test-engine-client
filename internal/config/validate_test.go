@@ -643,6 +643,82 @@ func TestConfigValidate_TagFiltersOnlyWorksWithPytest(t *testing.T) {
 	})
 }
 
+func TestGenerateSchedulerOIDCToken_PassesClaims(t *testing.T) {
+	c := createConfig()
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent-echo-args"
+
+	token, err := c.GenerateSchedulerOIDCToken()
+	if err != nil {
+		t.Fatalf("GenerateSchedulerOIDCToken() error = %v", err)
+	}
+
+	if want := "--claim organization_id,pipeline_id,build_id,job_id"; !strings.Contains(token, want) {
+		t.Errorf("buildkite-agent args = %q, want substring %q", token, want)
+	}
+}
+
+func TestGenerateSchedulerOIDCToken_OidcDisabled(t *testing.T) {
+	c := createConfig()
+	c.OIDC = false
+
+	_, err := c.GenerateSchedulerOIDCToken()
+	if err == nil {
+		t.Fatal("GenerateSchedulerOIDCToken() error = nil, want error")
+	}
+
+	if want := "requires an OIDC token"; !strings.Contains(err.Error(), want) {
+		t.Errorf("GenerateSchedulerOIDCToken() error = %q, want substring %q", err.Error(), want)
+	}
+}
+
+func TestGenerateOIDCToken_NoClaimsByDefault(t *testing.T) {
+	c := createConfig()
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent-echo-args"
+
+	token, err := c.generateOIDCToken()
+	if err != nil {
+		t.Fatalf("generateOIDCToken() error = %v", err)
+	}
+
+	if strings.Contains(token, "--claim") {
+		t.Errorf("buildkite-agent args = %q, want no --claim flag", token)
+	}
+}
+
+func TestConfigValidateForPlan_TestSchedulerRequiresPool(t *testing.T) {
+	c := createConfig()
+	c.TestScheduler = true
+	c.PoolName = ""
+
+	err := c.ValidateForPlan()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForPlan() error = %v, want InvalidConfigError", err)
+	}
+
+	if len(invConfigError["pool"]) != 1 {
+		t.Fatalf("ValidateForPlan() error for pool length = %d, want 1", len(invConfigError["pool"]))
+	}
+
+	expectedMsg := "must be set when test-scheduler is set"
+	if invConfigError["pool"][0].Error() != expectedMsg {
+		t.Errorf("ValidateForPlan() error message = %q, want %q", invConfigError["pool"][0].Error(), expectedMsg)
+	}
+}
+
+func TestConfigValidateForPlan_TestSchedulerWithPool(t *testing.T) {
+	c := createConfig()
+	c.TestScheduler = true
+	c.PoolName = "default"
+
+	if err := c.ValidateForPlan(); err != nil {
+		t.Errorf("ValidateForPlan() error = %v, want nil", err)
+	}
+}
+
 func TestConfigValidate_OidcTokens(t *testing.T) {
 	c := createConfig()
 	c.OIDC = true

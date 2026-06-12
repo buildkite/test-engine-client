@@ -240,6 +240,10 @@ func (c *Config) ValidateForPlan() error {
 		}
 	}
 
+	if c.TestScheduler && c.PoolName == "" {
+		c.errs.appendFieldError("pool", "must be set when test-scheduler is set")
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}
@@ -247,18 +251,40 @@ func (c *Config) ValidateForPlan() error {
 	return nil
 }
 
+// schedulerOIDCClaims are the extra claims the Test Scheduler endpoints
+// require in the OIDC token, passed as a single comma-separated --claim flag
+// to buildkite-agent.
+const schedulerOIDCClaims = "organization_id,pipeline_id,build_id,job_id"
+
 func (c *Config) generateOIDCToken() (token string, err error) {
 	if !c.OIDC {
 		return "", nil
 	}
+	return c.mintOIDCToken("")
+}
 
+// GenerateSchedulerOIDCToken mints an OIDC token with the additional claims
+// required by the Test Scheduler API. Unlike generateOIDCToken, OIDC being
+// disabled is an error because a static access token cannot carry the claims.
+func (c *Config) GenerateSchedulerOIDCToken() (string, error) {
+	if !c.OIDC {
+		return "", fmt.Errorf("the Test Scheduler requires an OIDC token minted by buildkite-agent; remove --no-oidc / set BUILDKITE_TEST_ENGINE_OIDC=true")
+	}
+	return c.mintOIDCToken(schedulerOIDCClaims)
+}
+
+func (c *Config) mintOIDCToken(claims string) (token string, err error) {
 	suiteURL := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s", c.ServerBaseURL, c.OrganizationSlug, c.SuiteSlug)
 	var tokenWriter strings.Builder
 	var errorWriter strings.Builder
 	lifetime := strconv.Itoa(int(c.OIDCLifetime.Seconds()))
+	args := []string{"oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime}
+	if claims != "" {
+		args = append(args, "--claim", claims)
+	}
 	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
 	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
-	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime) //nolint:gosec
+	cmd := exec.Command(c.BuildkiteAgentCommand, args...) //nolint:gosec
 	cmd.Stderr = &errorWriter
 	cmd.Stdout = &tokenWriter
 	cmd.Env = os.Environ()

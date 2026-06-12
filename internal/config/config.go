@@ -49,6 +49,9 @@ type Config struct {
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"BUILDKITE_PARALLEL_JOB_COUNT"`
+	// PoolName is the Test Scheduler pool key. When set on the run command, the
+	// client leases work from the pool instead of using a static test plan split.
+	PoolName string `json:"BUILDKITE_TEST_ENGINE_POOL"`
 	// Remote is the git remote name for fetching missing commits and detecting default branch (default "origin").
 	Remote string `json:"-"`
 	// ResultPath is the path to the result file.
@@ -83,6 +86,8 @@ type Config struct {
 	TagFilters string `json:"BUILDKITE_TEST_ENGINE_TAG_FILTERS"`
 	// TargetTime is the target time in seconds for the test plan.
 	TargetTime time.Duration `json:"BUILDKITE_TEST_ENGINE_TARGET_TIME"`
+	// TestScheduler enables creating a Test Scheduler pool from the generated test plan.
+	TestScheduler bool `json:"BUILDKITE_TEST_ENGINE_TEST_SCHEDULER"`
 	// TestCommand is the command to run the tests.
 	TestCommand string `json:"BUILDKITE_TEST_ENGINE_TEST_CMD"`
 	// TestFileExcludePattern is the pattern to exclude the test files.

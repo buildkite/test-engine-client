@@ -416,6 +416,23 @@ var planIdentifierFlag = &cli.StringFlag{
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"),
 }
 
+// Test Scheduler flags
+var testSchedulerFlag = &cli.BoolFlag{
+	Name:        "test-scheduler",
+	Category:    "TEST SCHEDULER",
+	Usage:       "Create a Test Scheduler pool from the generated test plan. Requires --pool",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TEST_SCHEDULER"),
+	Destination: &cfg.TestScheduler,
+}
+
+var poolFlag = &cli.StringFlag{
+	Name:        "pool",
+	Category:    "TEST SCHEDULER",
+	Usage:       "Test Scheduler pool key",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL"),
+	Destination: &cfg.PoolName,
+}
+
 // `plan` command flags
 var maxParallelismFlag = &cli.IntFlag{
 	Name:        "max-parallelism",
@@ -600,6 +617,9 @@ func planCommandFlags() []cli.Flag {
 		// Dynamic Parallelism Flags
 		maxParallelismFlag,
 		targetTimeFlag,
+		// Test Scheduler Flags
+		testSchedulerFlag,
+		poolFlag,
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)

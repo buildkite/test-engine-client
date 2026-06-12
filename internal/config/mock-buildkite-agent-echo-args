@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Echoes all arguments so tests can assert which flags were passed to
+# `buildkite-agent oidc request-token`.
+echo "$@"

@@ -74,6 +74,12 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 
 	plan.PrintSplitSummary(os.Stderr, testPlan)
 
+	if cfg.TestScheduler {
+		if err := createSchedulerPool(ctx, cfg); err != nil {
+			return err
+		}
+	}
+
 	switch outputFormat {
 
 	case PlanOutputJSON:
