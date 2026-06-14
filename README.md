@@ -48,7 +48,7 @@ bktec uses the following Buildkite Pipeline provided environment variables.
 
 ### Authentication
 
-From bktec 2.6.0, bktec automatically requests a [Buildkite Agent OIDC token](https://buildkite.com/docs/agent/cli/reference/oidc) for authentication. You don't need to create or configure an API access token. You will need to [configure an OIDC policy for your Test Engine suite](https://buildkite.com/docs/test-engine/test-collection/oidc) to allow this.
+From bktec 2.6.0, bktec automatically requests a [Buildkite Agent OIDC token](https://buildkite.com/docs/agent/cli/reference/oidc) for authentication. You don't need to create or configure an API access token. You will need to [configure an OIDC policy for your Test Engine suite](https://buildkite.com/docs/pipelines/configure/tests/test-collection/oidc) to allow this.
 
 If you're running bktec older than 2.6.0, or if you want to use an API access token instead, you can create a Buildkite API access token with `read_suites`, `read_test_plan`, and `write_test_plan` scopes from your [Personal Settings](https://buildkite.com/user/api-access-tokens) in Buildkite, then set:
 
