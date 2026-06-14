@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -134,7 +133,7 @@ func promiseFailureIfNeeded(ctx context.Context, cfg *config.Config, runResult r
 
 	fmt.Printf("+++ Buildkite Test Engine Client: ⚠️  Declaring early failure: %d hard test failure(s) remain after retries\n", len(failedTests))
 
-	if err := agent.PromiseFailure(ctx, http.DefaultClient, cfg.AgentEndpoint, cfg.AgentAccessToken, cfg.JobID, promisedExitStatus, reason); err != nil {
+	if err := agent.PromiseFailure(ctx, nil, cfg.AgentEndpoint, cfg.AgentAccessToken, cfg.JobID, promisedExitStatus, reason); err != nil {
 		fmt.Printf("Buildkite Test Engine Client: Warning: failed to declare early failure: %v\n", err)
 		return
 	}

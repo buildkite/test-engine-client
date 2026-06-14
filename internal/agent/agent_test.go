@@ -34,7 +34,9 @@ func TestPromiseFailure_sendsCorrectRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := PromiseFailure(context.Background(), server.Client(), server.URL, "secret-token", "job-uuid-123", 1, "test_failure")
+	// Pass a trailing slash on the endpoint to confirm it is trimmed and the
+	// path does not become a double slash.
+	err := PromiseFailure(context.Background(), server.Client(), server.URL+"/", "secret-token", "job-uuid-123", 1, "test_failure")
 	if err != nil {
 		t.Fatalf("PromiseFailure returned error: %v", err)
 	}

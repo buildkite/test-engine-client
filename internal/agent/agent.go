@@ -13,9 +13,16 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/buildkite/test-engine-client/v2/internal/version"
 )
+
+// promiseFailureTimeout bounds the promise_failure request. The call is
+// best-effort and happens near job completion, so it must never stall the run
+// if the Agent API is slow or unreachable.
+const promiseFailureTimeout = 5 * time.Second
 
 // promiseFailureRequest is the JSON body sent to the promise_failure endpoint.
 // The field names match the Buildkite Agent API contract exercised by the
@@ -58,7 +65,12 @@ func PromiseFailure(ctx context.Context, httpClient *http.Client, endpoint strin
 		httpClient = http.DefaultClient
 	}
 
-	url := fmt.Sprintf("%s/jobs/%s/promise_failure", endpoint, jobID)
+	ctx, cancel := context.WithTimeout(ctx, promiseFailureTimeout)
+	defer cancel()
+
+	// TrimRight guards against a trailing slash in BUILDKITE_AGENT_ENDPOINT
+	// producing a double-slash path that some proxies reject.
+	url := fmt.Sprintf("%s/jobs/%s/promise_failure", strings.TrimRight(endpoint, "/"), jobID)
 
 	body, err := json.Marshal(promiseFailureRequest{ExitStatus: exitStatus, Reason: reason})
 	if err != nil {
