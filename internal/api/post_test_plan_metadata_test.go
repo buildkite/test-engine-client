@@ -46,6 +46,7 @@ func TestPostTestPlanMetadata(t *testing.T) {
 		assertJSONBody(t, r.Body, `{
 			"version": "0.7.0",
 			"env": {
+				"BUILDKITE_AGENT_ENDPOINT": "",
 				"BUILDKITE_BRANCH": "",
 				"BUILDKITE_BUILD_ID": "",
 				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": false,
@@ -57,6 +58,7 @@ func TestPostTestPlanMetadata(t *testing.T) {
 				"BUILDKITE_TEST_ENGINE_MAX_PARALLELISM": 0,
 				"BUILDKITE_TEST_ENGINE_OIDC": false,
 				"BUILDKITE_TEST_ENGINE_OIDC_LIFETIME": 0,
+				"BUILDKITE_TEST_ENGINE_PROMISE_FAILURE": false,
 				"BUILDKITE_TEST_ENGINE_RETRY_COUNT": 0,
 				"BUILDKITE_PARALLEL_JOB": 1,
 				"BUILDKITE_ORGANIZATION_SLUG": "",
