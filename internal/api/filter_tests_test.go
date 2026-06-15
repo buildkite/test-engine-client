@@ -49,7 +49,6 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 				{"path": "./turtle_spec.rb"}
 			],
 			"env": {
-				"BUILDKITE_AGENT_ENDPOINT": "",
 				"BUILDKITE_BRANCH": "",
 				"BUILDKITE_BUILD_ID": "",
 				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": false,
