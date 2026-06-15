@@ -37,7 +37,7 @@ func (c Client) CreateTestPlan(ctx context.Context, suiteSlug string, params Tes
 	postURL := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan", c.ServerBaseURL, c.OrganizationSlug, suiteSlug)
 
 	var testPlan plan.TestPlan
-	_, err := c.DoWithRetry(ctx, httpRequest{
+	_, err := c.doJSONWithRetry(ctx, httpRequest{
 		Method: http.MethodPost,
 		URL:    postURL,
 		Body:   params,

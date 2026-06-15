@@ -35,7 +35,7 @@ func (c Client) FilterTests(ctx context.Context, suiteSlug string, params Filter
 	url := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan/filter_tests", c.ServerBaseURL, c.OrganizationSlug, suiteSlug)
 
 	var response FilteredTestResponse
-	_, err := c.DoWithRetry(ctx, httpRequest{
+	_, err := c.doJSONWithRetry(ctx, httpRequest{
 		Method: http.MethodPost,
 		URL:    url,
 		Body:   params,
