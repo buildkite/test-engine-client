@@ -7,6 +7,12 @@ release:
   prerelease: auto
   make_latest: "{{not .Prerelease}}"
   mode: replace
+  # The release pipeline tags the commit locally but never pushes the tag. When
+  # GoReleaser publishes the release, GitHub creates the missing tag at
+  # target_commitish, which defaults to the repo's default branch (main). That
+  # puts the tag on the wrong commit when releasing from a vX.Y.x branch, so pin
+  # it to the checked-out commit where the release was actually built.
+  target_commitish: '{{ .Commit }}'
 
 changelog:
   use: github-native
