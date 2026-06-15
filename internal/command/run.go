@@ -111,6 +111,10 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 // remain. bktec's own exit status is unchanged; this is only the early signal.
 const promisedExitStatus = 1
 
+// promiseFailureTimeout bounds the best-effort promise call so a slow or hung
+// agent can never stall job completion.
+const promiseFailureTimeout = 5 * time.Second
+
 // promiseFailureIfNeeded declares an early ("promised") failure via the
 // `buildkite-agent job promise-failure` CLI when the run finished with hard
 // (non-muted) failures after retries and the opt-in flag is enabled.
@@ -131,6 +135,11 @@ func promiseFailureIfNeeded(ctx context.Context, cfg *config.Config, runResult r
 	}
 
 	fmt.Printf("+++ Buildkite Test Engine Client: ⚠️  Declaring early failure: %d hard test failure(s) remain after retries\n", len(runResult.FailedTests()))
+
+	// Bound the call so a slow or hung agent can never stall job completion;
+	// this path is best-effort and must not hold up the real test run.
+	ctx, cancel := context.WithTimeout(ctx, promiseFailureTimeout)
+	defer cancel()
 
 	if err := makePromiseFailureCommand(ctx, cfg, promisedExitStatus, reason).Run(); err != nil {
 		fmt.Printf("Buildkite Test Engine Client: Warning: failed to declare early failure: %v\n", err)
