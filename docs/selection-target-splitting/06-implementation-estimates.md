@@ -1,428 +1,120 @@
-# Implementation Estimates and Recommendation
+# Implementation Estimates
 
-These are rough planning estimates for the three solution shapes. They assume one experienced engineer or a small pair, and that existing backend/Test Engine patterns are reasonably easy to extend.
-
-The estimates intentionally separate client work from backend/ClickHouse work because the hard part is not the CLI. The hard part is selector attribution plus the ClickHouse materialized view queried by the planner.
+Rough estimates assume one experienced engineer or a small pair. Backend timing and attribution are the schedule risk, not the CLI.
 
 ## Summary
 
-| Option | Client work | Backend/ClickHouse work | Total shape | Recommendation |
-| --- | ---: | ---: | --- | --- |
-| Lo-fi | 1–3 days | 3–7 days if attribution/MV is simple | ~1–2 weeks | Fastest, awkward API |
-| Middle-ground | 3–6 days | 1–3 weeks | ~2–4 weeks | Best practical path |
-| Full solution | 1–2 weeks | 3–6+ weeks | ~4–8 weeks | Cleanest, highest coordination |
+| Option | Client | Backend/ClickHouse | When to choose |
+| --- | ---: | ---: | --- |
+| Lo-fi | 1–3 days | 3–7 days minimum | short-lived workaround or spike |
+| Middle-ground | 3–6 days | 1–3 weeks | recommended path |
+| Full | 1–2 weeks | 3–6+ weeks | backend is ready and coordinated now |
 
-All options must preserve selector attribution and feed the ClickHouse materialized view. Without that, the work is only target dispatch and does not satisfy the original package-level splitting requirement.
+All options require selector attribution and selector timing lookup to qualify as smart target splitting.
 
-## Lo-fi estimate
+## Lo-fi
 
-The lo-fi path uses today’s `--files` mechanism for target lists, while the backend interprets each submitted path as a selector value under a configured or derived selector tag.
-
-Example:
-
-```sh
-bktec run --files bazel-targets.txt
-```
-
-Conceptually:
+Shape:
 
 ```text
-tests.files[].path = selector.value
-selector.tag = package / bazel_label / pants_target
+CLI: bktec run --files targets.txt
+transport: tests.files[].path = selector.value
+selector.tag: derived/configured elsewhere
 ```
 
-### Estimated effort
+Best case client work is mostly docs and validation polish. Backend work is only small if selector tag derivation, ClickHouse materialized view writes/queries, and unknown-target fallback already fit existing patterns.
 
-Client:
+Risk: bad public names (`--files`, `{{testExamples}}`) become sticky and target values pollute file timing history.
+
+## Middle-ground
+
+Shape:
 
 ```text
-1–3 days
+CLI: --split-by selection-target --selection-target-tag --selection-targets-file
+command: {{selectionTargets}}
+transport: native selection_targets when supported; compatibility files transport otherwise
 ```
 
-Mostly docs, validation tweaks, and maybe runner-specific polish.
-
-Backend / ClickHouse:
-
-```text
-3–7 days minimum
-```
-
-Only this small if there is already a straightforward way to:
-
-```text
-derive or configure selector.tag
-map tests.files[].path to selector.value
-write/query the ClickHouse materialized view
-apply unknown-target fallback timing
-```
-
-If attribution is not already clear, this becomes larger.
-
-### Pros
-
-```text
-Fastest path
-Smallest client change
-Good enough for early Go package-level experiments
-```
-
-### Cons
-
-```text
-Bad names: --files means targets
-Bad placeholder: {{testExamples}} means targets
-Harder to explain
-Easy to ossify into a bad API
-Still needs selector attribution and ClickHouse MV support
-```
-
-### Use only if
-
-```text
-We need a proof of concept immediately.
-We can keep it behind internal docs/config.
-We do not present it as the final public API.
-The backend can still feed/query selector timing in ClickHouse.
-```
-
-## Middle-ground estimate
-
-The middle-ground path adds the clean CLI now:
-
-```sh
---split-by selection-target
---selection-target-tag bazel_label
---selection-targets-file bazel-targets.txt
-{{selectionTargets}}
-```
-
-But it allows backend compatibility transport initially:
-
-```json
-{
-  "tests": {
-    "files": [
-      { "path": "//src/api:test" }
-    ]
-  },
-  "selection_target": {
-    "tag": "bazel_label",
-    "value_from": "tests.files[].path"
-  }
-}
-```
-
-Later, the same CLI can move to native `selection_targets` transport:
-
-```json
-{
-  "tests": {
-    "selection_targets": [
-      {
-        "path": "//src/api:test",
-        "selector": {
-          "tag": "bazel_label",
-          "value": "//src/api:test"
-        }
-      }
-    ]
-  }
-}
-```
-
-### Estimated effort
-
-Client:
-
-```text
-3–6 days
-```
-
-Includes:
+Client work includes:
 
 ```text
 config fields
 CLI flags/env vars
-target file parsing
-{{selectionTargets}}
+target parser
+placeholder expansion
 validation/conflict rules
-split summary wording
-tests
-docs
+custom runner target mode
+summary/debug wording
+retry behavior
+tests and docs
 ```
 
-Backend / ClickHouse:
-
-```text
-1–3 weeks
-```
-
-Includes:
+Backend work includes:
 
 ```text
 selector tag/value attribution
 ClickHouse MV write/query path
-planner query integration
-default/fallback timing for unknown targets
-server capability or compatibility behavior
+planner integration
+unknown-target fallback
+capability/compatibility behavior
+summary/debug metadata
 API tests
-debug/summary metadata
 ```
 
-### Pros
+This is recommended because the backend timing model is validated first, then users get the right API while backend transport can evolve.
+
+## Full
+
+Shape:
 
 ```text
-Good user-facing API now
-Can ship before native selection_targets transport is complete
-Avoids teaching users the --files workaround
-Clean path to the full solution
-Can still feed the ClickHouse MV during compatibility transport
+CLI and transport are target-native from day one
+tests.selection_targets is the only supported target transport
 ```
 
-### Cons
+Client work is higher than middle-ground because native schemas, capability behavior, public JSON stability, summaries, retries, and integration tests all need to land together.
+
+Backend work is the largest because it includes new API schema, planner model, ClickHouse MV, result attribution, capabilities, rollout, and migration/backfill decisions.
+
+## Recommended sequence
+
+1. **Backend attribution/MV spike** (2–5 days): prove selector tag/value attribution for Go and determine what is possible for Bazel/Pants/custom multi-target commands.
+2. **Client middle-ground API** (3–6 days): add `--split-by selection-target`, target-file parsing, `{{selectionTargets}}`, validation, tests, docs, and compatibility transport if needed.
+3. **Backend planner integration** (1–3 weeks): selector timing lookup, unknown fallback, ClickHouse MV write/query path, capability behavior, and observability.
+4. **Go opt-in rollout** (2–5 days after backend support): `selector.tag=package`, target discovery via `go list ./...`, explicit opt-in first.
+5. **Bazel/Pants docs and polish** (2–4 days): document required result attribution and limitations.
+
+## First spike questions
+
+Before building the public CLI, answer these:
 
 ```text
-Slightly more client work
-Temporary internal mismatch between CLI and transport
-Needs clear debug output so users know if native target timing is active
+Can the backend store timing for selector.tag/value?
+Can the planner query selector timing by suite + runner + selector tag?
+Can Go results produce package-level durations reliably?
+What happens when one node runs multiple packages or targets?
+What metadata would Bazel/Pants/custom results need for target attribution?
+What fallback duration is used for unknown selector values?
+Where does server capability negotiation live?
 ```
 
-### Recommendation
-
-Choose this path.
-
-It balances:
+Decision tree:
 
 ```text
-good API
-reasonable implementation size
-safe rollout
-backend flexibility
-future compatibility
+Can we attribute durations to selector.tag/value?
+  yes => build selector MV, planner lookup, then client selection-target mode
+  no  => client can only ship target dispatch with fallback/default timing
 ```
 
-## Full solution estimate
+## Caveats that affect estimates
 
-The full solution implements the clean end-state immediately:
+The middle-ground estimate assumes compatibility transport and no large expansion of `bktec plan --json`. If public JSON starts exposing assigned units, add schema-versioning and target-shaped output work.
 
-```sh
-BUILDKITE_TEST_ENGINE_SPLIT_BY=selection-target
-BUILDKITE_TEST_ENGINE_SELECTION_TARGET_TAG=bazel_label
-BUILDKITE_TEST_ENGINE_SELECTION_TARGETS_FILE=bazel-targets.txt
-BUILDKITE_TEST_ENGINE_TEST_CMD='bazel test {{selectionTargets}}'
-```
+Command construction is a real client task: current runners join paths/packages into a command string before shell splitting. Selection targets need argv-safe placeholder expansion or shell escaping.
 
-Native API payload:
+Retry work depends on attribution. If a failed result cannot be mapped to an executable target, choose and document either retry-all-assigned-targets or skip target retries.
 
-```json
-{
-  "tests": {
-    "selection_targets": [
-      {
-        "format": "selection_target",
-        "path": "//src/api:test",
-        "selector": {
-          "tag": "bazel_label",
-          "value": "//src/api:test"
-        }
-      }
-    ]
-  }
-}
-```
+## Final recommendation
 
-### Estimated effort
-
-Client:
-
-```text
-1–2 weeks
-```
-
-More than middle-ground because there is no compatibility shortcut and integration testing needs to be broader.
-
-Backend / ClickHouse:
-
-```text
-3–6+ weeks
-```
-
-Potentially more if result attribution is hard.
-
-Includes:
-
-```text
-new request schema
-new planner input model
-ClickHouse MV creation/query path
-MV refresh/backfill behavior
-attribution from uploaded results
-capability handling
-response shape
-retries
-observability
-rollout and migration
-tests
-```
-
-### Pros
-
-```text
-Cleanest architecture
-Least long-term ambiguity
-Best API story
-```
-
-### Cons
-
-```text
-Largest coordination cost
-Higher risk
-May block client work on backend readiness
-Harder to incrementally validate
-```
-
-### Use only if
-
-```text
-Backend team is ready now.
-Attribution design is already clear.
-We can afford a longer coordinated release.
-```
-
-## Best path forward
-
-Use the **middle-ground solution**.
-
-The real hard part is:
-
-```text
-selector attribution + ClickHouse MV + planner query
-```
-
-The highest schedule risk is target-level result attribution, especially for Bazel/Pants/custom workflows that run multiple targets in one command. If result uploads cannot identify the target that produced each timing, the client API can still ship, but smart target balancing must stay in default/unknown-timing mode for those workflows.
-
-The middle-ground path lets us:
-
-1. Give users the right CLI shape now.
-2. Avoid baking in the awkward `--files` workaround.
-3. Keep existing APIs working.
-4. Roll out backend support safely.
-5. Flip Go to package-level default later, when attribution and the ClickHouse MV are proven.
-
-## Suggested implementation plan
-
-### Phase 1: backend attribution and ClickHouse MV spike
-
-Estimate:
-
-```text
-2–5 days
-```
-
-Goal:
-
-```text
-Can we reliably produce selector.tag/value for Go package results?
-Can we do the same for Bazel/Pants/custom?
-What is the ClickHouse MV schema?
-How will the planner query it?
-What happens for unknown targets?
-```
-
-Deliverable:
-
-```text
-A concrete backend contract for selector timing.
-```
-
-Do this first because it determines whether the CLI is truly smart splitting or just target dispatch.
-
-### Phase 2: client middle-ground API
-
-Estimate:
-
-```text
-3–6 days
-```
-
-Add:
-
-```sh
---split-by selection-target
---selection-target-tag
---selection-targets-file
-{{selectionTargets}}
-```
-
-With validation, tests, docs, and compatibility transport if needed.
-
-### Phase 3: backend planner integration
-
-Estimate:
-
-```text
-1–3 weeks
-```
-
-Add:
-
-```text
-selector timing lookup
-unknown target fallback
-split summary metadata
-result attribution
-ClickHouse MV refresh/query path
-capability handling
-```
-
-### Phase 4: Go package rollout
-
-Estimate:
-
-```text
-2–5 days after backend support is ready
-```
-
-Use:
-
-```text
-selector.tag = package
-selector.value = package path
-```
-
-Start explicit opt-in first:
-
-```sh
-BUILDKITE_TEST_ENGINE_SPLIT_BY=selection-target
-```
-
-Then later make it the `gotest` default once attribution, ClickHouse MV timing, and observability are proven.
-
-### Phase 5: Bazel/Pants docs and polish
-
-Estimate:
-
-```text
-2–4 days
-```
-
-Add examples, caveats, and required result attribution instructions.
-
-## Concrete recommendation
-
-Do this:
-
-```text
-1. Start with a backend attribution/ClickHouse MV spike.
-2. Implement the middle-ground CLI.
-3. Use compatibility transport only if needed, but preserve selector tag/value semantics.
-4. Ship Go package splitting behind explicit opt-in.
-5. Make Go default later.
-```
-
-Do not make `--files` the public recommended API for Bazel/Pants.
-
-Do not flip Go defaults until the ClickHouse MV and attribution path are proven.
-
-This gives the shortest safe path to package-level splitting without locking in a bad user API.
+Do the middle-ground path, but start with the backend attribution/ClickHouse spike. Without that spike, the CLI can ship only as target dispatch with fallback/default timing.

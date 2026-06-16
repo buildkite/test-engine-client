@@ -1,13 +1,27 @@
 # Evolution Plan
 
-## Phase 1: documented compatibility path
+## Phase 0: backend attribution and timing spike
 
-Support target-style workflows using existing mechanics, but document them honestly as a workaround.
+Before building the public client API, prove the backend model:
 
 ```text
-Use --files for target lists if needed today.
-Use selector attribution if the backend can derive/configure selector.tag.
-Do not call it smart target splitting unless it feeds the ClickHouse materialized view.
+selector.tag/value can be stored with result timing
+the planner can query selector timing from a materialized view
+unknown selector values have explicit fallback timing
+Go package-level attribution is reliable enough for opt-in rollout
+Bazel/Pants/custom attribution requirements are understood
+```
+
+If this is not true yet, any client work should be described as target dispatch, not smart target splitting.
+
+## Phase 1: compatibility workaround
+
+Allow target-style workflows through existing `--files` only as a short-term workaround.
+
+```text
+Use selector attribution if backend can derive/configure selector.tag.
+Do not call it smart target splitting unless selector timing is written and queried.
+Do not write target strings into ordinary file timing history.
 ```
 
 ## Phase 2: clean client API
@@ -15,13 +29,13 @@ Do not call it smart target splitting unless it feeds the ClickHouse materialize
 Add:
 
 ```sh
---split-by
+--split-by selection-target
 --selection-target-tag
 --selection-targets-file
 {{selectionTargets}}
 ```
 
-Keep existing APIs working:
+Keep existing APIs:
 
 ```sh
 --files
@@ -30,54 +44,41 @@ BUILDKITE_TEST_ENGINE_FILES
 BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE
 ```
 
-Initial implementation can still send `tests.files` if backend support for `tests.selection_targets` is not ready, but it must still preserve selector tag/value semantics for ClickHouse materialized-view lookup.
+Initial implementation may use compatibility transport, but it must preserve selector semantics.
 
 ## Phase 3: backend target timing
 
-Add server support for:
+Add native API and planner support for:
 
 ```json
-{
-  "tests": {
-    "selection_targets": []
-  }
-}
+{ "tests": { "selection_targets": [] } }
 ```
 
-Add historical timing lookup by:
+Add ClickHouse timing lookup by:
 
 ```text
-suite
-runner
-selector.tag
-selector.value
+suite + runner + selector.tag + selector.value
 ```
 
-This is where target splitting becomes smart instead of only syntactically cleaner.
-
-The ClickHouse materialized view is the core backend artifact for the original requirement. It should let the planner quickly answer:
-
-```text
-For this suite/runner/selector tag, what historical duration do we have for each selector value?
-```
+Unknown targets should use explicit fallback/default timing.
 
 ## Phase 4: result attribution
 
-Make sure uploaded results can be associated with selection targets.
+Associate uploaded results with the targets the planner assigns.
 
-Possible approaches:
+Possible mechanisms:
 
 ```text
-derive package from Go result data
-require custom collectors to emit target tags
-use plan assignment metadata to associate node results with assigned targets
+derive package from Go results
+require custom/Bazel/Pants result metadata
+use assignment metadata when a node runs exactly one target
 ```
 
-This must be solved before claiming target-level timing is reliable for Bazel/Pants.
+Do not claim reliable target-level timing for Bazel/Pants until multi-target commands can attribute results per target.
 
-## Phase 5: make Go automatic
+## Phase 5: Go default
 
-After backend support is safe, change `gotest` defaults:
+After backend support is proven, make `gotest` default to:
 
 ```text
 split mode: selection-target
@@ -85,58 +86,35 @@ selector tag: package
 target discovery: go list ./...
 ```
 
-Existing Go users should not need to change pipeline config.
-
 Guardrails:
 
 ```text
-do not flip based only on client version
-require server capability support
-require package-level result attribution confidence
-preserve existing {{packages}} commands
-provide an opt-out, e.g. BUILDKITE_TEST_ENGINE_SPLIT_BY=file
+server capability support
+package-level result attribution confidence
+target-aware summaries/debug output
+opt-out: BUILDKITE_TEST_ENGINE_SPLIT_BY=file
 ```
 
 ## Observability
 
-During rollout, users need to see which behavior they are getting.
-
-Split summary/debug output should say things like:
+Split summaries/debug logs should state:
 
 ```text
 12 selection targets across 4 nodes
-selection-target transport: native selection_targets
-selection-target transport: legacy files compatibility mode
-target timing: available from selector ClickHouse materialized view
-target timing: unavailable; using defaults
+selection-target transport: native selection_targets | files compatibility
+target timing: selector history used | unavailable, using defaults
+result attribution: available | unavailable
 ```
 
-## Phase 6: advanced cases only when needed
+## Later, only if needed
 
-Avoid adding advanced options too early. Later, if real users need them, consider:
+Consider these only after real demand appears:
 
 ```text
-separate selector.value from executable path
-runner-native target discovery for Bazel/Pants
-direct examples file input
+separate executable target from selector.value
+runner-native Bazel/Pants target discovery
+direct examples-file input
 target-level result attribution helpers
 ```
 
-## Deprecation guidance
-
-Do not remove anything in the first release.
-
-Keep:
-
-```sh
---files
---split-by-example
-```
-
-If `--split-by` is adopted broadly, later soft-deprecate `--split-by-example` in docs as an alias for:
-
-```sh
---split-by example
-```
-
-Do not deprecate `tests.files` or `tests.examples`; they remain correct concepts for many runners.
+Do not deprecate `tests.files` or `tests.examples`; they remain correct for file/example-centric runners.
