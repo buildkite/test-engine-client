@@ -180,7 +180,7 @@ func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Cli
 	debug.Printf("Filtering %d files", len(allTestFiles))
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
 		Files: allTestFiles,
-		Env:   cfg,
+		Env:   cfg.EnvPayload(),
 	})
 	if err != nil {
 		return api.TestPlanParamsTest{}, fmt.Errorf("filter tests: %w", err)

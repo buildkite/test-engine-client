@@ -3,6 +3,12 @@ package config
 import "time"
 
 // Config is the internal representation of the complete test engine client configuration.
+//
+// Config is never serialized to the wire: every field is tagged json:"-". The
+// data sent to the API in the "env" request field is represented by the
+// separate EnvPayload type and built via Config.EnvPayload. This keeps internal
+// configuration decoupled from the API contract, so adding a field here does not
+// cause it to be sent to the API unless it is also added to EnvPayload.
 type Config struct {
 	// AccessToken is the access token for the API.
 	AccessToken string `json:"-"`
@@ -11,15 +17,15 @@ type Config struct {
 	AgentAccessToken string `json:"-"`
 	// AgentEndpoint is the base URL of the Buildkite Agent API (e.g. https://agent.buildkite.com/v3).
 	// Injected into the job env as BUILDKITE_AGENT_ENDPOINT.
-	AgentEndpoint string `json:"BUILDKITE_AGENT_ENDPOINT"`
+	AgentEndpoint string `json:"-"`
 	// PromiseFailure, when true, makes bktec declare an early failure to the
 	// Buildkite Agent API once retries are exhausted and hard failures remain.
-	PromiseFailure bool `json:"BUILDKITE_TEST_ENGINE_PROMISE_FAILURE"`
+	PromiseFailure bool `json:"-"`
 	// UploadBaseURL is the base URL for the Test Engine analytics API.
 	UploadBaseURL string `json:"-"`
 	// Branch is the string value of the git branch name, used by Buildkite only.
-	Branch                string `json:"BUILDKITE_BRANCH"`
-	BuildID               string `json:"BUILDKITE_BUILD_ID"`
+	Branch                string `json:"-"`
+	BuildID               string `json:"-"`
 	BuildkiteAgentCommand string `json:"-"`
 	// CollectGitMetadata enables git metadata auto-collection on plan without requiring --selection-strategy to be set.
 	CollectGitMetadata bool `json:"-"`
@@ -28,49 +34,49 @@ type Config struct {
 	// Days is the lookback window in days for the commit list API (1-90, default 90).
 	Days int `json:"-"`
 	// Enable debug output
-	DebugEnabled bool `json:"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED"`
+	DebugEnabled bool `json:"-"`
 	// FailOnNoTests causes the client to exit with an error if no tests are assigned to the node
-	FailOnNoTests bool `json:"BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS"`
+	FailOnNoTests bool `json:"-"`
 	// Identifier is the identifier of the build.
-	Identifier string `json:"BUILDKITE_TEST_ENGINE_IDENTIFIER"`
-	JobID      string `json:"BUILDKITE_JOB_ID"`
+	Identifier string `json:"-"`
+	JobID      string `json:"-"`
 	// JobRetryCount is the count of the number of times the job has been retried.
-	JobRetryCount int `json:"BUILDKITE_RETRY_COUNT"`
+	JobRetryCount int `json:"-"`
 	// LocationPrefix is prepended to test file paths when requesting a test plan.
 	// Use this when the test collector is configured to report files with a path prefix,
 	// so the test plan API can correctly match and bin-pack them across nodes.
-	LocationPrefix string `json:"BUILDKITE_TEST_ENGINE_LOCATION_PREFIX"`
+	LocationPrefix string `json:"-"`
 	// MaxParallelism is the maximum parallelism when calculating parallelism dynamically.
-	MaxParallelism int `json:"BUILDKITE_TEST_ENGINE_MAX_PARALLELISM"`
+	MaxParallelism int `json:"-"`
 	// MaxRetries is the maximum number of retries for a failed test.
-	MaxRetries int `json:"BUILDKITE_TEST_ENGINE_RETRY_COUNT"`
+	MaxRetries int `json:"-"`
 	// Metadata is additional key/value data sent to the test plan API.
 	Metadata map[string]string `json:"-"`
 	// Node index is index of the current node.
-	NodeIndex int `json:"BUILDKITE_PARALLEL_JOB"`
+	NodeIndex int `json:"-"`
 	// Enable OIDC token generation
-	OIDC bool `json:"BUILDKITE_TEST_ENGINE_OIDC"`
+	OIDC bool `json:"-"`
 	// Lifetime of OIDC tokens
-	OIDCLifetime time.Duration `json:"BUILDKITE_TEST_ENGINE_OIDC_LIFETIME"`
+	OIDCLifetime time.Duration `json:"-"`
 	// OrganizationSlug is the slug of the organization.
-	OrganizationSlug string `json:"BUILDKITE_ORGANIZATION_SLUG"`
+	OrganizationSlug string `json:"-"`
 	// Output is the local file path for the export tarball. If set, skip S3 upload.
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.
-	Parallelism int `json:"BUILDKITE_PARALLEL_JOB_COUNT"`
+	Parallelism int `json:"-"`
 	// Remote is the git remote name for fetching missing commits and detecting default branch (default "origin").
 	Remote string `json:"-"`
 	// ResultPath is the path to the result file.
 	ResultPath string `json:"-"`
 	// RetryCommand is the command to run the retry tests.
-	RetryCommand string `json:"BUILDKITE_TEST_ENGINE_RETRY_CMD"`
+	RetryCommand string `json:"-"`
 	// RetryForMutedTest indicates whether a failed muted test should be retried.
 	// This is default to true because we want more signal for our flaky detection system.
 	RetryForMutedTest bool `json:"-"`
 	// SelectionParams are additional key/value parameters for the strategy.
 	SelectionParams map[string]string `json:"-"`
 	// SelectionStrategy is the selection strategy sent to the test plan API.
-	SelectionStrategy string `json:"BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"`
+	SelectionStrategy string `json:"-"`
 	// ServerBaseURL is the base URL of the test plan server.
 	ServerBaseURL string `json:"-"`
 	// SkipDiffs omits git_diff and git_diff_raw from the export to reduce upload size.
@@ -84,22 +90,22 @@ type Config struct {
 	// UploadToken is the token used by test collectors. From `BUILDKITE_ANALYTICS_TOKEN` if present, otherwise generated by `buildkite-agent oidc request-token`.
 	UploadToken string `json:"-"`
 	// SplitByExample is the flag to enable split the test by example.
-	SplitByExample bool   `json:"BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE"`
-	StepID         string `json:"BUILDKITE_STEP_ID"`
+	SplitByExample bool   `json:"-"`
+	StepID         string `json:"-"`
 	// SuiteSlug is the slug of the suite.
-	SuiteSlug string `json:"BUILDKITE_TEST_ENGINE_SUITE_SLUG"`
+	SuiteSlug string `json:"-"`
 	// TagFilters filters test examples by execution tags.
-	TagFilters string `json:"BUILDKITE_TEST_ENGINE_TAG_FILTERS"`
+	TagFilters string `json:"-"`
 	// TargetTime is the target time in seconds for the test plan.
-	TargetTime time.Duration `json:"BUILDKITE_TEST_ENGINE_TARGET_TIME"`
+	TargetTime time.Duration `json:"-"`
 	// TestCommand is the command to run the tests.
-	TestCommand string `json:"BUILDKITE_TEST_ENGINE_TEST_CMD"`
+	TestCommand string `json:"-"`
 	// TestFileExcludePattern is the pattern to exclude the test files.
-	TestFileExcludePattern string `json:"BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN"`
+	TestFileExcludePattern string `json:"-"`
 	// TestFilePattern is the pattern to match the test files.
-	TestFilePattern string `json:"BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN"`
+	TestFilePattern string `json:"-"`
 	// TestRunner is the name of the runner.
-	TestRunner string `json:"BUILDKITE_TEST_ENGINE_TEST_RUNNER"`
+	TestRunner string `json:"-"`
 
 	// Set to true if AccessToken was unset and an OIDC token was generated instead
 	accessTokenIsOIDC bool

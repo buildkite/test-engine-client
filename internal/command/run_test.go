@@ -20,7 +20,6 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/runner"
 	"github.com/buildkite/test-engine-client/v2/internal/version"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -823,13 +822,13 @@ func TestSendMetadata(t *testing.T) {
 		want := api.TestPlanMetadataParams{
 			Version:  "0.1.0",
 			Timeline: timeline,
-			Env:      &cfg,
+			Env:      cfg.EnvPayload(),
 			Statistics: runner.RunStatistics{
 				Total: 3,
 			},
 		}
 
-		if diff := cmp.Diff(got, want, cmpopts.IgnoreUnexported(config.Config{})); diff != "" {
+		if diff := cmp.Diff(got, want); diff != "" {
 			t.Errorf("sendMetadata() request params diff (-got +want):\n%s", diff)
 			w.WriteHeader(http.StatusBadRequest)
 		} else {

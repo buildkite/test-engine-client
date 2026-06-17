@@ -252,7 +252,7 @@ func uploadResults(ctx context.Context, apiClient *api.Client, cfg *config.Confi
 func sendMetadata(ctx context.Context, apiClient *api.Client, cfg *config.Config, timeline []api.Timeline, statistics runner.RunStatistics) {
 	err := apiClient.PostTestPlanMetadata(ctx, cfg.SuiteSlug, cfg.Identifier, api.TestPlanMetadataParams{
 		Timeline:   timeline,
-		Env:        cfg,
+		Env:        cfg.EnvPayload(),
 		Version:    version.Version,
 		Statistics: statistics,
 	})

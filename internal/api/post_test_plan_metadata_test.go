@@ -21,7 +21,7 @@ func TestPostTestPlanMetadata(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		Env:     &cfg,
+		Env:     cfg.EnvPayload(),
 		Timeline: []Timeline{
 			{Event: "test_start", Timestamp: "2024-06-20T04:46:13.60977Z"},
 			{Event: "test_end", Timestamp: "2024-06-20T04:49:09.609793Z"},
@@ -120,7 +120,7 @@ func TestPostTestPlanMetadata_NotFound(t *testing.T) {
 
 	params := TestPlanMetadataParams{
 		Version: "0.7.0",
-		Env:     &cfg,
+		Env:     cfg.EnvPayload(),
 		Timeline: []Timeline{
 			{Event: "test_start", Timestamp: "2024-06-20T04:46:13.60977Z"},
 			{Event: "test_end", Timestamp: "2024-06-20T04:49:09.609793Z"},
