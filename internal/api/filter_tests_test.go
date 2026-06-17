@@ -25,7 +25,7 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 			{Path: "./dog_spec.rb"},
 			{Path: "./turtle_spec.rb"},
 		},
-		Env: &cfg,
+		Env: cfg.EnvPayload(),
 	}
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -10,8 +10,8 @@ import (
 )
 
 type FilterTestsParams struct {
-	Files []plan.TestCase `json:"files"`
-	Env   *config.Config  `json:"env"`
+	Files []plan.TestCase   `json:"files"`
+	Env   config.EnvPayload `json:"env"`
 }
 
 type FilteredTest struct {
