@@ -46,7 +46,6 @@ func TestPostTestPlanMetadata(t *testing.T) {
 		assertJSONBody(t, r.Body, `{
 			"version": "0.7.0",
 			"env": {
-				"BUILDKITE_AGENT_ENDPOINT": "",
 				"BUILDKITE_BRANCH": "",
 				"BUILDKITE_BUILD_ID": "",
 				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": false,

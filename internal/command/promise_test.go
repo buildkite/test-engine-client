@@ -1,12 +1,7 @@
 package command
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"sync/atomic"
+	"context"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/config"
@@ -28,7 +23,7 @@ func resultWith(muted []plan.TestCase, record func(r *runner.RunResult)) runner.
 	return *r
 }
 
-func TestPromiseFailureIfNeeded(t *testing.T) {
+func TestPromiseFailureDecision(t *testing.T) {
 	hardFailures := resultWith(nil, func(r *runner.RunResult) {
 		r.RecordTestResult(testCase("a_spec.rb"), runner.TestStatusPassed)
 		r.RecordTestResult(testCase("b_spec.rb"), runner.TestStatusFailed)
@@ -45,93 +40,67 @@ func TestPromiseFailureIfNeeded(t *testing.T) {
 	})
 
 	tests := []struct {
-		name            string
-		promiseEnabled  bool
-		result          runner.RunResult
-		serverStatus    int
-		wantRequest     bool
-		wantExitStatus  float64
-		wantReasonStart string
+		name           string
+		promiseEnabled bool
+		result         runner.RunResult
+		wantDeclare    bool
+		wantReason     string
 	}{
 		{
-			name:            "hard failures with flag on promises",
-			promiseEnabled:  true,
-			result:          hardFailures,
-			wantRequest:     true,
-			wantExitStatus:  1,
-			wantReasonStart: "test_failure",
-		},
-		{
-			name:            "agent error is swallowed (best-effort)",
-			promiseEnabled:  true,
-			result:          hardFailures,
-			serverStatus:    http.StatusInternalServerError,
-			wantRequest:     true,
-			wantExitStatus:  1,
-			wantReasonStart: "test_failure",
+			name:           "hard failures with flag on declares",
+			promiseEnabled: true,
+			result:         hardFailures,
+			wantDeclare:    true,
+			wantReason:     "test_failure (2 failed after retries)",
 		},
 		{
 			name:           "hard failures with flag off does nothing",
 			promiseEnabled: false,
 			result:         hardFailures,
-			wantRequest:    false,
+			wantDeclare:    false,
 		},
 		{
 			name:           "no failures does nothing",
 			promiseEnabled: true,
 			result:         allPassed,
-			wantRequest:    false,
+			wantDeclare:    false,
 		},
 		{
 			name:           "muted-only failures does nothing",
 			promiseEnabled: true,
 			result:         mutedOnlyFailures,
-			wantRequest:    false,
+			wantDeclare:    false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var hits int32
-			var gotBody map[string]any
+			cfg := &config.Config{PromiseFailure: tc.promiseEnabled}
 
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				atomic.AddInt32(&hits, 1)
-				raw, _ := io.ReadAll(r.Body)
-				_ = json.Unmarshal(raw, &gotBody)
-				status := tc.serverStatus
-				if status == 0 {
-					status = http.StatusOK
-				}
-				w.WriteHeader(status)
-			}))
-			defer server.Close()
+			declare, reason := promiseFailureDecision(cfg, tc.result)
 
-			cfg := &config.Config{
-				PromiseFailure:   tc.promiseEnabled,
-				AgentEndpoint:    server.URL,
-				AgentAccessToken: "test-token",
-				JobID:            "job-uuid",
+			if declare != tc.wantDeclare {
+				t.Fatalf("declare = %v, want %v", declare, tc.wantDeclare)
 			}
-
-			promiseFailureIfNeeded(t.Context(), cfg, tc.result)
-
-			gotRequest := atomic.LoadInt32(&hits) > 0
-			if gotRequest != tc.wantRequest {
-				t.Fatalf("request made = %v, want %v", gotRequest, tc.wantRequest)
-			}
-
-			if !tc.wantRequest {
-				return
-			}
-
-			if got := gotBody["exit_status"]; got != tc.wantExitStatus {
-				t.Errorf("exit_status = %v, want %v", got, tc.wantExitStatus)
-			}
-			reason, _ := gotBody["reason"].(string)
-			if !strings.HasPrefix(reason, tc.wantReasonStart) {
-				t.Errorf("reason = %q, want prefix %q", reason, tc.wantReasonStart)
+			if declare && reason != tc.wantReason {
+				t.Errorf("reason = %q, want %q", reason, tc.wantReason)
 			}
 		})
+	}
+}
+
+func TestMakePromiseFailureCommand(t *testing.T) {
+	cfg := &config.Config{BuildkiteAgentCommand: "buildkite-agent"}
+
+	cmd := makePromiseFailureCommand(context.Background(), cfg, 1, "test_failure (2 failed after retries)")
+
+	want := []string{"buildkite-agent", "job", "promise-failure", "1", "--reason", "test_failure (2 failed after retries)"}
+	if len(cmd.Args) != len(want) {
+		t.Fatalf("args = %v, want %v", cmd.Args, want)
+	}
+	for i := range want {
+		if cmd.Args[i] != want[i] {
+			t.Errorf("args[%d] = %q, want %q", i, cmd.Args[i], want[i])
+		}
 	}
 }

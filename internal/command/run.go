@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/test-engine-client/v2/internal/agent"
 	"github.com/buildkite/test-engine-client/v2/internal/api"
 	"github.com/buildkite/test-engine-client/v2/internal/config"
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
@@ -108,37 +107,77 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	return runErr
 }
 
-// promiseFailureIfNeeded declares an early ("promised") failure to the Buildkite
-// Agent API when the run finished with hard (non-muted) failures after retries
-// and the opt-in flag is enabled.
+// promisedExitStatus is the exit status bktec promises when hard failures
+// remain. bktec's own exit status is unchanged; this is only the early signal.
+const promisedExitStatus = 1
+
+// promiseFailureTimeout bounds the best-effort promise call so a slow or hung
+// agent can never stall job completion.
+const promiseFailureTimeout = 5 * time.Second
+
+// promiseFailureIfNeeded declares an early ("promised") failure via the
+// `buildkite-agent job promise-failure` CLI when the run finished with hard
+// (non-muted) failures after retries and the opt-in flag is enabled.
 //
 // This is the single point that knows both that retries are exhausted and which
 // failures are hard vs muted, so it's the only correct place to promise. Muted
 // failures are excluded by FailedTests(), so a muted-only run never promises.
 //
-// It is best-effort: any error is logged and swallowed so a promise problem
+// We shell out to the agent CLI (rather than calling the Agent API directly)
+// so it owns auth, retries, redaction, idempotency, and graceful degradation
+// when the early-failure feature isn't enabled for the org (it warns and exits
+// 0). It is best-effort: any error is logged and swallowed so a promise problem
 // never changes the test run's real exit status.
 func promiseFailureIfNeeded(ctx context.Context, cfg *config.Config, runResult runner.RunResult) {
+	declare, reason := promiseFailureDecision(cfg, runResult)
+	if !declare {
+		return
+	}
+
+	fmt.Printf("+++ Buildkite Test Engine Client: ⚠️  Declaring early failure: %d hard test failure(s) remain after retries\n", len(runResult.FailedTests()))
+
+	// Bound the call so a slow or hung agent can never stall job completion;
+	// this path is best-effort and must not hold up the real test run.
+	ctx, cancel := context.WithTimeout(ctx, promiseFailureTimeout)
+	defer cancel()
+
+	// The agent CLI exits 0 even for expected no-ops (e.g. the feature is
+	// disabled for the org, or the job isn't running), so a nil error here does
+	// not guarantee a promise was recorded. The agent prints its own outcome to
+	// stdout/stderr above, so we only note that the command completed rather
+	// than claiming an early failure was declared.
+	if err := makePromiseFailureCommand(ctx, cfg, promisedExitStatus, reason).Run(); err != nil {
+		fmt.Printf("Buildkite Test Engine Client: Warning: failed to run promise-failure command: %v\n", err)
+		return
+	}
+
+	fmt.Println("Buildkite Test Engine Client: promise-failure command completed (see agent output above for the result).")
+}
+
+// promiseFailureDecision encapsulates the gating logic: whether to declare an
+// early failure and, if so, the reason string to send. Kept separate so it can
+// be unit-tested without shelling out.
+func promiseFailureDecision(cfg *config.Config, runResult runner.RunResult) (declare bool, reason string) {
 	if !cfg.PromiseFailure {
-		return
+		return false, ""
 	}
 
-	failedTests := runResult.FailedTests()
-	if len(failedTests) == 0 {
-		return
+	failedCount := len(runResult.FailedTests())
+	if failedCount == 0 {
+		return false, ""
 	}
 
-	const promisedExitStatus = 1
-	reason := fmt.Sprintf("test_failure (%d failed after retries)", len(failedTests))
+	return true, fmt.Sprintf("test_failure (%d failed after retries)", failedCount)
+}
 
-	fmt.Printf("+++ Buildkite Test Engine Client: ⚠️  Declaring early failure: %d hard test failure(s) remain after retries\n", len(failedTests))
-
-	if err := agent.PromiseFailure(ctx, nil, cfg.AgentEndpoint, cfg.AgentAccessToken, cfg.JobID, promisedExitStatus, reason); err != nil {
-		fmt.Printf("Buildkite Test Engine Client: Warning: failed to declare early failure: %v\n", err)
-		return
-	}
-
-	fmt.Println("Buildkite Test Engine Client: Early failure declared to the Buildkite Agent API.")
+// makePromiseFailureCommand builds the `buildkite-agent job promise-failure`
+// invocation. The CLI reads --job from BUILDKITE_JOB_ID and its auth from the
+// agent env vars, all inherited from the current process, so we pass neither.
+func makePromiseFailureCommand(ctx context.Context, cfg *config.Config, exitStatus int, reason string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, cfg.BuildkiteAgentCommand, "job", "promise-failure", strconv.Itoa(exitStatus), "--reason", reason) //nolint:gosec
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd
 }
 
 func printStartUpMessage() {

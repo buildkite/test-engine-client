@@ -12,14 +12,9 @@ import "time"
 type Config struct {
 	// AccessToken is the access token for the API.
 	AccessToken string `json:"-"`
-	// AgentAccessToken is the Buildkite Agent API access token, used to authenticate
-	// promise_failure calls. Injected into the job env as BUILDKITE_AGENT_ACCESS_TOKEN.
-	AgentAccessToken string `json:"-"`
-	// AgentEndpoint is the base URL of the Buildkite Agent API (e.g. https://agent.buildkite.com/v3).
-	// Injected into the job env as BUILDKITE_AGENT_ENDPOINT.
-	AgentEndpoint string `json:"-"`
-	// PromiseFailure, when true, makes bktec declare an early failure to the
-	// Buildkite Agent API once retries are exhausted and hard failures remain.
+	// PromiseFailure, when true, makes bktec declare an early failure via the
+	// `buildkite-agent job promise-failure` CLI once retries are exhausted and
+	// hard failures remain.
 	PromiseFailure bool `json:"-"`
 	// UploadBaseURL is the base URL for the Test Engine analytics API.
 	UploadBaseURL string `json:"-"`
