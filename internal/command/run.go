@@ -141,12 +141,17 @@ func promiseFailureIfNeeded(ctx context.Context, cfg *config.Config, runResult r
 	ctx, cancel := context.WithTimeout(ctx, promiseFailureTimeout)
 	defer cancel()
 
+	// The agent CLI exits 0 even for expected no-ops (e.g. the feature is
+	// disabled for the org, or the job isn't running), so a nil error here does
+	// not guarantee a promise was recorded. The agent prints its own outcome to
+	// stdout/stderr above, so we only note that the command completed rather
+	// than claiming an early failure was declared.
 	if err := makePromiseFailureCommand(ctx, cfg, promisedExitStatus, reason).Run(); err != nil {
-		fmt.Printf("Buildkite Test Engine Client: Warning: failed to declare early failure: %v\n", err)
+		fmt.Printf("Buildkite Test Engine Client: Warning: failed to run promise-failure command: %v\n", err)
 		return
 	}
 
-	fmt.Println("Buildkite Test Engine Client: Early failure declared to the Buildkite Agent.")
+	fmt.Println("Buildkite Test Engine Client: promise-failure command completed (see agent output above for the result).")
 }
 
 // promiseFailureDecision encapsulates the gating logic: whether to declare an
