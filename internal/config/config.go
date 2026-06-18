@@ -15,7 +15,7 @@ type Config struct {
 	// PromiseFailure, when true, makes bktec declare an early failure via the
 	// `buildkite-agent job promise-failure` CLI once retries are exhausted and
 	// hard failures remain.
-	PromiseFailure bool `json:"BUILDKITE_TEST_ENGINE_PROMISE_FAILURE"`
+	PromiseFailure bool `json:"-"`
 	// UploadBaseURL is the base URL for the Test Engine analytics API.
 	UploadBaseURL string `json:"-"`
 	// Branch is the string value of the git branch name, used by Buildkite only.

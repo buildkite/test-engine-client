@@ -16,7 +16,6 @@ import "time"
 // produced by serializing Config directly, so existing API calls are
 // unaffected.
 type EnvPayload struct {
-	AgentEndpoint          string        `json:"BUILDKITE_AGENT_ENDPOINT"`
 	PromiseFailure         bool          `json:"BUILDKITE_TEST_ENGINE_PROMISE_FAILURE"`
 	Branch                 string        `json:"BUILDKITE_BRANCH"`
 	BuildID                string        `json:"BUILDKITE_BUILD_ID"`
@@ -51,7 +50,6 @@ type EnvPayload struct {
 // an API request body.
 func (c *Config) EnvPayload() EnvPayload {
 	return EnvPayload{
-		AgentEndpoint:          c.AgentEndpoint,
 		PromiseFailure:         c.PromiseFailure,
 		Branch:                 c.Branch,
 		BuildID:                c.BuildID,
