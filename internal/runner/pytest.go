@@ -116,6 +116,7 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 
 	cmdErr := runAndForwardSignal(cmd)
+	parseExit2JSON := false
 
 	// Only rescue exit code 1 because it indicates a test failures.
 	// Ref: https://docs.pytest.org/en/7.1.x/reference/exit-codes.html
@@ -125,6 +126,7 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		if p.useJUnit || exitError.ExitCode() != 2 {
 			return cmdErr
 		}
+		parseExit2JSON = true
 	}
 
 	var parseErr error
@@ -135,6 +137,9 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read test output, failed tests will not be retried: %v\n", parseErr)
+	}
+	if parseExit2JSON && result.Status() != RunStatusError {
+		result.error = cmdErr
 	}
 
 	return cmdErr

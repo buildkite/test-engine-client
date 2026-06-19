@@ -192,6 +192,45 @@ func TestPytestRun_JSONExit2ParsesCollectionError(t *testing.T) {
 	}
 }
 
+func TestPytestRun_JSONExit2WithoutCollectionErrorIsTerminal(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	json := `[
+		{
+			"id": "failed-test-id",
+			"scope": "tests/test_sample.py",
+			"name": "test_failed",
+			"result": "failed"
+		}
+	]`
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "sh -c 'printf %s \"$1\" > \"$2\"; exit 2' sh " + shellquote.Join(json) + " {{resultPath}}",
+			ResultPath:  resultPath,
+		},
+	}
+	result := NewRunResult([]plan.TestCase{})
+
+	err := pytest.Run(result, nil, false)
+
+	exitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, err, &exitError) {
+		return
+	}
+	if exitError.ExitCode() != 2 {
+		t.Errorf("Pytest.Run() exit code = %d, want 2", exitError.ExitCode())
+	}
+	if result.Status() != RunStatusError {
+		t.Errorf("Pytest.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusError)
+	}
+	resultExitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, result.Error(), &resultExitError) {
+		return
+	}
+	if resultExitError.ExitCode() != 2 {
+		t.Errorf("Pytest.Run() RunResult.Error exit code = %d, want 2", resultExitError.ExitCode())
+	}
+}
+
 func TestPytestRunParseJSON_CollectionError(t *testing.T) {
 	resultPath := filepath.Join(t.TempDir(), "result.json")
 	json := `[

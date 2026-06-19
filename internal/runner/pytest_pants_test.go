@@ -3,6 +3,7 @@ package runner
 import (
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
@@ -96,6 +97,80 @@ func TestPytestPantsRun_TestFailed(t *testing.T) {
 
 	if diff := cmp.Diff(failedTest, wantFailedTests); diff != "" {
 		t.Errorf("PytestPants.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+	}
+}
+
+func TestPytestPantsRun_JSONExit2ParsesCollectionError(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	json := `[
+		{
+			"id": "collection-error-id",
+			"scope": "",
+			"name": "tests/test_broken.py",
+			"result": "failed",
+			"tags": {"test.pytest_collection_error": "true"}
+		}
+	]`
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: "sh -c 'printf %s \"$1\" > \"$2\"; exit 2' sh " + shellquote.Join(json) + " {{resultPath}} -- --json={{resultPath}} --merge-json",
+		ResultPath:  resultPath,
+	})
+	result := NewRunResult([]plan.TestCase{})
+
+	err := pytest.Run(result, nil, false)
+
+	exitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, err, &exitError) {
+		return
+	}
+	if exitError.ExitCode() != 2 {
+		t.Errorf("PytestPants.Run() exit code = %d, want 2", exitError.ExitCode())
+	}
+	if result.Status() != RunStatusError {
+		t.Errorf("PytestPants.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusError)
+	}
+	if result.Error() == nil {
+		t.Fatal("PytestPants.Run() RunResult.Error = nil, want error")
+	}
+	if got, want := result.Error().Error(), "pytest collection failed: tests/test_broken.py"; got != want {
+		t.Errorf("PytestPants.Run() RunResult.Error = %q, want %q", got, want)
+	}
+}
+
+func TestPytestPantsRun_JSONExit2WithoutCollectionErrorIsTerminal(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	json := `[
+		{
+			"id": "failed-test-id",
+			"scope": "tests/test_sample.py",
+			"name": "test_failed",
+			"result": "failed"
+		}
+	]`
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: "sh -c 'printf %s \"$1\" > \"$2\"; exit 2' sh " + shellquote.Join(json) + " {{resultPath}} -- --json={{resultPath}} --merge-json",
+		ResultPath:  resultPath,
+	})
+	result := NewRunResult([]plan.TestCase{})
+
+	err := pytest.Run(result, nil, false)
+
+	exitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, err, &exitError) {
+		return
+	}
+	if exitError.ExitCode() != 2 {
+		t.Errorf("PytestPants.Run() exit code = %d, want 2", exitError.ExitCode())
+	}
+	if result.Status() != RunStatusError {
+		t.Errorf("PytestPants.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusError)
+	}
+	resultExitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, result.Error(), &resultExitError) {
+		return
+	}
+	if resultExitError.ExitCode() != 2 {
+		t.Errorf("PytestPants.Run() RunResult.Error exit code = %d, want 2", resultExitError.ExitCode())
 	}
 }
 
