@@ -2,7 +2,9 @@ package runner
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
@@ -92,6 +94,260 @@ func TestPytestRun_TestFailed(t *testing.T) {
 
 	if diff := cmp.Diff(failedTest, wantFailedTests); diff != "" {
 		t.Errorf("Pytest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+	}
+}
+
+func TestPytestRun_CollectionError(t *testing.T) {
+	if !checkPythonPackageInstalled("pytest") {
+		t.Skip("pytest Python package is not installed")
+	}
+	if !checkPythonPackageInstalled("buildkite_test_collector") {
+		t.Skip("buildkite-test-collector Python package is not installed")
+	}
+
+	changeCwd(t, "./testdata/pytest_collection_error")
+
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "python -m pytest {{testExamples}} --json={{resultPath}}",
+			ResultPath:  resultPath,
+		},
+	}
+	testCases := []plan.TestCase{{Path: "test_broken_import.py"}}
+	result := NewRunResult([]plan.TestCase{})
+
+	err := pytest.Run(result, testCases, false)
+
+	exitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, err, &exitError) {
+		return
+	}
+	if exitError.ExitCode() != 2 {
+		t.Errorf("Pytest.Run(%q) exit code = %d, want 2", testCases, exitError.ExitCode())
+	}
+
+	if result.Status() != RunStatusError {
+		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	}
+	if result.Error() == nil {
+		t.Fatalf("Pytest.Run(%q) RunResult.Error = nil, want error", testCases)
+	}
+	if got, want := result.Error().Error(), "pytest collection failed: test_broken_import.py"; got != want {
+		t.Errorf("Pytest.Run(%q) RunResult.Error = %q, want %q", testCases, got, want)
+	}
+
+	failedTests := result.FailedTests()
+	if len(failedTests) != 1 {
+		t.Fatalf("len(result.FailedTests()) = %d, want 1", len(failedTests))
+	}
+	failedTest := failedTests[0]
+	if failedTest.Scope != "" {
+		t.Errorf("Pytest.Run(%q) failed test scope = %q, want empty", testCases, failedTest.Scope)
+	}
+	if failedTest.Name != "test_broken_import.py" {
+		t.Errorf("Pytest.Run(%q) failed test name = %q, want %q", testCases, failedTest.Name, "test_broken_import.py")
+	}
+	if failedTest.Path != "test_broken_import.py" {
+		t.Errorf("Pytest.Run(%q) failed test path = %q, want %q", testCases, failedTest.Path, "test_broken_import.py")
+	}
+}
+
+func TestPytestRun_JSONExit2ParsesCollectionError(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	json := `[
+		{
+			"id": "collection-error-id",
+			"scope": "",
+			"name": "tests/test_broken.py",
+			"result": "failed",
+			"tags": {"test.pytest_collection_error": "true"}
+		}
+	]`
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "sh -c 'printf %s \"$1\" > \"$2\"; exit 2' sh " + shellquote.Join(json) + " {{resultPath}}",
+			ResultPath:  resultPath,
+		},
+	}
+	result := NewRunResult([]plan.TestCase{})
+
+	err := pytest.Run(result, nil, false)
+
+	exitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, err, &exitError) {
+		return
+	}
+	if exitError.ExitCode() != 2 {
+		t.Errorf("Pytest.Run() exit code = %d, want 2", exitError.ExitCode())
+	}
+	if result.Status() != RunStatusError {
+		t.Errorf("Pytest.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusError)
+	}
+	if result.Error() == nil {
+		t.Fatal("Pytest.Run() RunResult.Error = nil, want error")
+	}
+	if got, want := result.Error().Error(), "pytest collection failed: tests/test_broken.py"; got != want {
+		t.Errorf("Pytest.Run() RunResult.Error = %q, want %q", got, want)
+	}
+}
+
+func TestPytestRun_JSONExit2WithoutCollectionErrorIsTerminal(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	json := `[
+		{
+			"id": "failed-test-id",
+			"scope": "tests/test_sample.py",
+			"name": "test_failed",
+			"result": "failed"
+		}
+	]`
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "sh -c 'printf %s \"$1\" > \"$2\"; exit 2' sh " + shellquote.Join(json) + " {{resultPath}}",
+			ResultPath:  resultPath,
+		},
+	}
+	result := NewRunResult([]plan.TestCase{})
+
+	err := pytest.Run(result, nil, false)
+
+	exitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, err, &exitError) {
+		return
+	}
+	if exitError.ExitCode() != 2 {
+		t.Errorf("Pytest.Run() exit code = %d, want 2", exitError.ExitCode())
+	}
+	if result.Status() != RunStatusError {
+		t.Errorf("Pytest.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusError)
+	}
+	resultExitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, result.Error(), &resultExitError) {
+		return
+	}
+	if resultExitError.ExitCode() != 2 {
+		t.Errorf("Pytest.Run() RunResult.Error exit code = %d, want 2", resultExitError.ExitCode())
+	}
+}
+
+func TestPytestRunParseJSON_CollectionError(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	json := `[
+		{
+			"id": "collection-error-id",
+			"scope": "",
+			"name": "tests/test_broken.py",
+			"file_name": "tests/test_broken.py",
+			"location": "tests/test_broken.py",
+			"result": "failed",
+			"tags": {"test.pytest_collection_error": "true"}
+		}
+	]`
+	if err := os.WriteFile(resultPath, []byte(json), 0600); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v", resultPath, err)
+	}
+
+	pytest := Pytest{RunnerConfig: RunnerConfig{ResultPath: resultPath}}
+	result := NewRunResult([]plan.TestCase{})
+
+	if err := pytest.runParseJSON(result); err != nil {
+		t.Fatalf("Pytest.runParseJSON() error = %v", err)
+	}
+
+	if result.Status() != RunStatusError {
+		t.Errorf("Pytest.runParseJSON() RunResult.Status = %v, want %v", result.Status(), RunStatusError)
+	}
+	if result.Error() == nil {
+		t.Fatal("Pytest.runParseJSON() RunResult.Error = nil, want error")
+	}
+	if got, want := result.Error().Error(), "pytest collection failed: tests/test_broken.py"; got != want {
+		t.Errorf("Pytest.runParseJSON() RunResult.Error = %q, want %q", got, want)
+	}
+
+	wantFailedTests := []plan.TestCase{
+		{
+			Identifier: "collection-error-id",
+			Format:     plan.TestCaseFormatExample,
+			Scope:      "",
+			Name:       "tests/test_broken.py",
+			Path:       "tests/test_broken.py",
+		},
+	}
+
+	if diff := cmp.Diff(result.FailedTests(), wantFailedTests); diff != "" {
+		t.Errorf("Pytest.runParseJSON() RunResult.FailedTests() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestPytestRunParseJSON_EmptyScopeWithoutCollectionErrorTag(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	json := `[
+		{
+			"id": "empty-scope-id",
+			"scope": "",
+			"name": "tests/test_file.py",
+			"result": "failed"
+		}
+	]`
+	if err := os.WriteFile(resultPath, []byte(json), 0600); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v", resultPath, err)
+	}
+
+	pytest := Pytest{RunnerConfig: RunnerConfig{ResultPath: resultPath}}
+	result := NewRunResult([]plan.TestCase{})
+
+	if err := pytest.runParseJSON(result); err != nil {
+		t.Fatalf("Pytest.runParseJSON() error = %v", err)
+	}
+
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Pytest.runParseJSON() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
+	}
+
+	wantFailedTests := []plan.TestCase{
+		{
+			Identifier: "empty-scope-id",
+			Format:     plan.TestCaseFormatExample,
+			Scope:      "",
+			Name:       "tests/test_file.py",
+			Path:       "tests/test_file.py",
+		},
+	}
+
+	if diff := cmp.Diff(result.FailedTests(), wantFailedTests); diff != "" {
+		t.Errorf("Pytest.runParseJSON() RunResult.FailedTests() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestPytestPathFromTestEngineResult(t *testing.T) {
+	tests := []struct {
+		name     string
+		scope    string
+		testName string
+		wantPath string
+	}{
+		{
+			name:     "scoped test",
+			scope:    "tests/test_sample.py",
+			testName: "test_happy",
+			wantPath: "tests/test_sample.py::test_happy",
+		},
+		{
+			name:     "collection error",
+			scope:    "",
+			testName: "tests/test_broken.py",
+			wantPath: "tests/test_broken.py",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := pytestPathFromTestEngineResult(tt.scope, tt.testName)
+			if got != tt.wantPath {
+				t.Errorf("pytestPathFromTestEngineResult(%q, %q) = %q, want %q", tt.scope, tt.testName, got, tt.wantPath)
+			}
+		})
 	}
 }
 

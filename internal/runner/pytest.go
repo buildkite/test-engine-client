@@ -116,11 +116,17 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 
 	cmdErr := runAndForwardSignal(cmd)
+	parseExit2JSON := false
 
 	// Only rescue exit code 1 because it indicates a test failures.
 	// Ref: https://docs.pytest.org/en/7.1.x/reference/exit-codes.html
 	if exitError := new(exec.ExitError); errors.As(cmdErr, &exitError) && exitError.ExitCode() != 1 {
-		return cmdErr
+		// pytest exits 2 for collection errors, and buildkite-test-collector can
+		// still write tagged JSON results for those errors.
+		if p.useJUnit || exitError.ExitCode() != 2 {
+			return cmdErr
+		}
+		parseExit2JSON = true
 	}
 
 	var parseErr error
@@ -131,6 +137,9 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	}
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read test output, failed tests will not be retried: %v\n", parseErr)
+	}
+	if parseExit2JSON && result.Status() != RunStatusError {
+		result.error = cmdErr
 	}
 
 	return cmdErr
@@ -143,18 +152,39 @@ func (p Pytest) runParseJSON(result *RunResult) error {
 	}
 
 	for _, test := range tests {
-		result.RecordTestResult(plan.TestCase{
-			Identifier: test.ID,
-			Format:     plan.TestCaseFormatExample,
-			Scope:      test.Scope,
-			Name:       test.Name,
-			// pytest can execute individual test using node id, which is a filename, classname (if any), and function, separated by `::`.
-			// Ref: https://docs.pytest.org/en/6.2.x/usage.html#nodeids
-			Path: fmt.Sprintf("%s::%s", test.Scope, test.Name),
-		}, test.Result)
+		recordPytestJSONTestResult(result, test)
 	}
 
 	return nil
+}
+
+const pytestCollectionErrorTag = "test.pytest_collection_error"
+
+func recordPytestJSONTestResult(result *RunResult, test TestEngineTest) {
+	path := pytestPathFromTestEngineResult(test.Scope, test.Name)
+
+	result.RecordTestResult(plan.TestCase{
+		Identifier: test.ID,
+		Format:     plan.TestCaseFormatExample,
+		Scope:      test.Scope,
+		Name:       test.Name,
+		// pytest can execute individual tests using node IDs, which are filenames,
+		// class names (if any), and functions separated by `::`.
+		// Ref: https://docs.pytest.org/en/6.2.x/usage.html#nodeids
+		Path: path,
+	}, test.Result)
+
+	if test.Tags[pytestCollectionErrorTag] == "true" {
+		result.error = fmt.Errorf("pytest collection failed: %s", path)
+	}
+}
+
+func pytestPathFromTestEngineResult(scope, name string) string {
+	if scope == "" {
+		return name
+	}
+
+	return fmt.Sprintf("%s::%s", scope, name)
 }
 
 func (p Pytest) runParseJUnit(result *RunResult) error {

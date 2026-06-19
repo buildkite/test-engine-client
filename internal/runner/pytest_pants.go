@@ -69,32 +69,36 @@ func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry boo
 	}
 
 	cmdErr := runAndForwardSignal(cmd)
+	parseExit2JSON := false
 
 	// Only rescue exit code 1 because it indicates a test failures.
 	// Ref: https://docs.pytest.org/en/7.1.x/reference/exit-codes.html
 	if exitError := new(exec.ExitError); errors.As(cmdErr, &exitError) && exitError.ExitCode() != 1 {
-		return cmdErr
+		// pytest exits 2 for collection errors, and buildkite-test-collector can
+		// still write tagged JSON results for those errors.
+		if exitError.ExitCode() != 2 {
+			return cmdErr
+		}
+		parseExit2JSON = true
 	}
 
 	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
 
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read json output, failed tests will not be retried: %v\n", parseErr)
+		if parseExit2JSON {
+			result.error = cmdErr
+		}
 		// We don't want to fail the build if we fail to parse the report,
 		// therefore we return the command error (which can be nil), instead of the parse error.
 		return cmdErr
 	}
 
 	for _, test := range tests {
-		result.RecordTestResult(plan.TestCase{
-			Identifier: test.ID,
-			Format:     plan.TestCaseFormatExample,
-			Scope:      test.Scope,
-			Name:       test.Name,
-			// pytest can execute individual test using node id, which is a filename, classname (if any), and function, separated by `::`.
-			// Ref: https://docs.pytest.org/en/6.2.x/usage.html#nodeids
-			Path: fmt.Sprintf("%s::%s", test.Scope, test.Name),
-		}, test.Result)
+		recordPytestJSONTestResult(result, test)
+	}
+	if parseExit2JSON && result.Status() != RunStatusError {
+		result.error = cmdErr
 	}
 
 	// Return any command error after processing the report
