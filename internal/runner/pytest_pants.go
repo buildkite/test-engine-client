@@ -86,15 +86,7 @@ func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry boo
 	}
 
 	for _, test := range tests {
-		result.RecordTestResult(plan.TestCase{
-			Identifier: test.ID,
-			Format:     plan.TestCaseFormatExample,
-			Scope:      test.Scope,
-			Name:       test.Name,
-			// pytest can execute individual test using node id, which is a filename, classname (if any), and function, separated by `::`.
-			// Ref: https://docs.pytest.org/en/6.2.x/usage.html#nodeids
-			Path: fmt.Sprintf("%s::%s", test.Scope, test.Name),
-		}, test.Result)
+		recordPytestJSONTestResult(result, test)
 	}
 
 	// Return any command error after processing the report

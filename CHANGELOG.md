@@ -1,4 +1,7 @@
 # Changelog
+## 2.8.2 - 2026-06-19
+- Treat pytest collection errors reported by `buildkite-test-collector` as terminal, and preserve their file-only node IDs when recording JSON results. Previously bktec could construct invalid retry selectors like `::tests/test_broken.py` for collection failures with empty scopes, then waste a retry on a failure that cannot be fixed by rerunning individual tests.
+
 ## 2.8.1 - 2026-06-16
 - Treat Go test build failures (`FAIL <pkg> [build failed]`) as terminal: bktec no longer retries when a package fails to compile, and exits non-zero with the failing package named in the report. Previously the build failure was recorded as a retryable "TestMain" failure that was silently dropped from the retry command, so a flaky test passing on retry could make the job pass despite the compile error.
 - Stop retrying when a run reports an error outside of the tests (e.g. RSpec errors outside of examples, Jest runtime errors, Playwright report errors) even when retryable failed tests are also present. Retrying cannot fix such errors, and the passing retry could previously mask them.

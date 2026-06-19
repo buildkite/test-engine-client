@@ -243,6 +243,7 @@ type TestEngineTest struct {
 	Location string
 	FileName string `json:"file_name,omitempty"`
 	Result   TestStatus
+	Tags     map[string]string `json:"tags,omitempty"`
 }
 
 func parseTestEngineTestResult(path string) ([]TestEngineTest, error) {
