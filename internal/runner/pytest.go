@@ -120,7 +120,11 @@ func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	// Only rescue exit code 1 because it indicates a test failures.
 	// Ref: https://docs.pytest.org/en/7.1.x/reference/exit-codes.html
 	if exitError := new(exec.ExitError); errors.As(cmdErr, &exitError) && exitError.ExitCode() != 1 {
-		return cmdErr
+		// pytest exits 2 for collection errors, and buildkite-test-collector can
+		// still write tagged JSON results for those errors.
+		if p.useJUnit || exitError.ExitCode() != 2 {
+			return cmdErr
+		}
 	}
 
 	var parseErr error

@@ -110,11 +110,7 @@ func TestPytestRun_CollectionError(t *testing.T) {
 	resultPath := filepath.Join(t.TempDir(), "result.json")
 	pytest := Pytest{
 		RunnerConfig: RunnerConfig{
-			// Plain pytest exits 2 for collection errors, while pytest-xdist reports
-			// them as exit 1. Force the command error to exit 1 so this test exercises
-			// bktec's retryable-exit-code path while still using real pytest and
-			// buildkite-test-collector output.
-			TestCommand: "sh -c 'python -m pytest {{testExamples}} --json={{resultPath}} || exit 1'",
+			TestCommand: "python -m pytest {{testExamples}} --json={{resultPath}}",
 			ResultPath:  resultPath,
 		},
 	}
@@ -127,8 +123,8 @@ func TestPytestRun_CollectionError(t *testing.T) {
 	if !assert.ErrorAs(t, err, &exitError) {
 		return
 	}
-	if exitError.ExitCode() != 1 {
-		t.Errorf("Pytest.Run(%q) exit code = %d, want 1", testCases, exitError.ExitCode())
+	if exitError.ExitCode() != 2 {
+		t.Errorf("Pytest.Run(%q) exit code = %d, want 2", testCases, exitError.ExitCode())
 	}
 
 	if result.Status() != RunStatusError {
@@ -154,6 +150,45 @@ func TestPytestRun_CollectionError(t *testing.T) {
 	}
 	if failedTest.Path != "test_broken_import.py" {
 		t.Errorf("Pytest.Run(%q) failed test path = %q, want %q", testCases, failedTest.Path, "test_broken_import.py")
+	}
+}
+
+func TestPytestRun_JSONExit2ParsesCollectionError(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "result.json")
+	json := `[
+		{
+			"id": "collection-error-id",
+			"scope": "",
+			"name": "tests/test_broken.py",
+			"result": "failed",
+			"tags": {"test.pytest_collection_error": "true"}
+		}
+	]`
+	pytest := Pytest{
+		RunnerConfig: RunnerConfig{
+			TestCommand: "sh -c 'printf %s \"$1\" > \"$2\"; exit 2' sh " + shellquote.Join(json) + " {{resultPath}}",
+			ResultPath:  resultPath,
+		},
+	}
+	result := NewRunResult([]plan.TestCase{})
+
+	err := pytest.Run(result, nil, false)
+
+	exitError := new(exec.ExitError)
+	if !assert.ErrorAs(t, err, &exitError) {
+		return
+	}
+	if exitError.ExitCode() != 2 {
+		t.Errorf("Pytest.Run() exit code = %d, want 2", exitError.ExitCode())
+	}
+	if result.Status() != RunStatusError {
+		t.Errorf("Pytest.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusError)
+	}
+	if result.Error() == nil {
+		t.Fatal("Pytest.Run() RunResult.Error = nil, want error")
+	}
+	if got, want := result.Error().Error(), "pytest collection failed: tests/test_broken.py"; got != want {
+		t.Errorf("Pytest.Run() RunResult.Error = %q, want %q", got, want)
 	}
 }
 
