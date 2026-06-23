@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -9,6 +10,11 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/kballard/go-shellquote"
+)
+
+const (
+	goTestSelectorTagKey       = "test.selector.primary"
+	maxTestEngineTagValueBytes = 127
 )
 
 type GoTest struct {
@@ -50,6 +56,80 @@ func (g GoTest) Name() string {
 
 func (g GoTest) ResultFormat() string {
 	return "junit"
+}
+
+func (g GoTest) PrepareUploadResult() (UploadResult, error) {
+	if !g.EmitSelectorTags {
+		return UploadResult{
+			Path:   g.ResultFilePath(),
+			Format: g.ResultFormat(),
+		}, nil
+	}
+
+	tests, err := loadAndParseJUnitXML(g.ResultPath)
+	if err != nil {
+		return UploadResult{}, err
+	}
+
+	uploadTests := make([]TestEngineTest, 0, len(tests))
+	for _, test := range tests {
+		if isBuildFailure(test) {
+			continue
+		}
+
+		uploadTest, err := goTestEngineTest(test)
+		if err != nil {
+			return UploadResult{}, err
+		}
+		uploadTests = append(uploadTests, uploadTest)
+	}
+	if len(uploadTests) == 0 {
+		return UploadResult{
+			Path:   g.ResultFilePath(),
+			Format: g.ResultFormat(),
+		}, nil
+	}
+
+	return writeTestEngineUploadResult(uploadTests, "bktec-gotest-upload-*.json")
+}
+
+func goTestEngineTest(test JUnitXMLTestCase) (TestEngineTest, error) {
+	testID, err := randomUUID()
+	if err != nil {
+		return TestEngineTest{}, err
+	}
+
+	return TestEngineTest{
+		ID:     testID,
+		Scope:  test.Classname,
+		Name:   test.Name,
+		Result: test.Result,
+		History: &TestEngineHistory{
+			StartAt:  0,
+			EndAt:    test.Time,
+			Duration: test.Time,
+		},
+		Tags: goTestSelectorTags(test),
+	}, nil
+}
+
+func goTestSelectorTags(test JUnitXMLTestCase) map[string]string {
+	if test.Classname == "" || len(test.Classname) > maxTestEngineTagValueBytes {
+		return nil
+	}
+	return map[string]string{goTestSelectorTagKey: test.Classname}
+}
+
+func randomUUID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("failed to generate upload test ID: %w", err)
+	}
+
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }
 
 func (g GoTest) GetExamples(files []string) ([]plan.TestCase, error) {

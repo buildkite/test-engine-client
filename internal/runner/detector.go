@@ -2,9 +2,12 @@ package runner
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/buildkite/test-engine-client/v2/internal/config"
 )
+
+const temporaryTestEngineClientSelectorTagsEnv = "BUILDKITE_TEST_ENGINE_CLIENT_EMIT_SELECTOR_TAGS"
 
 func DetectRunner(cfg *config.Config) (TestRunner, error) {
 	runnerConfig := RunnerConfig{
@@ -17,6 +20,7 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		TestCommand:            cfg.TestCommand,
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		TestFilePattern:        cfg.TestFilePattern,
+		EmitSelectorTags:       emitSelectorTagsForTestEngineClient(),
 		uploadToken:            cfg.UploadToken,
 	}
 
@@ -45,4 +49,13 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		// Update the error message to include the new runner
 		return nil, fmt.Errorf("runner value %q is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'pytest-pants', 'gotest', 'cucumber', 'nunit', or 'custom'", testRunner)
 	}
+}
+
+func emitSelectorTagsForTestEngineClient() bool {
+	// Temporary dogfood switch for validating selector-based smart splitting with
+	// execution custom tags in Buildkite's own test-engine-client pipeline. This
+	// should be removed when selector tags are promoted to core tags.
+	return os.Getenv(temporaryTestEngineClientSelectorTagsEnv) == "true" &&
+		os.Getenv("BUILDKITE_ORGANIZATION_SLUG") == "buildkite" &&
+		os.Getenv("BUILDKITE_PIPELINE_SLUG") == "test-engine-client"
 }

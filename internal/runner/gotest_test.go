@@ -1,10 +1,12 @@
 package runner
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
@@ -105,6 +107,89 @@ func TestGotestRun_CommandFailed(t *testing.T) {
 	if result.Status() != RunStatusFailed {
 		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
+}
+
+func TestGotestPrepareUploadResult_EmitSelectorTags(t *testing.T) {
+	resultFile := filepath.Join(t.TempDir(), "junit.xml")
+	err := os.WriteFile(resultFile, []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="0" errors="0" time="0.123000">
+	<testsuite tests="1" failures="0" time="0.123000" name="github.com/buildkite/test-engine-client/v2/internal/runner" timestamp="2026-06-24T08:58:51+10:00">
+		<properties>
+			<property name="go.version" value="go1.25.10 darwin/arm64"></property>
+		</properties>
+		<testcase classname="github.com/buildkite/test-engine-client/v2/internal/runner" name="TestGotest" time="0.123000"></testcase>
+	</testsuite>
+</testsuites>`), 0600)
+	assert.NoError(t, err)
+
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:       resultFile,
+		EmitSelectorTags: true,
+	})
+
+	uploadResult, err := gotest.PrepareUploadResult()
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer uploadResult.Cleanup()
+
+	assert.Equal(t, "json", uploadResult.Format)
+	assert.NotEqual(t, resultFile, uploadResult.Path)
+
+	data, err := os.ReadFile(uploadResult.Path)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), `"start_at":`)
+
+	var tests []TestEngineTest
+	assert.NoError(t, json.Unmarshal(data, &tests))
+
+	if assert.Len(t, tests, 1) {
+		assert.Equal(t, "github.com/buildkite/test-engine-client/v2/internal/runner", tests[0].Tags["test.selector.primary"])
+		assert.Equal(t, "github.com/buildkite/test-engine-client/v2/internal/runner", tests[0].Scope)
+		assert.Equal(t, "TestGotest", tests[0].Name)
+		assert.Equal(t, TestStatusPassed, tests[0].Result)
+		if assert.NotNil(t, tests[0].History) {
+			assert.Equal(t, 0.0, tests[0].History.StartAt)
+			assert.Equal(t, 0.123, tests[0].History.EndAt)
+			assert.Equal(t, 0.123, tests[0].History.Duration)
+		}
+	}
+}
+
+func TestGotestPrepareUploadResult_OnlyBuildFailures(t *testing.T) {
+	resultFile := filepath.Join(t.TempDir(), "junit.xml")
+	err := os.WriteFile(resultFile, []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="1" errors="1" time="0.000000">
+	<testsuite tests="1" failures="1" time="0.000000" name="github.com/buildkite/test-engine-client/v2/internal/runner/testdata/go/broken" timestamp="2026-06-24T08:58:51+10:00">
+		<testcase classname="" name="TestMain" time="0.000000">
+			<failure message="Failed" type="">FAIL	github.com/buildkite/test-engine-client/v2/internal/runner/testdata/go/broken [build failed]</failure>
+		</testcase>
+	</testsuite>
+</testsuites>`), 0600)
+	assert.NoError(t, err)
+
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:       resultFile,
+		EmitSelectorTags: true,
+	})
+
+	uploadResult, err := gotest.PrepareUploadResult()
+	assert.NoError(t, err)
+	assert.Equal(t, "junit", uploadResult.Format)
+	assert.Equal(t, resultFile, uploadResult.Path)
+	assert.Nil(t, uploadResult.Cleanup)
+}
+
+func TestGoTestSelectorTags(t *testing.T) {
+	test := JUnitXMLTestCase{
+		Classname: "github.com/buildkite/test-engine-client/v2/internal/runner",
+		Name:      "TestGotest",
+	}
+
+	assert.Equal(t, map[string]string{goTestSelectorTagKey: "github.com/buildkite/test-engine-client/v2/internal/runner"}, goTestSelectorTags(test))
+	assert.Equal(t, map[string]string{goTestSelectorTagKey: strings.Repeat("a", 127)}, goTestSelectorTags(JUnitXMLTestCase{Classname: strings.Repeat("a", 127)}))
+	assert.Nil(t, goTestSelectorTags(JUnitXMLTestCase{Name: "TestMain"}))
+	assert.Nil(t, goTestSelectorTags(JUnitXMLTestCase{Classname: strings.Repeat("a", 128)}))
 }
 
 func TestGotestGetFiles(t *testing.T) {

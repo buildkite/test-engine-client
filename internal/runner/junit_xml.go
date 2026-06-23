@@ -11,6 +11,7 @@ import (
 type JUnitXMLTestCase struct {
 	Classname string           `xml:"classname,attr"`
 	Name      string           `xml:"name,attr"`
+	Time      float64          `xml:"time,attr"`
 	Result    TestStatus       // passed | failed | skipped
 	Failure   *JUnitXMLFailure `xml:"failure"`
 	Error     *JUnitXMLError   `xml:"error"`

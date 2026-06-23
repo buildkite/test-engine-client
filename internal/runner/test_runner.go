@@ -18,3 +18,13 @@ type TestRunner interface {
 	// ResultFilePath returns the path to the runner's raw result file.
 	ResultFilePath() string
 }
+
+type UploadResultPreparer interface {
+	PrepareUploadResult() (UploadResult, error)
+}
+
+type UploadResult struct {
+	Path    string
+	Format  string
+	Cleanup func()
+}

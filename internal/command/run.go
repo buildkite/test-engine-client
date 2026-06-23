@@ -282,8 +282,23 @@ func uploadResults(ctx context.Context, apiClient *api.Client, cfg *config.Confi
 	if _, err := os.Stat(testRunner.ResultFilePath()); err != nil {
 		return
 	}
+	uploadResult := runner.UploadResult{Path: testRunner.ResultFilePath(), Format: format}
+	if preparer, ok := testRunner.(runner.UploadResultPreparer); ok {
+		var err error
+		uploadResult, err = preparer.PrepareUploadResult()
+		if err != nil {
+			fmt.Printf("Buildkite Test Engine Client: Failed to prepare test results upload: %v\n", err)
+			return
+		}
+	}
+	if uploadResult.Cleanup != nil {
+		defer uploadResult.Cleanup()
+	}
+	if uploadResult.Format == "" {
+		return
+	}
 	fmt.Println("Buildkite Test Engine Client: Uploading test results to Test Engine")
-	if err := apiClient.UploadTestResults(ctx, cfg.UploadToken, testRunner.ResultFilePath(), format, testRunner.LocationPrefix(), cfg.UploadTags); err != nil {
+	if err := apiClient.UploadTestResults(ctx, cfg.UploadToken, uploadResult.Path, uploadResult.Format, testRunner.LocationPrefix(), cfg.UploadTags); err != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to upload test results to Test Engine: %v\n", err)
 	}
 }

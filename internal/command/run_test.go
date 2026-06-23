@@ -968,6 +968,51 @@ func TestRunTestsWithRetry_UploadsResults(t *testing.T) {
 	assert.Equal(t, "./", gotLocationPrefix)
 }
 
+func TestUploadResults_UsesPreparedUploadResult(t *testing.T) {
+	rawResult := filepath.Join(t.TempDir(), "raw.xml")
+	preparedResult := filepath.Join(t.TempDir(), "prepared.json")
+	assert.NoError(t, os.WriteFile(rawResult, []byte("raw"), 0600))
+	assert.NoError(t, os.WriteFile(preparedResult, []byte(`[{"name":"prepared"}]`), 0600))
+
+	var uploadRequests int
+	var gotFormat, gotData string
+	uploadSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uploadRequests++
+		assert.NoError(t, r.ParseMultipartForm(1<<20))
+		gotFormat = r.FormValue("format")
+
+		file, _, err := r.FormFile("data")
+		assert.NoError(t, err)
+		defer file.Close()
+
+		data, err := io.ReadAll(file)
+		assert.NoError(t, err)
+		gotData = string(data)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer uploadSvr.Close()
+
+	cleanupCalled := false
+	testRunner := preparedUploadTestRunner{
+		metadataTestRunner: metadataTestRunner{name: "prepared-upload-test"},
+		rawPath:            rawResult,
+		preparedPath:       preparedResult,
+		cleanup:            func() { cleanupCalled = true },
+	}
+	cfg := &config.Config{
+		UploadResults: true,
+		UploadToken:   "test-token",
+	}
+	apiClient := api.NewClient(api.ClientConfig{UploadBaseURL: uploadSvr.URL})
+
+	uploadResults(context.Background(), apiClient, cfg, testRunner)
+
+	assert.Equal(t, 1, uploadRequests)
+	assert.Equal(t, "json", gotFormat)
+	assert.Equal(t, `[{"name":"prepared"}]`, gotData)
+	assert.True(t, cleanupCalled)
+}
+
 func TestRunTestsWithRetry_SkipsUploadWhenNoToken(t *testing.T) {
 	var uploadRequests int
 	uploadSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1051,4 +1096,23 @@ func TestRunTestsWithRetry_UploadErrorDoesNotFailBuild(t *testing.T) {
 	result, err := runTestsWithRetry(context.Background(), apiClient, cfg, testRunner, &testCases, 0, []plan.TestCase{}, &timeline, true, false)
 	assert.NoError(t, err)
 	assert.Equal(t, runner.RunStatusPassed, result.Status(), "build should pass even when upload fails")
+}
+
+type preparedUploadTestRunner struct {
+	metadataTestRunner
+	rawPath      string
+	preparedPath string
+	cleanup      func()
+}
+
+func (r preparedUploadTestRunner) ResultFormat() string {
+	return "junit"
+}
+
+func (r preparedUploadTestRunner) ResultFilePath() string {
+	return r.rawPath
+}
+
+func (r preparedUploadTestRunner) PrepareUploadResult() (runner.UploadResult, error) {
+	return runner.UploadResult{Path: r.preparedPath, Format: "json", Cleanup: r.cleanup}, nil
 }

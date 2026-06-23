@@ -232,18 +232,23 @@ func (r *RunResult) Statistics() RunStatistics {
 }
 
 // TestEngineTest represents a Test Engine test result object.
-// Some attributes such as `history` and `failure_reason` are omitted as they are not needed by bktec.
-// Ref: https://buildkite.com/docs/test-engine/importing-json#json-test-results-data-reference-test-result-objects
-//
-// Currently, only pytest and custom runner uses result from test collector.
+// Some attributes such as `failure_reason` are omitted as they are not needed by bktec.
+// Ref: https://buildkite.com/docs/pipelines/configure/tests/test-collection/importing-json#json-test-results-data-reference-test-result-objects
 type TestEngineTest struct {
-	ID       string
-	Name     string
-	Scope    string
-	Location string
-	FileName string `json:"file_name,omitempty"`
-	Result   TestStatus
-	Tags     map[string]string `json:"tags,omitempty"`
+	ID       string             `json:"id"`
+	Name     string             `json:"name"`
+	Scope    string             `json:"scope,omitempty"`
+	Location string             `json:"location,omitempty"`
+	FileName string             `json:"file_name,omitempty"`
+	Result   TestStatus         `json:"result"`
+	History  *TestEngineHistory `json:"history,omitempty"`
+	Tags     map[string]string  `json:"tags,omitempty"`
+}
+
+type TestEngineHistory struct {
+	StartAt  float64 `json:"start_at"`
+	EndAt    float64 `json:"end_at,omitempty"`
+	Duration float64 `json:"duration"`
 }
 
 func parseTestEngineTestResult(path string) ([]TestEngineTest, error) {
@@ -258,4 +263,28 @@ func parseTestEngineTestResult(path string) ([]TestEngineTest, error) {
 	}
 
 	return results, nil
+}
+
+func writeTestEngineUploadResult(results []TestEngineTest, tempPattern string) (UploadResult, error) {
+	f, err := os.CreateTemp("", tempPattern)
+	if err != nil {
+		return UploadResult{}, fmt.Errorf("failed to create test engine upload file: %w", err)
+	}
+	cleanup := func() { os.Remove(f.Name()) }
+
+	if err := json.NewEncoder(f).Encode(results); err != nil {
+		f.Close()
+		cleanup()
+		return UploadResult{}, fmt.Errorf("failed to write test engine upload file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		cleanup()
+		return UploadResult{}, fmt.Errorf("failed to close test engine upload file: %w", err)
+	}
+
+	return UploadResult{
+		Path:    f.Name(),
+		Format:  "json",
+		Cleanup: cleanup,
+	}, nil
 }
