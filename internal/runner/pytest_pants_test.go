@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
@@ -297,6 +298,20 @@ func TestPytestPantsResultFormat_JUnit(t *testing.T) {
 	pytest := PytestPants{resultFormat: "junit"}
 	if got := pytest.ResultFormat(); got != "junit" {
 		t.Errorf("ResultFormat() = %q, want %q", got, "junit")
+	}
+}
+
+func TestNewPytestPants_JUnit_DetectsFormatAndXmlPath(t *testing.T) {
+	pytest := NewPytestPants(RunnerConfig{
+		TestCommand: "pants test //:: -- --junit-xml={{resultPath}}",
+	})
+
+	if got := pytest.ResultFormat(); got != "junit" {
+		t.Errorf("ResultFormat() = %q, want %q", got, "junit")
+	}
+
+	if !strings.HasSuffix(pytest.ResultPath, ".xml") {
+		t.Errorf("ResultPath = %q, want path ending in .xml", pytest.ResultPath)
 	}
 }
 

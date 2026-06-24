@@ -108,7 +108,7 @@ func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry boo
 	if p.resultFormat == "junit" {
 		parseErr = p.runParseJUnit(result)
 	} else {
-		parseErr = p.runParseJSON(result)
+		parseErr = p.runParseJSON(result, parseExit2JSON, cmdErr)
 	}
 
 	if parseErr != nil {
@@ -121,7 +121,7 @@ func (p PytestPants) Run(result *RunResult, testCases []plan.TestCase, retry boo
 	return cmdErr
 }
 
-func (p PytestPants) runParseJSON(result *RunResult) error {
+func (p PytestPants) runParseJSON(result *RunResult, parseExit2JSON bool, cmdErr error) error {
 	tests, parseErr := parseTestEngineTestResult(p.ResultPath)
 	if parseErr != nil {
 		return parseErr
