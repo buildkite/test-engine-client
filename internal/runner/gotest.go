@@ -20,6 +20,11 @@ type GoTest struct {
 	resultFormat string
 }
 
+const (
+	goTestResultFormatJUnit   = "junit"
+	goTestResultFormatGoJSONL = "go-jsonl"
+)
+
 // Compile-time check that GoTest implements TestRunner
 var _ TestRunner = (*GoTest)(nil)
 
@@ -32,9 +37,9 @@ func NewGoTest(c RunnerConfig) GoTest {
 		c.RetryTestCommand = c.TestCommand
 	}
 
-	resultFormat := "junit"
-	if commandUploadsGoJSONL(c.TestCommand) {
-		resultFormat = "go-jsonl"
+	resultFormat := goTestResultFormatJUnit
+	if commandProducesGoJSONL(c.TestCommand) {
+		resultFormat = goTestResultFormatGoJSONL
 	}
 
 	return GoTest{
@@ -64,7 +69,7 @@ func (g GoTest) ResultFormat() string {
 }
 
 func (g GoTest) ResultFilePath() string {
-	if g.resultFormat == "go-jsonl" {
+	if g.resultFormat == goTestResultFormatGoJSONL {
 		return g.goJSONLResultPathFromCommand()
 	}
 	return g.RunnerConfig.ResultFilePath()
@@ -87,7 +92,7 @@ func (g GoTest) goJSONLResultPathFromCommand() string {
 	return g.ResultPath
 }
 
-func commandUploadsGoJSONL(command string) bool {
+func commandProducesGoJSONL(command string) bool {
 	args, err := shellquote.Split(command)
 	if err != nil {
 		return strings.Contains(command, "--jsonfile") || strings.Contains(command, "go test -json")
@@ -128,9 +133,9 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 
 func (g GoTest) parseResults(result *RunResult) error {
 	switch g.resultFormat {
-	case "junit":
+	case goTestResultFormatJUnit:
 		return g.parseJUnitResults(result)
-	case "go-jsonl":
+	case goTestResultFormatGoJSONL:
 		return g.parseGoJSONLResults(result)
 	default:
 		return fmt.Errorf("unsupported Go test result format %q", g.resultFormat)
