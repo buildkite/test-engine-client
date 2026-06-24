@@ -39,3 +39,5 @@ test-engine-client
 
 # Output binary with `go build -o bktec`
 /bktec
+
+internal/runner/testdata/*/tmp/
