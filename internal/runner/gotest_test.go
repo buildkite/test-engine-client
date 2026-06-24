@@ -86,6 +86,105 @@ func TestGotestRun_BuildFailed(t *testing.T) {
 	}
 }
 
+func TestGotestRun_GoJSONL(t *testing.T) {
+	changeCwd(t, "./testdata/go")
+
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "go test -json {{packages}}",
+		ResultPath:  filepath.Join(t.TempDir(), "test-results.jsonl"),
+	})
+	testCases := []plan.TestCase{
+		{Path: "example.com/hello"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := gotest.Run(result, testCases, false)
+
+	assert.NoError(t, err)
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+
+	testResult := result.tests["example.com/hello/TestHelloWorld/example.com/hello"]
+	if testResult.Path != "example.com/hello" {
+		t.Errorf("TestResult.Path = %v, want %v", testResult.Path, "example.com/hello")
+	}
+}
+
+func TestGotestRun_GotestsumGoJSONL(t *testing.T) {
+	changeCwd(t, "./testdata/go")
+
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "gotestsum --jsonfile={{resultPath}} {{packages}}",
+		ResultPath:  filepath.Join(t.TempDir(), "test-results.jsonl"),
+	})
+	testCases := []plan.TestCase{
+		{Path: "example.com/hello"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := gotest.Run(result, testCases, false)
+
+	assert.NoError(t, err)
+	if result.Status() != RunStatusPassed {
+		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+	}
+
+	testResult := result.tests["example.com/hello/TestHelloWorld/example.com/hello"]
+	if testResult.Path != "example.com/hello" {
+		t.Errorf("TestResult.Path = %v, want %v", testResult.Path, "example.com/hello")
+	}
+}
+
+func TestGotestRun_GoJSONLTestFailed(t *testing.T) {
+	changeCwd(t, "./testdata/go")
+
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "go test -json {{packages}}",
+		ResultPath:  filepath.Join(t.TempDir(), "test-results.jsonl"),
+	})
+	testCases := []plan.TestCase{
+		{Path: "example.com/hello/bad"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := gotest.Run(result, testCases, false)
+
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
+	if result.Status() != RunStatusFailed {
+		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+	}
+
+	failed := result.FailedTests()
+	if len(failed) != 1 || failed[0].Path != "example.com/hello/bad" {
+		t.Errorf("Gotest.Run(%q) RunResult.FailedTests = %v, want one failed package", testCases, failed)
+	}
+}
+
+func TestGotestRun_GoJSONLBuildFailed(t *testing.T) {
+	changeCwd(t, "./testdata/go")
+
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "go test -json {{packages}}",
+		ResultPath:  filepath.Join(t.TempDir(), "test-results.jsonl"),
+	})
+	testCases := []plan.TestCase{
+		{Path: "example.com/hello/broken"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := gotest.Run(result, testCases, false)
+
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
+	if result.Status() != RunStatusError {
+		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	}
+
+	if failed := result.FailedTests(); len(failed) != 0 {
+		t.Errorf("Gotest.Run(%q) RunResult.FailedTests() = %v, want none", testCases, failed)
+	}
+}
+
 func TestGotestRun_CommandFailed(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 
@@ -114,18 +213,50 @@ func TestGotestUploadResult_DefaultsToJUnit(t *testing.T) {
 	assert.Equal(t, "junit.xml", gotest.ResultFilePath())
 }
 
-func TestGotestUploadResult_PrivateGoJSONLOptIn(t *testing.T) {
-	gotest := NewGoTest(RunnerConfig{ResultPath: "junit.xml", GoTestUploadGoJSONL: true})
+func TestGotestUploadResult_DetectsGoJSONLFromGoTestJSONCommand(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:  "go-test.jsonl",
+		TestCommand: "go test -json {{packages}}",
+	})
+
+	assert.Equal(t, "go-jsonl", gotest.ResultFormat())
+	assert.Equal(t, "go-test.jsonl", gotest.ResultFilePath())
+}
+
+func TestGotestUploadResult_DetectsGoJSONLFromGotestsumJSONFileCommand(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:  "go-test.jsonl",
+		TestCommand: "gotestsum --jsonfile={{resultPath}} {{packages}}",
+	})
+
+	assert.Equal(t, "go-jsonl", gotest.ResultFormat())
+	assert.Equal(t, "go-test.jsonl", gotest.ResultFilePath())
+}
+
+func TestGotestUploadResult_DoesNotDetectGoJSONLFromGotestsumGoTestJSONArg(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:  "junit.xml",
+		TestCommand: "gotestsum --junitfile={{resultPath}} -- -json {{packages}}",
+	})
+
+	assert.Equal(t, "junit", gotest.ResultFormat())
+	assert.Equal(t, "junit.xml", gotest.ResultFilePath())
+}
+
+func TestGotestUploadResult_UsesExplicitGoJSONLResultPath(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:  "junit.xml",
+		TestCommand: "gotestsum --junitfile={{resultPath}} --jsonfile={{goJsonlResultPath}} {{packages}}",
+	})
 
 	assert.Equal(t, "go-jsonl", gotest.ResultFormat())
 	assert.Equal(t, "junit.xml.jsonl", gotest.ResultFilePath())
 }
 
-func TestGotestCommandAddsGoJSONLFileWhenOptedIn(t *testing.T) {
+func TestGotestCommandKeepsGotestsumJSONFileCommand(t *testing.T) {
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath:          "junit.xml",
-		TestCommand:         "gotestsum --junitfile={{resultPath}} -- -count=1 {{packages}}",
-		GoTestUploadGoJSONL: true,
+		ResultPath:  "junit.xml",
+		TestCommand: "gotestsum --junitfile={{resultPath}} --jsonfile={{goJsonlResultPath}} -- -count=1 {{packages}}",
 	})
 
 	cmd, args, err := gotest.CommandNameAndArgs([]plan.TestCase{{Path: "example.com/hello"}}, false)
@@ -141,29 +272,34 @@ func TestGotestCommandAddsGoJSONLFileWhenOptedIn(t *testing.T) {
 	}, args)
 }
 
-func TestGotestCommandAddsGoJSONLFileBeforePackagesWithoutSeparator(t *testing.T) {
+func TestGotestCommandCapturesGoTestJSONStdout(t *testing.T) {
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath:          "junit.xml",
-		TestCommand:         "gotestsum --junitfile={{resultPath}} {{packages}}",
-		GoTestUploadGoJSONL: true,
+		ResultPath:  "go-test.jsonl",
+		TestCommand: "go test -json -count=1 {{packages}}",
 	})
 
 	cmd, args, err := gotest.CommandNameAndArgs([]plan.TestCase{{Path: "example.com/hello"}}, false)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "gotestsum", cmd)
+	assert.Equal(t, "bash", cmd)
 	assert.Equal(t, []string{
-		"--jsonfile=junit.xml.jsonl",
-		"--junitfile=junit.xml",
+		"-o",
+		"pipefail",
+		"-c",
+		`"$@" | tee "$0"`,
+		"go-test.jsonl",
+		"go",
+		"test",
+		"-json",
+		"-count=1",
 		"example.com/hello",
 	}, args)
 }
 
-func TestGotestCommandDoesNotDuplicateGoJSONLFile(t *testing.T) {
+func TestGotestCommandKeepsGotestsumJUnitCommand(t *testing.T) {
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath:          "junit.xml",
-		TestCommand:         "gotestsum --junitfile={{resultPath}} --jsonfile={{goJsonlResultPath}} -- -count=1 {{packages}}",
-		GoTestUploadGoJSONL: true,
+		ResultPath:  "junit.xml",
+		TestCommand: "gotestsum --junitfile={{resultPath}} -- -count=1 {{packages}}",
 	})
 
 	cmd, args, err := gotest.CommandNameAndArgs([]plan.TestCase{{Path: "example.com/hello"}}, false)
@@ -172,7 +308,6 @@ func TestGotestCommandDoesNotDuplicateGoJSONLFile(t *testing.T) {
 	assert.Equal(t, "gotestsum", cmd)
 	assert.Equal(t, []string{
 		"--junitfile=junit.xml",
-		"--jsonfile=junit.xml.jsonl",
 		"--",
 		"-count=1",
 		"example.com/hello",

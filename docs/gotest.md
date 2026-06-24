@@ -36,6 +36,24 @@ You can customize this command using the `BUILDKITE_TEST_ENGINE_TEST_CMD` enviro
 export BUILDKITE_TEST_ENGINE_TEST_CMD="gotestsum --format="testname" --junitfile={{resultPath}} {{packages}}"
 ```
 
+## Upload Go JSONL results
+
+When `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true`, `bktec` detects Go JSONL output from the test command and uploads it using the `go-jsonl` ingestion format.
+
+For `gotestsum`, include `--jsonfile` in the command:
+
+```sh
+export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/gotest-result.jsonl
+export BUILDKITE_TEST_ENGINE_TEST_CMD="gotestsum --jsonfile={{resultPath}} {{packages}}"
+```
+
+For `go test -json`, `bktec` captures stdout to `{{resultPath}}` while still streaming it to the build log:
+
+```sh
+export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/gotest-result.jsonl
+export BUILDKITE_TEST_ENGINE_TEST_CMD="go test -json {{packages}}"
+```
+
 ## Filter packages
 
 Support for filtering specific packages is planned for a future release. Please let us know if this is a feature you need sooner.

@@ -1,8 +1,11 @@
 package runner
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -14,6 +17,7 @@ import (
 
 type GoTest struct {
 	RunnerConfig
+	resultFormat string
 }
 
 // Compile-time check that GoTest implements TestRunner
@@ -28,8 +32,14 @@ func NewGoTest(c RunnerConfig) GoTest {
 		c.RetryTestCommand = c.TestCommand
 	}
 
+	resultFormat := "junit"
+	if commandUploadsGoJSONL(c.TestCommand) {
+		resultFormat = "go-jsonl"
+	}
+
 	return GoTest{
 		RunnerConfig: c,
+		resultFormat: resultFormat,
 	}
 }
 
@@ -50,21 +60,39 @@ func (g GoTest) Name() string {
 }
 
 func (g GoTest) ResultFormat() string {
-	if g.GoTestUploadGoJSONL {
-		return "go-jsonl"
-	}
-	return "junit"
+	return g.resultFormat
 }
 
 func (g GoTest) ResultFilePath() string {
-	if g.GoTestUploadGoJSONL {
-		return g.goJSONLResultPath()
+	if g.resultFormat == "go-jsonl" {
+		return g.goJSONLResultPathFromCommand()
 	}
 	return g.RunnerConfig.ResultFilePath()
 }
 
 func (g GoTest) goJSONLResultPath() string {
 	return g.ResultPath + ".jsonl"
+}
+
+func (g GoTest) goJSONLResultPathFromCommand() string {
+	args, err := g.commandArgsWithoutPackages(g.TestCommand)
+	if err != nil {
+		return g.ResultPath
+	}
+
+	if path := goJSONLFileArg(args); path != "" {
+		return path
+	}
+
+	return g.ResultPath
+}
+
+func commandUploadsGoJSONL(command string) bool {
+	args, err := shellquote.Split(command)
+	if err != nil {
+		return strings.Contains(command, "--jsonfile") || strings.Contains(command, "go test -json")
+	}
+	return isGoTestJSONCommand(args) || goJSONLFileArg(args) != ""
 }
 
 func (g GoTest) GetExamples(files []string) ([]plan.TestCase, error) {
@@ -87,12 +115,32 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return cmdErr
 	}
 
-	testResults, parseErr := loadAndParseJUnitXML(g.ResultPath)
-	if parseErr != nil {
-		fmt.Printf("Buildkite Test Engine Client: Failed to read gotestsum output, tests will not be retried: %v\n", parseErr)
+	if parseErr := g.parseResults(result); parseErr != nil {
+		fmt.Printf("Buildkite Test Engine Client: Failed to read Go test output, tests will not be retried: %v\n", parseErr)
 		// We don't want to fail the build if we fail to parse the report,
 		// therefore we return the command error (which can be nil), instead of the parse error.
 		return cmdErr
+	}
+
+	// Return any command error after processing the report
+	return cmdErr
+}
+
+func (g GoTest) parseResults(result *RunResult) error {
+	switch g.resultFormat {
+	case "junit":
+		return g.parseJUnitResults(result)
+	case "go-jsonl":
+		return g.parseGoJSONLResults(result)
+	default:
+		return fmt.Errorf("unsupported Go test result format %q", g.resultFormat)
+	}
+}
+
+func (g GoTest) parseJUnitResults(result *RunResult) error {
+	testResults, parseErr := loadAndParseJUnitXML(g.ResultPath)
+	if parseErr != nil {
+		return parseErr
 	}
 
 	for _, test := range testResults {
@@ -118,8 +166,109 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		}, test.Result)
 	}
 
-	// Return any command error after processing the report
-	return cmdErr
+	return nil
+}
+
+type goJSONLTestEvent struct {
+	Action  string `json:"Action"`
+	Package string `json:"Package"`
+	Test    string `json:"Test"`
+	Output  string `json:"Output"`
+}
+
+func (g GoTest) parseGoJSONLResults(result *RunResult) error {
+	events, err := loadGoJSONLTestEvents(g.ResultFilePath())
+	if err != nil {
+		return err
+	}
+
+	packageOutputs := map[string]string{}
+	packageFailed := map[string]bool{}
+	testStatuses := map[string]TestStatus{}
+	testCases := map[string]plan.TestCase{}
+
+	for _, event := range events {
+		if event.Package == "" {
+			continue
+		}
+		if event.Output != "" {
+			packageOutputs[event.Package] += event.Output
+		}
+		if event.Test == "" {
+			if event.Action == "fail" {
+				packageFailed[event.Package] = true
+			}
+			continue
+		}
+
+		status, ok := goJSONLActionStatus(event.Action)
+		if !ok {
+			continue
+		}
+
+		key := event.Package + "/" + event.Test
+		testStatuses[key] = status
+		testCases[key] = plan.TestCase{
+			Format: plan.TestCaseFormatExample,
+			Scope:  event.Package,
+			Name:   event.Test,
+			Path:   event.Package,
+		}
+	}
+
+	for key, testCase := range testCases {
+		result.RecordTestResult(testCase, testStatuses[key])
+	}
+
+	for pkg := range packageFailed {
+		if packageOutputs[pkg] != "" && strings.Contains(packageOutputs[pkg], "[build failed]") {
+			result.error = fmt.Errorf("go test failed to build %s", pkg)
+		}
+	}
+
+	return nil
+}
+
+func loadGoJSONLTestEvents(path string) ([]goJSONLTestEvent, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read go jsonl: %w", err)
+	}
+	defer file.Close()
+
+	var events []goJSONLTestEvent
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		var event goJSONLTestEvent
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			return nil, fmt.Errorf("failed to parse go jsonl: %w", err)
+		}
+		events = append(events, event)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read go jsonl: %w", err)
+	}
+
+	return events, nil
+}
+
+func goJSONLActionStatus(action string) (TestStatus, bool) {
+	switch action {
+	case "pass":
+		return TestStatusPassed, true
+	case "fail":
+		return TestStatusFailed, true
+	case "skip":
+		return TestStatusSkipped, true
+	default:
+		return TestStatusUnknown, false
+	}
 }
 
 // isBuildFailure reports whether a JUnit testcase is gotestsum's synthetic
@@ -184,49 +333,59 @@ func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 		cmd = cmd + " " + concatenatedPackages
 	}
 
-	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
-	cmd = strings.Replace(cmd, "{{goJsonlResultPath}}", g.goJSONLResultPath(), 1)
-
-	args, err := shellquote.Split(cmd)
+	args, err := g.commandArgsWithoutPackages(cmd)
 
 	if err != nil {
 		return "", []string{}, err
 	}
-	args = g.withGoJSONLUploadArgs(args)
+	args = g.withGoJSONLStdoutCapture(args)
 
 	return args[0], args[1:], nil
 }
 
-func (g GoTest) withGoJSONLUploadArgs(args []string) []string {
-	if !g.GoTestUploadGoJSONL || len(args) == 0 || filepath.Base(args[0]) != "gotestsum" || hasGoJSONLArg(args) {
+func (g GoTest) commandArgsWithoutPackages(cmd string) ([]string, error) {
+	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
+	cmd = strings.Replace(cmd, "{{goJsonlResultPath}}", g.goJSONLResultPath(), 1)
+	return shellquote.Split(cmd)
+}
+
+func (g GoTest) withGoJSONLStdoutCapture(args []string) []string {
+	if !isGoTestJSONCommand(args) || goJSONLFileArg(args) != "" {
 		return args
 	}
 
-	insertAt := 1
-	for i, arg := range args {
-		if arg == "--" {
-			insertAt = i
-			break
-		}
-	}
-
-	argsWithJSONL := make([]string, 0, len(args)+1)
-	argsWithJSONL = append(argsWithJSONL, args[:insertAt]...)
-	argsWithJSONL = append(argsWithJSONL, "--jsonfile="+g.goJSONLResultPath())
-	argsWithJSONL = append(argsWithJSONL, args[insertAt:]...)
-	return argsWithJSONL
+	wrapped := []string{"-o", "pipefail", "-c", `"$@" | tee "$0"`, g.ResultPath}
+	wrapped = append(wrapped, args...)
+	return append([]string{"bash"}, wrapped...)
 }
 
 func hasGoJSONLArg(args []string) bool {
-	for i, arg := range args {
-		if arg == "--jsonfile" || strings.HasPrefix(arg, "--jsonfile=") {
-			return true
-		}
-		if i > 0 && args[i-1] == "--jsonfile" {
+	return isGoTestJSONCommand(args) || goJSONLFileArg(args) != ""
+}
+
+func hasGoTestJSONArg(args []string) bool {
+	for _, arg := range args {
+		if arg == "-json" {
 			return true
 		}
 	}
 	return false
+}
+
+func goJSONLFileArg(args []string) string {
+	for i, arg := range args {
+		if arg == "--jsonfile" && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(arg, "--jsonfile=") {
+			return strings.TrimPrefix(arg, "--jsonfile=")
+		}
+	}
+	return ""
+}
+
+func isGoTestJSONCommand(args []string) bool {
+	return len(args) >= 3 && filepath.Base(args[0]) == "go" && args[1] == "test" && hasGoTestJSONArg(args)
 }
 
 // Pluck unique packages from test cases

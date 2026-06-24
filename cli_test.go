@@ -143,7 +143,6 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "/tmp/results.json")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", "true")
-	t.Setenv("BUILDKITE_TEST_ENGINE_CLIENT_GOTEST_UPLOAD_GO_JSONL", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "app/")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "3")
 	t.Setenv("BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST", "true")
@@ -196,7 +195,6 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"ResultPath", cfg.ResultPath, "/tmp/results.json"},
 		{"SplitByExample", cfg.SplitByExample, true},
 		{"FailOnNoTests", cfg.FailOnNoTests, true},
-		{"GoTestUploadGoJSONL", cfg.GoTestUploadGoJSONL, true},
 		{"LocationPrefix", cfg.LocationPrefix, "app/"},
 		{"MaxRetries", cfg.MaxRetries, 3},
 		// DISABLE_RETRY_FOR_MUTED_TEST=true means RetryForMutedTest should be false (flag Action inverts the bool)

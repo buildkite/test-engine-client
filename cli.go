@@ -347,15 +347,6 @@ var failOnNoTestsFlag = &cli.BoolFlag{
 	Destination: &cfg.FailOnNoTests,
 }
 
-var goTestUploadGoJSONLFlag = &cli.BoolFlag{
-	Name:        "gotest-upload-go-jsonl",
-	Category:    "TEST RUNNER",
-	Usage:       "Upload Go test results using gotestsum JSONL and the go-jsonl ingestion format",
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_CLIENT_GOTEST_UPLOAD_GO_JSONL"),
-	Destination: &cfg.GoTestUploadGoJSONL,
-	Hidden:      true,
-}
-
 var locationPrefixFlag = &cli.StringFlag{
 	Name:        "location-prefix",
 	Category:    "TEST RUNNER",
@@ -573,7 +564,6 @@ var runnerEnvironmentFlags = []cli.Flag{
 	testRunnerFlag,
 	resultPathFlag,
 	splitByExampleFlag,
-	goTestUploadGoJSONLFlag,
 	locationPrefixFlag,
 	// Runner Retry Flags
 	disableRetryMutedFlag,
