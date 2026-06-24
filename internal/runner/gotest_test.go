@@ -185,6 +185,32 @@ func TestGotestRun_GoJSONLBuildFailed(t *testing.T) {
 	}
 }
 
+func TestGotestRun_GoJSONLPackageLevelFailure(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "test-results.jsonl")
+	err := os.WriteFile(resultPath, []byte(`{"Action":"start","Package":"example.com/hello"}
+{"Action":"output","Package":"example.com/hello","Output":"exit status 1\n"}
+{"Action":"fail","Package":"example.com/hello","Elapsed":0.1}
+`), 0o600)
+	assert.NoError(t, err)
+
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "go test -json {{packages}}",
+		ResultPath:  resultPath,
+	})
+	result := NewRunResult([]plan.TestCase{})
+	err = gotest.parseGoJSONLResults(result)
+
+	assert.NoError(t, err)
+	if result.Status() != RunStatusFailed {
+		t.Errorf("GoTest.parseGoJSONLResults() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
+	}
+
+	failed := result.FailedTests()
+	if len(failed) != 1 || failed[0].Path != "example.com/hello" || failed[0].Name != "TestMain" {
+		t.Errorf("GoTest.parseGoJSONLResults() RunResult.FailedTests = %v, want package-level failure", failed)
+	}
+}
+
 func TestGotestRun_CommandFailed(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 

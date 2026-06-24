@@ -170,10 +170,11 @@ func (g GoTest) parseJUnitResults(result *RunResult) error {
 }
 
 type goJSONLTestEvent struct {
-	Action  string `json:"Action"`
-	Package string `json:"Package"`
-	Test    string `json:"Test"`
-	Output  string `json:"Output"`
+	Action      string `json:"Action"`
+	Package     string `json:"Package"`
+	Test        string `json:"Test"`
+	Output      string `json:"Output"`
+	FailedBuild string `json:"FailedBuild"`
 }
 
 func (g GoTest) parseGoJSONLResults(result *RunResult) error {
@@ -184,6 +185,8 @@ func (g GoTest) parseGoJSONLResults(result *RunResult) error {
 
 	packageOutputs := map[string]string{}
 	packageFailed := map[string]bool{}
+	packageBuildFailed := map[string]bool{}
+	packageHasFailedTest := map[string]bool{}
 	testStatuses := map[string]TestStatus{}
 	testCases := map[string]plan.TestCase{}
 
@@ -197,6 +200,9 @@ func (g GoTest) parseGoJSONLResults(result *RunResult) error {
 		if event.Test == "" {
 			if event.Action == "fail" {
 				packageFailed[event.Package] = true
+				if event.FailedBuild != "" {
+					packageBuildFailed[event.Package] = true
+				}
 			}
 			continue
 		}
@@ -208,6 +214,9 @@ func (g GoTest) parseGoJSONLResults(result *RunResult) error {
 
 		key := event.Package + "/" + event.Test
 		testStatuses[key] = status
+		if status == TestStatusFailed {
+			packageHasFailedTest[event.Package] = true
+		}
 		testCases[key] = plan.TestCase{
 			Format: plan.TestCaseFormatExample,
 			Scope:  event.Package,
@@ -221,8 +230,18 @@ func (g GoTest) parseGoJSONLResults(result *RunResult) error {
 	}
 
 	for pkg := range packageFailed {
-		if packageOutputs[pkg] != "" && strings.Contains(packageOutputs[pkg], "[build failed]") {
+		if packageBuildFailed[pkg] || strings.Contains(packageOutputs[pkg], "[build failed]") {
 			result.error = fmt.Errorf("go test failed to build %s", pkg)
+			continue
+		}
+
+		if !packageHasFailedTest[pkg] {
+			result.RecordTestResult(plan.TestCase{
+				Format: plan.TestCaseFormatExample,
+				Scope:  pkg,
+				Name:   "TestMain",
+				Path:   pkg,
+			}, TestStatusFailed)
 		}
 	}
 
@@ -357,10 +376,6 @@ func (g GoTest) withGoJSONLStdoutCapture(args []string) []string {
 	wrapped := []string{"-o", "pipefail", "-c", `"$@" | tee "$0"`, g.ResultPath}
 	wrapped = append(wrapped, args...)
 	return append([]string{"bash"}, wrapped...)
-}
-
-func hasGoJSONLArg(args []string) bool {
-	return isGoTestJSONCommand(args) || goJSONLFileArg(args) != ""
 }
 
 func hasGoTestJSONArg(args []string) bool {
