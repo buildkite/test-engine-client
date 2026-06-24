@@ -32,6 +32,8 @@ type Config struct {
 	DebugEnabled bool `json:"-"`
 	// FailOnNoTests causes the client to exit with an error if no tests are assigned to the node
 	FailOnNoTests bool `json:"-"`
+	// GoTestUploadGoJSONL enables a private dogfood path that uploads gotest results as Go JSONL.
+	GoTestUploadGoJSONL bool `json:"-"`
 	// Identifier is the identifier of the build.
 	Identifier string `json:"-"`
 	JobID      string `json:"-"`

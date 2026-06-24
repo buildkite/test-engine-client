@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
@@ -49,7 +50,21 @@ func (g GoTest) Name() string {
 }
 
 func (g GoTest) ResultFormat() string {
+	if g.GoTestUploadGoJSONL {
+		return "go-jsonl"
+	}
 	return "junit"
+}
+
+func (g GoTest) ResultFilePath() string {
+	if g.GoTestUploadGoJSONL {
+		return g.goJSONLResultPath()
+	}
+	return g.RunnerConfig.ResultFilePath()
+}
+
+func (g GoTest) goJSONLResultPath() string {
+	return g.ResultPath + ".jsonl"
 }
 
 func (g GoTest) GetExamples(files []string) ([]plan.TestCase, error) {
@@ -170,14 +185,48 @@ func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 	}
 
 	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
+	cmd = strings.Replace(cmd, "{{goJsonlResultPath}}", g.goJSONLResultPath(), 1)
 
 	args, err := shellquote.Split(cmd)
 
 	if err != nil {
 		return "", []string{}, err
 	}
+	args = g.withGoJSONLUploadArgs(args)
 
 	return args[0], args[1:], nil
+}
+
+func (g GoTest) withGoJSONLUploadArgs(args []string) []string {
+	if !g.GoTestUploadGoJSONL || len(args) == 0 || filepath.Base(args[0]) != "gotestsum" || hasGoJSONLArg(args) {
+		return args
+	}
+
+	insertAt := 1
+	for i, arg := range args {
+		if arg == "--" {
+			insertAt = i
+			break
+		}
+	}
+
+	argsWithJSONL := make([]string, 0, len(args)+1)
+	argsWithJSONL = append(argsWithJSONL, args[:insertAt]...)
+	argsWithJSONL = append(argsWithJSONL, "--jsonfile="+g.goJSONLResultPath())
+	argsWithJSONL = append(argsWithJSONL, args[insertAt:]...)
+	return argsWithJSONL
+}
+
+func hasGoJSONLArg(args []string) bool {
+	for i, arg := range args {
+		if arg == "--jsonfile" || strings.HasPrefix(arg, "--jsonfile=") {
+			return true
+		}
+		if i > 0 && args[i-1] == "--jsonfile" {
+			return true
+		}
+	}
+	return false
 }
 
 // Pluck unique packages from test cases

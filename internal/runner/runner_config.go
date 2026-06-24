@@ -13,6 +13,7 @@ type RunnerConfig struct {
 	TestCommand            string
 	TestFileExcludePattern string
 	TestFilePattern        string
+	GoTestUploadGoJSONL    bool
 	uploadToken            string
 }
 

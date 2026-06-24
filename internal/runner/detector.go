@@ -17,6 +17,7 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		TestCommand:            cfg.TestCommand,
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		TestFilePattern:        cfg.TestFilePattern,
+		GoTestUploadGoJSONL:    cfg.GoTestUploadGoJSONL,
 		uploadToken:            cfg.UploadToken,
 	}
 

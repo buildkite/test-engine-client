@@ -107,6 +107,78 @@ func TestGotestRun_CommandFailed(t *testing.T) {
 	}
 }
 
+func TestGotestUploadResult_DefaultsToJUnit(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{ResultPath: "junit.xml"})
+
+	assert.Equal(t, "junit", gotest.ResultFormat())
+	assert.Equal(t, "junit.xml", gotest.ResultFilePath())
+}
+
+func TestGotestUploadResult_PrivateGoJSONLOptIn(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{ResultPath: "junit.xml", GoTestUploadGoJSONL: true})
+
+	assert.Equal(t, "go-jsonl", gotest.ResultFormat())
+	assert.Equal(t, "junit.xml.jsonl", gotest.ResultFilePath())
+}
+
+func TestGotestCommandAddsGoJSONLFileWhenOptedIn(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:          "junit.xml",
+		TestCommand:         "gotestsum --junitfile={{resultPath}} -- -count=1 {{packages}}",
+		GoTestUploadGoJSONL: true,
+	})
+
+	cmd, args, err := gotest.CommandNameAndArgs([]plan.TestCase{{Path: "example.com/hello"}}, false)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "gotestsum", cmd)
+	assert.Equal(t, []string{
+		"--junitfile=junit.xml",
+		"--jsonfile=junit.xml.jsonl",
+		"--",
+		"-count=1",
+		"example.com/hello",
+	}, args)
+}
+
+func TestGotestCommandAddsGoJSONLFileBeforePackagesWithoutSeparator(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:          "junit.xml",
+		TestCommand:         "gotestsum --junitfile={{resultPath}} {{packages}}",
+		GoTestUploadGoJSONL: true,
+	})
+
+	cmd, args, err := gotest.CommandNameAndArgs([]plan.TestCase{{Path: "example.com/hello"}}, false)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "gotestsum", cmd)
+	assert.Equal(t, []string{
+		"--jsonfile=junit.xml.jsonl",
+		"--junitfile=junit.xml",
+		"example.com/hello",
+	}, args)
+}
+
+func TestGotestCommandDoesNotDuplicateGoJSONLFile(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		ResultPath:          "junit.xml",
+		TestCommand:         "gotestsum --junitfile={{resultPath}} --jsonfile={{goJsonlResultPath}} -- -count=1 {{packages}}",
+		GoTestUploadGoJSONL: true,
+	})
+
+	cmd, args, err := gotest.CommandNameAndArgs([]plan.TestCase{{Path: "example.com/hello"}}, false)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "gotestsum", cmd)
+	assert.Equal(t, []string{
+		"--junitfile=junit.xml",
+		"--jsonfile=junit.xml.jsonl",
+		"--",
+		"-count=1",
+		"example.com/hello",
+	}, args)
+}
+
 func TestGotestGetFiles(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 
