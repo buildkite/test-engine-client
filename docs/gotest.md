@@ -1,6 +1,11 @@
 # Using bktec with go test
 
-To integrate `bktec` with Go's testing framework, you first need to install [`gotestsum`](https://github.com/gotestyourself/gotestsum), which `bktec` uses to generate JUnit XML reports.
+`bktec` works with Go tests in two result modes:
+
+- **JUnit XML output** (default): `bktec` runs [`gotestsum`](https://github.com/gotestyourself/gotestsum) with `--junitfile={{resultPath}}` and reads the generated JUnit XML report.
+- **Go JSONL output**: `bktec` detects `gotestsum --jsonfile` or `go test -json`, reads the Go JSON event stream, and uploads it using the `go-jsonl` ingestion format when result uploads are enabled.
+
+If you use the default command, install [`gotestsum`](https://github.com/gotestyourself/gotestsum) before running `bktec`.
 
 Set the following environment variables to configure `bktec` for your Go project:
 
@@ -8,7 +13,7 @@ Set the following environment variables to configure `bktec` for your Go project
 # Tell bktec to use the Go test runner integration
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=gotest
 
-# Specify where gotestsum should write the JUnit XML report
+# Specify where gotestsum should write the JUnit XML report in the default mode
 # A unique file name per build is recommended, especially when running in parallel
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/gotest-result.xml
 export BUILDKITE_TEST_ENGINE_SUITE_SLUG=your-suite-slug
@@ -23,7 +28,7 @@ bktec run
 
 ## Configure test command
 
-By default, `bktec` runs go test with the following command:
+By default, `bktec` runs Go tests through `gotestsum` and parses JUnit XML output:
 
 ```sh
 gotestsum --junitfile={{resultPath}} {{packages}}
@@ -36,23 +41,30 @@ You can customize this command using the `BUILDKITE_TEST_ENGINE_TEST_CMD` enviro
 export BUILDKITE_TEST_ENGINE_TEST_CMD="gotestsum --format="testname" --junitfile={{resultPath}} {{packages}}"
 ```
 
-## Upload Go JSONL results
+## Use Go JSONL output
 
-When `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true`, `bktec` detects Go JSONL output from the test command and uploads it using the `go-jsonl` ingestion format.
+To use Go JSONL output instead of JUnit XML, configure your test command to produce Go JSON events. When `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true`, `bktec` uploads the JSONL result file using the `go-jsonl` ingestion format.
 
-For `gotestsum`, include `--jsonfile` in the command:
+### With gotestsum
+
+Include `--jsonfile={{resultPath}}` in the command:
 
 ```sh
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/gotest-result.jsonl
 export BUILDKITE_TEST_ENGINE_TEST_CMD="gotestsum --jsonfile={{resultPath}} {{packages}}"
 ```
 
-For `go test -json`, `bktec` captures stdout to `{{resultPath}}` while still streaming it to the build log:
+### With go test -json
+
+You can also run `go test -json` directly. In this mode, `bktec` captures stdout to `{{resultPath}}` while still streaming it to the build log:
 
 ```sh
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/gotest-result.jsonl
 export BUILDKITE_TEST_ENGINE_TEST_CMD="go test -json {{packages}}"
 ```
+
+> [!IMPORTANT]
+> Go JSONL output contains both test-level events and package-level events. `bktec` still runs and retries Go tests by package, but reports individual tests when Go includes a test name in the JSON event stream.
 
 ## Filter packages
 
