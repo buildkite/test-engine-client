@@ -624,6 +624,55 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	assert.Contains(t, stderr, "Test Engine API timed out")
 }
 
+func TestFetchOrCreateTestPlan_SelectorOptInFallbackUsesPathTasks(t *testing.T) {
+	packages := []string{
+		"github.com/buildkite/test-engine-client/internal/api",
+		"github.com/buildkite/test-engine-client/internal/runner",
+	}
+	testRunner := runner.NewGoTest(runner.RunnerConfig{})
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}))
+	defer svr.Close()
+
+	ctx := context.Background()
+	fetchCtx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+	defer cancel()
+
+	cfg := config.Config{
+		NodeIndex:                     0,
+		Parallelism:                   2,
+		Identifier:                    "identifier",
+		Branch:                        "main",
+		ServerBaseURL:                 svr.URL,
+		SuiteSlug:                     "my-suite",
+		TestRunner:                    "gotest",
+		ExperimentalSelectorSplitting: true,
+	}
+	apiClient := api.NewClient(api.ClientConfig{
+		ServerBaseURL: cfg.ServerBaseURL,
+	})
+
+	got, err := fetchOrCreateTestPlan(fetchCtx, apiClient, &cfg, packages, testRunner)
+	if err != nil {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, packages, err)
+	}
+
+	want := plan.CreateFallbackPlan(packages, cfg.Parallelism)
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, packages, diff)
+	}
+
+	for _, task := range got.Tasks {
+		for _, test := range task.Tests {
+			if test.Format == plan.TestCaseFormatSelector || test.Value != "" {
+				t.Errorf("fallback test case = %+v, want path-based non-selector task", test)
+			}
+		}
+	}
+}
+
 func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	files := []string{"apple", "banana"}
 	testRunner := runner.Rspec{}
@@ -894,6 +943,34 @@ func TestRunTestsWithRetry_NoTestCases_Success(t *testing.T) {
 
 	if len(timeline) != 0 {
 		t.Errorf("timeline length = %v, want 0", len(timeline))
+	}
+}
+
+func TestTrimTaskLocationPrefix_SkipsSelectorTasks(t *testing.T) {
+	task := &plan.Task{
+		NodeNumber: 0,
+		Tests: []plan.TestCase{
+			{Path: "my/project/spec/apple_spec.rb", Format: plan.TestCaseFormatFile},
+			{Value: "github.com/buildkite/test-engine-client/internal/api", Format: plan.TestCaseFormatSelector},
+			{Path: "my/project/spec/banana_spec.rb[1:1]", Format: plan.TestCaseFormatExample},
+		},
+	}
+
+	if err := trimTaskLocationPrefix(task, "my/project"); err != nil {
+		t.Fatalf("trimTaskLocationPrefix() error = %v", err)
+	}
+
+	want := &plan.Task{
+		NodeNumber: 0,
+		Tests: []plan.TestCase{
+			{Path: "spec/apple_spec.rb", Format: plan.TestCaseFormatFile},
+			{Value: "github.com/buildkite/test-engine-client/internal/api", Format: plan.TestCaseFormatSelector},
+			{Path: "spec/banana_spec.rb[1:1]", Format: plan.TestCaseFormatExample},
+		},
+	}
+
+	if diff := cmp.Diff(task, want); diff != "" {
+		t.Errorf("trimTaskLocationPrefix() diff (-got +want):\n%s", diff)
 	}
 }
 

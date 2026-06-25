@@ -196,6 +196,39 @@ func TestPrintSplitSummary_ExampleMode(t *testing.T) {
 	}
 }
 
+func TestPrintSplitSummary_SelectorMode(t *testing.T) {
+	p := TestPlan{
+		Parallelism: 2,
+		Tasks: map[string]*Task{
+			"0": {NodeNumber: 0, Tests: []TestCase{
+				{Value: "github.com/buildkite/test-engine-client/internal/api", Format: TestCaseFormatSelector, TimingSampleSize: 7},
+			}},
+			"1": {NodeNumber: 1, Tests: []TestCase{
+				{Value: "github.com/buildkite/test-engine-client/internal/runner", Format: TestCaseFormatSelector, TimingSampleSize: 0},
+			}},
+		},
+		TimingMetadata: &TimingMetadata{
+			Selector: &FormatTimingMetadata{MedianDuration: fp(1750), DefaultDuration: 1000},
+		},
+	}
+	var buf bytes.Buffer
+	PrintSplitSummary(&buf, p)
+	got := buf.String()
+
+	for _, want := range []string{
+		"+++ Buildkite Test Engine Client: 📊 Split summary\n2 selectors across 2 nodes",
+		"1 selector (50%) estimated from past historical durations",
+		"1 selector (50%) had no history — assumed median (1.8s)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, " files ") || strings.Contains(got, " examples ") {
+		t.Errorf("expected no file/example wording in selector-mode output, got:\n%s", got)
+	}
+}
+
 func TestPrintSplitSummary_MixedFormats(t *testing.T) {
 	p := TestPlan{
 		Parallelism: 2,
@@ -227,6 +260,46 @@ func TestPrintSplitSummary_MixedFormats(t *testing.T) {
 		"  2 examples\n",
 		"    1 (50%) estimated from past historical durations",
 		"    1 (50%) had no history — assumed median (150ms)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, got)
+		}
+	}
+}
+
+func TestPrintSplitSummary_MixedFormatsWithSelectors(t *testing.T) {
+	p := TestPlan{
+		Parallelism: 2,
+		Tasks: map[string]*Task{
+			"0": {NodeNumber: 0, Tests: []TestCase{
+				{Path: "a_spec.rb", Format: TestCaseFormatFile, TimingSampleSize: 3},
+				{Value: "github.com/buildkite/test-engine-client/internal/api", Format: TestCaseFormatSelector, TimingSampleSize: 0},
+			}},
+			"1": {NodeNumber: 1, Tests: []TestCase{
+				{Path: "b_spec.rb[1:1]", Format: TestCaseFormatExample, TimingSampleSize: 0},
+				{Value: "github.com/buildkite/test-engine-client/internal/runner", Format: TestCaseFormatSelector, TimingSampleSize: 2},
+			}},
+		},
+		TimingMetadata: &TimingMetadata{
+			File:     &FormatTimingMetadata{MedianDuration: fp(4200), DefaultDuration: 1000},
+			Example:  &FormatTimingMetadata{MedianDuration: nil, DefaultDuration: 500},
+			Selector: &FormatTimingMetadata{MedianDuration: fp(1750), DefaultDuration: 1000},
+		},
+	}
+
+	var buf bytes.Buffer
+	PrintSplitSummary(&buf, p)
+	got := buf.String()
+
+	for _, want := range []string{
+		"4 tests across 2 nodes",
+		"  1 file\n",
+		"    1 (100%) estimated from past historical durations",
+		"  1 example\n",
+		"    1 (100%) had no history and used the default duration (500ms)",
+		"  2 selectors\n",
+		"    1 (50%) estimated from past historical durations",
+		"    1 (50%) had no history — assumed median (1.8s)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, got)
