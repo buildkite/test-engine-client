@@ -243,3 +243,27 @@ func TestExperimentalSelectorSplittingFlagBindsToConfig(t *testing.T) {
 		t.Fatalf("cfg.ExperimentalSelectorSplitting = false, want true")
 	}
 }
+
+func TestExperimentalSelectorSplittingFlagBindsToPlanConfig(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+
+	cmd := &cli.Command{
+		Name: "bktec",
+		Commands: []*cli.Command{
+			{
+				Name:   "plan",
+				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+				Flags:  planCommandFlags(),
+			},
+		},
+	}
+
+	if err := cmd.Run(context.Background(), []string{"bktec", "plan", "--experimental-selector-splitting"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cfg.ExperimentalSelectorSplitting {
+		t.Fatalf("cfg.ExperimentalSelectorSplitting = false, want true")
+	}
+}

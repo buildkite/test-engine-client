@@ -368,6 +368,60 @@ func TestCreateRequestParams_SelectorOptInIgnoredForFileRunner(t *testing.T) {
 	}
 }
 
+func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *testing.T) {
+	filterRequestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		filterRequestCount++
+		fmt.Fprint(w, `{"tests": []}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:              "my-org",
+		SuiteSlug:                     "my-suite",
+		Identifier:                    "identifier",
+		Parallelism:                   2,
+		Branch:                        "main",
+		TestRunner:                    "rspec",
+		ExperimentalSelectorSplitting: true,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: svr.URL,
+	})
+	files := []string{
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+	}
+
+	testRunner := metadataTestRunner{name: "rspec"}
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, testRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	if filterRequestCount != 1 {
+		t.Errorf("filter request count = %d, want 1", filterRequestCount)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "rspec",
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCreateRequestParams_SelectorOptInIgnoredForPytestPants(t *testing.T) {
 	cfg := config.Config{
 		Identifier:                    "identifier",
