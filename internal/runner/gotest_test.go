@@ -268,20 +268,10 @@ func TestGotestUploadResult_DoesNotDetectGoJSONLFromGotestsumGoTestJSONArg(t *te
 	assert.Equal(t, "junit.xml", gotest.ResultFilePath())
 }
 
-func TestGotestUploadResult_UsesExplicitGoJSONLResultPath(t *testing.T) {
-	gotest := NewGoTest(RunnerConfig{
-		ResultPath:  "junit.xml",
-		TestCommand: "gotestsum --junitfile={{resultPath}} --jsonfile={{goJsonlResultPath}} {{packages}}",
-	})
-
-	assert.Equal(t, "go-jsonl", gotest.ResultFormat())
-	assert.Equal(t, "junit.xml.jsonl", gotest.ResultFilePath())
-}
-
 func TestGotestCommandKeepsGotestsumJSONFileCommand(t *testing.T) {
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath:  "junit.xml",
-		TestCommand: "gotestsum --junitfile={{resultPath}} --jsonfile={{goJsonlResultPath}} -- -count=1 {{packages}}",
+		ResultPath:  "go-test.jsonl",
+		TestCommand: "gotestsum --jsonfile={{resultPath}} -- -count=1 {{packages}}",
 	})
 
 	cmd, args, err := gotest.CommandNameAndArgs([]plan.TestCase{{Path: "example.com/hello"}}, false)
@@ -289,8 +279,7 @@ func TestGotestCommandKeepsGotestsumJSONFileCommand(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "gotestsum", cmd)
 	assert.Equal(t, []string{
-		"--junitfile=junit.xml",
-		"--jsonfile=junit.xml.jsonl",
+		"--jsonfile=go-test.jsonl",
 		"--",
 		"-count=1",
 		"example.com/hello",

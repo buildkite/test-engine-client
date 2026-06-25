@@ -76,10 +76,6 @@ func (g GoTest) ResultFilePath() string {
 	return g.RunnerConfig.ResultFilePath()
 }
 
-func (g GoTest) goJSONLResultPath() string {
-	return g.ResultPath + ".jsonl"
-}
-
 func (g GoTest) goJSONLResultPathFromCommand() string {
 	args, err := g.commandArgsWithoutPackages(g.TestCommand)
 	if err != nil {
@@ -387,7 +383,6 @@ func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 
 func (g GoTest) commandArgsWithoutPackages(cmd string) ([]string, error) {
 	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
-	cmd = strings.Replace(cmd, "{{goJsonlResultPath}}", g.goJSONLResultPath(), 1)
 	return shellquote.Split(cmd)
 }
 

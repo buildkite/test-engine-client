@@ -37,6 +37,7 @@ gotestsum --junitfile={{resultPath}} {{packages}}
 In this command, `{{packages}}` is replaced by bktec with the list of packages to run, and `{{resultPath}}` is replaced with the `BUILDKITE_TEST_ENGINE_RESULT_PATH` environment variable.
 
 You can customize this command using the `BUILDKITE_TEST_ENGINE_TEST_CMD` environment variable. For example:
+
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_CMD="gotestsum --format="testname" --junitfile={{resultPath}} {{packages}}"
 ```
