@@ -69,26 +69,6 @@ func (g GoTest) ResultFormat() string {
 	return g.resultFormat
 }
 
-func (g GoTest) ResultFilePath() string {
-	if g.resultFormat == goTestResultFormatGoJSONL {
-		return g.goJSONLResultPathFromCommand()
-	}
-	return g.RunnerConfig.ResultFilePath()
-}
-
-func (g GoTest) goJSONLResultPathFromCommand() string {
-	args, err := g.commandArgsWithoutPackages(g.TestCommand)
-	if err != nil {
-		return g.ResultPath
-	}
-
-	if path := goJSONLFileArg(args); path != "" {
-		return path
-	}
-
-	return g.ResultPath
-}
-
 func commandProducesGoJSONL(command string) bool {
 	args, err := shellquote.Split(command)
 	if err != nil {
