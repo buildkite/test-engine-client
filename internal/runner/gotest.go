@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -111,7 +112,7 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 		return err
 	}
 
-	cmdErr := runAndForwardSignal(cmd)
+	cmdErr := g.runCommand(cmd)
 
 	// go test output does not differentiate build fail or test fail. They both return 1
 	// What is even more bizarre is that even when go test failed on compilation, it will still generate an output xml
@@ -129,6 +130,24 @@ func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 
 	// Return any command error after processing the report
 	return cmdErr
+}
+
+func (g GoTest) runCommand(cmd *exec.Cmd) error {
+	if !g.capturesGoJSONLStdout(cmd.Args) {
+		return runAndForwardSignal(cmd)
+	}
+
+	file, err := os.Create(g.ResultPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return runAndForwardSignalWithOutput(cmd, io.MultiWriter(os.Stdout, file), os.Stderr)
+}
+
+func (g GoTest) capturesGoJSONLStdout(args []string) bool {
+	return g.resultFormat == goTestResultFormatGoJSONL && isGoTestJSONCommand(args) && goJSONLFileArg(args) == ""
 }
 
 func (g GoTest) parseResults(result *RunResult) error {
@@ -362,7 +381,6 @@ func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 	if err != nil {
 		return "", []string{}, err
 	}
-	args = g.withGoJSONLStdoutCapture(args)
 
 	return args[0], args[1:], nil
 }
@@ -371,16 +389,6 @@ func (g GoTest) commandArgsWithoutPackages(cmd string) ([]string, error) {
 	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
 	cmd = strings.Replace(cmd, "{{goJsonlResultPath}}", g.goJSONLResultPath(), 1)
 	return shellquote.Split(cmd)
-}
-
-func (g GoTest) withGoJSONLStdoutCapture(args []string) []string {
-	if !isGoTestJSONCommand(args) || goJSONLFileArg(args) != "" {
-		return args
-	}
-
-	wrapped := []string{"-o", "pipefail", "-c", `"$@" | tee "$0"`, g.ResultPath}
-	wrapped = append(wrapped, args...)
-	return append([]string{"bash"}, wrapped...)
 }
 
 func hasGoTestJSONArg(args []string) bool {

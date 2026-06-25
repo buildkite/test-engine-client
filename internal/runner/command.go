@@ -2,6 +2,7 @@ package runner
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -28,8 +29,12 @@ func buildCommand(runner TestRunner, testCases []plan.TestCase, retry bool) (*ex
 
 // runAndForwardSignal runs the command and forwards any signals received to the command.
 func runAndForwardSignal(cmd *exec.Cmd) error {
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
+	return runAndForwardSignalWithOutput(cmd, os.Stdout, os.Stderr)
+}
+
+func runAndForwardSignalWithOutput(cmd *exec.Cmd, stdout io.Writer, stderr io.Writer) error {
+	cmd.Stderr = stderr
+	cmd.Stdout = stdout
 
 	// Create a channel that will be closed when the command finishes.
 	finishCh := make(chan struct{})

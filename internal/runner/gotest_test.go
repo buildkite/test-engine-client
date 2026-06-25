@@ -297,7 +297,7 @@ func TestGotestCommandKeepsGotestsumJSONFileCommand(t *testing.T) {
 	}, args)
 }
 
-func TestGotestCommandCapturesGoTestJSONStdout(t *testing.T) {
+func TestGotestCommandKeepsGoTestJSONCommand(t *testing.T) {
 	gotest := NewGoTest(RunnerConfig{
 		ResultPath:  "go-test.jsonl",
 		TestCommand: "go test -json -count=1 {{packages}}",
@@ -306,14 +306,8 @@ func TestGotestCommandCapturesGoTestJSONStdout(t *testing.T) {
 	cmd, args, err := gotest.CommandNameAndArgs([]plan.TestCase{{Path: "example.com/hello"}}, false)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "bash", cmd)
+	assert.Equal(t, "go", cmd)
 	assert.Equal(t, []string{
-		"-o",
-		"pipefail",
-		"-c",
-		`"$@" | tee "$0"`,
-		"go-test.jsonl",
-		"go",
 		"test",
 		"-json",
 		"-count=1",
