@@ -213,7 +213,9 @@ func (g GoTest) parseGoJSONLResults(result *RunResult) error {
 		}
 
 		key := event.Package + "/" + event.Test
-		testStatuses[key] = status
+		if testStatuses[key] != TestStatusFailed {
+			testStatuses[key] = status
+		}
 		if status == TestStatusFailed {
 			packageHasFailedTest[event.Package] = true
 		}
@@ -272,6 +274,9 @@ func loadGoJSONLTestEvents(path string) ([]goJSONLTestEvent, error) {
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("failed to read go jsonl: %w", err)
+	}
+	if len(events) == 0 {
+		return nil, fmt.Errorf("failed to parse go jsonl: no events found")
 	}
 
 	return events, nil
@@ -352,18 +357,15 @@ func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 		cmd = cmd + " " + concatenatedPackages
 	}
 
-	args, err := g.commandArgsWithoutPackages(cmd)
+	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
+
+	args, err := shellquote.Split(cmd)
 
 	if err != nil {
 		return "", []string{}, err
 	}
 
 	return args[0], args[1:], nil
-}
-
-func (g GoTest) commandArgsWithoutPackages(cmd string) ([]string, error) {
-	cmd = strings.Replace(cmd, "{{resultPath}}", g.ResultPath, 1)
-	return shellquote.Split(cmd)
 }
 
 func hasGoTestJSONArg(args []string) bool {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
@@ -207,6 +208,50 @@ func TestGotestRun_GoJSONLPackageLevelFailure(t *testing.T) {
 	failed := result.FailedTests()
 	if len(failed) != 1 || failed[0].Path != "example.com/hello/testmain" || failed[0].Name != "TestMain" {
 		t.Errorf("Gotest.Run(%q) RunResult.FailedTests = %v, want package-level failure", testCases, failed)
+	}
+}
+
+func TestGotestRun_GoJSONLEmptyResultFile(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "test-results.jsonl")
+	err := os.WriteFile(resultPath, nil, 0o600)
+	assert.NoError(t, err)
+
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "go test -json {{packages}}",
+		ResultPath:  resultPath,
+	})
+	result := NewRunResult([]plan.TestCase{})
+	err = gotest.parseGoJSONLResults(result)
+
+	if err == nil || !strings.Contains(err.Error(), "no events found") {
+		t.Errorf("GoTest.parseGoJSONLResults() error = %v, want no events found", err)
+	}
+}
+
+func TestGotestRun_GoJSONLFailureIsNotOverwrittenByLaterPass(t *testing.T) {
+	resultPath := filepath.Join(t.TempDir(), "test-results.jsonl")
+	err := os.WriteFile(resultPath, []byte(`{"Action":"start","Package":"example.com/hello"}
+{"Action":"fail","Package":"example.com/hello","Test":"TestFlaky"}
+{"Action":"pass","Package":"example.com/hello","Test":"TestFlaky"}
+{"Action":"fail","Package":"example.com/hello"}
+`), 0o600)
+	assert.NoError(t, err)
+
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "go test -json {{packages}}",
+		ResultPath:  resultPath,
+	})
+	result := NewRunResult([]plan.TestCase{})
+	err = gotest.parseGoJSONLResults(result)
+
+	assert.NoError(t, err)
+	if result.Status() != RunStatusFailed {
+		t.Errorf("GoTest.parseGoJSONLResults() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
+	}
+
+	failed := result.FailedTests()
+	if len(failed) != 1 || failed[0].Name != "TestFlaky" {
+		t.Errorf("GoTest.parseGoJSONLResults() RunResult.FailedTests = %v, want TestFlaky failure", failed)
 	}
 }
 
