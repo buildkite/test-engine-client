@@ -178,7 +178,7 @@ type goJSONLTestEvent struct {
 }
 
 func (g GoTest) parseGoJSONLResults(result *RunResult) error {
-	events, err := loadGoJSONLTestEvents(g.ResultFilePath())
+	events, err := loadGoJSONLTestEvents(g.ResultPath)
 	if err != nil {
 		return err
 	}
