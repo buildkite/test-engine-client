@@ -53,6 +53,7 @@ func (g GoTest) SupportedFeatures() SupportedFeatures {
 	return SupportedFeatures{
 		SplitByFile:     false,
 		SplitByExample:  false,
+		SplitBySelector: true,
 		FilterTestFiles: false,
 		FilterTestByTag: false,
 		AutoRetry:       true,
