@@ -339,6 +339,15 @@ var splitByExampleFlag = &cli.BoolFlag{
 	Destination: &cfg.SplitByExample,
 }
 
+var experimentalSelectorSplittingFlag = &cli.BoolFlag{
+	Name:        "experimental-selector-splitting",
+	Category:    "TEST RUNNER",
+	Usage:       "Enable experimental selector-based test splitting for supported non-file runners",
+	Value:       false,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_EXPERIMENTAL_SELECTOR_SPLITTING"),
+	Destination: &cfg.ExperimentalSelectorSplitting,
+}
+
 var failOnNoTestsFlag = &cli.BoolFlag{
 	Name:        "fail-on-no-tests",
 	Category:    "TEST RUNNER",
@@ -564,6 +573,7 @@ var runnerEnvironmentFlags = []cli.Flag{
 	testRunnerFlag,
 	resultPathFlag,
 	splitByExampleFlag,
+	experimentalSelectorSplittingFlag,
 	locationPrefixFlag,
 	// Runner Retry Flags
 	disableRetryMutedFlag,

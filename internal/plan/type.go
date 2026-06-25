@@ -3,8 +3,9 @@ package plan
 type TestCaseFormat string
 
 const (
-	TestCaseFormatFile    TestCaseFormat = "file"
-	TestCaseFormatExample TestCaseFormat = "example"
+	TestCaseFormatFile     TestCaseFormat = "file"
+	TestCaseFormatExample  TestCaseFormat = "example"
+	TestCaseFormatSelector TestCaseFormat = "selector"
 )
 
 // TestCase currently can represent a single test case or a single test file (when used as output of test plan API).
@@ -22,6 +23,8 @@ type TestCase struct {
 	// In go test, the path can only be package name like "example.com/foo/bar".
 	Path  string `json:"path"`
 	Scope string `json:"scope,omitempty"`
+	// Value is the runnable selector for selector-based plans, for example a Go package import path.
+	Value string `json:"value,omitempty"`
 	// TimingSampleSize is the number of historical executions/runs behind this
 	// case's EstimatedDuration. For file-scoped cases this is distinct runs,
 	// for example-scoped cases this is raw executions. Defaults to 0 when no
@@ -34,8 +37,9 @@ type TestCase struct {
 // omitted when the plan contains no cases of that format (or when
 // parallelism is 1 and no timings were fetched).
 type TimingMetadata struct {
-	File    *FormatTimingMetadata `json:"file,omitempty"`
-	Example *FormatTimingMetadata `json:"example,omitempty"`
+	File     *FormatTimingMetadata `json:"file,omitempty"`
+	Example  *FormatTimingMetadata `json:"example,omitempty"`
+	Selector *FormatTimingMetadata `json:"selector,omitempty"`
 }
 
 // FormatTimingMetadata is the timing data for a single case format
