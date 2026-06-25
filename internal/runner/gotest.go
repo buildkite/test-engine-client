@@ -72,7 +72,7 @@ func (g GoTest) ResultFormat() string {
 func commandProducesGoJSONL(command string) bool {
 	args, err := shellquote.Split(command)
 	if err != nil {
-		return strings.Contains(command, "--jsonfile") || strings.Contains(command, "go test -json")
+		return strings.Contains(command, "--jsonfile") || strings.Contains(command, "-json")
 	}
 	return isGoTestJSONCommand(args) || goJSONLFileArg(args) != ""
 }
