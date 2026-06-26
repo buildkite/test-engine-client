@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 current=$(svu current)
-
+overrideOptionValue="__override__"
 
 options() {
   if [[ "$current" =~ "-rc" ]]; then
@@ -46,7 +46,13 @@ cat <<YAML | buildkite-agent pipeline upload
   fields:
     - select: "Version"
       key: "release-version"
-      hint: "Select the version to release. Current version is $current"
+      hint: "Select the version to release, or choose Version override to use the exact version below. Current version is $current"
       options:
 $(options)
+        - label: "Version override"
+          value: "$overrideOptionValue"
+    - text: "Version override"
+      key: "release-version-override"
+      hint: "Exact version to release when Version is set to Version override, e.g. v2.9.0-rc.3"
+      required: false
 YAML
