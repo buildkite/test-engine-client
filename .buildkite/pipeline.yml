@@ -11,6 +11,8 @@ steps:
   - name: ":go: Tests"
     command: ".buildkite/steps/tests.sh"
     parallelism: 2
+    env:
+      BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING: "true"
     artifact_paths:
       - cover.{html,out}
     plugins:
