@@ -1,7 +1,40 @@
 #!/usr/bin/env sh
 set -euo pipefail
 
-tag=$(buildkite-agent meta-data get "release-version")
+override_option_value="__override__"
+version_number='(0|[1-9][0-9]*)'
+prerelease_identifier='(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+version_pattern="^v${version_number}\\.${version_number}\\.${version_number}(-${prerelease_identifier}(\\.${prerelease_identifier})*)?$"
+
+selected_tag=$(buildkite-agent meta-data get "release-version")
+override_tag=$(buildkite-agent meta-data get "release-version-override" 2>/dev/null || true)
+override_tag=$(printf '%s' "${override_tag}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+if [[ "${selected_tag}" == "${override_option_value}" ]]; then
+  if [[ -z "${override_tag}" ]]; then
+    echo "Release version override selected, but no override was provided"
+    exit 1
+  fi
+  tag="${override_tag}"
+  echo "Using release version override: ${tag}"
+else
+  tag="${selected_tag}"
+fi
+
+if [[ "$(printf '%s' "${tag}" | tr -d '\n\r')" != "${tag}" ]]; then
+  echo "Invalid release version: ${tag}"
+  exit 1
+fi
+
+if ! printf '%s\n' "${tag}" | grep -Eq "${version_pattern}"; then
+  echo "Invalid release version: ${tag}"
+  exit 1
+fi
+
+if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+  echo "Release version already exists: ${tag}"
+  exit 1
+fi
 
 git tag "${tag}"
 
