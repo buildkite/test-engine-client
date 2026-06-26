@@ -142,7 +142,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "gotest")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "/tmp/results.json")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
-	t.Setenv("BUILDKITE_TEST_ENGINE_EXPERIMENTAL_SELECTOR_SPLITTING", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "app/")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "3")
@@ -195,7 +195,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"TestRunner", cfg.TestRunner, "gotest"},
 		{"ResultPath", cfg.ResultPath, "/tmp/results.json"},
 		{"SplitByExample", cfg.SplitByExample, true},
-		{"ExperimentalSelectorSplitting", cfg.ExperimentalSelectorSplitting, true},
+		{"SelectorSplitting", cfg.SelectorSplitting, true},
 		{"FailOnNoTests", cfg.FailOnNoTests, true},
 		{"LocationPrefix", cfg.LocationPrefix, "app/"},
 		{"MaxRetries", cfg.MaxRetries, 3},
@@ -220,7 +220,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	}
 }
 
-func TestExperimentalSelectorSplittingFlagBindsToConfig(t *testing.T) {
+func TestSelectorSplittingFlagBindsToConfig(t *testing.T) {
 	cfg = config.New()
 	t.Cleanup(func() { cfg = config.New() })
 
@@ -235,16 +235,16 @@ func TestExperimentalSelectorSplittingFlagBindsToConfig(t *testing.T) {
 		},
 	}
 
-	if err := cmd.Run(context.Background(), []string{"bktec", "run", "--experimental-selector-splitting"}); err != nil {
+	if err := cmd.Run(context.Background(), []string{"bktec", "run", "--selector-splitting"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !cfg.ExperimentalSelectorSplitting {
-		t.Fatalf("cfg.ExperimentalSelectorSplitting = false, want true")
+	if !cfg.SelectorSplitting {
+		t.Fatalf("cfg.SelectorSplitting = false, want true")
 	}
 }
 
-func TestExperimentalSelectorSplittingFlagBindsToPlanConfig(t *testing.T) {
+func TestSelectorSplittingFlagBindsToPlanConfig(t *testing.T) {
 	cfg = config.New()
 	t.Cleanup(func() { cfg = config.New() })
 
@@ -259,11 +259,11 @@ func TestExperimentalSelectorSplittingFlagBindsToPlanConfig(t *testing.T) {
 		},
 	}
 
-	if err := cmd.Run(context.Background(), []string{"bktec", "plan", "--experimental-selector-splitting"}); err != nil {
+	if err := cmd.Run(context.Background(), []string{"bktec", "plan", "--selector-splitting"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !cfg.ExperimentalSelectorSplitting {
-		t.Fatalf("cfg.ExperimentalSelectorSplitting = false, want true")
+	if !cfg.SelectorSplitting {
+		t.Fatalf("cfg.SelectorSplitting = false, want true")
 	}
 }

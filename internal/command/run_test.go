@@ -641,14 +641,14 @@ func TestFetchOrCreateTestPlan_SelectorOptInFallbackUsesPathTasks(t *testing.T) 
 	defer cancel()
 
 	cfg := config.Config{
-		NodeIndex:                     0,
-		Parallelism:                   2,
-		Identifier:                    "identifier",
-		Branch:                        "main",
-		ServerBaseURL:                 svr.URL,
-		SuiteSlug:                     "my-suite",
-		TestRunner:                    "gotest",
-		ExperimentalSelectorSplitting: true,
+		NodeIndex:         0,
+		Parallelism:       2,
+		Identifier:        "identifier",
+		Branch:            "main",
+		ServerBaseURL:     svr.URL,
+		SuiteSlug:         "my-suite",
+		TestRunner:        "gotest",
+		SelectorSplitting: true,
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseURL: cfg.ServerBaseURL,

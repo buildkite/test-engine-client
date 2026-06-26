@@ -227,14 +227,14 @@ func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 	defer svr.Close()
 
 	cfg := config.Config{
-		Identifier:                    "identifier",
-		Parallelism:                   2,
-		MaxParallelism:                4,
-		Branch:                        "main",
-		TestRunner:                    "gotest",
-		ExperimentalSelectorSplitting: true,
-		LocationPrefix:                "my/project",
-		SelectionStrategy:             "least-reliable",
+		Identifier:        "identifier",
+		Parallelism:       2,
+		MaxParallelism:    4,
+		Branch:            "main",
+		TestRunner:        "gotest",
+		SelectorSplitting: true,
+		LocationPrefix:    "my/project",
+		SelectionStrategy: "least-reliable",
 		SelectionParams: map[string]string{
 			"top": "100",
 		},
@@ -330,11 +330,11 @@ func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 
 func TestCreateRequestParams_SelectorOptInIgnoredForFileRunner(t *testing.T) {
 	cfg := config.Config{
-		Identifier:                    "identifier",
-		Parallelism:                   2,
-		Branch:                        "main",
-		TestRunner:                    "jest",
-		ExperimentalSelectorSplitting: true,
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "jest",
+		SelectorSplitting: true,
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -377,13 +377,13 @@ func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *test
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:              "my-org",
-		SuiteSlug:                     "my-suite",
-		Identifier:                    "identifier",
-		Parallelism:                   2,
-		Branch:                        "main",
-		TestRunner:                    "rspec",
-		ExperimentalSelectorSplitting: true,
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "rspec",
+		SelectorSplitting: true,
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -424,11 +424,11 @@ func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *test
 
 func TestCreateRequestParams_SelectorOptInIgnoredForPytestPants(t *testing.T) {
 	cfg := config.Config{
-		Identifier:                    "identifier",
-		Parallelism:                   2,
-		Branch:                        "main",
-		TestRunner:                    "pytest-pants",
-		ExperimentalSelectorSplitting: true,
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "pytest-pants",
+		SelectorSplitting: true,
 	}
 
 	client := api.NewClient(api.ClientConfig{
