@@ -308,14 +308,19 @@ func isBuildFailure(test JUnitXMLTestCase) bool {
 		strings.Contains(test.Failure.Content, "[build failed]")
 }
 
-// GetFiles discovers Go packages using `go list ./...`.
+// GetFiles discovers Go packages that contain tests.
 // Note that "file" does not exist as a first level concept in Golang projects
 // So this func is returning a list of packages instead of files.
 // The implication is that the Server-side smart test splitting will never work.
 // It almost will always fallback to simple splitting.
+//
+// We use a format template so `go list` only emits packages that actually have
+// test files (_test.go). Packages with zero tests would otherwise be sent to the
+// test plan API as split units that run no tests, taking up a bin packing slot
+// for nothing.
 func (g GoTest) GetFiles() ([]string, error) {
-	debug.Println("Discovering Go packages with `go list ./...`")
-	cmd := exec.Command("go", "list", "./...")
+	debug.Println("Discovering Go packages with tests using `go list`")
+	cmd := exec.Command("go", "list", "-f", "{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}", "./...")
 	output, err := cmd.Output()
 	if err != nil {
 		// Handle stderr for better error messages
@@ -325,16 +330,16 @@ func (g GoTest) GetFiles() ([]string, error) {
 		return nil, fmt.Errorf("failed to run go list: %w", err)
 	}
 	packages := strings.Split(strings.TrimSpace(string(output)), "\n")
-	// Filter out empty strings if any
+	// Packages without tests produce an empty line in the output, so filter them out.
 	validPackages := []string{}
 	for _, pkg := range packages {
 		if pkg != "" {
 			validPackages = append(validPackages, pkg)
 		}
 	}
-	debug.Println("Discovered", len(validPackages), "packages")
+	debug.Println("Discovered", len(validPackages), "packages with tests")
 	if len(validPackages) == 0 {
-		return nil, fmt.Errorf("no Go packages found using `go list ./...`")
+		return nil, fmt.Errorf("no Go packages with tests found using `go list`")
 	}
 	return validPackages, nil
 }
