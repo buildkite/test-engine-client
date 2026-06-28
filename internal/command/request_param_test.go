@@ -220,6 +220,249 @@ func TestCreateRequestParams_PytestPants(t *testing.T) {
 	})
 }
 
+func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API request to %s", r.URL.Path)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		Identifier:        "identifier",
+		Parallelism:       2,
+		MaxParallelism:    4,
+		Branch:            "main",
+		TestRunner:        "gotest",
+		SelectorSplitting: true,
+		LocationPrefix:    "my/project",
+		SelectionStrategy: "least-reliable",
+		SelectionParams: map[string]string{
+			"top": "100",
+		},
+		Metadata: map[string]string{
+			"git_diff": "line1\nline2",
+		},
+	}
+
+	testRunner, err := runner.DetectRunner(&cfg)
+	if err != nil {
+		t.Fatalf("DetectRunner() error = %v", err)
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: svr.URL,
+	})
+	packages := []string{
+		"github.com/buildkite/test-engine-client/internal/api",
+		"github.com/buildkite/test-engine-client/internal/runner",
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, packages, *client, testRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:     "identifier",
+		Parallelism:    2,
+		MaxParallelism: 4,
+		Branch:         "main",
+		Runner:         "gotest",
+		Selection: &api.SelectionParams{
+			Strategy: "least-reliable",
+			Params: map[string]string{
+				"top": "100",
+			},
+		},
+		Metadata: map[string]string{
+			"git_diff": "line1\nline2",
+		},
+		Tests: api.TestPlanParamsTest{
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "github.com/buildkite/test-engine-client/internal/api"},
+				{Value: "github.com/buildkite/test-engine-client/internal/runner"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
+	cfg := config.Config{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		TestRunner:  "gotest",
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: "http://example.com",
+	})
+	packages := []string{
+		"github.com/buildkite/test-engine-client/internal/api",
+		"github.com/buildkite/test-engine-client/internal/runner",
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, packages, *client, runner.NewGoTest(runner.RunnerConfig{}))
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "gotest",
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "github.com/buildkite/test-engine-client/internal/api"},
+				{Path: "github.com/buildkite/test-engine-client/internal/runner"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_SelectorOptInIgnoredForFileRunner(t *testing.T) {
+	cfg := config.Config{
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "jest",
+		SelectorSplitting: true,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: "http://example.com",
+	})
+	files := []string{
+		"testdata/fruits/apple.spec.js",
+		"testdata/fruits/banana.spec.js",
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, runner.Jest{})
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "jest",
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "testdata/fruits/apple.spec.js"},
+				{Path: "testdata/fruits/banana.spec.js"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *testing.T) {
+	filterRequestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		filterRequestCount++
+		fmt.Fprint(w, `{"tests": []}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "rspec",
+		SelectorSplitting: true,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: svr.URL,
+	})
+	files := []string{
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+	}
+
+	testRunner := metadataTestRunner{name: "rspec"}
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, testRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	if filterRequestCount != 1 {
+		t.Errorf("filter request count = %d, want 1", filterRequestCount)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "rspec",
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_SelectorOptInIgnoredForPytestPants(t *testing.T) {
+	cfg := config.Config{
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "pytest-pants",
+		SelectorSplitting: true,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: "http://example.com",
+	})
+	files := []string{
+		"test/apple_test.py",
+		"test/banana_test.py",
+	}
+
+	testRunner := runner.PytestPants{}
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, testRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "pytest",
+		Tests: api.TestPlanParamsTest{
+			Files: []plan.TestCase{
+				{Path: "test/apple_test.py"},
+				{Path: "test/banana_test.py"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCreateRequestParams_WithSelectionAndMetadata_NonRSpec(t *testing.T) {
 	cfg := config.Config{
 		Identifier:        "identifier",

@@ -389,6 +389,76 @@ func TestGotestGetFiles(t *testing.T) {
 	}
 }
 
+func TestGotestCommandNameAndArgs_SelectorTasks(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "gotestsum --junitfile={{resultPath}} {{packages}}",
+		ResultPath:  "test-results.xml",
+	})
+
+	testCases := []plan.TestCase{
+		{
+			Format: plan.TestCaseFormatSelector,
+			Value:  "example.com/hello",
+		},
+		{
+			Format: plan.TestCaseFormatSelector,
+			Value:  "example.com/hello/bad",
+		},
+		{
+			Format: plan.TestCaseFormatSelector,
+			Value:  "example.com/hello",
+		},
+	}
+
+	gotName, gotArgs, err := gotest.CommandNameAndArgs(testCases, false)
+	if err != nil {
+		t.Fatalf("GoTest.CommandNameAndArgs() error = %v", err)
+	}
+
+	if gotName != "gotestsum" {
+		t.Errorf("GoTest.CommandNameAndArgs() name = %q, want %q", gotName, "gotestsum")
+	}
+
+	wantArgs := []string{
+		"--junitfile=test-results.xml",
+		"example.com/hello",
+		"example.com/hello/bad",
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("GoTest.CommandNameAndArgs() args diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestGotestCommandNameAndArgs_PathTasksStillWork(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{
+		TestCommand: "gotestsum --junitfile={{resultPath}} {{packages}}",
+		ResultPath:  "test-results.xml",
+	})
+
+	testCases := []plan.TestCase{
+		{Path: "example.com/hello"},
+		{Path: "example.com/hello/bad"},
+	}
+
+	gotName, gotArgs, err := gotest.CommandNameAndArgs(testCases, false)
+	if err != nil {
+		t.Fatalf("GoTest.CommandNameAndArgs() error = %v", err)
+	}
+
+	if gotName != "gotestsum" {
+		t.Errorf("GoTest.CommandNameAndArgs() name = %q, want %q", gotName, "gotestsum")
+	}
+
+	wantArgs := []string{
+		"--junitfile=test-results.xml",
+		"example.com/hello",
+		"example.com/hello/bad",
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("GoTest.CommandNameAndArgs() args diff (-got +want):\n%s", diff)
+	}
+}
+
 func getRandomXMLTempFilename() string {
 	tempDir, err := os.MkdirTemp("", "bktec-*")
 	if err != nil {

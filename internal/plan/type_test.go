@@ -22,7 +22,8 @@ func TestTestPlan_UnmarshalWithTimingMetadata(t *testing.T) {
 		},
 		"timing_metadata": {
 			"file": {"median_duration": 1200, "default_duration": 1000},
-			"example": {"median_duration": 800, "default_duration": 1000}
+			"example": {"median_duration": 800, "default_duration": 1000},
+			"selector": {"median_duration": 2000, "default_duration": 1000}
 		}
 	}`
 
@@ -48,6 +49,12 @@ func TestTestPlan_UnmarshalWithTimingMetadata(t *testing.T) {
 	}
 	if p.TimingMetadata.Example.MedianDuration == nil || *p.TimingMetadata.Example.MedianDuration != 800 {
 		t.Errorf("Example.MedianDuration = %v, want 800", p.TimingMetadata.Example.MedianDuration)
+	}
+	if p.TimingMetadata.Selector == nil {
+		t.Fatal("TimingMetadata.Selector is nil")
+	}
+	if p.TimingMetadata.Selector.MedianDuration == nil || *p.TimingMetadata.Selector.MedianDuration != 2000 {
+		t.Errorf("Selector.MedianDuration = %v, want 2000", p.TimingMetadata.Selector.MedianDuration)
 	}
 	gotTests := p.Tasks["0"].Tests
 	wantTests := []TestCase{
@@ -77,6 +84,9 @@ func TestTestPlan_UnmarshalWithFileOnly(t *testing.T) {
 	if p.TimingMetadata.Example != nil {
 		t.Errorf("TimingMetadata.Example = %+v, want nil", p.TimingMetadata.Example)
 	}
+	if p.TimingMetadata.Selector != nil {
+		t.Errorf("TimingMetadata.Selector = %+v, want nil", p.TimingMetadata.Selector)
+	}
 	if p.TimingMetadata.File.MedianDuration != nil {
 		t.Errorf("File.MedianDuration = %v, want nil", *p.TimingMetadata.File.MedianDuration)
 	}
@@ -104,6 +114,58 @@ func TestTestPlan_UnmarshalWithoutTimingFields(t *testing.T) {
 	}
 	if got := p.Tasks["0"].Tests[0].TimingSampleSize; got != 0 {
 		t.Errorf("TimingSampleSize = %d, want 0", got)
+	}
+}
+
+func TestTestPlan_UnmarshalWithSelectorTasks(t *testing.T) {
+	raw := `{
+		"identifier": "selector-plan",
+		"parallelism": 2,
+		"tasks": {
+			"0": {
+				"node_number": 0,
+				"tests": [
+					{
+						"value": "github.com/buildkite/test-engine-client/internal/api",
+						"format": "selector",
+						"estimated_duration": 3000,
+						"timing_sample_size": 7
+					}
+				]
+			}
+		},
+		"timing_metadata": {
+			"selector": {"median_duration": 1750, "default_duration": 1000}
+		}
+	}`
+
+	var p TestPlan
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	median := 1750.0
+	want := TestPlan{
+		Identifier:  "selector-plan",
+		Parallelism: 2,
+		Tasks: map[string]*Task{
+			"0": {
+				NodeNumber: 0,
+				Tests: []TestCase{{
+					Value:             "github.com/buildkite/test-engine-client/internal/api",
+					Format:            TestCaseFormatSelector,
+					EstimatedDuration: 3000,
+					TimingSampleSize:  7,
+				}},
+			},
+		},
+		TimingMetadata: &TimingMetadata{
+			Selector: &FormatTimingMetadata{MedianDuration: &median, DefaultDuration: 1000},
+		},
+	}
+
+	if diff := cmp.Diff(p, want); diff != "" {
+		t.Errorf("TestPlan diff (-got +want):\n%s", diff)
 	}
 }
 

@@ -142,6 +142,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "gotest")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "/tmp/results.json")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "app/")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "3")
@@ -194,6 +195,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"TestRunner", cfg.TestRunner, "gotest"},
 		{"ResultPath", cfg.ResultPath, "/tmp/results.json"},
 		{"SplitByExample", cfg.SplitByExample, true},
+		{"SelectorSplitting", cfg.SelectorSplitting, true},
 		{"FailOnNoTests", cfg.FailOnNoTests, true},
 		{"LocationPrefix", cfg.LocationPrefix, "app/"},
 		{"MaxRetries", cfg.MaxRetries, 3},
@@ -215,5 +217,53 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	wantUploadTags := map[string]string{"env": "production", "region": "us-east-1"}
 	if !reflect.DeepEqual(cfg.UploadTags, wantUploadTags) {
 		t.Errorf("cfg.UploadTags = %v, want %v", cfg.UploadTags, wantUploadTags)
+	}
+}
+
+func TestSelectorSplittingFlagBindsToConfig(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+
+	cmd := &cli.Command{
+		Name: "bktec",
+		Commands: []*cli.Command{
+			{
+				Name:   "run",
+				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+				Flags:  runCommandFlags(),
+			},
+		},
+	}
+
+	if err := cmd.Run(context.Background(), []string{"bktec", "run", "--selector-splitting"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cfg.SelectorSplitting {
+		t.Fatalf("cfg.SelectorSplitting = false, want true")
+	}
+}
+
+func TestSelectorSplittingFlagBindsToPlanConfig(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+
+	cmd := &cli.Command{
+		Name: "bktec",
+		Commands: []*cli.Command{
+			{
+				Name:   "plan",
+				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+				Flags:  planCommandFlags(),
+			},
+		},
+	}
+
+	if err := cmd.Run(context.Background(), []string{"bktec", "plan", "--selector-splitting"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cfg.SelectorSplitting {
+		t.Fatalf("cfg.SelectorSplitting = false, want true")
 	}
 }

@@ -53,6 +53,7 @@ func (g GoTest) SupportedFeatures() SupportedFeatures {
 	return SupportedFeatures{
 		SplitByFile:     false,
 		SplitByExample:  false,
+		SplitBySelector: true,
 		FilterTestFiles: false,
 		FilterTestByTag: false,
 		AutoRetry:       true,
@@ -399,7 +400,10 @@ func (g GoTest) getPackages(testCases []plan.TestCase) ([]string, error) {
 
 	packagesSeen := map[string]bool{}
 	for _, tc := range testCases {
-		packageName := tc.Path
+		packageName := packageFromTestCase(tc)
+		if packageName == "" {
+			continue
+		}
 		if !packagesSeen[packageName] {
 			packages = append(packages, packageName)
 			packagesSeen[packageName] = true
@@ -412,4 +416,14 @@ func (g GoTest) getPackages(testCases []plan.TestCase) ([]string, error) {
 	debug.Printf("Packages: %v\n", packages)
 
 	return packages, nil
+}
+
+func packageFromTestCase(tc plan.TestCase) string {
+	if tc.Format == plan.TestCaseFormatSelector && tc.Value != "" {
+		return tc.Value
+	}
+	if tc.Value != "" && tc.Path == "" {
+		return tc.Value
+	}
+	return tc.Path
 }

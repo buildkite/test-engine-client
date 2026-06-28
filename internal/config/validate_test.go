@@ -30,6 +30,26 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
+func TestConfigValidate_SelectorSplittingIsPermissive(t *testing.T) {
+	t.Run("run accepts selector opt-in for file-based runners", func(t *testing.T) {
+		c := createConfig()
+		c.SelectorSplitting = true
+
+		if err := c.ValidateForRun(); err != nil {
+			t.Errorf("ValidateForRun() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("plan accepts selector opt-in for file-based runners", func(t *testing.T) {
+		c := createConfig()
+		c.SelectorSplitting = true
+
+		if err := c.ValidateForPlan(); err != nil {
+			t.Errorf("ValidateForPlan() error = %v, want nil", err)
+		}
+	})
+}
+
 func TestConfigValidate_Empty(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
 	err := c.validate()

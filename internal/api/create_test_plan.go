@@ -9,8 +9,13 @@ import (
 )
 
 type TestPlanParamsTest struct {
-	Files    []plan.TestCase `json:"files"`
-	Examples []plan.TestCase `json:"examples,omitempty"`
+	Files     []plan.TestCase          `json:"files,omitempty"`
+	Examples  []plan.TestCase          `json:"examples,omitempty"`
+	Selectors []TestPlanParamsSelector `json:"selectors,omitempty"`
+}
+
+type TestPlanParamsSelector struct {
+	Value string `json:"value"`
 }
 
 type SelectionParams struct {

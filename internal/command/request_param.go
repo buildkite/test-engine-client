@@ -23,10 +23,33 @@ import (
 //
 // If tag filtering is enabled, all files are split into examples to support filtering.
 // Currently only the Pytest runner supports tag filtering.
-func createRequestParam(ctx context.Context, cfg *config.Config, files []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
+func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
+	if shouldUseSelectorSplitting(cfg, runner) {
+		// For selector-capable runners, discovered test targets are already runnable
+		// selector values, e.g. Go package import paths, not file paths.
+		selectors := make([]api.TestPlanParamsSelector, 0, len(testTargets))
+		for _, target := range testTargets {
+			selectors = append(selectors, api.TestPlanParamsSelector{Value: target})
+		}
+
+		return api.TestPlanParams{
+			Identifier:     cfg.Identifier,
+			Parallelism:    cfg.Parallelism,
+			MaxParallelism: cfg.MaxParallelism,
+			TargetTime:     cfg.TargetTime.Seconds(),
+			Branch:         cfg.Branch,
+			Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
+			Metadata:       cfg.Metadata,
+			Runner:         cfg.TestRunner,
+			Tests: api.TestPlanParamsTest{
+				Selectors: selectors,
+			},
+		}, nil
+	}
+
 	testFiles := []plan.TestCase{}
 
-	for _, file := range files {
+	for _, file := range testTargets {
 		testFiles = append(testFiles, plan.TestCase{
 			Path: prefixPath(file, runner.LocationPrefix()),
 		})
@@ -93,6 +116,10 @@ func createRequestParam(ctx context.Context, cfg *config.Config, files []string,
 		Runner:         cfg.TestRunner,
 		Tests:          testParams,
 	}, nil
+}
+
+func shouldUseSelectorSplitting(cfg *config.Config, runner runner.TestRunner) bool {
+	return cfg.SelectorSplitting && runner.SupportedFeatures().SplitBySelector
 }
 
 // buildSelectionParams returns the selection payload sent to the Test Engine

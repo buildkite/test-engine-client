@@ -19,15 +19,16 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 
 	fileTotal, fileKnown := countByFormat(p, TestCaseFormatFile)
 	exampleTotal, exampleKnown := countByFormat(p, TestCaseFormatExample)
+	selectorTotal, selectorKnown := countByFormat(p, TestCaseFormatSelector)
 
-	total := fileTotal + exampleTotal
+	total := fileTotal + exampleTotal + selectorTotal
 	if total == 0 {
 		return
 	}
 
 	nodes := p.Parallelism
-	mixed := fileTotal > 0 && exampleTotal > 0
-	noun := summaryNoun(fileTotal, exampleTotal)
+	mixed := countNonZero(fileTotal, exampleTotal, selectorTotal) > 1
+	noun := summaryNoun(fileTotal, exampleTotal, selectorTotal)
 
 	fmt.Fprintln(w, "\n+++ Buildkite Test Engine Client: 📊 Split summary")
 	fmt.Fprintf(w, "%d %s across %d %s\n",
@@ -52,6 +53,9 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	}
 	if exampleTotal > 0 {
 		printFormatBreakdown(w, exampleTotal, exampleKnown, "example", p.TimingMetadata.Example, mixed)
+	}
+	if selectorTotal > 0 {
+		printFormatBreakdown(w, selectorTotal, selectorKnown, "selector", p.TimingMetadata.Selector, mixed)
 	}
 	fmt.Fprintln(w)
 }
@@ -89,15 +93,27 @@ func countByFormat(p TestPlan, format TestCaseFormat) (total, known int) {
 	return total, known
 }
 
+func countNonZero(values ...int) int {
+	count := 0
+	for _, value := range values {
+		if value > 0 {
+			count++
+		}
+	}
+	return count
+}
+
 // summaryNoun returns the singular heading noun. The plan-level summary uses
-// "file"/"example" when the plan only contains one format, or "test" when
-// both are present. Callers pluralize as needed.
-func summaryNoun(fileTotal, exampleTotal int) string {
+// "file"/"example"/"selector" when the plan only contains one format, or
+// "test" when multiple formats are present. Callers pluralize as needed.
+func summaryNoun(fileTotal, exampleTotal, selectorTotal int) string {
 	switch {
-	case exampleTotal == 0:
+	case exampleTotal == 0 && selectorTotal == 0:
 		return "file"
-	case fileTotal == 0:
+	case fileTotal == 0 && selectorTotal == 0:
 		return "example"
+	case fileTotal == 0 && exampleTotal == 0:
+		return "selector"
 	default:
 		return "test"
 	}

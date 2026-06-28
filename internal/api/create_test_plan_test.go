@@ -207,6 +207,92 @@ func TestCreateTestPlan_SplitByExample(t *testing.T) {
 	}
 }
 
+func TestCreateTestPlan_Selector(t *testing.T) {
+	params := TestPlanParams{
+		Runner:      "gotest",
+		Identifier:  "abc123",
+		Parallelism: 2,
+		Tests: TestPlanParamsTest{
+			Selectors: []TestPlanParamsSelector{
+				{Value: "github.com/buildkite/test-engine-client/internal/api"},
+				{Value: "github.com/buildkite/test-engine-client/internal/runner"},
+			},
+		},
+	}
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertJSONBody(t, r.Body, `{
+			"runner": "gotest",
+			"identifier": "abc123",
+			"parallelism": 2,
+			"branch": "",
+			"tests": {
+				"selectors": [
+					{"value": "github.com/buildkite/test-engine-client/internal/api"},
+					{"value": "github.com/buildkite/test-engine-client/internal/runner"}
+				]
+			}
+		}`)
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, `{
+			"tasks": {
+				"0": {"node_number": 0, "tests": [{"value": "github.com/buildkite/test-engine-client/internal/api", "format": "selector", "estimated_duration": 3000, "timing_sample_size": 7}]},
+				"1": {"node_number": 1, "tests": [{"value": "github.com/buildkite/test-engine-client/internal/runner", "format": "selector", "estimated_duration": 500, "timing_sample_size": 2}]}
+			},
+			"timing_metadata": {
+				"selector": {"median_duration": 1750, "default_duration": 1000}
+			}
+		}`)
+	}))
+	defer svr.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	apiClient := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseURL:    svr.URL,
+	})
+
+	got, err := apiClient.CreateTestPlan(ctx, "gotest", params)
+	if err != nil {
+		t.Fatalf("CreateTestPlan() error = %v", err)
+	}
+
+	medianDuration := 1750.0
+	want := plan.TestPlan{
+		Tasks: map[string]*plan.Task{
+			"0": {
+				NodeNumber: 0,
+				Tests: []plan.TestCase{{
+					Value:             "github.com/buildkite/test-engine-client/internal/api",
+					Format:            plan.TestCaseFormatSelector,
+					EstimatedDuration: 3000,
+					TimingSampleSize:  7,
+				}},
+			},
+			"1": {
+				NodeNumber: 1,
+				Tests: []plan.TestCase{{
+					Value:             "github.com/buildkite/test-engine-client/internal/runner",
+					Format:            plan.TestCaseFormatSelector,
+					EstimatedDuration: 500,
+					TimingSampleSize:  2,
+				}},
+			},
+		},
+		TimingMetadata: &plan.TimingMetadata{
+			Selector: &plan.FormatTimingMetadata{MedianDuration: &medianDuration, DefaultDuration: 1000},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("CreateTestPlan() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCreateTestPlan_BadRequest(t *testing.T) {
 	requestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

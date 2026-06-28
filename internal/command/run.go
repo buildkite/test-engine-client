@@ -64,12 +64,8 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	// However, the test runner expects file paths without the prefix, so we need to remove it before running the tests.
 	locationPrefix := testRunner.LocationPrefix()
 	if locationPrefix != "" && !testPlan.Fallback {
-		for i, test := range thisNodeTask.Tests {
-			path, err := trimFilePathPrefix(test.Path, locationPrefix)
-			if err != nil {
-				return fmt.Errorf("failed to trim path prefix: %w", err)
-			}
-			thisNodeTask.Tests[i].Path = path
+		if err := trimTaskLocationPrefix(thisNodeTask, locationPrefix); err != nil {
+			return err
 		}
 	}
 
@@ -105,6 +101,22 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	}
 
 	return runErr
+}
+
+func trimTaskLocationPrefix(task *plan.Task, locationPrefix string) error {
+	for i, test := range task.Tests {
+		if test.Format == plan.TestCaseFormatSelector {
+			continue
+		}
+
+		path, err := trimFilePathPrefix(test.Path, locationPrefix)
+		if err != nil {
+			return fmt.Errorf("failed to trim path prefix: %w", err)
+		}
+		task.Tests[i].Path = path
+	}
+
+	return nil
 }
 
 // promisedExitStatus is the exit status bktec promises when hard failures
