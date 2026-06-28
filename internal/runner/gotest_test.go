@@ -377,6 +377,8 @@ func TestGotestGetFiles(t *testing.T) {
 		t.Errorf("Gotest.GetFiles() error = %v", err)
 	}
 
+	// example.com/hello/notest has source files but no tests, so it must be
+	// excluded from the discovered packages.
 	want := []string{
 		"example.com/hello",
 		"example.com/hello/bad",
