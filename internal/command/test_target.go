@@ -7,16 +7,8 @@ import (
 
 func getTestTargets(cfg *config.Config, runner runner.TestRunner, testFileList string) ([]string, error) {
 	if shouldUseSelectorSplitting(cfg, runner) {
-		selectors, err := runner.GetSelectors()
-		if err != nil {
-			return nil, err
-		}
-		return selectors, nil
-	} else {
-		files, err := getTestFiles(testFileList, runner)
-		if err != nil {
-			return nil, err
-		}
-		return files, nil
+		return runner.GetSelectors()
 	}
+
+	return getTestFiles(testFileList, runner)
 }
