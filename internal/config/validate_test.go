@@ -50,6 +50,38 @@ func TestConfigValidate_SelectorSplittingIsPermissive(t *testing.T) {
 	})
 }
 
+func TestConfigValidate_SelectorListRequiresSelectorSplitting(t *testing.T) {
+	t.Run("rejects a selector list without selector splitting", func(t *testing.T) {
+		c := createConfig()
+		c.SelectorListPath = "selectors.txt"
+
+		err := c.validate()
+		if err == nil {
+			t.Fatalf("config.validate() error = nil, want InvalidConfigError")
+		}
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("config.validate() error = %v, want InvalidConfigError", err)
+		}
+
+		want := "selector splitting must be enabled when a selector list is provided"
+		if got := invConfigError["selectors"][0].Error(); got != want {
+			t.Errorf("config.validate() error for selectors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("accepts a selector list when selector splitting is enabled", func(t *testing.T) {
+		c := createConfig()
+		c.SelectorListPath = "selectors.txt"
+		c.SelectorSplitting = true
+
+		if err := c.validate(); err != nil {
+			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+}
+
 func TestConfigValidate_Empty(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
 	err := c.validate()

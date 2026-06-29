@@ -94,6 +94,10 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("selection-param", "selection strategy must be set when selection params are provided")
 	}
 
+	if c.SelectorListPath != "" && !c.SelectorSplitting {
+		c.errs.appendFieldError("selectors", "selector splitting must be enabled when a selector list is provided")
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}
