@@ -49,6 +49,7 @@
       "env": {
         "BUILDKITE_TEST_ENGINE_TEST_RUNNER": "gotest",
         "BUILDKITE_TEST_ENGINE_RESULT_PATH": "tmp/result.junit",
+        "BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING": "true",
         "BUILDKITE_STEP_ID": "gotest",
         "BUILDKITE_BUILD_ID": "${input:build-id}"
       }
