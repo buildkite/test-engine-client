@@ -161,10 +161,6 @@ func (p PytestPants) GetFiles() ([]string, error) {
 	return []string{}, nil
 }
 
-func (p PytestPants) GetSelectors() ([]string, error) {
-	return nil, fmt.Errorf("not supported in pytest pants")
-}
-
 func (p PytestPants) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in pytest pants")
 }

@@ -175,10 +175,6 @@ func (p Playwright) GetFiles() ([]string, error) {
 	return files, nil
 }
 
-func (p Playwright) GetSelectors() ([]string, error) {
-	return nil, fmt.Errorf("not supported in Playwright")
-}
-
 // GetExamples returns an array of test examples within the given files.
 func (p Playwright) GetExamples(files []string) ([]plan.TestCase, error) {
 	if len(files) == 0 {

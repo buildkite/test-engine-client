@@ -1,5 +1,7 @@
 package runner
 
+import "fmt"
+
 type RunnerConfig struct {
 	TestRunner string
 
@@ -33,4 +35,12 @@ func (rc RunnerConfig) ResultFormat() string {
 // ResultFilePath returns the path to the runner's raw result file.
 func (rc RunnerConfig) ResultFilePath() string {
 	return rc.ResultPath
+}
+
+// GetSelectors returns a "not supported" error by default. Selector based
+// splitting is currently only implemented by the Go runner, which overrides
+// this. Every other runner inherits this default until it gains selector
+// support.
+func (rc RunnerConfig) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("selector based splitting is not supported for the %s runner", rc.TestRunner)
 }

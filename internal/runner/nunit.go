@@ -72,10 +72,6 @@ func (n NUnit) GetFiles() ([]string, error) {
 	return files, nil
 }
 
-func (n NUnit) GetSelectors() ([]string, error) {
-	return nil, fmt.Errorf("not supported in NUnit")
-}
-
 func (n NUnit) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in NUnit")
 }
