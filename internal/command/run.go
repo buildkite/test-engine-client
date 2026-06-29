@@ -35,19 +35,9 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	var testTargets []string
-	if shouldUseSelectorSplitting(cfg, testRunner) {
-		selectors, err := testRunner.GetSelectors()
-		if err != nil {
-			return err
-		}
-		testTargets = selectors
-	} else {
-		files, err := getTestFiles(testListFilename, testRunner)
-		if err != nil {
-			return err
-		}
-		testTargets = files
+	testTargets, err := getTestTargets(cfg, testRunner, testListFilename)
+	if err != nil {
+		return err
 	}
 
 	// get plan

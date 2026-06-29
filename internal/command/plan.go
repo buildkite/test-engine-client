@@ -46,7 +46,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	files, err := getTestFiles(testFileList, testRunner)
+	testTargets, err := getTestTargets(cfg, testRunner, testFileList)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 
 	debug.Println("Creating test plan via API")
 
-	testPlan, err := createTestPlan(ctx, cfg, files, apiClient, testRunner)
+	testPlan, err := createTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
 			return handledErr
