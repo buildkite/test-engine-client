@@ -107,6 +107,12 @@ need to set `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID`, which are otherwise
 required. Use a unique value per request (a UUIDv7 works well) so plans don't
 collide or silently return a stale cached plan.
 
+> [!IMPORTANT]
+> The identifier must be unique per **step**, not just per build. It is the
+> cache key for the plan, so two steps sharing an identifier get the *same*
+> cached plan, and the second step runs the first step's test split instead of
+> its own. The default `${BUILDKITE_BUILD_ID}/${BUILDKITE_STEP_ID}` includes the
+> step id for exactly this reason.
 ```sh
 ./bktec plan --json --plan-identifier 01919f1e-0000-7000-8000-000000000000
 ```
