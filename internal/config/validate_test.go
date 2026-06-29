@@ -198,25 +198,46 @@ func TestConfigValidate_IdentifierPresentBuildIdStepIdMissing(t *testing.T) {
 	}
 }
 
-func TestConfigValidate_ResultPathOptionalWithCypress(t *testing.T) {
+func TestConfigValidateForRun_ResultPathOptionalWithCypress(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""
 	c.TestRunner = "cypress"
 
-	err := c.validate()
-	if err != nil {
-		t.Errorf("config.validate() error = %v", err)
+	if err := c.ValidateForRun(); err != nil {
+		t.Errorf("ValidateForRun() error = %v, want nil", err)
 	}
 }
 
-func TestConfigValidate_ResultPathOptionalWithPytest(t *testing.T) {
+func TestConfigValidateForRun_ResultPathOptionalWithPytest(t *testing.T) {
 	c := createConfig()
 	c.ResultPath = ""
 	c.TestRunner = "pytest"
 
-	err := c.validate()
-	if err != nil {
-		t.Errorf("config.validate() error = %v", err)
+	if err := c.ValidateForRun(); err != nil {
+		t.Errorf("ValidateForRun() error = %v, want nil", err)
+	}
+}
+
+func TestConfigValidateForRun_ResultPathRequiredWithRspec(t *testing.T) {
+	c := createConfig()
+	c.ResultPath = ""
+	c.TestRunner = "rspec"
+
+	err := c.ValidateForRun()
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Errorf("ValidateForRun() error = %v, want InvalidConfigError", err)
+	}
+}
+
+func TestConfigValidateForPlan_ResultPathNotRequired(t *testing.T) {
+	c := createConfig()
+	c.ResultPath = ""
+	c.TestRunner = "rspec"
+
+	if err := c.ValidateForPlan(); err != nil {
+		t.Errorf("ValidateForPlan() error = %v, want nil", err)
 	}
 }
 

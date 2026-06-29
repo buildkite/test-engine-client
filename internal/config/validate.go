@@ -60,16 +60,6 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
 	}
 
-	runnersWithoutResultPath := map[string]bool{
-		"cypress":      true,
-		"pytest":       true,
-		"pytest-pants": true,
-		"custom":       true,
-	}
-	if c.ResultPath == "" && !runnersWithoutResultPath[c.TestRunner] {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
-	}
-
 	if c.TestRunner == "" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "must not be blank")
 	}
@@ -104,6 +94,18 @@ func (c *Config) validate() error {
 // Validation for the `bktec run` command
 func (c *Config) ValidateForRun() error {
 	_ = c.validate()
+
+	// result-path is only consumed when running tests (command construction and
+	// report parsing), so it is required here but not for `plan`.
+	runnersWithoutResultPath := map[string]bool{
+		"cypress":      true,
+		"pytest":       true,
+		"pytest-pants": true,
+		"custom":       true,
+	}
+	if c.ResultPath == "" && !runnersWithoutResultPath[c.TestRunner] {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
+	}
 
 	// Upload token could come from the env BUILDKITE_ANALYTICS_TOKEN, but may be blank ...
 	if c.UploadToken == "" {
