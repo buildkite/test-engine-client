@@ -8,9 +8,9 @@ import (
 
 // CreateFallbackPlan creates a fallback test plan for the given tests and parallelism.
 // It distributes test cases evenly across the tasks using deterministic algorithm.
-func CreateFallbackPlan(files []string, parallelism int) TestPlan {
+func CreateFallbackPlan(testTargets []string, parallelism int) TestPlan {
 	// sort all test cases
-	slices.SortFunc(files, func(a, b string) int {
+	slices.SortFunc(testTargets, func(a, b string) int {
 		return cmp.Compare(a, b)
 	})
 
@@ -22,12 +22,12 @@ func CreateFallbackPlan(files []string, parallelism int) TestPlan {
 		}
 	}
 
-	// distribute files to tasks
-	for i, file := range files {
+	// distribute test targets to tasks
+	for i, target := range testTargets {
 		nodeNumber := i % parallelism
 		task := tasks[strconv.Itoa(nodeNumber)]
 		task.Tests = append(task.Tests, TestCase{
-			Path: file,
+			Path: target,
 		})
 	}
 

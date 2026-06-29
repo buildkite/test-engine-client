@@ -134,14 +134,14 @@ func makePipelineUploadCommand(template string) *exec.Cmd {
 	return cmd
 }
 
-func createTestPlan(ctx context.Context, cfg *config.Config, files []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
+func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
 	fallbackPlan := plan.TestPlan{
 		Identifier:  cfg.Identifier,
 		Parallelism: cfg.MaxParallelism,
 		Fallback:    true,
 	}
 
-	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
+	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
 		return fallbackPlan, err
 	}
