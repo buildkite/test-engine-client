@@ -7,8 +7,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestGetTestFilesFromFile(t *testing.T) {
-	files, err := getTestFilesFromFile("testdata/test_file_discovery/list.txt")
+func TestGetRowsFromFile(t *testing.T) {
+	rows, err := getRowsFromFile("testdata/test_file_discovery/list.txt")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -19,21 +19,21 @@ func TestGetTestFilesFromFile(t *testing.T) {
 		"./c_spec.rb",
 		"./spec/my spec.rb",
 	}
-	if diff := cmp.Diff(files, expected); diff != "" {
-		t.Errorf("files diff (-got +want):\n%s", diff)
+	if diff := cmp.Diff(rows, expected); diff != "" {
+		t.Errorf("rows diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestGetTestFilesFromFile_Dir(t *testing.T) {
-	_, err := getTestFilesFromFile("testdata")
+func TestGetRowsFromFile_Dir(t *testing.T) {
+	_, err := getRowsFromFile("testdata")
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
 }
 
-func TestGetTestFilesFromFile_BinaryFile(t *testing.T) {
+func TestGetRowsFromFile_BinaryFile(t *testing.T) {
 	path := "testdata/test_file_discovery/image.png"
-	_, err := getTestFilesFromFile(path)
+	_, err := getRowsFromFile(path)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -44,13 +44,13 @@ func TestGetTestFilesFromFile_BinaryFile(t *testing.T) {
 	}
 }
 
-func TestGetTestFilesFromFile_EmptyFile(t *testing.T) {
+func TestGetRowsFromFile_EmptyFile(t *testing.T) {
 	path := "testdata/test_file_discovery/empty_list.txt"
-	_, err := getTestFilesFromFile(path)
+	_, err := getRowsFromFile(path)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
-	expectedError := fmt.Sprintf("no test files found in %s", path)
+	expectedError := fmt.Sprintf("no rows found in %s", path)
 	if err.Error() != expectedError {
 		t.Fatalf("expected error: %q, got %v", expectedError, err)
 	}
