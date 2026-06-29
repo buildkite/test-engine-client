@@ -197,6 +197,10 @@ func (r Rspec) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string
 	return words[0], words[1:], nil
 }
 
+func (r Rspec) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("not supported in RSpec")
+}
+
 // GetExamples returns an array of test examples within the given files.
 func (r Rspec) GetExamples(files []string) ([]plan.TestCase, error) {
 	// Create a temporary file to store the JSON output of the rspec dry run.

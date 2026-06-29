@@ -75,6 +75,10 @@ func (r Custom) GetFiles() ([]string, error) {
 	return files, nil
 }
 
+func (r Custom) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("not supported for custom runner")
+}
+
 func (r Custom) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported for custom runner")
 }

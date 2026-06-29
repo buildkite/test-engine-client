@@ -227,6 +227,10 @@ func (j Jest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string,
 	return words[0], words[1:], nil
 }
 
+func (j Jest) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("not supported in Jest")
+}
+
 func (j Jest) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in Jest")
 }

@@ -618,6 +618,10 @@ func (r metadataTestRunner) GetFiles() ([]string, error) {
 	return nil, nil
 }
 
+func (r metadataTestRunner) GetSelectors() ([]string, error) {
+	return nil, nil
+}
+
 func (r metadataTestRunner) LocationPrefix() string {
 	return ""
 }

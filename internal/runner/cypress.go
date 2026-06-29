@@ -75,6 +75,10 @@ func (c Cypress) GetFiles() ([]string, error) {
 	return files, nil
 }
 
+func (c Cypress) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("not supported in Cypress")
+}
+
 func (c Cypress) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in Cypress")
 }

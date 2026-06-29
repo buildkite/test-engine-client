@@ -277,6 +277,10 @@ func (p Pytest) GetFiles() ([]string, error) {
 	return files, nil
 }
 
+func (p Pytest) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("not supported in pytest")
+}
+
 // GetExamples returns an array of test examples within the given files.
 // It uses `pytest --collect-only -q` to enumerate individual tests.
 //

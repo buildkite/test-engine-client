@@ -150,6 +150,10 @@ func mapScenarioToTestCase(featureName string, featureURI string, scenario Cucum
 	}
 }
 
+func (c Cucumber) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("not supported in Cucumber")
+}
+
 // GetExamples returns an array of test scenarios within the given feature files.
 func (c Cucumber) GetExamples(files []string) ([]plan.TestCase, error) {
 	if len(files) == 0 {
