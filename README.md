@@ -104,17 +104,22 @@ Inside a Buildkite build you don't need to set this; the identifier defaults to
 explicitly when generating a plan **off-agent** (for example, running it in your
 local development environment or on your own machine). Doing so also removes the
 need to set `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID`, which are otherwise
-required. Use a unique value per request (a UUIDv7 works well) so plans don't
-collide or silently return a stale cached plan.
+required.
 
 > [!IMPORTANT]
 > The identifier must be unique per **step**, not just per build. It is the
 > cache key for the plan, so two steps sharing an identifier get the *same*
 > cached plan, and the second step runs the first step's test split instead of
 > its own. The default `${BUILDKITE_BUILD_ID}/${BUILDKITE_STEP_ID}` includes the
-> step id for exactly this reason.
+> step id for exactly this reason. When setting it yourself, use a unique value
+> per request; a UUIDv7 works well, but any unique string is fine.
+
 ```sh
-./bktec plan --json --plan-identifier 01919f1e-0000-7000-8000-000000000000
+# UUIDv7 via Python (3.14+); use uuid4() on older versions
+./bktec plan --json --plan-identifier "$(python3 -c 'import uuid; print(uuid.uuid7())')"
+
+# UUIDv4 via uuidgen (preinstalled on macOS and most Linux)
+./bktec plan --json --plan-identifier "$(uuidgen)"
 ```
 
 `bktec run` accepts the same flag. It fetches the plan cached under the
