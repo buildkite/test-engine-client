@@ -41,6 +41,7 @@ func (c Custom) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       false,
 		Mute:            true,
 		Skip:            false,
+		SplitBySelector: true,
 	}
 }
 
@@ -73,6 +74,10 @@ func (r Custom) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (r Custom) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("use `--selectors` or `BUILDKITE_TEST_ENGINE_SELECTOR_LIST_PATH` to provide the list of selectors")
 }
 
 func (r Custom) GetExamples(files []string) ([]plan.TestCase, error) {
