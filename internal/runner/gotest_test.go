@@ -367,11 +367,37 @@ func TestGotestCommandKeepsGotestsumJUnitCommand(t *testing.T) {
 	}, args)
 }
 
+func TestGotestGetSelectors(t *testing.T) {
+	changeCwd(t, "./testdata/go")
+
+	gotest := NewGoTest(RunnerConfig{})
+
+	got, err := gotest.GetSelectors()
+	if err != nil {
+		t.Errorf("Gotest.GetSelectors() error = %v", err)
+	}
+
+	// example.com/hello/notest has source files but no tests, so it must be
+	// excluded from the discovered packages.
+	want := []string{
+		"example.com/hello",
+		"example.com/hello/bad",
+		"example.com/hello/broken",
+		"example.com/hello/testmain",
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Gotest.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestGotestGetFiles(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 
 	gotest := NewGoTest(RunnerConfig{})
 
+	// When selector based splitting is disabled, GetFiles falls back to the same
+	// package discovery as GetSelectors because Go has no file-level concept.
 	got, err := gotest.GetFiles()
 	if err != nil {
 		t.Errorf("Gotest.GetFiles() error = %v", err)

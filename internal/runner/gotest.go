@@ -308,17 +308,18 @@ func isBuildFailure(test JUnitXMLTestCase) bool {
 		strings.Contains(test.Failure.Content, "[build failed]")
 }
 
-// GetFiles discovers Go packages that contain tests.
-// Note that "file" does not exist as a first level concept in Golang projects
-// So this func is returning a list of packages instead of files.
-// The implication is that the Server-side smart test splitting will never work.
-// It almost will always fallback to simple splitting.
+// GetSelectors discovers the Go packages that contain tests and returns their
+// import paths to be used as selectors for selector based splitting.
+//
+// "File" does not exist as a first level concept in Go projects, so a package
+// import path is the smallest unit we can split on. The returned import paths
+// are sent to the test plan API as selector values.
 //
 // We use a format template so `go list` only emits packages that actually have
 // test files (_test.go). Packages with zero tests would otherwise be sent to the
 // test plan API as split units that run no tests, taking up a bin packing slot
 // for nothing.
-func (g GoTest) GetFiles() ([]string, error) {
+func (g GoTest) GetSelectors() ([]string, error) {
 	debug.Println("Discovering Go packages with tests using `go list`")
 	cmd := exec.Command("go", "list", "-f", "{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}", "./...")
 	output, err := cmd.Output()
@@ -342,6 +343,19 @@ func (g GoTest) GetFiles() ([]string, error) {
 		return nil, fmt.Errorf("no Go packages with tests found using `go list`")
 	}
 	return validPackages, nil
+}
+
+// GetFiles is the fallback used when selector based splitting is disabled, which
+// is the default behavior. Because "file" does not exist as a first level concept
+// in Go projects, there is nothing file-like to discover, so we reuse the same
+// package discovery as GetSelectors and return package import paths instead.
+//
+// The implication is that server side smart test splitting will never work for
+// these targets, since the API treats them as file paths. It almost always falls
+// back to simple splitting. We are migrating Go splitting over to GetSelectors so
+// the API can split by selector properly.
+func (g GoTest) GetFiles() ([]string, error) {
+	return g.GetSelectors()
 }
 
 func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {

@@ -35,7 +35,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		return fmt.Errorf("unsupported value for BUILDKITE_TEST_ENGINE_TEST_RUNNER: %w", err)
 	}
 
-	files, err := getTestFiles(testListFilename, testRunner)
+	testTargets, err := getTestTargets(cfg, testRunner, testListFilename)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
-	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, files, testRunner)
+	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, testTargets, testRunner)
 	if err != nil {
 		return err
 	}
