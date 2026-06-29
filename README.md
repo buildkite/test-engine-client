@@ -92,6 +92,30 @@ export BUILDKITE_TEST_ENGINE_TAGS="env=production,region=us-east-1"
 
 Test collectors are available for many languages and frameworks. Some collectors also provide richer data collection such as execution-level tagging and span tracing. See the [test collector docs](https://buildkite.com/docs/test-engine/test-collection) for details on what's available for your framework.
 
+### Plan identifier
+
+`--plan-identifier` (or `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER`) sets the
+identifier the `plan` command generates the plan under. The identifier is the
+plan's server-side cache key: distinct values produce distinct plans, while
+reusing a value returns the previously cached plan for that identifier.
+
+Inside a Buildkite build you don't need to set this; the identifier defaults to
+`${BUILDKITE_BUILD_ID}/${BUILDKITE_STEP_ID}`. Supply `--plan-identifier`
+explicitly when generating a plan **off-agent** (for example, running it in your
+local development environment or on your own machine). Doing so also removes the
+need to set `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID`, which are otherwise
+required. Use a unique value per request (a UUIDv7 works well) so plans don't
+collide or silently return a stale cached plan.
+
+```sh
+./bktec plan --json --plan-identifier 01919f1e-0000-7000-8000-000000000000
+```
+
+`bktec run` accepts the same flag. It fetches the plan cached under the
+identifier, or, on a cache miss, creates and caches one under it. A reused
+identifier therefore returns the previously cached plan even if the inputs have
+changed, so keep the value unique per distinct plan.
+
 ### Preview: Test Selection
 You can pass test selection strategy configuration and additional change context to the test plan API request.
 This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).
