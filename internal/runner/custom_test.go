@@ -39,6 +39,21 @@ func TestCustom_NewCustom_MissingTestFilePattern(t *testing.T) {
 	}
 }
 
+func TestCustom_NewCustom_SelectorListWithoutTestFilePattern(t *testing.T) {
+	// When splitting by a provided selector list, test file discovery is
+	// skipped, so an empty TestFilePattern should be allowed.
+	_, err := NewCustom(RunnerConfig{
+		TestCommand:       "bin/test",
+		TestFilePattern:   "",
+		SelectorSplitting: true,
+		SelectorListPath:  "selectors.txt",
+	})
+
+	if err != nil {
+		t.Errorf("NewCustom() error = %v, want nil", err)
+	}
+}
+
 func TestCustom_GetExamples(t *testing.T) {
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "bin/test",

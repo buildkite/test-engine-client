@@ -19,7 +19,7 @@ func NewCustom(r RunnerConfig) (Custom, error) {
 		return Custom{}, errors.New("test command must be provided for custom runner")
 	}
 
-	if r.TestFilePattern == "" {
+	if r.TestFilePattern == "" && !r.splitBySelectorList() {
 		return Custom{}, errors.New("test file pattern must be provided for custom runner")
 	}
 

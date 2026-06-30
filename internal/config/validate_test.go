@@ -82,6 +82,37 @@ func TestConfigValidate_SelectorListRequiresSelectorSplitting(t *testing.T) {
 	})
 }
 
+func TestConfigValidate_CustomRunnerFilePatternWithSelectorList(t *testing.T) {
+	t.Run("requires a file pattern for the custom runner by default", func(t *testing.T) {
+		c := createConfig()
+		c.TestRunner = "custom"
+		c.TestCommand = "bin/test"
+		c.TestFilePattern = ""
+
+		err := c.validate()
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("config.validate() error = %v, want InvalidConfigError", err)
+		}
+		if _, ok := invConfigError["BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN"]; !ok {
+			t.Errorf("config.validate() = %v, want a TEST_FILE_PATTERN error", invConfigError)
+		}
+	})
+
+	t.Run("does not require a file pattern when splitting by a selector list", func(t *testing.T) {
+		c := createConfig()
+		c.TestRunner = "custom"
+		c.TestCommand = "bin/test"
+		c.TestFilePattern = ""
+		c.SelectorSplitting = true
+		c.SelectorListPath = "selectors.txt"
+
+		if err := c.validate(); err != nil {
+			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+}
+
 func TestConfigValidate_Empty(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
 	err := c.validate()

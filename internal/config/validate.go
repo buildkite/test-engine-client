@@ -78,7 +78,9 @@ func (c *Config) validate() error {
 		if c.TestCommand == "" {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_CMD", "must not be blank when using the custom test runner")
 		}
-		if c.TestFilePattern == "" {
+		// A selector list replaces test file discovery, so the file pattern
+		// isn't required when splitting by a provided selector list.
+		if c.TestFilePattern == "" && !(c.SelectorSplitting && c.SelectorListPath != "") {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN", "must not be blank when using the custom test runner")
 		}
 	}
