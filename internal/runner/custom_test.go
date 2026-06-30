@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"fmt"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
@@ -179,10 +181,12 @@ func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
 
 func TestCustom_Run_TestFailedWithXMLResult(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
+	tmpDir := t.TempDir()
+
 	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "bats --report-formatter junit --output tmp/ {{testExamples}}",
+		TestCommand:     fmt.Sprintf("bats --report-formatter junit --output %s {{testExamples}}", tmpDir),
 		TestFilePattern: "tests/**/*.bats",
-		ResultPath:      "tmp/report.xml",
+		ResultPath:      filepath.Join(tmpDir, "report.xml"),
 	})
 
 	if err != nil {
