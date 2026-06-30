@@ -426,11 +426,11 @@ var promiseFailureFlag = &cli.BoolFlag{
 	Destination: &cfg.PromiseFailure,
 }
 
-// `run` command flags
+// `run` and `plan` command flags
 var planIdentifierFlag = &cli.StringFlag{
 	Name:        "plan-identifier",
 	Value:       "",
-	Usage:       "run the tests from a plan previously generated matching the provided plan-identifier",
+	Usage:       "the identifier used as the plan's cache key. On 'run', consume a plan previously generated under this identifier. On 'plan', generate the plan under this identifier; distinct values produce distinct plans, a reused value returns the cached plan. Supplying it also lets 'plan' run off-agent without BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID set",
 	Destination: &cfg.Identifier,
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"),
 }
@@ -618,6 +618,7 @@ func planCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
 		filesFlag,
 		tagFiltersFlag,
+		planIdentifierFlag,
 		// Dynamic Parallelism Flags
 		maxParallelismFlag,
 		targetTimeFlag,

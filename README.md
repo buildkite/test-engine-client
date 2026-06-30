@@ -92,6 +92,41 @@ export BUILDKITE_TEST_ENGINE_TAGS="env=production,region=us-east-1"
 
 Test collectors are available for many languages and frameworks. Some collectors also provide richer data collection such as execution-level tagging and span tracing. See the [test collector docs](https://buildkite.com/docs/test-engine/test-collection) for details on what's available for your framework.
 
+### Plan identifier
+
+`--plan-identifier` (or `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER`) sets the
+identifier the `plan` command generates the plan under. The identifier is the
+plan's server-side cache key: distinct values produce distinct plans, while
+reusing a value returns the previously cached plan for that identifier.
+
+Inside a Buildkite build you don't need to set this; the identifier defaults to
+`${BUILDKITE_BUILD_ID}/${BUILDKITE_STEP_ID}`. Supply `--plan-identifier`
+explicitly when generating a plan **off-agent** (for example, running it in your
+local development environment or on your own machine). Doing so also removes the
+need to set `BUILDKITE_BUILD_ID` and `BUILDKITE_STEP_ID`, which are otherwise
+required.
+
+> [!IMPORTANT]
+> The identifier must be unique per **step**, not just per build. It is the
+> cache key for the plan, so two steps sharing an identifier get the *same*
+> cached plan, and the second step runs the first step's test split instead of
+> its own. The default `${BUILDKITE_BUILD_ID}/${BUILDKITE_STEP_ID}` includes the
+> step id for exactly this reason. When setting it yourself, use a unique value
+> per request; a UUIDv7 works well, but any unique string is fine.
+
+```sh
+# UUIDv7 via Python (3.14+); use uuid4() on older versions
+./bktec plan --json --plan-identifier "$(python3 -c 'import uuid; print(uuid.uuid7())')"
+
+# UUIDv4 via uuidgen (preinstalled on macOS and most Linux)
+./bktec plan --json --plan-identifier "$(uuidgen)"
+```
+
+`bktec run` accepts the same flag. It fetches the plan cached under the
+identifier, or, on a cache miss, creates and caches one under it. A reused
+identifier therefore returns the previously cached plan even if the inputs have
+changed, so keep the value unique per distinct plan.
+
 ### Preview: Test Selection
 You can pass test selection strategy configuration and additional change context to the test plan API request.
 This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).

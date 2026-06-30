@@ -68,6 +68,12 @@ func TestPlanCommandIncludesParallelismFlag(t *testing.T) {
 	}
 }
 
+func TestPlanCommandIncludesPlanIdentifierFlag(t *testing.T) {
+	if !hasFlag(planCommandFlags(), "plan-identifier") {
+		t.Fatalf("planCommandFlags() missing --plan-identifier flag; an off-agent `bktec plan` cannot set the plan cache key or skip the BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID guards")
+	}
+}
+
 func TestApplyPlanRequestContext_ClearsCollectGitMetadataWhenPreviewDisabled(t *testing.T) {
 	t.Setenv(previewSelectionEnvVar, "")
 

@@ -89,6 +89,132 @@ called with testtemplate.yml
 	}
 }
 
+// An off-agent `bktec plan` supplies --plan-identifier instead of
+// BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID. The identifier must flow through to the
+// test_plan create request as the `identifier` param (the server cache key).
+func TestPlan_PlanIdentifierFlowsToRequestParam(t *testing.T) {
+	var requestBody []byte
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		enc := json.NewEncoder(w)
+
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			enc.Encode(api.FilteredTestResponse{})
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			requestBody, _ = io.ReadAll(r.Body)
+			enc.Encode(plan.TestPlan{
+				Identifier:  "01919f1e-0000-7000-8000-000000000000",
+				Parallelism: 42,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+	// An off-agent run has no build/step; identity comes from the identifier.
+	cfg.BuildID = ""
+	cfg.StepID = ""
+	cfg.Identifier = "01919f1e-0000-7000-8000-000000000000"
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Fatalf("ValidateForPlan() error = %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	if err := Plan(ctx, cfg, "", PlanOutputJSON, ""); err != nil {
+		t.Fatalf("command.Plan(...) error = %v", err)
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(requestBody, &params); err != nil {
+		t.Fatalf("failed to unmarshal request body %q: %v", requestBody, err)
+	}
+
+	if got, want := params["identifier"], "01919f1e-0000-7000-8000-000000000000"; got != want {
+		t.Errorf("request identifier = %v, want %v", got, want)
+	}
+}
+
+// Supplying an identifier lets `ValidateForPlan` skip the BUILDKITE_BUILD_ID /
+// BUILDKITE_STEP_ID blank guards, so an off-agent run needn't fake build env vars.
+func TestValidateForPlan_PlanIdentifierSkipsBuildStepGuards(t *testing.T) {
+	cfg := getConfig()
+	cfg.BuildID = ""
+	cfg.StepID = ""
+	cfg.Identifier = "01919f1e-0000-7000-8000-000000000000"
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Fatalf("ValidateForPlan() with --plan-identifier and no BUILD_ID/STEP_ID error = %v", err)
+	}
+
+	if cfg.Identifier != "01919f1e-0000-7000-8000-000000000000" {
+		t.Errorf("cfg.Identifier = %q, want it preserved (not overwritten with BUILD_ID/STEP_ID)", cfg.Identifier)
+	}
+}
+
+// A supplied identifier takes precedence over BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID:
+// when both are set, the identifier is kept rather than overwritten with the
+// "<build>/<step>" composite.
+func TestValidateForPlan_PlanIdentifierTakesPrecedenceOverBuildStep(t *testing.T) {
+	cfg := getConfig()
+	cfg.BuildID = "123"
+	cfg.StepID = "789"
+	cfg.Identifier = "01919f1e-0000-7000-8000-000000000000"
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Fatalf("ValidateForPlan() error = %v", err)
+	}
+
+	if cfg.Identifier != "01919f1e-0000-7000-8000-000000000000" {
+		t.Errorf("cfg.Identifier = %q, want the supplied identifier to win over %q", cfg.Identifier, "123/789")
+	}
+}
+
+// Without an identifier but with BUILD_ID/STEP_ID, the identifier defaults to
+// the "<build>/<step>" composite.
+func TestValidateForPlan_IdentifierDefaultsToBuildStepWhenUnset(t *testing.T) {
+	cfg := getConfig()
+	cfg.BuildID = "123"
+	cfg.StepID = "789"
+	cfg.Identifier = ""
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Fatalf("ValidateForPlan() error = %v", err)
+	}
+
+	if cfg.Identifier != "123/789" {
+		t.Errorf("cfg.Identifier = %q, want %q", cfg.Identifier, "123/789")
+	}
+}
+
+// Without an identifier and without BUILD_ID/STEP_ID, validation must still fail.
+func TestValidateForPlan_RequiresBuildStepWhenNoPlanIdentifier(t *testing.T) {
+	cfg := getConfig()
+	cfg.BuildID = ""
+	cfg.StepID = ""
+	cfg.Identifier = ""
+
+	err := cfg.ValidateForPlan()
+	if err == nil {
+		t.Fatal("ValidateForPlan() error = nil, want errors for blank BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID")
+	}
+	if !strings.Contains(err.Error(), "BUILDKITE_BUILD_ID") || !strings.Contains(err.Error(), "BUILDKITE_STEP_ID") {
+		t.Errorf("ValidateForPlan() error = %v, want it to mention BUILDKITE_BUILD_ID and BUILDKITE_STEP_ID", err)
+	}
+}
+
 func TestPlanJSON_BillingError(t *testing.T) {
 	// mock server to return 403 with a billing error
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

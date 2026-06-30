@@ -1,4 +1,7 @@
 # Changelog
+## Unreleased
+- Add `--plan-identifier` (env: `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER`) to `bktec plan`. The identifier sets the plan's server-side cache key, and supplying it lets `plan` run off-agent without `BUILDKITE_BUILD_ID`/`BUILDKITE_STEP_ID`. Previously this flag was only available on `bktec run`.
+
 ## 2.8.2 - 2026-06-19
 - Treat pytest collection errors reported by `buildkite-test-collector` as terminal, and preserve their file-only node IDs when recording JSON results. Previously bktec could construct invalid retry selectors like `::tests/test_broken.py` for collection failures with empty scopes, then waste a retry on a failure that cannot be fixed by rerunning individual tests.
 
