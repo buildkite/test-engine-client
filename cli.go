@@ -283,11 +283,11 @@ var filesFlag = &cli.StringFlag{
 }
 
 var selectorsFlag = &cli.StringFlag{
-	Name:        "selectors",
+	Name:        "selector-file",
 	Category:    "TEST RUNNER",
 	Value:       "",
-	Usage:       "A file path containing a list of selectors to run (one per line). Must be used alongside `selector-splitting`",
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_LIST_PATH"),
+	Usage:       "Path to a file containing a list of selectors to run (one per line). Must be used alongside `selector-splitting`",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_FILE"),
 	Destination: &cfg.SelectorListPath,
 	Hidden:      true,
 }

@@ -77,7 +77,7 @@ func (r Custom) GetFiles() ([]string, error) {
 }
 
 func (r Custom) GetSelectors() ([]string, error) {
-	return nil, fmt.Errorf("use `--selectors` or `BUILDKITE_TEST_ENGINE_SELECTOR_LIST_PATH` to provide the list of selectors")
+	return nil, fmt.Errorf("use `--selector-file` or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE` to provide the list of selectors")
 }
 
 func (r Custom) GetExamples(files []string) ([]plan.TestCase, error) {

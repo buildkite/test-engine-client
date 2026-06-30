@@ -36,13 +36,13 @@ By default bktec discovers and splits work by test file. If your test suite is b
 
 A selector is an arbitrary string that your test command understands. You provide them in a file with one selector per line, and bktec distributes them across parallel nodes the same way it distributes test files. The selectors assigned to each node replace `{{testExamples}}` in `BUILDKITE_TEST_ENGINE_TEST_CMD`.
 
-To enable it, set `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true` and point `BUILDKITE_TEST_ENGINE_SELECTOR_LIST_PATH` at your selector file. When selector splitting is enabled, `BUILDKITE_TEST_ENGINE_SELECTOR_LIST_PATH` is required and `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` is not used.
+To enable it, set `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true` and point `BUILDKITE_TEST_ENGINE_SELECTOR_FILE` at your selector file. When selector splitting is enabled, `BUILDKITE_TEST_ENGINE_SELECTOR_FILE` is required and `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` is not used.
 
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=custom
 export BUILDKITE_TEST_ENGINE_TEST_CMD="bin/test {{testExamples}}"
 export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
-export BUILDKITE_TEST_ENGINE_SELECTOR_LIST_PATH="path/to/selectors.txt"
+export BUILDKITE_TEST_ENGINE_SELECTOR_FILE="path/to/selectors.txt"
 bktec run
 ```
 
