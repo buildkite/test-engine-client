@@ -502,7 +502,6 @@ func getConfig() *config.Config {
 	cfg.AccessToken = "asdf1234"
 	cfg.SuiteSlug = "rspec"
 	cfg.TestRunner = "rspec"
-	cfg.ResultPath = "out.json"
 	cfg.DebugEnabled = true
 	cfg.TestFilePattern = "testdata/rspec/spec/**/*_spec.rb"
 
