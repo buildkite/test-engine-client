@@ -143,6 +143,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "/tmp/results.json")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_FILE", "selectors.txt")
 	t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "app/")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "3")
@@ -196,6 +197,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"ResultPath", cfg.ResultPath, "/tmp/results.json"},
 		{"SplitByExample", cfg.SplitByExample, true},
 		{"SelectorSplitting", cfg.SelectorSplitting, true},
+		{"SelectorListPath", cfg.SelectorListPath, "selectors.txt"},
 		{"FailOnNoTests", cfg.FailOnNoTests, true},
 		{"LocationPrefix", cfg.LocationPrefix, "app/"},
 		{"MaxRetries", cfg.MaxRetries, 3},
