@@ -1,5 +1,6 @@
 # Changelog
 ## Unreleased
+- Add first-class support for the [Vitest](./docs/vitest.md) test runner (`BUILDKITE_TEST_ENGINE_TEST_RUNNER=vitest`), including test splitting by file, automatic retries, and muting. Vitest's JSON reporter is Jest-compatible, so results are parsed with the shared Jest report parser.
 - Add `--plan-identifier` (env: `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER`) to `bktec plan`. The identifier sets the plan's server-side cache key, and supplying it lets `plan` run off-agent without `BUILDKITE_BUILD_ID`/`BUILDKITE_STEP_ID`. Previously this flag was only available on `bktec run`.
 - `bktec plan` no longer requires `BUILDKITE_TEST_ENGINE_RESULT_PATH` (`--result-path`). The value is only used when running tests, so planning never needed it. `bktec run` still requires it for runners that read a result file.
 

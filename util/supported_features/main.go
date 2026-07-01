@@ -42,6 +42,7 @@ func main() {
 	runners := []runner.TestRunner{
 		runner.NewRspec(runnerConfig),
 		runner.NewJest(runnerConfig),
+		runner.NewVitest(runnerConfig),
 		runner.NewPlaywright(runnerConfig),
 		runner.NewCypress(runnerConfig),
 		runner.NewPytest(runnerConfig),
