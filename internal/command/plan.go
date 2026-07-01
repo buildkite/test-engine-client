@@ -134,36 +134,6 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	return nil
 }
 
-// fullPlanOutput mirrors the server's test_plan endpoint response. It is used
-// only for the locally-computed fallback plan (when the server is unreachable),
-// so that fallback output matches the server's shape. It deliberately omits
-// plan.TestPlan.Fallback, which is client-internal and untagged (it would
-// otherwise leak as "Fallback": <bool>). Plans that come from the server are
-// passed through as their raw JSON, not via this struct.
-type fullPlanOutput struct {
-	Identifier        string                `json:"identifier"`
-	Parallelism       int                   `json:"parallelism"`
-	Experiment        string                `json:"experiment"`
-	Tasks             map[string]*plan.Task `json:"tasks"`
-	MutedTests        []plan.TestCase       `json:"muted_tests,omitempty"`
-	SkippedTests      []plan.TestCase       `json:"skipped_tests,omitempty"`
-	TimingMetadata    *plan.TimingMetadata  `json:"timing_metadata,omitempty"`
-	KnownTimingsRatio *float64              `json:"known_timings_ratio,omitempty"`
-}
-
-func newFullPlanOutput(p plan.TestPlan) fullPlanOutput {
-	return fullPlanOutput{
-		Identifier:        p.Identifier,
-		Parallelism:       p.Parallelism,
-		Experiment:        p.Experiment,
-		Tasks:             p.Tasks,
-		MutedTests:        p.MutedTests,
-		SkippedTests:      p.SkippedTests,
-		TimingMetadata:    p.TimingMetadata,
-		KnownTimingsRatio: p.KnownTimingsRatio,
-	}
-}
-
 // fullJSONPlan emits the plan as the server's test_plan endpoint would return
 // it. Unlike the --json and --pipeline-upload modes it does not substitute a
 // local fallback for a server error plan: the server's response (including an
@@ -208,14 +178,24 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 
 // emitLocalFallback writes a locally-computed fallback plan as JSON, used by
 // --full-json when the server cannot be reached and there is nothing to pass
-// through.
+// through. The fallback carries no tasks, so only the identifier and
+// parallelism are emitted.
 func emitLocalFallback(cfg *config.Config) error {
 	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
 
-	// The fallback is a fixed-shape struct of plain fields, so marshalling
-	// cannot fail.
-	encoded, _ := json.Marshal(newFullPlanOutput(makeFallbackPlan(cfg)))
-	return writeIndentedJSON(encoded)
+	// A fixed-shape struct of plain fields, so marshalling cannot fail.
+	encoded, _ := json.MarshalIndent(struct {
+		Identifier  string                `json:"identifier"`
+		Parallelism int                   `json:"parallelism"`
+		Tasks       map[string]*plan.Task `json:"tasks"`
+	}{
+		Identifier:  cfg.Identifier,
+		Parallelism: cfg.MaxParallelism,
+		Tasks:       map[string]*plan.Task{},
+	}, "", "  ")
+
+	fmt.Fprintln(planWriter, string(encoded))
+	return nil
 }
 
 // writeIndentedJSON re-indents raw JSON and writes it to planWriter, leaving the
