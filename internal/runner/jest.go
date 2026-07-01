@@ -160,14 +160,20 @@ type JestReport struct {
 }
 
 func (j Jest) ParseReport(path string) (JestReport, error) {
+	return ParseJestReport(path)
+}
+
+// ParseJestReport parses a Jest-compatible JSON report file. It is shared by the
+// Jest and Vitest runners, since Vitest's JSON reporter emits the same shape.
+func ParseJestReport(path string) (JestReport, error) {
 	var report JestReport
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return JestReport{}, fmt.Errorf("failed to read Jest output: %v", err)
+		return JestReport{}, fmt.Errorf("failed to read report output: %v", err)
 	}
 
 	if err := json.Unmarshal(data, &report); err != nil {
-		return JestReport{}, fmt.Errorf("failed to parse Jest output: %s", err)
+		return JestReport{}, fmt.Errorf("failed to parse report output: %s", err)
 	}
 
 	return report, nil
