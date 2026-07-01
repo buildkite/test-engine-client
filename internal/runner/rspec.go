@@ -51,6 +51,7 @@ func (r Rspec) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       true,
 		Mute:            true,
 		Skip:            true,
+		SplitBySelector: true,
 	}
 }
 
@@ -77,6 +78,10 @@ func (r Rspec) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (r Rspec) GetSelectors() ([]string, error) {
+	return r.GetFiles()
 }
 
 // Run executes the test command with the given test cases.
