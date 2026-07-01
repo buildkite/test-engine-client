@@ -916,8 +916,9 @@ func TestPlanJSON_DebugLogging_Fallback(t *testing.T) {
 	}
 }
 
-// When the server is unreachable, --full-json still emits the locally-computed
-// fallback plan on stdout, but warns on stderr that it is not a server plan.
+// When the server cannot be reached (here, a retry timeout), --full-json has
+// nothing to pass through, so it emits the locally-computed fallback plan on
+// stdout and warns on stderr that it is not a server plan.
 func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -980,5 +981,72 @@ func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 	// The fallback caveat is written to stderr.
 	if !strings.Contains(stderrOutput, "locally-computed fallback plan") {
 		t.Errorf("expected stderr to contain the fallback caveat, got: %s", stderrOutput)
+	}
+}
+
+// When the server returns an error plan (`{"tasks": {}}`), --full-json passes
+// it through verbatim rather than substituting a local fallback, so the output
+// reflects the server's actual response. It is not marked as a local fallback.
+func TestPlanFullJSON_ServerErrorPlanPassedThrough(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		enc := json.NewEncoder(w)
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			enc.Encode(api.FilteredTestResponse{})
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			// Error plan: empty task map.
+			enc.Encode(plan.TestPlan{Identifier: "facecafe", Parallelism: 0, Tasks: map[string]*plan.Task{}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	getStderr := captureStderr(t)
+
+	planErr := Plan(context.Background(), cfg, "", PlanOutputFullJSON, "")
+
+	stderrOutput := getStderr()
+
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	var got plan.TestPlan
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	// The server's error plan is passed through: empty tasks, server identifier,
+	// no locally-distributed task map.
+	if len(got.Tasks) != 0 {
+		t.Errorf("expected empty tasks passed through from server, got: %s", buf.String())
+	}
+	if got.Identifier != "facecafe" {
+		t.Errorf("expected server identifier %q, got %q", "facecafe", got.Identifier)
+	}
+
+	// The error-plan warning is written to stderr...
+	if !strings.Contains(stderrOutput, "failed to generate a plan") {
+		t.Errorf("expected stderr to contain the error-plan warning, got: %s", stderrOutput)
+	}
+	// ...but it is NOT presented as a locally-computed fallback.
+	if strings.Contains(stderrOutput, "locally-computed fallback plan") {
+		t.Errorf("server error plan should not be reported as a local fallback, got: %s", stderrOutput)
 	}
 }

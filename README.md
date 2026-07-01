@@ -143,6 +143,11 @@ The human-readable split summary and any warnings are written to stderr, so
 stdout carries only the JSON. `--json`, `--full-json` and `--pipeline-upload`
 are mutually exclusive; choose one.
 
+`--full-json` prints what the server returns. If the server cannot generate a
+plan it returns an empty plan, which is emitted as-is (a warning is printed to
+stderr). Only when the server cannot be reached at all does `bktec` fall back to
+a locally-computed plan, again noting this on stderr.
+
 ### Preview: Test Selection
 You can pass test selection strategy configuration and additional change context to the test plan API request.
 This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).

@@ -60,6 +60,12 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 
 	debug.Println("Creating test plan via API")
 
+	// --full-json emits what the server returns, so it takes a distinct path
+	// that does not substitute a local fallback for a server error plan.
+	if outputFormat == PlanOutputFullJSON {
+		return fullJSONPlan(ctx, cfg, testTargets, apiClient, testRunner)
+	}
+
 	testPlan, err := createTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
@@ -97,24 +103,6 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 
 		enc := json.NewEncoder(planWriter)
 		if err = enc.Encode(summary); err != nil {
-			return err
-		}
-
-	case PlanOutputFullJSON:
-		if testPlan.Parallelism == 0 {
-			fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
-		}
-
-		if testPlan.Fallback {
-			fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
-		}
-
-		encoded, err := json.MarshalIndent(newFullPlanOutput(testPlan), "", "  ")
-		if err != nil {
-			return err
-		}
-
-		if _, err := fmt.Fprintln(planWriter, string(encoded)); err != nil {
 			return err
 		}
 
@@ -173,6 +161,54 @@ func newFullPlanOutput(p plan.TestPlan) fullPlanOutput {
 	}
 }
 
+// fullJSONPlan emits the plan as the server's test_plan endpoint would return
+// it. Unlike the --json and --pipeline-upload modes it does not substitute a
+// local fallback for a server error plan: the server's response (including an
+// empty error plan) is passed through verbatim, so the output faithfully
+// reflects what the server has. A locally-computed fallback is used only when
+// the server cannot be reached at all, since there is nothing to pass through.
+func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) error {
+	testPlan, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
+	if err != nil {
+		// Fatal errors (auth, forbidden, bad request) are returned; soft
+		// errors (timeout, billing, disabled, not found) fall through to a
+		// locally-computed fallback since the server returned nothing.
+		if handledErr := handleError(err); handledErr != nil {
+			return handledErr
+		}
+		fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
+		testPlan = makeFallbackPlan(cfg, testTargets)
+	} else if len(testPlan.Tasks) == 0 {
+		// The server returned an error plan (`{"tasks": {}}`). Pass it through
+		// verbatim rather than substituting a fallback, so --full-json reflects
+		// the server's actual response.
+		warnErrorPlan()
+	}
+
+	if testPlan.Fallback {
+		debug.Printf("Using fallback plan. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
+	} else {
+		debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
+	}
+
+	plan.PrintSplitSummary(os.Stderr, testPlan)
+
+	if testPlan.Parallelism == 0 {
+		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
+	}
+
+	encoded, err := json.MarshalIndent(newFullPlanOutput(testPlan), "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if _, err := fmt.Fprintln(planWriter, string(encoded)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func makePipelineUploadCommand(template string) *exec.Cmd {
 	args := append(pipelineUploadArgs, template)
 	cmd := exec.Command(pipelineUploadCommand, args...)
@@ -181,33 +217,45 @@ func makePipelineUploadCommand(template string) *exec.Cmd {
 	return cmd
 }
 
-func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
-	makeFallbackPlan := func() plan.TestPlan {
-		parallelism := fallbackParallelism(cfg)
-		fallbackPlan := plan.CreateFallbackPlan(testTargets, parallelism)
-		fallbackPlan.Identifier = cfg.Identifier
-		fallbackPlan.Parallelism = parallelism
-		return fallbackPlan
-	}
-
+// requestTestPlan requests a plan from the server and returns it verbatim,
+// without substituting a local fallback. The returned plan may be an "error
+// plan" with an empty task list (i.e. `{"tasks": {}}`) when the server could
+// not generate one; callers that need a runnable plan should fall back
+// themselves.
+func requestTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
 	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
-		return makeFallbackPlan(), err
+		return plan.TestPlan{}, err
 	}
 
-	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+	return apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+}
+
+// createTestPlan requests a plan and substitutes a locally-computed fallback
+// when the server errors or returns an error plan, so the caller always gets a
+// runnable plan. Used by the --json and --pipeline-upload output modes.
+func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
+	testPlan, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
 	if err != nil {
-		return makeFallbackPlan(), err
+		return makeFallbackPlan(cfg, testTargets), err
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		warnErrorPlan()
-		return makeFallbackPlan(), nil
+		return makeFallbackPlan(cfg, testTargets), nil
 	}
 
 	return testPlan, nil
+}
+
+func makeFallbackPlan(cfg *config.Config, testTargets []string) plan.TestPlan {
+	parallelism := fallbackParallelism(cfg)
+	fallbackPlan := plan.CreateFallbackPlan(testTargets, parallelism)
+	fallbackPlan.Identifier = cfg.Identifier
+	fallbackPlan.Parallelism = parallelism
+	return fallbackPlan
 }
 
 // fallbackParallelism resolves the parallelism for a locally-computed fallback
