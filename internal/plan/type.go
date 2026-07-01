@@ -77,7 +77,8 @@ type TestPlan struct {
 	// the server began emitting it).
 	TimingMetadata *TimingMetadata `json:"timing_metadata,omitempty"`
 	// KnownTimingsRatio is the fraction (0.0–1.0) of cases that had historical
-	// timing data when the plan was built. Used to summarise plans where
-	// per-format timing metadata is not emitted (e.g. parallelism == 1).
+	// timing data when the plan was built. The server only emits it at
+	// parallelism > 1, where the split summary instead uses per-format
+	// TimingMetadata. Currently unread; retained for wire compatibility.
 	KnownTimingsRatio *float64 `json:"known_timings_ratio,omitempty"`
 }
