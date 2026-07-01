@@ -182,30 +182,46 @@ func makePipelineUploadCommand(template string) *exec.Cmd {
 }
 
 func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
-	fallbackPlan := plan.TestPlan{
-		Identifier:  cfg.Identifier,
-		Parallelism: cfg.MaxParallelism,
-		Fallback:    true,
+	makeFallbackPlan := func() plan.TestPlan {
+		parallelism := fallbackParallelism(cfg)
+		fallbackPlan := plan.CreateFallbackPlan(testTargets, parallelism)
+		fallbackPlan.Identifier = cfg.Identifier
+		fallbackPlan.Parallelism = parallelism
+		return fallbackPlan
 	}
 
 	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
-		return fallbackPlan, err
+		return makeFallbackPlan(), err
 	}
 
 	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 	if err != nil {
-		return fallbackPlan, err
+		return makeFallbackPlan(), err
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		warnErrorPlan()
-		return fallbackPlan, nil
+		return makeFallbackPlan(), nil
 	}
 
 	return testPlan, nil
+}
+
+// fallbackParallelism resolves the parallelism for a locally-computed fallback
+// plan. It prefers the dynamic --max-parallelism, then BUILDKITE_PARALLEL_JOB_COUNT,
+// and finally 1, so the fallback always has at least one node to distribute
+// files across (plan.CreateFallbackPlan divides by parallelism).
+func fallbackParallelism(cfg *config.Config) int {
+	if cfg.MaxParallelism > 0 {
+		return cfg.MaxParallelism
+	}
+	if cfg.Parallelism > 0 {
+		return cfg.Parallelism
+	}
+	return 1
 }
 
 // autoCollectGitMetadata collects git commit metadata and merges it into

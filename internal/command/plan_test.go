@@ -961,6 +961,22 @@ func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 		t.Errorf("full-json output leaked the Fallback field:\n%s", buf.String())
 	}
 
+	// The fallback must be a real, usable plan: tasks populated from the
+	// discovered targets, not a null/empty task map.
+	if len(got.Tasks) == 0 {
+		t.Fatalf("fallback --full-json output has no tasks; got: %s", buf.String())
+	}
+	if got.Parallelism != 10 {
+		t.Errorf("fallback plan Parallelism = %d, want 10 (from --max-parallelism)", got.Parallelism)
+	}
+	var fallbackTestCount int
+	for _, task := range got.Tasks {
+		fallbackTestCount += len(task.Tests)
+	}
+	if fallbackTestCount == 0 {
+		t.Errorf("fallback plan distributed no tests across its tasks; got: %s", buf.String())
+	}
+
 	// The fallback caveat is written to stderr.
 	if !strings.Contains(stderrOutput, "locally-computed fallback plan") {
 		t.Errorf("expected stderr to contain the fallback caveat, got: %s", stderrOutput)

@@ -86,12 +86,32 @@ func TestPlanCommandIncludesFullJSONOutputFlag(t *testing.T) {
 }
 
 // --full-json belongs to the required, mutually-exclusive PLAN OUTPUT group, so
-// it cannot be combined with --json and one output flag must be supplied.
+// it cannot be combined with --json. Exercised on a fresh command with fresh
+// flag instances, so it doesn't mutate the package-global cliCommand/flag state
+// that other tests reuse.
 func TestPlanFullJSONIsMutuallyExclusiveWithJSON(t *testing.T) {
-	cfg = config.New()
-	t.Cleanup(func() { cfg = config.New() })
+	cmd := &cli.Command{
+		Name: "bktec",
+		Commands: []*cli.Command{
+			{
+				Name:   "plan",
+				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+				MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+					{
+						Required: true,
+						Category: "PLAN OUTPUT",
+						Flags: [][]cli.Flag{
+							{&cli.BoolFlag{Name: "json"}},
+							{&cli.BoolFlag{Name: "full-json"}},
+							{&cli.StringFlag{Name: "pipeline-upload"}},
+						},
+					},
+				},
+			},
+		},
+	}
 
-	err := cliCommand.Run(context.Background(), []string{"bktec", "plan", "--json", "--full-json"})
+	err := cmd.Run(context.Background(), []string{"bktec", "plan", "--json", "--full-json"})
 	if err == nil {
 		t.Fatal("expected an error when --json and --full-json are combined, got nil")
 	}
