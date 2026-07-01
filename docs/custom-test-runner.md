@@ -27,39 +27,6 @@ You can exclude specific files or directories that match a certain pattern using
 export BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN=tests/api
 ```
 
-## Splitting by selector
-
-> [!NOTE]
-> Selector-based splitting is experimental and may change.
-
-By default bktec discovers and splits work by test file. If your test suite is better divided by something other than a file path, for example a tag, scenario, or package, you can split by selector instead.
-
-A selector is an arbitrary string that your test command understands. You provide them in a file with one selector per line, and bktec distributes them across parallel nodes the same way it distributes test files. The selectors assigned to each node replace `{{testExamples}}` in `BUILDKITE_TEST_ENGINE_TEST_CMD`.
-
-To enable it, set `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true` and point `BUILDKITE_TEST_ENGINE_SELECTOR_FILE` at your selector file. When selector splitting is enabled, `BUILDKITE_TEST_ENGINE_SELECTOR_FILE` is required and `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` is not used.
-
-```sh
-export BUILDKITE_TEST_ENGINE_TEST_RUNNER=custom
-export BUILDKITE_TEST_ENGINE_TEST_CMD="bin/test {{testExamples}}"
-export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
-export BUILDKITE_TEST_ENGINE_SELECTOR_FILE="path/to/selectors.txt"
-bktec run
-```
-
-Given a `selectors.txt` like this:
-
-```
-checkout
-search
-account
-```
-
-The actual command that bktec runs on each node will look like this:
-
-```sh
-bin/test checkout search
-```
-
 ## Muting test results
 If you have [Test state and quarantine](https://buildkite.com/docs/test-engine/test-suites/test-state-and-quarantine#lifecycle-states-mute-recommended) enabled in your Buildkite Test Suite, you can configure bktec to mute test results. When this is configured, failure from muted tests will not cause the build to fail.
 
