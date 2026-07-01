@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/test-engine-client/v2/internal/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,6 +167,13 @@ func TestBuildTestResultsMultipartBody(t *testing.T) {
 	t.Setenv("BUILDKITE_BRANCH", "main")
 	t.Setenv("BUILDKITE_COMMIT", "abc123")
 
+	dummyVersion := "3.0.1"
+	originalVersion := version.Version
+	version.Version = dummyVersion
+	t.Cleanup(func() {
+		version.Version = originalVersion
+	})
+
 	resultFile, err := os.CreateTemp("", "results-*.json")
 	require.NoError(t, err)
 	defer os.Remove(resultFile.Name())
@@ -204,6 +212,8 @@ func TestBuildTestResultsMultipartBody(t *testing.T) {
 	assert.Equal(t, "main", fields["run_env[branch]"])
 	assert.Equal(t, "abc123", fields["run_env[commit_sha]"])
 	assert.Equal(t, "my/prefix", fields["run_env[location_prefix]"])
+	assert.Equal(t, "bktec", fields["run_env[collector]"])
+	assert.Equal(t, dummyVersion, fields["run_env[version]"])
 	assert.Equal(t, cwd, fields["run_env[cwd]"])
 }
 
