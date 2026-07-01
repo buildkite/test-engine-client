@@ -18,6 +18,7 @@ func TestSupportedFeatures_SplitBySelectorOnlyGotest(t *testing.T) {
 	runners := []TestRunner{
 		NewRspec(runnerConfig),
 		NewJest(runnerConfig),
+		NewVitest(runnerConfig),
 		NewPlaywright(runnerConfig),
 		NewCypress(runnerConfig),
 		NewPytest(runnerConfig),
