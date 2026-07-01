@@ -8,12 +8,12 @@ import (
 
 // PrintSplitSummary writes a human-readable summary of the resolved test plan
 // to w (typically os.Stderr). At parallelism > 1 it uses per-format
-// TimingMetadata to break down known vs unknown cases. At parallelism == 1
-// the server skips per-format timing data due to performance reasons, so it falls back to the
-// plan-level KnownTimingsRatio. Skipped for fallback plans, or when neither
-// signal is available.
+// TimingMetadata to break down known vs unknown cases. At parallelism == 1 the
+// server skips the per-format timing fetch and emits an empty TimingMetadata,
+// so only the header and case count are printed. Skipped for fallback plans and
+// plans without TimingMetadata at all (e.g. error or older cached plans).
 func PrintSplitSummary(w io.Writer, p TestPlan) {
-	if p.Fallback || (p.TimingMetadata == nil && p.KnownTimingsRatio == nil) {
+	if p.Fallback || p.TimingMetadata == nil {
 		return
 	}
 
@@ -34,16 +34,9 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	fmt.Fprintf(w, "%d %s across %d %s\n",
 		total, pluralize(total, noun), nodes, pluralize(nodes, "node"))
 
-	// At parallelism == 1 the server skips the per-format timing fetch, so
-	// per-case TimingSampleSize is always 0. Fall back to the plan-level
-	// known_timings_ratio for a meaningful breakdown.
-	if nodes <= 1 && p.KnownTimingsRatio != nil {
-		printRatioBreakdown(w, total, *p.KnownTimingsRatio, noun)
-		fmt.Fprintln(w)
-		return
-	}
-
-	if p.TimingMetadata == nil {
+	// At parallelism == 1 the server skips the per-format timing fetch and
+	// emits an empty TimingMetadata, so there is no breakdown to print.
+	if p.TimingMetadata.File == nil && p.TimingMetadata.Example == nil && p.TimingMetadata.Selector == nil {
 		fmt.Fprintln(w)
 		return
 	}
@@ -58,18 +51,6 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 		printFormatBreakdown(w, selectorTotal, selectorKnown, "selector", p.TimingMetadata.Selector, mixed)
 	}
 	fmt.Fprintln(w)
-}
-
-// printRatioBreakdown renders a single-node summary using the plan-level
-// known_timings_ratio. Per-format metadata is unavailable at parallelism == 1,
-// so it delegates to printFormatBreakdown with meta == nil; the breakdown text
-// is rendered without parenthesised duration values.
-func printRatioBreakdown(w io.Writer, total int, ratio float64, noun string) {
-	known := int(float64(total)*ratio + 0.5)
-	if known > total {
-		known = total
-	}
-	printFormatBreakdown(w, total, known, noun, nil, false)
 }
 
 // countByFormat returns (total, known) for cases of the given format. The

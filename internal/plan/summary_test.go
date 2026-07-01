@@ -111,10 +111,9 @@ func TestPrintSplitSummary_SkipsWhenNoMetadata(t *testing.T) {
 	}
 }
 
-func TestPrintSplitSummary_ParallelismOneUsesKnownRatio(t *testing.T) {
-	// At parallelism=1 the server skips per-format timing metadata, so the
-	// summary derives counts from the plan-level known_timings_ratio.
-	ratio := 0.75
+func TestPrintSplitSummary_ParallelismOneNoBreakdown(t *testing.T) {
+	// At parallelism=1 the server skips the per-format timing fetch and emits an
+	// empty timing_metadata, so the summary prints only the header and count.
 	p := TestPlan{
 		Parallelism: 1,
 		Tasks: map[string]*Task{
@@ -122,43 +121,17 @@ func TestPrintSplitSummary_ParallelismOneUsesKnownRatio(t *testing.T) {
 				{Path: "a"}, {Path: "b"}, {Path: "c"}, {Path: "d"},
 			}},
 		},
-		TimingMetadata:    &TimingMetadata{},
-		KnownTimingsRatio: &ratio,
+		TimingMetadata: &TimingMetadata{},
 	}
 	var buf bytes.Buffer
 	PrintSplitSummary(&buf, p)
 	got := buf.String()
 
-	for _, want := range []string{
-		"4 files across 1 node",
-		"3 files (75%) estimated from past historical durations",
-		"1 file (25%) had no history",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("output missing %q\nfull output:\n%s", want, got)
-		}
+	if !strings.Contains(got, "4 files across 1 node") {
+		t.Errorf("output missing count line\nfull output:\n%s", got)
 	}
-}
-
-func TestPrintSplitSummary_ParallelismOneZeroRatio(t *testing.T) {
-	ratio := 0.0
-	p := TestPlan{
-		Parallelism: 1,
-		Tasks: map[string]*Task{
-			"0": {NodeNumber: 0, Tests: []TestCase{{Path: "a"}, {Path: "b"}}},
-		},
-		TimingMetadata:    &TimingMetadata{},
-		KnownTimingsRatio: &ratio,
-	}
-	var buf bytes.Buffer
-	PrintSplitSummary(&buf, p)
-	got := buf.String()
-
-	if !strings.Contains(got, "2 files (100%) had no history") {
-		t.Errorf("expected all-no-history line, got:\n%s", got)
-	}
-	if strings.Contains(got, "estimated from past") {
-		t.Errorf("unexpected estimated line at ratio=0:\n%s", got)
+	if strings.Contains(got, "estimated from past") || strings.Contains(got, "had no history") {
+		t.Errorf("unexpected breakdown at parallelism 1:\n%s", got)
 	}
 }
 
