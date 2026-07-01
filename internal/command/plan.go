@@ -212,10 +212,9 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 func emitLocalFallback(cfg *config.Config) error {
 	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
 
-	encoded, err := json.Marshal(newFullPlanOutput(makeFallbackPlan(cfg)))
-	if err != nil {
-		return err
-	}
+	// The fallback is a fixed-shape struct of plain fields, so marshalling
+	// cannot fail.
+	encoded, _ := json.Marshal(newFullPlanOutput(makeFallbackPlan(cfg)))
 	return writeIndentedJSON(encoded)
 }
 
