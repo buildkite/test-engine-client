@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -133,10 +134,12 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	return nil
 }
 
-// fullPlanOutput mirrors the server's test_plan endpoint response, so
-// --full-json emits the same shape a fetch of that endpoint would. It
-// deliberately omits plan.TestPlan.Fallback, which is client-internal and
-// untagged (it would otherwise leak as "Fallback": <bool>).
+// fullPlanOutput mirrors the server's test_plan endpoint response. It is used
+// only for the locally-computed fallback plan (when the server is unreachable),
+// so that fallback output matches the server's shape. It deliberately omits
+// plan.TestPlan.Fallback, which is client-internal and untagged (it would
+// otherwise leak as "Fallback": <bool>). Plans that come from the server are
+// passed through as their raw JSON, not via this struct.
 type fullPlanOutput struct {
 	Identifier        string                `json:"identifier"`
 	Parallelism       int                   `json:"parallelism"`
@@ -168,7 +171,15 @@ func newFullPlanOutput(p plan.TestPlan) fullPlanOutput {
 // reflects what the server has. A locally-computed fallback is used only when
 // the server cannot be reached at all, since there is nothing to pass through.
 func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) error {
-	testPlan, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
+	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
+	if err != nil {
+		if handledErr := handleError(err); handledErr != nil {
+			return handledErr
+		}
+		return emitLocalFallback(cfg, testTargets)
+	}
+
+	testPlan, raw, err := apiClient.CreateTestPlanRaw(ctx, cfg.SuiteSlug, params)
 	if err != nil {
 		// Fatal errors (auth, forbidden, bad request) are returned; soft
 		// errors (timeout, billing, disabled, not found) fall through to a
@@ -176,36 +187,53 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 		if handledErr := handleError(err); handledErr != nil {
 			return handledErr
 		}
-		fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
-		testPlan = makeFallbackPlan(cfg, testTargets)
-	} else if len(testPlan.Tasks) == 0 {
-		// The server returned an error plan (`{"tasks": {}}`). Pass it through
-		// verbatim rather than substituting a fallback, so --full-json reflects
-		// the server's actual response.
+		return emitLocalFallback(cfg, testTargets)
+	}
+
+	// The server responded. Emit its exact JSON, unmodified. An error plan
+	// (`{"tasks": {}}`) is passed through verbatim so --full-json reflects the
+	// server's actual response; we only warn about it on stderr.
+	if len(testPlan.Tasks) == 0 {
 		warnErrorPlan()
 	}
 
-	if testPlan.Fallback {
-		debug.Printf("Using fallback plan. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
-	} else {
-		debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
-	}
-
+	debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
 	plan.PrintSplitSummary(os.Stderr, testPlan)
-
 	if testPlan.Parallelism == 0 {
 		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
 	}
 
-	encoded, err := json.MarshalIndent(newFullPlanOutput(testPlan), "", "  ")
+	return writeIndentedJSON(raw)
+}
+
+// emitLocalFallback writes a locally-computed fallback plan, used by --full-json
+// when the server cannot be reached and there is nothing to pass through.
+func emitLocalFallback(cfg *config.Config, testTargets []string) error {
+	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
+
+	testPlan := makeFallbackPlan(cfg, testTargets)
+	plan.PrintSplitSummary(os.Stderr, testPlan)
+	if testPlan.Parallelism == 0 {
+		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
+	}
+
+	encoded, err := json.Marshal(newFullPlanOutput(testPlan))
 	if err != nil {
 		return err
 	}
+	return writeIndentedJSON(encoded)
+}
 
-	if _, err := fmt.Fprintln(planWriter, string(encoded)); err != nil {
+// writeIndentedJSON re-indents raw JSON and writes it to planWriter, leaving the
+// content (keys, values, order) untouched.
+func writeIndentedJSON(raw []byte) error {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
 		return err
 	}
-
+	if _, err := fmt.Fprintln(planWriter, buf.String()); err != nil {
+		return err
+	}
 	return nil
 }
 

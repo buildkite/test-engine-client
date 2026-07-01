@@ -53,7 +53,25 @@ func TestPlanJSON(t *testing.T) {
 }
 
 func TestPlanFullJSON(t *testing.T) {
-	svr := getHttptestServer()
+	// The server's exact response body, including a field the client struct
+	// does not model (server_only), to prove --full-json passes the response
+	// through unmodified rather than re-marshalling a struct.
+	serverBody := `{"identifier":"facecafe","parallelism":42,"experiment":"","tasks":{"0":{"node_number":0,"tests":[{"path":"testdata/rspec/spec/fruits/apple_spec.rb"}]}},"server_only":"kept"}`
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			json.NewEncoder(w).Encode(api.FilteredTestResponse{})
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			w.Write([]byte(serverBody))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
 	defer svr.Close()
 
 	cfg := getConfig()
@@ -73,28 +91,15 @@ func TestPlanFullJSON(t *testing.T) {
 		t.Errorf("command.Plan(...) error = %v", err)
 	}
 
-	// The full plan is emitted as indented JSON, matching the shape a fetch of
-	// the server's test_plan endpoint would return.
-	want := plan.TestPlan{
-		Identifier:  "facecafe",
-		Parallelism: 42,
-		Tasks: map[string]*plan.Task{
-			"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
-		},
-	}
-
-	var got plan.TestPlan
-	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+	// stdout is the server's exact response, only re-indented. Comparing the
+	// compacted output against the compacted server body proves no field was
+	// added, dropped, or renamed.
+	var gotCompact bytes.Buffer
+	if err := json.Compact(&gotCompact, buf.Bytes()); err != nil {
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
 	}
-
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("command.Plan(...) full plan diff = %s", diff)
-	}
-
-	// The client-internal Fallback field must not leak into the output.
-	if strings.Contains(strings.ToLower(buf.String()), "fallback") {
-		t.Errorf("full-json output leaked the Fallback field:\n%s", buf.String())
+	if gotCompact.String() != serverBody {
+		t.Errorf("full-json output was modified.\n got: %s\nwant: %s", gotCompact.String(), serverBody)
 	}
 
 	// Output should be indented, not compact.
