@@ -135,13 +135,22 @@ func TestPlanFullJSON_Parallelism0(t *testing.T) {
 		t.Errorf("command.Plan(...) error = %v", planErr)
 	}
 
-	// The full plan is still emitted, even at parallelism 0.
+	// The server plan is emitted in full, even at parallelism 0: the
+	// identifier, parallelism, and the task breakdown are all passed through.
 	var got plan.TestPlan
 	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
 	}
-	if got.Parallelism != 0 {
-		t.Errorf("emitted plan Parallelism = %d, want 0", got.Parallelism)
+
+	want := plan.TestPlan{
+		Identifier:  "facecafe",
+		Parallelism: 0,
+		Tasks: map[string]*plan.Task{
+			"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
+		},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("emitted plan diff (-want +got):\n%s", diff)
 	}
 
 	// The parallelism warning is written to stderr.
