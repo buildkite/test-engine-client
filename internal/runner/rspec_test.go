@@ -383,7 +383,7 @@ func TestRspecGetSelectors(t *testing.T) {
 
 	// Selector based splitting for RSpec splits by file, so the selectors are
 	// the discovered test files (the same result as GetFiles).
-	want := []string{"testdata/rspec/spec/spells/expelliarmus_spec.rb"}
+	want := []string{"./testdata/rspec/spec/spells/expelliarmus_spec.rb"}
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("Rspec.GetSelectors() diff (-got +want):\n%s", diff)

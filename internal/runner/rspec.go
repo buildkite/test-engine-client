@@ -80,8 +80,20 @@ func (r Rspec) GetFiles() ([]string, error) {
 	return files, nil
 }
 
-func (r Rspec) GetSelectors() ([]string, error) {
-	return r.GetFiles()
+func (r Rspec) GetSelectors() (selectors []string, err error) {
+	files, err := r.GetFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	// Unlike file based splitting, selector based splitting always uses the original
+	// file name reported by the test runner, so the location prefix is not prepended
+	// when requesting the test plan (see command.createRequestParam). RSpec reports
+	// file names with a leading "./", so we prepend it here too to match.
+	for _, file := range files {
+		selectors = append(selectors, "./"+file)
+	}
+	return selectors, nil
 }
 
 // Run executes the test command with the given test cases.
