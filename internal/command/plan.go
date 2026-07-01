@@ -154,9 +154,11 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 
 	// The server responded. Emit its exact JSON, unmodified. An error plan
 	// (`{"tasks": {}}`) is passed through verbatim so --full-json reflects the
-	// server's actual response; we only warn about it on stderr.
+	// server's actual response. We warn on stderr, but not via warnErrorPlan:
+	// that appends a "falling back to non-intelligent splitting" notice, which
+	// is untrue here since we emit the server's plan rather than a fallback.
 	if len(testPlan.Tasks) == 0 {
-		warnErrorPlan()
+		fmt.Fprintln(os.Stderr, "⚠️ The Test Engine API returned an empty plan.")
 	}
 
 	debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)

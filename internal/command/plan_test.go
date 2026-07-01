@@ -1046,13 +1046,18 @@ func TestPlanFullJSON_ServerErrorPlanPassedThrough(t *testing.T) {
 		t.Errorf("expected server identifier %q, got %q", "facecafe", got.Identifier)
 	}
 
-	// The error-plan warning is written to stderr...
-	if !strings.Contains(stderrOutput, "failed to generate a plan") {
-		t.Errorf("expected stderr to contain the error-plan warning, got: %s", stderrOutput)
+	// The empty-plan warning is written to stderr...
+	if !strings.Contains(stderrOutput, "returned an empty plan") {
+		t.Errorf("expected stderr to contain the empty-plan warning, got: %s", stderrOutput)
 	}
-	// ...but it is NOT presented as a locally-computed fallback.
+	// ...but it is NOT presented as a locally-computed fallback, nor does it
+	// claim a fallback to non-intelligent splitting, since the server's plan is
+	// what gets emitted.
 	if strings.Contains(stderrOutput, "locally-computed fallback plan") {
 		t.Errorf("server error plan should not be reported as a local fallback, got: %s", stderrOutput)
+	}
+	if strings.Contains(stderrOutput, "Falling back to non-intelligent splitting") {
+		t.Errorf("server error plan should not claim a fallback to non-intelligent splitting, got: %s", stderrOutput)
 	}
 }
 
