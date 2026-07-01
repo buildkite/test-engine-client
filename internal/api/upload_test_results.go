@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/buildkite/test-engine-client/v2/internal/version"
 )
 
 var (
@@ -85,6 +87,8 @@ func buildTestResultsMultipartBody(filePath string, format string, locationPrefi
 		"job_id":          os.Getenv("BUILDKITE_JOB_ID"),
 		"message":         os.Getenv("BUILDKITE_MESSAGE"),
 		"location_prefix": locationPrefix,
+		"collector":       "bktec",
+		"version":         version.Version,
 	}
 	if buildID != "" {
 		cwd, _ := os.Getwd()
