@@ -186,8 +186,8 @@ func emitLocalFallback(cfg *config.Config) error {
 		Tasks:       map[string]*plan.Task{},
 	}, "", "  ")
 
-	fmt.Fprintln(planWriter, string(encoded))
-	return nil
+	_, err := fmt.Fprintln(planWriter, string(encoded))
+	return err
 }
 
 // writeIndentedJSON re-indents raw JSON and writes it to planWriter, leaving the
