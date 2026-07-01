@@ -467,6 +467,11 @@ var jsonFlag = &cli.BoolFlag{
 	Usage: "JSON format output",
 }
 
+var fullJSONFlag = &cli.BoolFlag{
+	Name:  "full-json",
+	Usage: "print the full test plan (tasks, per-node test breakdown, muted/skipped tests and timing metadata) as JSON to stdout, without running the tests",
+}
+
 var pipelineUploadFlag = &cli.StringFlag{
 	Name:  "pipeline-upload",
 	Usage: "buildkite-agent pipeline upload will be executed with the provided `template.yml`. The additional enviroment variables BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER and BUILDKITE_TEST_ENGINE_PARALLELISM from the generated plan will be available to the template.",
@@ -666,6 +671,7 @@ var cliCommand = &cli.Command{
 					Category: "PLAN OUTPUT",
 					Flags: [][]cli.Flag{
 						{jsonFlag},
+						{fullJSONFlag},
 						{pipelineUploadFlag},
 					},
 				},

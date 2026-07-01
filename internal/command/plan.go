@@ -23,6 +23,7 @@ type PlanOutput int
 const (
 	PlanOutputJSON PlanOutput = iota
 	PlanOutputPipelineUpload
+	PlanOutputFullJSON
 )
 
 var planWriter io.Writer = os.Stdout
@@ -99,6 +100,24 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 			return err
 		}
 
+	case PlanOutputFullJSON:
+		if testPlan.Parallelism == 0 {
+			fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
+		}
+
+		if testPlan.Fallback {
+			fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
+		}
+
+		encoded, err := json.MarshalIndent(newFullPlanOutput(testPlan), "", "  ")
+		if err != nil {
+			return err
+		}
+
+		if _, err := fmt.Fprintln(planWriter, string(encoded)); err != nil {
+			return err
+		}
+
 	case PlanOutputPipelineUpload:
 		if testPlan.Parallelism == 0 {
 			fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
@@ -124,6 +143,34 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	}
 
 	return nil
+}
+
+// fullPlanOutput mirrors the server's test_plan endpoint response, so
+// --full-json emits the same shape a fetch of that endpoint would. It
+// deliberately omits plan.TestPlan.Fallback, which is client-internal and
+// untagged (it would otherwise leak as "Fallback": <bool>).
+type fullPlanOutput struct {
+	Identifier        string                `json:"identifier"`
+	Parallelism       int                   `json:"parallelism"`
+	Experiment        string                `json:"experiment"`
+	Tasks             map[string]*plan.Task `json:"tasks"`
+	MutedTests        []plan.TestCase       `json:"muted_tests,omitempty"`
+	SkippedTests      []plan.TestCase       `json:"skipped_tests,omitempty"`
+	TimingMetadata    *plan.TimingMetadata  `json:"timing_metadata,omitempty"`
+	KnownTimingsRatio *float64              `json:"known_timings_ratio,omitempty"`
+}
+
+func newFullPlanOutput(p plan.TestPlan) fullPlanOutput {
+	return fullPlanOutput{
+		Identifier:        p.Identifier,
+		Parallelism:       p.Parallelism,
+		Experiment:        p.Experiment,
+		Tasks:             p.Tasks,
+		MutedTests:        p.MutedTests,
+		SkippedTests:      p.SkippedTests,
+		TimingMetadata:    p.TimingMetadata,
+		KnownTimingsRatio: p.KnownTimingsRatio,
+	}
 }
 
 func makePipelineUploadCommand(template string) *exec.Cmd {
