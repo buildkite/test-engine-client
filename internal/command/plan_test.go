@@ -1055,3 +1055,37 @@ func TestPlanFullJSON_ServerErrorPlanPassedThrough(t *testing.T) {
 		t.Errorf("server error plan should not be reported as a local fallback, got: %s", stderrOutput)
 	}
 }
+
+// A fatal API error (here, 401 Unauthorized) is returned rather than swallowed:
+// --full-json exits with an error and emits nothing on stdout, instead of
+// falling back to a local plan.
+func TestPlanFullJSON_FatalErrorReturnsNoOutput(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"message": "Invalid access token"}`))
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	planErr := Plan(context.Background(), cfg, "", PlanOutputFullJSON, "")
+
+	// A fatal error is propagated (non-nil), so main exits non-zero.
+	if planErr == nil {
+		t.Error("expected a fatal error for a 401 response, got nil")
+	}
+
+	// Nothing is written to stdout: no plan, no fallback.
+	if buf.Len() != 0 {
+		t.Errorf("expected no stdout output on fatal error, got: %s", buf.String())
+	}
+}

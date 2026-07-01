@@ -141,15 +141,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 // reflects what the server has. A locally-computed fallback is used only when
 // the server cannot be reached at all, since there is nothing to pass through.
 func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) error {
-	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
-	if err != nil {
-		if handledErr := handleError(err); handledErr != nil {
-			return handledErr
-		}
-		return emitLocalFallback(cfg)
-	}
-
-	testPlan, raw, err := apiClient.CreateTestPlanRaw(ctx, cfg.SuiteSlug, params)
+	testPlan, raw, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
 	if err != nil {
 		// Fatal errors (auth, forbidden, bad request) are returned; soft
 		// errors (timeout, billing, disabled, not found) fall through to a
@@ -229,16 +221,23 @@ func makeFallbackPlan(cfg *config.Config) plan.TestPlan {
 	}
 }
 
+// requestTestPlan builds the request parameters and asks the server for a plan,
+// returning the decoded plan and the raw JSON response. It applies no fallback:
+// callers decide how to handle an error or an empty (error) plan.
+func requestTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, json.RawMessage, error) {
+	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
+	if err != nil {
+		return plan.TestPlan{}, nil, err
+	}
+
+	return apiClient.CreateTestPlanRaw(ctx, cfg.SuiteSlug, params)
+}
+
 // createTestPlan requests a plan and substitutes a locally-computed fallback
 // when the server errors or returns an error plan, so the caller always gets a
 // plan. Used by the --json and --pipeline-upload output modes.
 func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
-	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
-	if err != nil {
-		return makeFallbackPlan(cfg), err
-	}
-
-	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+	testPlan, _, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
 	if err != nil {
 		return makeFallbackPlan(cfg), err
 	}
