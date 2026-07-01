@@ -212,12 +212,7 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 func emitLocalFallback(cfg *config.Config) error {
 	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
 
-	testPlan := makeFallbackPlan(cfg)
-	if testPlan.Parallelism == 0 {
-		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
-	}
-
-	encoded, err := json.Marshal(newFullPlanOutput(testPlan))
+	encoded, err := json.Marshal(newFullPlanOutput(makeFallbackPlan(cfg)))
 	if err != nil {
 		return err
 	}
