@@ -86,6 +86,8 @@ type Config struct {
 	UploadToken string `json:"-"`
 	// SelectorSplitting enables selector-based splitting for supported runners.
 	SelectorSplitting bool `json:"-"`
+	// File path containing the list of selectors to run. If not set, `bktec` will rely on each runner implementation of `GetSelectors`
+	SelectorListPath string `json:"-"`
 	// SplitByExample is the flag to enable split the test by example.
 	SplitByExample bool   `json:"-"`
 	StepID         string `json:"-"`

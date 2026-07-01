@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"fmt"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
@@ -37,6 +39,21 @@ func TestCustom_NewCustom_MissingTestFilePattern(t *testing.T) {
 	}
 }
 
+func TestCustom_NewCustom_SelectorListWithoutTestFilePattern(t *testing.T) {
+	// When splitting by a provided selector list, test file discovery is
+	// skipped, so an empty TestFilePattern should be allowed.
+	_, err := NewCustom(RunnerConfig{
+		TestCommand:       "bin/test",
+		TestFilePattern:   "",
+		SelectorSplitting: true,
+		SelectorListPath:  "selectors.txt",
+	})
+
+	if err != nil {
+		t.Errorf("NewCustom() error = %v, want nil", err)
+	}
+}
+
 func TestCustom_GetExamples(t *testing.T) {
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "bin/test",
@@ -56,8 +73,8 @@ func TestCustom_GetExamples(t *testing.T) {
 func TestCustom_GetFiles(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "./test {{testExamples}}",
-		TestFilePattern: "tests/**/test_*.sh",
+		TestCommand:     "bats {{testExamples}}",
+		TestFilePattern: "tests/*.bats",
 	})
 
 	if err != nil {
@@ -70,8 +87,9 @@ func TestCustom_GetFiles(t *testing.T) {
 	}
 
 	want := []string{
-		"tests/test_a.sh",
-		"tests/test_b.sh",
+		"tests/failed_test.bats",
+		"tests/flaky_test.bats",
+		"tests/happy_test.bats",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -128,8 +146,8 @@ func TestCustom_CommandNameAndArgs(t *testing.T) {
 func TestCustom_Run(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "./test {{testExamples}}",
-		TestFilePattern: "tests/**/test_*.sh",
+		TestCommand:     "bats {{testExamples}}",
+		TestFilePattern: "tests/**/*.bats",
 	})
 
 	if err != nil {
@@ -137,8 +155,7 @@ func TestCustom_Run(t *testing.T) {
 	}
 
 	testCases := []plan.TestCase{
-		{Path: "./tests/test_a.sh"},
-		{Path: "./tests/test_b.sh"},
+		{Path: "./tests/happy_test.bats"},
 	}
 
 	result := NewRunResult([]plan.TestCase{})
@@ -155,8 +172,8 @@ func TestCustom_Run(t *testing.T) {
 func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "./test {{testExamples}}",
-		TestFilePattern: "./tests/**/test_*.sh",
+		TestCommand:     "bats {{testExamples}}",
+		TestFilePattern: "tests/**/*.bats",
 	})
 
 	if err != nil {
@@ -164,7 +181,7 @@ func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
 	}
 
 	testCases := []plan.TestCase{
-		{Path: "./tests/fail_test.sh"},
+		{Path: "./tests/failed_test.bats"},
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err = custom.Run(result, testCases, false)
@@ -179,10 +196,12 @@ func TestCustom_Run_TestFailedWithoutResult(t *testing.T) {
 
 func TestCustom_Run_TestFailedWithXMLResult(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
+	tmpDir := t.TempDir()
+
 	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "./test {{testExamples}}",
-		TestFilePattern: "./tests/**/test_*.sh",
-		ResultPath:      "./test-result.xml",
+		TestCommand:     fmt.Sprintf("bats --report-formatter junit --output %s {{testExamples}}", tmpDir),
+		TestFilePattern: "tests/**/*.bats",
+		ResultPath:      filepath.Join(tmpDir, "report.xml"),
 	})
 
 	if err != nil {
@@ -190,8 +209,7 @@ func TestCustom_Run_TestFailedWithXMLResult(t *testing.T) {
 	}
 
 	testCases := []plan.TestCase{
-		{Path: "./tests/test_a.sh"},
-		{Path: "./tests/fail_test.sh"},
+		{Path: "./tests/failed_test.bats"},
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err = custom.Run(result, testCases, false)
@@ -203,16 +221,16 @@ func TestCustom_Run_TestFailedWithXMLResult(t *testing.T) {
 		t.Errorf("Custom.Run() RunResult.Status = %v, want %v", result.Status(), RunStatusFailed)
 	}
 
-	if len(result.tests) != 2 {
-		t.Errorf("Custom.Run() len(RunResult.tests) = %d, want %d", len(result.tests), 2)
+	if len(result.tests) != 1 {
+		t.Errorf("Custom.Run() len(RunResult.tests) = %d, want %d", len(result.tests), 1)
 	}
 }
 
 func TestCustom_Run_TestFailedWithJSONResult(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "./test {{testExamples}}",
-		TestFilePattern: "./tests/**/test_*.sh",
+		TestCommand:     "bats {{testExamples}}",
+		TestFilePattern: "tests/**/*.bats",
 		ResultPath:      "./test-result.json",
 	})
 
@@ -221,8 +239,8 @@ func TestCustom_Run_TestFailedWithJSONResult(t *testing.T) {
 	}
 
 	testCases := []plan.TestCase{
-		{Path: "./tests/test_a.sh"},
-		{Path: "./tests/fail_test.sh"},
+		{Path: "./tests/happy_test.bats"},
+		{Path: "./tests/failed_test.bats"},
 	}
 	result := NewRunResult([]plan.TestCase{})
 	err = custom.Run(result, testCases, false)

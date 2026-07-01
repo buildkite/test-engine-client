@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// splitBySelectorList reports whether the run is splitting work using a
+// user-provided selector list instead of discovered test files. In this mode
+// test file discovery is skipped, so TestFilePattern isn't required.
+func (c *Config) splitBySelectorList() bool {
+	return c.SelectorSplitting && c.SelectorListPath != ""
+}
+
 // Checks common to all commands
 func (c *Config) validate() error {
 	if c.MaxRetries < 0 {
@@ -68,7 +75,9 @@ func (c *Config) validate() error {
 		if c.TestCommand == "" {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_CMD", "must not be blank when using the custom test runner")
 		}
-		if c.TestFilePattern == "" {
+		// A selector list replaces test file discovery, so the file pattern
+		// isn't required when splitting by a provided selector list.
+		if c.TestFilePattern == "" && !c.splitBySelectorList() {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN", "must not be blank when using the custom test runner")
 		}
 	}
@@ -82,6 +91,10 @@ func (c *Config) validate() error {
 
 	if c.SelectionStrategy == "" && len(c.SelectionParams) > 0 {
 		c.errs.appendFieldError("selection-param", "selection strategy must be set when selection params are provided")
+	}
+
+	if c.SelectorListPath != "" && !c.SelectorSplitting {
+		c.errs.appendFieldError("selectors", "selector splitting must be enabled when a selector list is provided")
 	}
 
 	if len(c.errs) > 0 {

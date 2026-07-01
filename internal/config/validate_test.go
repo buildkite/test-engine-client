@@ -50,6 +50,69 @@ func TestConfigValidate_SelectorSplittingIsPermissive(t *testing.T) {
 	})
 }
 
+func TestConfigValidate_SelectorListRequiresSelectorSplitting(t *testing.T) {
+	t.Run("rejects a selector list without selector splitting", func(t *testing.T) {
+		c := createConfig()
+		c.SelectorListPath = "selectors.txt"
+
+		err := c.validate()
+		if err == nil {
+			t.Fatalf("config.validate() error = nil, want InvalidConfigError")
+		}
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("config.validate() error = %v, want InvalidConfigError", err)
+		}
+
+		want := "selector splitting must be enabled when a selector list is provided"
+		if got := invConfigError["selectors"][0].Error(); got != want {
+			t.Errorf("config.validate() error for selectors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("accepts a selector list when selector splitting is enabled", func(t *testing.T) {
+		c := createConfig()
+		c.SelectorListPath = "selectors.txt"
+		c.SelectorSplitting = true
+
+		if err := c.validate(); err != nil {
+			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+}
+
+func TestConfigValidate_CustomRunnerFilePatternWithSelectorList(t *testing.T) {
+	t.Run("requires a file pattern for the custom runner by default", func(t *testing.T) {
+		c := createConfig()
+		c.TestRunner = "custom"
+		c.TestCommand = "bin/test"
+		c.TestFilePattern = ""
+
+		err := c.validate()
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("config.validate() error = %v, want InvalidConfigError", err)
+		}
+		if _, ok := invConfigError["BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN"]; !ok {
+			t.Errorf("config.validate() = %v, want a TEST_FILE_PATTERN error", invConfigError)
+		}
+	})
+
+	t.Run("does not require a file pattern when splitting by a selector list", func(t *testing.T) {
+		c := createConfig()
+		c.TestRunner = "custom"
+		c.TestCommand = "bin/test"
+		c.TestFilePattern = ""
+		c.SelectorSplitting = true
+		c.SelectorListPath = "selectors.txt"
+
+		if err := c.validate(); err != nil {
+			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+}
+
 func TestConfigValidate_Empty(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
 	err := c.validate()

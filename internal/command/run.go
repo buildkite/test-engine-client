@@ -416,7 +416,7 @@ func logSignalAndExit(name string, signal syscall.Signal) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, files []string, testRunner runner.TestRunner) (plan.TestPlan, error) {
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, testTargets []string, testRunner runner.TestRunner) (plan.TestPlan, error) {
 	debug.Println("Fetching test plan")
 
 	// Fetch the plan from the server's cache.
@@ -426,7 +426,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 		if handledErr := handleError(err); handledErr != nil {
 			return plan.TestPlan{}, handledErr
 		}
-		return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
+		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
 	}
 
 	if cachedPlan != nil {
@@ -434,7 +434,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 		// In this case, we should create a fallback plan.
 		if len(cachedPlan.Tasks) == 0 {
 			warnErrorPlan()
-			return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
+			return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
 		}
 
 		debug.Printf("Test plan found. Identifier: %q", cfg.Identifier)
@@ -443,12 +443,12 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 
 	debug.Println("No test plan found, creating a new plan")
 	// If the cache is empty, create a new plan.
-	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
+	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
 			return plan.TestPlan{}, handledErr
 		}
-		return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
+		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
 	}
 
 	debug.Println("Creating test plan")
@@ -458,14 +458,14 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 		if handledErr := handleError(err); handledErr != nil {
 			return plan.TestPlan{}, handledErr
 		}
-		return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
+		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		warnErrorPlan()
-		return plan.CreateFallbackPlan(files, cfg.Parallelism), nil
+		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
 	}
 
 	debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)

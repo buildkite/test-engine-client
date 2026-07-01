@@ -18,6 +18,8 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		TestFilePattern:        cfg.TestFilePattern,
 		uploadToken:            cfg.UploadToken,
+		SelectorSplitting:      cfg.SelectorSplitting,
+		SelectorListPath:       cfg.SelectorListPath,
 	}
 
 	switch testRunner := cfg.TestRunner; testRunner {

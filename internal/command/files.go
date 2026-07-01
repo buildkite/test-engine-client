@@ -11,16 +11,18 @@ import (
 
 func getTestFiles(fileList string, testRunner runner.TestRunner) ([]string, error) {
 	if fileList != "" {
-		return getTestFilesFromFile(fileList)
+		return getRowsFromFile(fileList)
 	} else {
 		return testRunner.GetFiles()
 	}
 }
 
-func getTestFilesFromFile(path string) ([]string, error) {
+// getRowsFromFile reads a text file and returns each non-empty, trimmed line as
+// a row. It's used for any newline-delimited list, such as test files or selectors.
+func getRowsFromFile(path string) ([]string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't read files from %s", path)
+		return nil, fmt.Errorf("couldn't read rows from %s", path)
 	}
 
 	contentType := http.DetectContentType(content)
@@ -29,17 +31,17 @@ func getTestFilesFromFile(path string) ([]string, error) {
 	}
 
 	lines := strings.Split(string(content), "\n")
-	fileNames := []string{}
+	rows := []string{}
 	for _, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
 		if trimmedLine != "" {
-			fileNames = append(fileNames, trimmedLine)
+			rows = append(rows, trimmedLine)
 		}
 	}
 
-	if len(fileNames) == 0 {
-		return nil, fmt.Errorf("no test files found in %s", path)
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("no rows found in %s", path)
 	}
 
-	return fileNames, nil
+	return rows, nil
 }

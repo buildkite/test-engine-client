@@ -282,6 +282,16 @@ var filesFlag = &cli.StringFlag{
 	Sources:  cli.EnvVars("BUILDKITE_TEST_ENGINE_FILES"),
 }
 
+var selectorsFlag = &cli.StringFlag{
+	Name:        "selector-file",
+	Category:    "TEST RUNNER",
+	Value:       "",
+	Usage:       "Path to a file containing a list of selectors to run (one per line). Must be used alongside `selector-splitting`",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_FILE"),
+	Destination: &cfg.SelectorListPath,
+	Hidden:      true,
+}
+
 var tagFiltersFlag = &cli.StringFlag{
 	Name:        "tag-filters",
 	Category:    "TEST RUNNER",
@@ -575,6 +585,7 @@ var runnerEnvironmentFlags = []cli.Flag{
 	resultPathFlag,
 	splitByExampleFlag,
 	selectorSplittingFlag,
+	selectorsFlag,
 	locationPrefixFlag,
 	// Runner Retry Flags
 	disableRetryMutedFlag,

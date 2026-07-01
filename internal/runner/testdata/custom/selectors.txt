@@ -1,0 +1,3 @@
+tests/failed_test.bats
+tests/flaky_test.bats
+tests/happy_test.bats
