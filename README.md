@@ -127,6 +127,22 @@ identifier, or, on a cache miss, creates and caches one under it. A reused
 identifier therefore returns the previously cached plan even if the inputs have
 changed, so keep the value unique per distinct plan.
 
+### Inspecting the full plan
+
+`--full-json` makes `bktec plan` print the full test plan to stdout as JSON,
+without running any tests. Unlike `--json`, which emits only the plan identifier
+and parallelism, `--full-json` includes the tasks, the per-node breakdown of
+tests, the muted and skipped tests, and the timing metadata. Redirect stdout to
+keep a copy:
+
+```sh
+./bktec plan --full-json --plan-identifier "$(uuidgen)" > plan.json
+```
+
+The human-readable split summary and any warnings are written to stderr, so
+stdout carries only the JSON. `--json`, `--full-json` and `--pipeline-upload`
+are mutually exclusive; choose one.
+
 ### Preview: Test Selection
 You can pass test selection strategy configuration and additional change context to the test plan API request.
 This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).
