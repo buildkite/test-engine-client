@@ -52,6 +52,99 @@ func TestPlanJSON(t *testing.T) {
 	}
 }
 
+func TestPlanFullJSON(t *testing.T) {
+	svr := getHttptestServer()
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	// This is the method under test
+	if err := Plan(ctx, cfg, "", PlanOutputFullJSON, ""); err != nil {
+		t.Errorf("command.Plan(...) error = %v", err)
+	}
+
+	// The full plan is emitted as indented JSON, matching the shape a fetch of
+	// the server's test_plan endpoint would return.
+	want := plan.TestPlan{
+		Identifier:  "facecafe",
+		Parallelism: 42,
+		Tasks: map[string]*plan.Task{
+			"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
+		},
+	}
+
+	var got plan.TestPlan
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("command.Plan(...) full plan diff = %s", diff)
+	}
+
+	// The client-internal Fallback field must not leak into the output.
+	if strings.Contains(strings.ToLower(buf.String()), "fallback") {
+		t.Errorf("full-json output leaked the Fallback field:\n%s", buf.String())
+	}
+
+	// Output should be indented, not compact.
+	if !strings.Contains(buf.String(), "\n  \"identifier\"") {
+		t.Errorf("expected indented JSON output, got:\n%s", buf.String())
+	}
+}
+
+func TestPlanFullJSON_Parallelism0(t *testing.T) {
+	svr := getZeroParallelismServer()
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	getStderr := captureStderr(t)
+
+	// This is the method under test
+	planErr := Plan(ctx, cfg, "", PlanOutputFullJSON, "")
+
+	stderrOutput := getStderr()
+
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	// The full plan is still emitted, even at parallelism 0.
+	var got plan.TestPlan
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if got.Parallelism != 0 {
+		t.Errorf("emitted plan Parallelism = %d, want 0", got.Parallelism)
+	}
+
+	// The parallelism warning is written to stderr.
+	if !strings.Contains(stderrOutput, "Parallelism is 0") {
+		t.Errorf("expected stderr to contain parallelism warning, got: %s", stderrOutput)
+	}
+}
+
 func TestPlanPipelineUpload(t *testing.T) {
 	svr := getHttptestServer()
 	defer svr.Close()
@@ -820,5 +913,56 @@ func TestPlanJSON_DebugLogging_Fallback(t *testing.T) {
 	// Verify debug output is NOT in stdout
 	if strings.Contains(stdoutOutput, "DEBUG") {
 		t.Errorf("debug output should not appear in stdout, got: %s", stdoutOutput)
+	}
+}
+
+// When the server is unreachable, --full-json still emits the locally-computed
+// fallback plan on stdout, but warns on stderr that it is not a server plan.
+func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.Identifier = "hello"
+	cfg.MaxParallelism = 10
+	cfg.ServerBaseURL = svr.URL
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	// Short timeout to trigger fallback quickly
+	fetchCtx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	getStderr := captureStderr(t)
+
+	// This is the method under test
+	planErr := Plan(fetchCtx, cfg, "", PlanOutputFullJSON, "")
+
+	stderrOutput := getStderr()
+
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	// The fallback plan is still emitted as valid JSON on stdout, without the
+	// Fallback field leaking.
+	var got plan.TestPlan
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if strings.Contains(strings.ToLower(buf.String()), "fallback") {
+		t.Errorf("full-json output leaked the Fallback field:\n%s", buf.String())
+	}
+
+	// The fallback caveat is written to stderr.
+	if !strings.Contains(stderrOutput, "locally-computed fallback plan") {
+		t.Errorf("expected stderr to contain the fallback caveat, got: %s", stderrOutput)
 	}
 }

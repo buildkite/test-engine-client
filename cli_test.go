@@ -74,6 +74,52 @@ func TestPlanCommandIncludesPlanIdentifierFlag(t *testing.T) {
 	}
 }
 
+func TestPlanCommandIncludesFullJSONOutputFlag(t *testing.T) {
+	planCmd := findCommand(cliCommand, "plan")
+	if planCmd == nil {
+		t.Fatal("cliCommand missing the plan subcommand")
+	}
+
+	if !mutuallyExclusiveGroupHasFlag(planCmd, "PLAN OUTPUT", "full-json") {
+		t.Fatalf("plan command's PLAN OUTPUT group missing --full-json; `bktec plan --full-json` cannot emit the full plan")
+	}
+}
+
+// --full-json belongs to the required, mutually-exclusive PLAN OUTPUT group, so
+// it cannot be combined with --json and one output flag must be supplied.
+func TestPlanFullJSONIsMutuallyExclusiveWithJSON(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+
+	err := cliCommand.Run(context.Background(), []string{"bktec", "plan", "--json", "--full-json"})
+	if err == nil {
+		t.Fatal("expected an error when --json and --full-json are combined, got nil")
+	}
+}
+
+func findCommand(root *cli.Command, name string) *cli.Command {
+	for _, c := range root.Commands {
+		if c.Name == name {
+			return c
+		}
+	}
+	return nil
+}
+
+func mutuallyExclusiveGroupHasFlag(cmd *cli.Command, category, name string) bool {
+	for _, group := range cmd.MutuallyExclusiveFlags {
+		if group.Category != category {
+			continue
+		}
+		for _, flags := range group.Flags {
+			if hasFlag(flags, name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestApplyPlanRequestContext_ClearsCollectGitMetadataWhenPreviewDisabled(t *testing.T) {
 	t.Setenv(previewSelectionEnvVar, "")
 
