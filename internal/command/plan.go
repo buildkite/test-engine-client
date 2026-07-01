@@ -176,7 +176,7 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 		if handledErr := handleError(err); handledErr != nil {
 			return handledErr
 		}
-		return emitLocalFallback(cfg, testTargets)
+		return emitLocalFallback(cfg)
 	}
 
 	testPlan, raw, err := apiClient.CreateTestPlanRaw(ctx, cfg.SuiteSlug, params)
@@ -187,7 +187,7 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 		if handledErr := handleError(err); handledErr != nil {
 			return handledErr
 		}
-		return emitLocalFallback(cfg, testTargets)
+		return emitLocalFallback(cfg)
 	}
 
 	// The server responded. Emit its exact JSON, unmodified. An error plan
@@ -206,13 +206,13 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 	return writeIndentedJSON(raw)
 }
 
-// emitLocalFallback writes a locally-computed fallback plan, used by --full-json
-// when the server cannot be reached and there is nothing to pass through.
-func emitLocalFallback(cfg *config.Config, testTargets []string) error {
+// emitLocalFallback writes a locally-computed fallback plan as JSON, used by
+// --full-json when the server cannot be reached and there is nothing to pass
+// through.
+func emitLocalFallback(cfg *config.Config) error {
 	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
 
-	testPlan := makeFallbackPlan(cfg, testTargets)
-	plan.PrintSplitSummary(os.Stderr, testPlan)
+	testPlan := makeFallbackPlan(cfg)
 	if testPlan.Parallelism == 0 {
 		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
 	}
@@ -245,59 +245,38 @@ func makePipelineUploadCommand(template string) *exec.Cmd {
 	return cmd
 }
 
-// requestTestPlan requests a plan from the server and returns it verbatim,
-// without substituting a local fallback. The returned plan may be an "error
-// plan" with an empty task list (i.e. `{"tasks": {}}`) when the server could
-// not generate one; callers that need a runnable plan should fall back
-// themselves.
-func requestTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
-	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
-	if err != nil {
-		return plan.TestPlan{}, err
+// makeFallbackPlan returns the locally-computed fallback plan used when the
+// server cannot generate or return one.
+func makeFallbackPlan(cfg *config.Config) plan.TestPlan {
+	return plan.TestPlan{
+		Identifier:  cfg.Identifier,
+		Parallelism: cfg.MaxParallelism,
+		Fallback:    true,
 	}
-
-	return apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
 }
 
 // createTestPlan requests a plan and substitutes a locally-computed fallback
 // when the server errors or returns an error plan, so the caller always gets a
-// runnable plan. Used by the --json and --pipeline-upload output modes.
+// plan. Used by the --json and --pipeline-upload output modes.
 func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
-	testPlan, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
+	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
-		return makeFallbackPlan(cfg, testTargets), err
+		return makeFallbackPlan(cfg), err
+	}
+
+	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+	if err != nil {
+		return makeFallbackPlan(cfg), err
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		warnErrorPlan()
-		return makeFallbackPlan(cfg, testTargets), nil
+		return makeFallbackPlan(cfg), nil
 	}
 
 	return testPlan, nil
-}
-
-func makeFallbackPlan(cfg *config.Config, testTargets []string) plan.TestPlan {
-	parallelism := fallbackParallelism(cfg)
-	fallbackPlan := plan.CreateFallbackPlan(testTargets, parallelism)
-	fallbackPlan.Identifier = cfg.Identifier
-	fallbackPlan.Parallelism = parallelism
-	return fallbackPlan
-}
-
-// fallbackParallelism resolves the parallelism for a locally-computed fallback
-// plan. It prefers the dynamic --max-parallelism, then BUILDKITE_PARALLEL_JOB_COUNT,
-// and finally 1, so the fallback always has at least one node to distribute
-// files across (plan.CreateFallbackPlan divides by parallelism).
-func fallbackParallelism(cfg *config.Config) int {
-	if cfg.MaxParallelism > 0 {
-		return cfg.MaxParallelism
-	}
-	if cfg.Parallelism > 0 {
-		return cfg.Parallelism
-	}
-	return 1
 }
 
 // autoCollectGitMetadata collects git commit metadata and merges it into

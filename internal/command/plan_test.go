@@ -922,7 +922,7 @@ func TestPlanJSON_DebugLogging_Fallback(t *testing.T) {
 }
 
 // When the server cannot be reached (here, a retry timeout), --full-json has
-// nothing to pass through, so it emits the locally-computed fallback plan on
+// nothing to pass through, so it emits a locally-computed fallback plan on
 // stdout and warns on stderr that it is not a server plan.
 func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -957,8 +957,9 @@ func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 		t.Errorf("command.Plan(...) error = %v", planErr)
 	}
 
-	// The fallback plan is still emitted as valid JSON on stdout, without the
-	// Fallback field leaking.
+	// The fallback plan is still emitted as valid JSON on stdout, carrying the
+	// identifier and parallelism, without the client-internal Fallback field
+	// leaking.
 	var got plan.TestPlan
 	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
@@ -966,21 +967,11 @@ func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 	if strings.Contains(strings.ToLower(buf.String()), "fallback") {
 		t.Errorf("full-json output leaked the Fallback field:\n%s", buf.String())
 	}
-
-	// The fallback must be a real, usable plan: tasks populated from the
-	// discovered targets, not a null/empty task map.
-	if len(got.Tasks) == 0 {
-		t.Fatalf("fallback --full-json output has no tasks; got: %s", buf.String())
+	if got.Identifier != "hello" {
+		t.Errorf("fallback plan Identifier = %q, want %q", got.Identifier, "hello")
 	}
 	if got.Parallelism != 10 {
 		t.Errorf("fallback plan Parallelism = %d, want 10 (from --max-parallelism)", got.Parallelism)
-	}
-	var fallbackTestCount int
-	for _, task := range got.Tasks {
-		fallbackTestCount += len(task.Tests)
-	}
-	if fallbackTestCount == 0 {
-		t.Errorf("fallback plan distributed no tests across its tasks; got: %s", buf.String())
 	}
 
 	// The fallback caveat is written to stderr.

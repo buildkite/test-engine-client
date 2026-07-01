@@ -136,7 +136,7 @@ tests, the muted and skipped tests, and the timing metadata. Redirect stdout to
 keep a copy:
 
 ```sh
-./bktec plan --full-json --plan-identifier "$(uuidgen)" > plan.json
+./bktec plan --full-json ... > plan.json
 ```
 
 The human-readable split summary and any warnings are written to stderr, so
