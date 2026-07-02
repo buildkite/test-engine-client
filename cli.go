@@ -711,9 +711,9 @@ var cliCommand = &cli.Command{
 					Required: true,
 					Category: "PLAN OUTPUT",
 					Flags: [][]cli.Flag{
-						{jsonFlag},
-						{planOutFlag},
-						{pipelineUploadFlag},
+						{freshFlag(jsonFlag)},
+						{freshFlag(planOutFlag)},
+						{freshFlag(pipelineUploadFlag)},
 					},
 				},
 			},

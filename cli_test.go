@@ -194,7 +194,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 
 	cmd := &cli.Command{
 		Name:  "bktec",
-		Flags: []cli.Flag{debugFlag},
+		Flags: freshFlags([]cli.Flag{debugFlag}),
 		Commands: []*cli.Command{
 			{
 				Name:                      "run",
@@ -352,5 +352,30 @@ func TestRunCommandFlagsDoNotShareParseState(t *testing.T) {
 
 	if !cfg.SelectorSplitting {
 		t.Fatalf("cfg.SelectorSplitting = false, want true; flag parse state leaked between commands")
+	}
+}
+
+// TestCommandFlagsAllReturnFreshInstances asserts every flag handed out by the
+// run and plan helpers is a distinct instance, i.e. freshFlag matched a concrete
+// case rather than falling through to its default (which returns the shared
+// global unchanged). This catches a new flag type being added without a
+// corresponding freshFlag case, which would silently reintroduce the TE-6257
+// parse-state leak for that flag.
+func TestCommandFlagsAllReturnFreshInstances(t *testing.T) {
+	// Enable preview so the selection flags are included in the sweep.
+	t.Setenv(previewSelectionEnvVar, "true")
+
+	for _, tc := range []struct {
+		name  string
+		flags []cli.Flag
+	}{
+		{"run", runCommandFlags()},
+		{"plan", planCommandFlags()},
+	} {
+		for _, f := range tc.flags {
+			if freshFlag(f) == f {
+				t.Errorf("%s: freshFlag(%v) returned the shared global (type %T); add a case to freshFlag so its parse state is isolated", tc.name, f.Names(), f)
+			}
+		}
 	}
 }
