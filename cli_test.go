@@ -74,10 +74,10 @@ func TestPlanCommandIncludesPlanIdentifierFlag(t *testing.T) {
 	}
 }
 
-// --full-json is registered in the plan command's mutually-exclusive PLAN
+// --plan-out is registered in the plan command's mutually-exclusive PLAN
 // OUTPUT group, so it is a valid output mode and cannot be combined with --json
 // or --pipeline-upload.
-func TestPlanCommandIncludesFullJSONOutputFlag(t *testing.T) {
+func TestPlanCommandIncludesPlanOutOutputFlag(t *testing.T) {
 	var planCmd *cli.Command
 	for _, c := range cliCommand.Commands {
 		if c.Name == "plan" {
@@ -94,14 +94,14 @@ func TestPlanCommandIncludesFullJSONOutputFlag(t *testing.T) {
 			continue
 		}
 		for _, flags := range group.Flags {
-			if hasFlag(flags, "full-json") {
+			if hasFlag(flags, "plan-out") {
 				found = true
 			}
 		}
 	}
 
 	if !found {
-		t.Fatal("plan command's PLAN OUTPUT group missing --full-json")
+		t.Fatal("plan command's PLAN OUTPUT group missing --plan-out")
 	}
 }
 

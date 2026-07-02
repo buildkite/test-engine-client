@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -52,9 +53,9 @@ func TestPlanJSON(t *testing.T) {
 	}
 }
 
-func TestPlanFullJSON(t *testing.T) {
+func TestPlanPlanOut(t *testing.T) {
 	// The server's exact response body, including a field the client struct
-	// does not model (server_only), to prove --full-json passes the response
+	// does not model (server_only), to prove --plan-out passes the response
 	// through unmodified rather than re-marshalling a struct.
 	serverBody := `{"identifier":"facecafe","parallelism":42,"experiment":"","tasks":{"0":{"node_number":0,"tests":[{"path":"testdata/rspec/spec/fruits/apple_spec.rb"}]}},"server_only":"kept"}`
 
@@ -76,6 +77,7 @@ func TestPlanFullJSON(t *testing.T) {
 
 	cfg := getConfig()
 	cfg.ServerBaseURL = svr.URL
+	cfg.PlanOut = "-"
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -87,7 +89,7 @@ func TestPlanFullJSON(t *testing.T) {
 	setPlanWriter(t, &buf)
 
 	// This is the method under test
-	if err := Plan(ctx, cfg, "", PlanOutputFullJSON, ""); err != nil {
+	if err := Plan(ctx, cfg, "", PlanOutputPlanOut, ""); err != nil {
 		t.Errorf("command.Plan(...) error = %v", err)
 	}
 
@@ -99,7 +101,7 @@ func TestPlanFullJSON(t *testing.T) {
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
 	}
 	if gotCompact.String() != serverBody {
-		t.Errorf("full-json output was modified.\n got: %s\nwant: %s", gotCompact.String(), serverBody)
+		t.Errorf("--plan-out output was modified.\n got: %s\nwant: %s", gotCompact.String(), serverBody)
 	}
 
 	// Output should be indented, not compact.
@@ -108,12 +110,69 @@ func TestPlanFullJSON(t *testing.T) {
 	}
 }
 
-func TestPlanFullJSON_Parallelism0(t *testing.T) {
+// --plan-out with a file path writes the plan to that file rather than stdout.
+func TestPlanPlanOut_WritesToFile(t *testing.T) {
+	serverBody := `{"identifier":"facecafe","parallelism":42,"tasks":{"0":{"node_number":0,"tests":[{"path":"a_spec.rb"}]}}}`
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			json.NewEncoder(w).Encode(api.FilteredTestResponse{})
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			w.Write([]byte(serverBody))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	outPath := filepath.Join(t.TempDir(), "plan.json")
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+	cfg.PlanOut = outPath
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	// planWriter (stdout) must stay empty; the plan goes to the file.
+	var stdout bytes.Buffer
+	setPlanWriter(t, &stdout)
+
+	if err := Plan(context.Background(), cfg, "", PlanOutputPlanOut, ""); err != nil {
+		t.Errorf("command.Plan(...) error = %v", err)
+	}
+
+	if stdout.Len() != 0 {
+		t.Errorf("expected no stdout output when writing to a file, got: %s", stdout.String())
+	}
+
+	contents, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("reading --plan-out file: %v", err)
+	}
+
+	var gotCompact bytes.Buffer
+	if err := json.Compact(&gotCompact, contents); err != nil {
+		t.Fatalf("file is not valid JSON: %v\ncontents: %s", err, contents)
+	}
+	if gotCompact.String() != serverBody {
+		t.Errorf("--plan-out file was modified.\n got: %s\nwant: %s", gotCompact.String(), serverBody)
+	}
+}
+
+func TestPlanPlanOut_Parallelism0(t *testing.T) {
 	svr := getZeroParallelismServer()
 	defer svr.Close()
 
 	cfg := getConfig()
 	cfg.ServerBaseURL = svr.URL
+	cfg.PlanOut = "-"
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -127,7 +186,7 @@ func TestPlanFullJSON_Parallelism0(t *testing.T) {
 	getStderr := captureStderr(t)
 
 	// This is the method under test
-	planErr := Plan(ctx, cfg, "", PlanOutputFullJSON, "")
+	planErr := Plan(ctx, cfg, "", PlanOutputPlanOut, "")
 
 	stderrOutput := getStderr()
 
@@ -930,10 +989,10 @@ func TestPlanJSON_DebugLogging_Fallback(t *testing.T) {
 	}
 }
 
-// When the server cannot be reached (here, a retry timeout), --full-json has
+// When the server cannot be reached (here, a retry timeout), --plan-out has
 // nothing to pass through, so it emits a locally-computed fallback plan on
 // stdout and warns on stderr that it is not a server plan.
-func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
+func TestPlanPlanOut_FallbackWarnsOnStderr(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}))
@@ -943,6 +1002,7 @@ func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 	cfg.Identifier = "hello"
 	cfg.MaxParallelism = 10
 	cfg.ServerBaseURL = svr.URL
+	cfg.PlanOut = "-"
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -958,7 +1018,7 @@ func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 	getStderr := captureStderr(t)
 
 	// This is the method under test
-	planErr := Plan(fetchCtx, cfg, "", PlanOutputFullJSON, "")
+	planErr := Plan(fetchCtx, cfg, "", PlanOutputPlanOut, "")
 
 	stderrOutput := getStderr()
 
@@ -974,7 +1034,7 @@ func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
 	}
 	if strings.Contains(strings.ToLower(buf.String()), "fallback") {
-		t.Errorf("full-json output leaked the Fallback field:\n%s", buf.String())
+		t.Errorf("--plan-out output leaked the Fallback field:\n%s", buf.String())
 	}
 	if got.Identifier != "hello" {
 		t.Errorf("fallback plan Identifier = %q, want %q", got.Identifier, "hello")
@@ -989,10 +1049,10 @@ func TestPlanFullJSON_FallbackWarnsOnStderr(t *testing.T) {
 	}
 }
 
-// When the server returns an error plan (`{"tasks": {}}`), --full-json passes
+// When the server returns an error plan (`{"tasks": {}}`), --plan-out passes
 // it through verbatim rather than substituting a local fallback, so the output
 // reflects the server's actual response. It is not marked as a local fallback.
-func TestPlanFullJSON_ServerErrorPlanPassedThrough(t *testing.T) {
+func TestPlanPlanOut_ServerErrorPlanPassedThrough(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
@@ -1014,6 +1074,7 @@ func TestPlanFullJSON_ServerErrorPlanPassedThrough(t *testing.T) {
 
 	cfg := getConfig()
 	cfg.ServerBaseURL = svr.URL
+	cfg.PlanOut = "-"
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -1024,7 +1085,7 @@ func TestPlanFullJSON_ServerErrorPlanPassedThrough(t *testing.T) {
 
 	getStderr := captureStderr(t)
 
-	planErr := Plan(context.Background(), cfg, "", PlanOutputFullJSON, "")
+	planErr := Plan(context.Background(), cfg, "", PlanOutputPlanOut, "")
 
 	stderrOutput := getStderr()
 
@@ -1062,9 +1123,9 @@ func TestPlanFullJSON_ServerErrorPlanPassedThrough(t *testing.T) {
 }
 
 // A fatal API error (here, 401 Unauthorized) is returned rather than swallowed:
-// --full-json exits with an error and emits nothing on stdout, instead of
+// --plan-out exits with an error and emits nothing on stdout, instead of
 // falling back to a local plan.
-func TestPlanFullJSON_FatalErrorReturnsNoOutput(t *testing.T) {
+func TestPlanPlanOut_FatalErrorReturnsNoOutput(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -1074,6 +1135,7 @@ func TestPlanFullJSON_FatalErrorReturnsNoOutput(t *testing.T) {
 
 	cfg := getConfig()
 	cfg.ServerBaseURL = svr.URL
+	cfg.PlanOut = "-"
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -1082,7 +1144,7 @@ func TestPlanFullJSON_FatalErrorReturnsNoOutput(t *testing.T) {
 	var buf bytes.Buffer
 	setPlanWriter(t, &buf)
 
-	planErr := Plan(context.Background(), cfg, "", PlanOutputFullJSON, "")
+	planErr := Plan(context.Background(), cfg, "", PlanOutputPlanOut, "")
 
 	// A fatal error is propagated (non-nil), so main exits non-zero.
 	if planErr == nil {

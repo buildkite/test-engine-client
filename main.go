@@ -54,8 +54,8 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 	switch {
 	case cmd.Bool("json"):
 		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputJSON, "")
-	case cmd.Bool("full-json"):
-		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputFullJSON, "")
+	case cmd.IsSet("plan-out"):
+		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputPlanOut, "")
 	default:
 		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputPipelineUpload, cmd.String("pipeline-upload"))
 	}

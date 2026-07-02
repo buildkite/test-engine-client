@@ -24,7 +24,7 @@ type PlanOutput int
 const (
 	PlanOutputJSON PlanOutput = iota
 	PlanOutputPipelineUpload
-	PlanOutputFullJSON
+	PlanOutputPlanOut
 )
 
 var planWriter io.Writer = os.Stdout
@@ -61,10 +61,10 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 
 	debug.Println("Creating test plan via API")
 
-	// --full-json emits what the server returns, so it takes a distinct path
+	// --plan-out emits what the server returns, so it takes a distinct path
 	// that does not substitute a local fallback for a server error plan.
-	if outputFormat == PlanOutputFullJSON {
-		return fullJSONPlan(ctx, cfg, testTargets, apiClient, testRunner)
+	if outputFormat == PlanOutputPlanOut {
+		return planOut(ctx, cfg, testTargets, apiClient, testRunner)
 	}
 
 	testPlan, err := createTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
@@ -134,13 +134,20 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	return nil
 }
 
-// fullJSONPlan emits the plan as the server's test_plan endpoint would return
-// it. Unlike the --json and --pipeline-upload modes it does not substitute a
-// local fallback for a server error plan: the server's response (including an
-// empty error plan) is passed through verbatim, so the output faithfully
-// reflects what the server has. A locally-computed fallback is used only when
-// the server cannot be reached at all, since there is nothing to pass through.
-func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) error {
+// planOut writes the plan as the server's test_plan endpoint would return it to
+// the destination given by cfg.PlanOut ("-" for stdout, otherwise a file).
+// Unlike the --json and --pipeline-upload modes it does not substitute a local
+// fallback for a server error plan: the server's response (including an empty
+// error plan) is passed through verbatim, so the output faithfully reflects
+// what the server has. A locally-computed fallback is used only when the server
+// cannot be reached at all, since there is nothing to pass through.
+func planOut(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) error {
+	out, closeOut, err := planOutWriter(cfg.PlanOut)
+	if err != nil {
+		return err
+	}
+	defer closeOut()
+
 	testPlan, raw, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
 	if err != nil {
 		// Fatal errors (auth, forbidden, bad request) are returned; soft
@@ -149,11 +156,11 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 		if handledErr := handleError(err); handledErr != nil {
 			return handledErr
 		}
-		return emitLocalFallback(cfg)
+		return emitLocalFallback(out, cfg)
 	}
 
 	// The server responded. Emit its exact JSON, unmodified. An error plan
-	// (`{"tasks": {}}`) is passed through verbatim so --full-json reflects the
+	// (`{"tasks": {}}`) is passed through verbatim so --plan-out reflects the
 	// server's actual response. We warn on stderr, but not via warnErrorPlan:
 	// that appends a "falling back to non-intelligent splitting" notice, which
 	// is untrue here since we emit the server's plan rather than a fallback.
@@ -167,14 +174,29 @@ func fullJSONPlan(ctx context.Context, cfg *config.Config, testTargets []string,
 		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
 	}
 
-	return writeIndentedJSON(raw)
+	return writeIndentedJSON(out, raw)
+}
+
+// planOutWriter resolves the --plan-out destination: "-" writes to planWriter
+// (stdout), any other value creates (or truncates) that file. The returned
+// close function closes a file destination, and is a no-op for stdout.
+func planOutWriter(dest string) (io.Writer, func(), error) {
+	if dest == "-" {
+		return planWriter, func() {}, nil
+	}
+
+	f, err := os.Create(dest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("opening --plan-out file: %w", err)
+	}
+	return f, func() { f.Close() }, nil
 }
 
 // emitLocalFallback writes a locally-computed fallback plan as JSON, used by
-// --full-json when the server cannot be reached and there is nothing to pass
+// --plan-out when the server cannot be reached and there is nothing to pass
 // through. The fallback carries no tasks, so only the identifier and
 // parallelism are emitted.
-func emitLocalFallback(cfg *config.Config) error {
+func emitLocalFallback(out io.Writer, cfg *config.Config) error {
 	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
 
 	// A fixed-shape struct of plain fields, so marshalling cannot fail.
@@ -188,18 +210,18 @@ func emitLocalFallback(cfg *config.Config) error {
 		Tasks:       map[string]*plan.Task{},
 	}, "", "  ")
 
-	_, err := fmt.Fprintln(planWriter, string(encoded))
+	_, err := fmt.Fprintln(out, string(encoded))
 	return err
 }
 
-// writeIndentedJSON re-indents raw JSON and writes it to planWriter, leaving the
+// writeIndentedJSON re-indents raw JSON and writes it to out, leaving the
 // content (keys, values, order) untouched.
-func writeIndentedJSON(raw []byte) error {
+func writeIndentedJSON(out io.Writer, raw []byte) error {
 	var buf bytes.Buffer
 	if err := json.Indent(&buf, raw, "", "  "); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(planWriter, buf.String()); err != nil {
+	if _, err := fmt.Fprintln(out, buf.String()); err != nil {
 		return err
 	}
 	return nil

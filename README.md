@@ -129,24 +129,25 @@ changed, so keep the value unique per distinct plan.
 
 ### Inspecting the full plan
 
-`--full-json` makes `bktec plan` print the full test plan to stdout as JSON,
-without running any tests. Unlike `--json`, which emits only the plan identifier
-and parallelism, `--full-json` includes the tasks, the per-node breakdown of
-tests, the muted and skipped tests, and the timing metadata. Redirect stdout to
-keep a copy:
+`--plan-out` makes `bktec plan` write the full test plan without running any
+tests. Unlike `--json`, which emits only the plan identifier and parallelism,
+`--plan-out` writes the whole plan: the tasks, the per-node breakdown of tests,
+the muted and skipped tests, and the timing metadata. It takes a destination:
+`-` for stdout, or a file path.
 
 ```sh
-./bktec plan --full-json ... > plan.json
+./bktec plan --plan-out - > plan.json    # stdout
+./bktec plan --plan-out plan.json        # a file
 ```
 
 The human-readable split summary and any warnings are written to stderr, so
-stdout carries only the JSON. `--json`, `--full-json` and `--pipeline-upload`
+stdout carries only the plan. `--json`, `--plan-out` and `--pipeline-upload`
 are mutually exclusive; choose one.
 
-`--full-json` prints what the server returns. If the server cannot generate a
-plan it returns an empty plan, which is emitted as-is (a warning is printed to
-stderr). Only when the server cannot be reached at all does `bktec` fall back to
-a locally-computed plan, again noting this on stderr.
+`--plan-out` writes what the server returns, unmodified. If the server cannot
+generate a plan it returns an empty plan, which is emitted as-is (a warning is
+printed to stderr). Only when the server cannot be reached at all does `bktec`
+fall back to a locally-computed plan, again noting this on stderr.
 
 ### Preview: Test Selection
 You can pass test selection strategy configuration and additional change context to the test plan API request.

@@ -467,9 +467,10 @@ var jsonFlag = &cli.BoolFlag{
 	Usage: "JSON format output",
 }
 
-var fullJSONFlag = &cli.BoolFlag{
-	Name:  "full-json",
-	Usage: "print the full test plan (tasks, per-node test breakdown, muted/skipped tests and timing metadata) as JSON to stdout, without running the tests",
+var planOutFlag = &cli.StringFlag{
+	Name:        "plan-out",
+	Usage:       "write the full test plan (the server's test plan response, unmodified) to `PATH`, or `-` for stdout, without running the tests",
+	Destination: &cfg.PlanOut,
 }
 
 var pipelineUploadFlag = &cli.StringFlag{
@@ -671,7 +672,7 @@ var cliCommand = &cli.Command{
 					Category: "PLAN OUTPUT",
 					Flags: [][]cli.Flag{
 						{jsonFlag},
-						{fullJSONFlag},
+						{planOutFlag},
 						{pipelineUploadFlag},
 					},
 				},
