@@ -59,6 +59,10 @@ type Config struct {
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"-"`
+	// PlanOut is the destination for the `bktec plan --plan-out` output: "-" for
+	// stdout, or a file path. The full test plan is written as the server's
+	// response, unmodified.
+	PlanOut string `json:"-"`
 	// Remote is the git remote name for fetching missing commits and detecting default branch (default "origin").
 	Remote string `json:"-"`
 	// ResultPath is the path to the result file.

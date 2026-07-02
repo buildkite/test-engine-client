@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -52,4 +53,30 @@ func (c Client) CreateTestPlan(ctx context.Context, suiteSlug string, params Tes
 	}
 
 	return testPlan, nil
+}
+
+// CreateTestPlanRaw is like CreateTestPlan but also returns the raw JSON
+// response body from the server, unmodified. Callers that want to surface the
+// server's exact response (rather than a re-marshalled struct) use the raw
+// bytes, and use the decoded plan for control-flow decisions.
+// ErrRetryTimeout is returned if the client failed to communicate with the server after exceeding the retry limit.
+func (c Client) CreateTestPlanRaw(ctx context.Context, suiteSlug string, params TestPlanParams) (plan.TestPlan, json.RawMessage, error) {
+	postURL := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s/test_plan", c.ServerBaseURL, c.OrganizationSlug, suiteSlug)
+
+	var raw json.RawMessage
+	_, err := c.doJSONWithRetry(ctx, httpRequest{
+		Method: http.MethodPost,
+		URL:    postURL,
+		Body:   params,
+	}, &raw)
+	if err != nil {
+		return plan.TestPlan{}, nil, err
+	}
+
+	var testPlan plan.TestPlan
+	if err := json.Unmarshal(raw, &testPlan); err != nil {
+		return plan.TestPlan{}, nil, fmt.Errorf("parsing test plan: %w", err)
+	}
+
+	return testPlan, raw, nil
 }
