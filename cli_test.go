@@ -306,3 +306,51 @@ func TestSelectorSplittingFlagBindsToPlanConfig(t *testing.T) {
 		t.Fatalf("cfg.SelectorSplitting = false, want true")
 	}
 }
+
+// TestRunCommandFlagsDoNotShareParseState guards against the order-dependent
+// failure from TE-6257: runCommandFlags() must hand out fresh flag instances so
+// that explicitly setting a flag on one command does not leave urfave/cli's
+// hasBeenSet state on a shared flag object, which would make a later command
+// ignore the flag's env var source.
+func TestRunCommandFlagsDoNotShareParseState(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+
+	// First command parses --selector-splitting on the CLI.
+	first := &cli.Command{
+		Name: "bktec",
+		Commands: []*cli.Command{
+			{
+				Name:   "run",
+				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+				Flags:  runCommandFlags(),
+			},
+		},
+	}
+	if err := first.Run(context.Background(), []string{"bktec", "run", "--selector-splitting"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Second command, built independently, relies on the env var source. If the
+	// two commands shared the same flag instance, the flag's hasBeenSet state
+	// from the first parse would suppress the env var here.
+	cfg = config.New()
+	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING", "true")
+	second := &cli.Command{
+		Name: "bktec",
+		Commands: []*cli.Command{
+			{
+				Name:   "run",
+				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+				Flags:  runCommandFlags(),
+			},
+		},
+	}
+	if err := second.Run(context.Background(), []string{"bktec", "run"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cfg.SelectorSplitting {
+		t.Fatalf("cfg.SelectorSplitting = false, want true; flag parse state leaked between commands")
+	}
+}

@@ -613,6 +613,46 @@ func previewSelectionFlags() []cli.Flag {
 	}
 }
 
+// freshFlag returns a shallow copy of a flag with a distinct backing struct, so
+// urfave/cli's per-flag parse state (hasBeenSet, applied, count, value) does not
+// leak between commands built from the same package-global flag definitions. The
+// copy keeps the shared Destination pointer, so parsed values still land in cfg.
+func freshFlag(f cli.Flag) cli.Flag {
+	switch v := f.(type) {
+	case *cli.BoolFlag:
+		c := *v
+		return &c
+	case *cli.StringFlag:
+		c := *v
+		return &c
+	case *cli.IntFlag:
+		c := *v
+		return &c
+	case *cli.DurationFlag:
+		c := *v
+		return &c
+	case *cli.StringSliceFlag:
+		c := *v
+		return &c
+	case *cli.BoolWithInverseFlag:
+		c := *v
+		return &c
+	default:
+		// Unknown flag type: return as-is rather than silently dropping it. This
+		// preserves behaviour if a new flag type is introduced, at the cost of
+		// that flag not being isolated until added above.
+		return f
+	}
+}
+
+func freshFlags(flags []cli.Flag) []cli.Flag {
+	out := make([]cli.Flag, len(flags))
+	for i, f := range flags {
+		out[i] = freshFlag(f)
+	}
+	return out
+}
+
 func runCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
 		filesFlag,
@@ -626,7 +666,7 @@ func runCommandFlags() []cli.Flag {
 	flags = append(flags, failOnNoTestsFlag)
 	flags = append(flags, promiseFailureFlag)
 	flags = append(flags, previewSelectionFlags()...)
-	return flags
+	return freshFlags(flags)
 }
 
 func planCommandFlags() []cli.Flag {
@@ -645,7 +685,7 @@ func planCommandFlags() []cli.Flag {
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
 	flags = append(flags, previewSelectionFlags()...)
-	return flags
+	return freshFlags(flags)
 }
 
 var cliCommand = &cli.Command{
