@@ -255,6 +255,15 @@ func (c *Config) ValidateForPlan() error {
 		}
 	}
 
+	// The server enforces parallelism > 0 only when reachable. With both
+	// --max-parallelism and BUILDKITE_PARALLEL_JOB_COUNT at 0, parallelism
+	// resolves to 0; if the server is also unreachable the request is never
+	// validated and bktec falls back to a parallelism-0 plan (nothing runs).
+	// Enforce it client-side to fail fast, before any network call.
+	if c.MaxParallelism == 0 && c.Parallelism <= 0 {
+		c.errs.appendFieldError("parallelism", "parallelism must be greater than 0; set --max-parallelism or BUILDKITE_PARALLEL_JOB_COUNT")
+	}
+
 	if len(c.errs) > 0 {
 		return c.errs
 	}
