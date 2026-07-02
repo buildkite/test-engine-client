@@ -555,6 +555,53 @@ called with testtemplate.yml
 	}
 }
 
+// When the resolved plan has parallelism 0, --pipeline-upload must not run
+// buildkite-agent. This is reachable via a fallback plan whose parallelism
+// comes from an unset --max-parallelism (cfg.MaxParallelism == 0), triggered
+// here by a server error plan.
+func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
+	svr := getErrorPlanServer()
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+	cfg.Identifier = "local-id"
+	// MaxParallelism left at 0, so the fallback plan has parallelism 0.
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	// Fail loudly if pipeline upload is executed despite parallelism 0.
+	setPipelineUploadCommand(t, "echo", "SHOULD_NOT_RUN")
+
+	getStderr := captureStderr(t)
+
+	// This is the method under test
+	planErr := Plan(ctx, cfg, "", PlanOutputPipelineUpload, "testtemplate.yml")
+
+	stderrOutput := getStderr()
+
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	// Nothing is written to stdout: pipeline upload does not run.
+	if got := buf.String(); got != "" {
+		t.Errorf("expected no pipeline upload output, got: %s", got)
+	}
+
+	// Verify the parallelism-0 warning was logged to stderr.
+	if !strings.Contains(stderrOutput, "Parallelism is 0") {
+		t.Errorf("expected stderr to contain parallelism-0 warning, got: %s", stderrOutput)
+	}
+}
+
 func TestPlanPipelineUpload_InternalServerError(t *testing.T) {
 	// mock server to return 500 Internal Server Error
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
