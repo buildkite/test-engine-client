@@ -194,8 +194,10 @@ func TestPlanPlanOut_Parallelism0(t *testing.T) {
 		t.Errorf("command.Plan(...) error = %v", planErr)
 	}
 
-	// The server plan is emitted in full, even at parallelism 0: the
-	// identifier, parallelism, and the task breakdown are all passed through.
+	// The server plan is emitted verbatim, even at parallelism 0: the
+	// identifier, parallelism, and the (empty) task breakdown are passed
+	// through. --plan-out does not substitute a fallback for a well-formed
+	// server response.
 	var got plan.TestPlan
 	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
@@ -204,9 +206,7 @@ func TestPlanPlanOut_Parallelism0(t *testing.T) {
 	want := plan.TestPlan{
 		Identifier:  "facecafe",
 		Parallelism: 0,
-		Tasks: map[string]*plan.Task{
-			"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
-		},
+		Tasks:       map[string]*plan.Task{},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("emitted plan diff (-want +got):\n%s", diff)
@@ -461,12 +461,15 @@ func TestPlanJSON_InternalServerError(t *testing.T) {
 	}
 }
 
-func TestPlanJSON_Parallelism0(t *testing.T) {
-	svr := getZeroParallelismServer()
+func TestPlanJSON_ErrorPlanFallback(t *testing.T) {
+	svr := getErrorPlanServer()
 	defer svr.Close()
 
 	cfg := getConfig()
 	cfg.ServerBaseURL = svr.URL
+	// Identifier and MaxParallelism seed the locally-computed fallback plan.
+	cfg.Identifier = "local-id"
+	cfg.MaxParallelism = 7
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -489,8 +492,9 @@ func TestPlanJSON_Parallelism0(t *testing.T) {
 		t.Errorf("command.Plan(...) error = %v", planErr)
 	}
 
-	// Verify JSON output on stdout still contains the expected keys
-	want := `{"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER":"facecafe","BUILDKITE_TEST_ENGINE_PARALLELISM":"0"}
+	// The server's error plan (empty tasks) is replaced by the local fallback,
+	// so the emitted identifier and parallelism come from cfg, not the server.
+	want := `{"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER":"local-id","BUILDKITE_TEST_ENGINE_PARALLELISM":"7"}
 `
 	got := buf.String()
 
@@ -498,18 +502,20 @@ func TestPlanJSON_Parallelism0(t *testing.T) {
 		t.Errorf("command.Plan(...) JSON output diff = %s", diff)
 	}
 
-	// Verify warning was logged to stderr
-	if !strings.Contains(stderrOutput, "Parallelism is 0") {
-		t.Errorf("expected stderr to contain parallelism warning, got: %s", stderrOutput)
+	// Verify the error-plan warning was logged to stderr.
+	if !strings.Contains(stderrOutput, "Falling back to non-intelligent splitting") {
+		t.Errorf("expected stderr to contain error-plan warning, got: %s", stderrOutput)
 	}
 }
 
-func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
-	svr := getZeroParallelismServer()
+func TestPlanPipelineUpload_ErrorPlanFallback(t *testing.T) {
+	svr := getErrorPlanServer()
 	defer svr.Close()
 
 	cfg := getConfig()
 	cfg.ServerBaseURL = svr.URL
+	cfg.Identifier = "local-id"
+	cfg.MaxParallelism = 7
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -520,8 +526,58 @@ func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	var buf bytes.Buffer
 	setPlanWriter(t, &buf)
 
-	// Set a dummy command that records whether it was called.
-	// If pipeline upload runs, we'll see its output in buf.
+	setPipelineUploadCommand(t, "echo", "called with")
+
+	getStderr := captureStderr(t)
+
+	// This is the method under test
+	planErr := Plan(ctx, cfg, "", PlanOutputPipelineUpload, "testtemplate.yml")
+
+	stderrOutput := getStderr()
+
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	// The fallback plan has non-zero parallelism, so pipeline upload runs with
+	// the fallback identifier and parallelism.
+	want := `Executing buildkite-agent pipeline upload with BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER=local-id BUILDKITE_TEST_ENGINE_PARALLELISM=7
+called with testtemplate.yml
+`
+	got := buf.String()
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("command.Plan(...) diff = %s", diff)
+	}
+
+	// Verify the error-plan warning was logged to stderr.
+	if !strings.Contains(stderrOutput, "Falling back to non-intelligent splitting") {
+		t.Errorf("expected stderr to contain error-plan warning, got: %s", stderrOutput)
+	}
+}
+
+// When the resolved plan has parallelism 0, --pipeline-upload must not run
+// buildkite-agent. This is reachable via a fallback plan whose parallelism
+// comes from an unset --max-parallelism (cfg.MaxParallelism == 0), triggered
+// here by a server error plan.
+func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
+	svr := getErrorPlanServer()
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+	cfg.Identifier = "local-id"
+	// MaxParallelism left at 0, so the fallback plan has parallelism 0.
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	// Fail loudly if pipeline upload is executed despite parallelism 0.
 	setPipelineUploadCommand(t, "echo", "SHOULD_NOT_RUN")
 
 	getStderr := captureStderr(t)
@@ -535,15 +591,14 @@ func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 		t.Errorf("command.Plan(...) error = %v", planErr)
 	}
 
-	// Verify pipeline upload was NOT executed (stdout buffer should have no "SHOULD_NOT_RUN")
-	got := buf.String()
-	if got != "" {
+	// Nothing is written to stdout: pipeline upload does not run.
+	if got := buf.String(); got != "" {
 		t.Errorf("expected no pipeline upload output, got: %s", got)
 	}
 
-	// Verify warning was logged to stderr
+	// Verify the parallelism-0 warning was logged to stderr.
 	if !strings.Contains(stderrOutput, "Parallelism is 0") {
-		t.Errorf("expected stderr to contain parallelism warning, got: %s", stderrOutput)
+		t.Errorf("expected stderr to contain parallelism-0 warning, got: %s", stderrOutput)
 	}
 }
 
@@ -608,12 +663,46 @@ func getZeroParallelismServer() *httptest.Server {
 			filteredTests := api.FilteredTestResponse{}
 			enc.Encode(filteredTests)
 		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			// A realistic zero-parallelism plan: no nodes means no tasks. This
+			// is a well-formed server response, distinct from an error plan.
 			testPlan := plan.TestPlan{
 				Identifier:  "facecafe",
 				Parallelism: 0,
-				Tasks: map[string]*plan.Task{
-					"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "testdata/rspec/spec/fruits/apple_spec.rb"}}},
-				},
+				Tasks:       map[string]*plan.Task{},
+			}
+			enc.Encode(testPlan)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message": "Not found"}`))
+		}
+	}))
+	return svr
+}
+
+// getErrorPlanServer returns an "error plan": a 200 response whose task list is
+// empty (`{"tasks": {}}`). The --json and --pipeline-upload paths treat this as
+// a signal to substitute a locally-computed fallback plan.
+func getErrorPlanServer() *httptest.Server {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message": "Not found"}`))
+			return
+		}
+
+		enc := json.NewEncoder(w)
+
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
+			filteredTests := api.FilteredTestResponse{}
+			enc.Encode(filteredTests)
+		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
+			testPlan := plan.TestPlan{
+				Identifier:  "facecafe",
+				Parallelism: 4,
+				Tasks:       map[string]*plan.Task{},
 			}
 			enc.Encode(testPlan)
 		default:
