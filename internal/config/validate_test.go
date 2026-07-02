@@ -455,19 +455,21 @@ func TestValidateForPlan_SkipsParallelismAndNodeIndexValidation(t *testing.T) {
 // plan resolves parallelism from --max-parallelism then
 // BUILDKITE_PARALLEL_JOB_COUNT; when both are 0 it would silently fall back to a
 // parallelism-0 plan that runs nothing, so validation must reject it up front.
-func TestValidateForPlan_RejectsZeroParallelism(t *testing.T) {
-	c := createConfig()
-	c.MaxParallelism = 0
-	c.Parallelism = 0
+func TestValidateForPlan_RejectsNonPositiveParallelism(t *testing.T) {
+	for _, parallelism := range []int{0, -1} {
+		c := createConfig()
+		c.MaxParallelism = 0
+		c.Parallelism = parallelism
 
-	err := c.ValidateForPlan()
+		err := c.ValidateForPlan()
 
-	var invConfigError InvalidConfigError
-	if !errors.As(err, &invConfigError) {
-		t.Fatalf("ValidateForPlan() error = %v, want InvalidConfigError", err)
-	}
-	if len(invConfigError["parallelism"]) != 1 {
-		t.Errorf("ValidateForPlan() parallelism errors = %v, want 1", invConfigError["parallelism"])
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("ValidateForPlan() with Parallelism=%d error = %v, want InvalidConfigError", parallelism, err)
+		}
+		if len(invConfigError["parallelism"]) != 1 {
+			t.Errorf("ValidateForPlan() with Parallelism=%d parallelism errors = %v, want 1", parallelism, invConfigError["parallelism"])
+		}
 	}
 }
 
