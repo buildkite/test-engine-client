@@ -557,8 +557,8 @@ called with testtemplate.yml
 
 // When the resolved plan has parallelism 0, --pipeline-upload must not run
 // buildkite-agent. This is reachable via a fallback plan whose parallelism
-// comes from an unset --max-parallelism (cfg.MaxParallelism == 0), triggered
-// here by a server error plan.
+// comes from both --max-parallelism and BUILDKITE_PARALLEL_JOB_COUNT being 0
+// (the residual off-agent gap), triggered here by a server error plan.
 func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	svr := getErrorPlanServer()
 	defer svr.Close()
@@ -566,7 +566,9 @@ func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	cfg := getConfig()
 	cfg.ServerBaseURL = svr.URL
 	cfg.Identifier = "local-id"
-	// MaxParallelism left at 0, so the fallback plan has parallelism 0.
+	// Both MaxParallelism and Parallelism 0, so the fallback plan has
+	// parallelism 0.
+	cfg.Parallelism = 0
 
 	if err := cfg.ValidateForPlan(); err != nil {
 		t.Errorf("Invalid config: %v", err)
@@ -599,6 +601,44 @@ func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	// Verify the parallelism-0 warning was logged to stderr.
 	if !strings.Contains(stderrOutput, "Parallelism is 0") {
 		t.Errorf("expected stderr to contain parallelism-0 warning, got: %s", stderrOutput)
+	}
+}
+
+// When --max-parallelism is unset but BUILDKITE_PARALLEL_JOB_COUNT
+// (cfg.Parallelism) is set, the fallback plan falls back to the static
+// parallelism, so the suite runs un-optimised rather than being skipped.
+func TestPlanPipelineUpload_FallbackToStaticParallelism(t *testing.T) {
+	svr := getErrorPlanServer()
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+	cfg.Identifier = "local-id"
+	// MaxParallelism left at 0; Parallelism (BUILDKITE_PARALLEL_JOB_COUNT) is 3.
+	cfg.Parallelism = 3
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+
+	setPipelineUploadCommand(t, "echo", "called with")
+
+	planErr := Plan(ctx, cfg, "", PlanOutputPipelineUpload, "testtemplate.yml")
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	// The fallback uses the static parallelism (3), so pipeline upload runs.
+	want := `Executing buildkite-agent pipeline upload with BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER=local-id BUILDKITE_TEST_ENGINE_PARALLELISM=3
+called with testtemplate.yml
+`
+	if diff := cmp.Diff(want, buf.String()); diff != "" {
+		t.Errorf("command.Plan(...) diff = %s", diff)
 	}
 }
 
@@ -1135,6 +1175,46 @@ func TestPlanPlanOut_FallbackWarnsOnStderr(t *testing.T) {
 	// The fallback caveat is written to stderr.
 	if !strings.Contains(stderrOutput, "locally-computed fallback plan") {
 		t.Errorf("expected stderr to contain the fallback caveat, got: %s", stderrOutput)
+	}
+}
+
+// When --max-parallelism is unset, the --plan-out local fallback falls back to
+// the static BUILDKITE_PARALLEL_JOB_COUNT (cfg.Parallelism).
+func TestPlanPlanOut_FallbackToStaticParallelism(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.Identifier = "hello"
+	// MaxParallelism left at 0; Parallelism (BUILDKITE_PARALLEL_JOB_COUNT) is 3.
+	cfg.Parallelism = 3
+	cfg.ServerBaseURL = svr.URL
+	cfg.PlanOut = "-"
+
+	if err := cfg.ValidateForPlan(); err != nil {
+		t.Errorf("Invalid config: %v", err)
+	}
+
+	fetchCtx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+	captureStderr(t)
+
+	planErr := Plan(fetchCtx, cfg, "", PlanOutputPlanOut, "")
+	if planErr != nil {
+		t.Errorf("command.Plan(...) error = %v", planErr)
+	}
+
+	var got plan.TestPlan
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if got.Parallelism != 3 {
+		t.Errorf("fallback plan Parallelism = %d, want 3 (from BUILDKITE_PARALLEL_JOB_COUNT)", got.Parallelism)
 	}
 }
 

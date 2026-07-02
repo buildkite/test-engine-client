@@ -206,7 +206,7 @@ func emitLocalFallback(out io.Writer, cfg *config.Config) error {
 		Tasks       map[string]*plan.Task `json:"tasks"`
 	}{
 		Identifier:  cfg.Identifier,
-		Parallelism: cfg.MaxParallelism,
+		Parallelism: fallbackParallelism(cfg),
 		Tasks:       map[string]*plan.Task{},
 	}, "", "  ")
 
@@ -235,12 +235,24 @@ func makePipelineUploadCommand(template string) *exec.Cmd {
 	return cmd
 }
 
+// fallbackParallelism resolves the parallelism for a locally-computed fallback
+// plan, matching how bktec run derives it: prefer the dynamic --max-parallelism,
+// then fall back to the static BUILDKITE_PARALLEL_JOB_COUNT. Without this, an
+// unset --max-parallelism yields parallelism 0, so the fallback runs nothing.
+// May still be 0 off-agent, where BUILDKITE_PARALLEL_JOB_COUNT is unset too.
+func fallbackParallelism(cfg *config.Config) int {
+	if cfg.MaxParallelism > 0 {
+		return cfg.MaxParallelism
+	}
+	return cfg.Parallelism
+}
+
 // makeFallbackPlan returns the locally-computed fallback plan used when the
 // server cannot generate or return one.
 func makeFallbackPlan(cfg *config.Config) plan.TestPlan {
 	return plan.TestPlan{
 		Identifier:  cfg.Identifier,
-		Parallelism: cfg.MaxParallelism,
+		Parallelism: fallbackParallelism(cfg),
 		Fallback:    true,
 	}
 }
