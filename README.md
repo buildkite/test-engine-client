@@ -147,7 +147,8 @@ are mutually exclusive; choose one.
 `--plan-out` writes what the server returns, unmodified. If the server cannot
 generate a plan it returns an empty plan, which is emitted as-is (a warning is
 printed to stderr). Only when the server cannot be reached at all does `bktec`
-fall back to a locally-computed plan, again noting this on stderr.
+fall back to a minimal locally-generated plan; this carries the identifier and
+parallelism but no tasks (it is not a computed split), and is noted on stderr.
 
 ### Preview: Test Selection
 You can pass test selection strategy configuration and additional change context to the test plan API request.
