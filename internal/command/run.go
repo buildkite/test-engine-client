@@ -106,14 +106,18 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 func trimTaskLocationPrefix(task *plan.Task, locationPrefix string) error {
 	for i, test := range task.Tests {
 		if test.Format == plan.TestCaseFormatSelector {
-			continue
+			selector, err := trimFilePathPrefix(test.Value, locationPrefix)
+			if err != nil {
+				return fmt.Errorf("failed to trim prefix: %w", err)
+			}
+			task.Tests[i].Value = selector
+		} else {
+			path, err := trimFilePathPrefix(test.Path, locationPrefix)
+			if err != nil {
+				return fmt.Errorf("failed to trim path prefix: %w", err)
+			}
+			task.Tests[i].Path = path
 		}
-
-		path, err := trimFilePathPrefix(test.Path, locationPrefix)
-		if err != nil {
-			return fmt.Errorf("failed to trim path prefix: %w", err)
-		}
-		task.Tests[i].Path = path
 	}
 
 	return nil

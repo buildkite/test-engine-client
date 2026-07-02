@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/api"
@@ -29,7 +30,15 @@ func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []s
 		// selector values, e.g. Go package import paths, not file paths.
 		selectors := make([]api.TestPlanParamsSelector, 0, len(testTargets))
 		for _, target := range testTargets {
-			selectors = append(selectors, api.TestPlanParamsSelector{Value: target})
+			var selector string
+			// not all selector is a file path. For instance selector for go is package name.
+			// therefore we should only prepend the location prefix to the selector when it is a valid file.
+			if _, err := os.Stat(target); err == nil {
+				selector = prefixPath(target, runner.LocationPrefix())
+			} else {
+				selector = target
+			}
+			selectors = append(selectors, api.TestPlanParamsSelector{Value: selector})
 		}
 
 		return api.TestPlanParams{
