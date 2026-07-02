@@ -555,10 +555,11 @@ called with testtemplate.yml
 	}
 }
 
-// When the resolved plan has parallelism 0, --pipeline-upload must not run
-// buildkite-agent. This is reachable via a fallback plan whose parallelism
-// comes from both --max-parallelism and BUILDKITE_PARALLEL_JOB_COUNT being 0
-// (the residual off-agent gap), triggered here by a server error plan.
+// Plan()'s parallelism-0 guard must not run buildkite-agent for a
+// --pipeline-upload plan with parallelism 0. ValidateForPlan now rejects the
+// both-unset config that produces this fallback, so the guard is defence in
+// depth; this drives it directly by leaving both parallelism sources at 0 and
+// skipping validation.
 func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	svr := getErrorPlanServer()
 	defer svr.Close()
@@ -569,10 +570,6 @@ func TestPlanPipelineUpload_Parallelism0(t *testing.T) {
 	// Both MaxParallelism and Parallelism 0, so the fallback plan has
 	// parallelism 0.
 	cfg.Parallelism = 0
-
-	if err := cfg.ValidateForPlan(); err != nil {
-		t.Errorf("Invalid config: %v", err)
-	}
 
 	ctx := context.Background()
 
