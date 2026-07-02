@@ -235,11 +235,10 @@ func makePipelineUploadCommand(template string) *exec.Cmd {
 	return cmd
 }
 
-// fallbackParallelism resolves the parallelism for a locally-computed fallback
-// plan, matching how bktec run derives it: prefer the dynamic --max-parallelism,
-// then fall back to the static BUILDKITE_PARALLEL_JOB_COUNT. Without this, an
-// unset --max-parallelism yields parallelism 0, so the fallback runs nothing.
-// May still be 0 off-agent, where BUILDKITE_PARALLEL_JOB_COUNT is unset too.
+// fallbackParallelism resolves the fallback plan's parallelism like bktec run
+// does: prefer --max-parallelism, else the static BUILDKITE_PARALLEL_JOB_COUNT.
+// Without this an unset --max-parallelism yields parallelism 0, so the fallback
+// runs nothing. Still 0 off-agent, where BUILDKITE_PARALLEL_JOB_COUNT is unset.
 func fallbackParallelism(cfg *config.Config) int {
 	if cfg.MaxParallelism > 0 {
 		return cfg.MaxParallelism
