@@ -196,28 +196,40 @@ func TestCreateSchedulerLease(t *testing.T) {
 			t.Errorf("request path = %q", r.URL.Path)
 		}
 
-		assertJSONBody(t, r.Body, `{"target_cost_limit": 30, "lease_ttl_seconds": 300}`)
+		assertJSONBody(t, r.Body, `{"target_cost_limit": {"custom": 30}, "lease_ttl_seconds": 300}`)
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = io.WriteString(w, `{
 			"lease": {
 				"id": "lease-uuid",
 				"expires_at": "2026-06-12T00:05:00Z",
-				"entries": [
+				"attempts": [
 					{
-						"id": "entry-1",
-						"type": "file",
+						"id": "attempt-1",
+						"pool_id": "pool-uuid",
+						"entry_id": "entry-1",
+						"attempt_index": 0,
+						"selector_type": "file",
 						"selector": {"path": "spec/foo_spec.rb"},
-						"custom_cost": 1.5,
+						"costs": {"custom": 1.5},
 						"priority": 2,
+						"state": "leased",
+						"lease_id": "lease-uuid",
+						"lease_expires_at": "2026-06-12T00:05:00Z",
 						"meta_data": {"source": "plan"}
 					},
 					{
-						"id": "entry-2",
-						"type": "example",
+						"id": "attempt-2",
+						"pool_id": "pool-uuid",
+						"entry_id": "entry-2",
+						"attempt_index": 0,
+						"selector_type": "example",
 						"selector": {"path": "spec/bar_spec.rb[1:2]"},
-						"custom_cost": 1,
+						"costs": {"custom": 1},
 						"priority": 1,
+						"state": "leased",
+						"lease_id": "lease-uuid",
+						"lease_expires_at": "2026-06-12T00:05:00Z",
 						"meta_data": null
 					}
 				]
@@ -241,22 +253,34 @@ func TestCreateSchedulerLease(t *testing.T) {
 		Lease: &SchedulerLease{
 			ID:        "lease-uuid",
 			ExpiresAt: "2026-06-12T00:05:00Z",
-			Entries: []SchedulerLeaseEntry{
+			Attempts: []SchedulerLeaseAttempt{
 				{
-					ID:         "entry-1",
-					Type:       "file",
-					Selector:   json.RawMessage(`{"path": "spec/foo_spec.rb"}`),
-					CustomCost: 1.5,
-					Priority:   2,
-					MetaData:   json.RawMessage(`{"source": "plan"}`),
+					ID:             "attempt-1",
+					PoolID:         "pool-uuid",
+					EntryID:        "entry-1",
+					AttemptIndex:   0,
+					SelectorType:   "file",
+					Selector:       json.RawMessage(`{"path": "spec/foo_spec.rb"}`),
+					Costs:          SchedulerCosts{Custom: 1.5},
+					Priority:       2,
+					State:          "leased",
+					LeaseID:        "lease-uuid",
+					LeaseExpiresAt: "2026-06-12T00:05:00Z",
+					MetaData:       json.RawMessage(`{"source": "plan"}`),
 				},
 				{
-					ID:         "entry-2",
-					Type:       "example",
-					Selector:   json.RawMessage(`{"path": "spec/bar_spec.rb[1:2]"}`),
-					CustomCost: 1,
-					Priority:   1,
-					MetaData:   json.RawMessage(`null`),
+					ID:             "attempt-2",
+					PoolID:         "pool-uuid",
+					EntryID:        "entry-2",
+					AttemptIndex:   0,
+					SelectorType:   "example",
+					Selector:       json.RawMessage(`{"path": "spec/bar_spec.rb[1:2]"}`),
+					Costs:          SchedulerCosts{Custom: 1},
+					Priority:       1,
+					State:          "leased",
+					LeaseID:        "lease-uuid",
+					LeaseExpiresAt: "2026-06-12T00:05:00Z",
+					MetaData:       json.RawMessage(`null`),
 				},
 			},
 		},

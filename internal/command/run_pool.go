@@ -65,7 +65,7 @@ func RunTestSchedulerPool(ctx context.Context, cfg *config.Config) error {
 
 	fmt.Printf("Using test pool %s (%s)\n", pool.ID, pool.State)
 
-	entriesExecuted := 0
+	attemptsExecuted := 0
 	leaseCount := 0
 	completeFailures := 0
 	// failureErr is the run error from the first failed batch. It wraps the
@@ -99,14 +99,14 @@ func RunTestSchedulerPool(ctx context.Context, cfg *config.Config) error {
 		}
 
 		leaseCount++
-		entriesExecuted += len(lease.Entries)
+		attemptsExecuted += len(lease.Attempts)
 
-		testCases, err := testCasesFromLeaseEntries(lease.Entries, testRunner.LocationPrefix())
+		testCases, err := testCasesFromLeaseAttempts(lease.Attempts, testRunner.LocationPrefix())
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Leased %d entries (lease %s)\n", len(lease.Entries), lease.ID)
+		fmt.Printf("Leased %d attempts (lease %s)\n", len(lease.Attempts), lease.ID)
 
 		stopHeartbeat := startLeaseHeartbeat(ctx, schedulerClient, pool.ID, lease.ID)
 
@@ -146,7 +146,7 @@ func RunTestSchedulerPool(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	fmt.Printf("Pool drained: executed %d entries across %d leases\n", entriesExecuted, leaseCount)
+	fmt.Printf("Pool drained: executed %d attempts across %d leases\n", attemptsExecuted, leaseCount)
 	if completeFailures > 0 {
 		fmt.Printf("⚠️ %d lease(s) could not be completed; their entries may have been re-run by other workers\n", completeFailures)
 	}
@@ -185,22 +185,22 @@ func resolveSchedulerPool(ctx context.Context, client *api.Client, claims api.OI
 	}
 }
 
-// testCasesFromLeaseEntries converts leased entries into test cases for the
+// testCasesFromLeaseAttempts converts leased attempts into test cases for the
 // test runner. Paths include the location prefix sent at plan creation, which
 // is trimmed before running, mirroring the static-split path.
-func testCasesFromLeaseEntries(entries []api.SchedulerLeaseEntry, locationPrefix string) ([]plan.TestCase, error) {
-	testCases := make([]plan.TestCase, 0, len(entries))
-	for _, entry := range entries {
-		switch entry.Type {
+func testCasesFromLeaseAttempts(attempts []api.SchedulerLeaseAttempt, locationPrefix string) ([]plan.TestCase, error) {
+	testCases := make([]plan.TestCase, 0, len(attempts))
+	for _, attempt := range attempts {
+		switch attempt.SelectorType {
 		case "file", "example":
 			var selector struct {
 				Path string `json:"path"`
 			}
-			if err := json.Unmarshal(entry.Selector, &selector); err != nil {
-				return nil, fmt.Errorf("parsing selector of test pool entry %s: %w", entry.ID, err)
+			if err := json.Unmarshal(attempt.Selector, &selector); err != nil {
+				return nil, fmt.Errorf("parsing selector of test pool attempt %s: %w", attempt.ID, err)
 			}
 			if selector.Path == "" {
-				return nil, fmt.Errorf("test pool entry %s has no path in its selector", entry.ID)
+				return nil, fmt.Errorf("test pool attempt %s has no path in its selector", attempt.ID)
 			}
 
 			path := selector.Path
@@ -214,7 +214,7 @@ func testCasesFromLeaseEntries(entries []api.SchedulerLeaseEntry, locationPrefix
 
 			testCases = append(testCases, plan.TestCase{Path: path})
 		default:
-			return nil, fmt.Errorf("unsupported test pool entry type %q (entry %s); upgrade bktec to a version that supports it", entry.Type, entry.ID)
+			return nil, fmt.Errorf("unsupported test pool attempt selector type %q (attempt %s); upgrade bktec to a version that supports it", attempt.SelectorType, attempt.ID)
 		}
 	}
 	return testCases, nil

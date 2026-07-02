@@ -38,15 +38,15 @@ func setPoolTimings(t *testing.T, resolveTimeout, resolveInterval, idleInterval 
 	})
 }
 
-func TestTestCasesFromLeaseEntries(t *testing.T) {
-	entries := []api.SchedulerLeaseEntry{
-		{ID: "entry-1", Type: "file", Selector: json.RawMessage(`{"path": "spec/foo_spec.rb"}`)},
-		{ID: "entry-2", Type: "example", Selector: json.RawMessage(`{"path": "spec/bar_spec.rb[1:2]"}`)},
+func TestTestCasesFromLeaseAttempts(t *testing.T) {
+	attempts := []api.SchedulerLeaseAttempt{
+		{ID: "attempt-1", SelectorType: "file", Selector: json.RawMessage(`{"path": "spec/foo_spec.rb"}`)},
+		{ID: "attempt-2", SelectorType: "example", Selector: json.RawMessage(`{"path": "spec/bar_spec.rb[1:2]"}`)},
 	}
 
-	got, err := testCasesFromLeaseEntries(entries, "")
+	got, err := testCasesFromLeaseAttempts(attempts, "")
 	if err != nil {
-		t.Fatalf("testCasesFromLeaseEntries() error = %v", err)
+		t.Fatalf("testCasesFromLeaseAttempts() error = %v", err)
 	}
 
 	want := []plan.TestCase{
@@ -54,53 +54,53 @@ func TestTestCasesFromLeaseEntries(t *testing.T) {
 		{Path: "spec/bar_spec.rb[1:2]"},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("testCasesFromLeaseEntries() diff (-got +want):\n%s", diff)
+		t.Errorf("testCasesFromLeaseAttempts() diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestTestCasesFromLeaseEntries_LocationPrefix(t *testing.T) {
-	entries := []api.SchedulerLeaseEntry{
-		{ID: "entry-1", Type: "file", Selector: json.RawMessage(`{"path": "package/spec/foo_spec.rb"}`)},
+func TestTestCasesFromLeaseAttempts_LocationPrefix(t *testing.T) {
+	attempts := []api.SchedulerLeaseAttempt{
+		{ID: "attempt-1", SelectorType: "file", Selector: json.RawMessage(`{"path": "package/spec/foo_spec.rb"}`)},
 	}
 
-	got, err := testCasesFromLeaseEntries(entries, "package/")
+	got, err := testCasesFromLeaseAttempts(attempts, "package/")
 	if err != nil {
-		t.Fatalf("testCasesFromLeaseEntries() error = %v", err)
+		t.Fatalf("testCasesFromLeaseAttempts() error = %v", err)
 	}
 
 	want := []plan.TestCase{{Path: "spec/foo_spec.rb"}}
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("testCasesFromLeaseEntries() diff (-got +want):\n%s", diff)
+		t.Errorf("testCasesFromLeaseAttempts() diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestTestCasesFromLeaseEntries_UnknownType(t *testing.T) {
-	entries := []api.SchedulerLeaseEntry{
-		{ID: "entry-1", Type: "mystery", Selector: json.RawMessage(`{"path": "spec/foo_spec.rb"}`)},
+func TestTestCasesFromLeaseAttempts_UnknownType(t *testing.T) {
+	attempts := []api.SchedulerLeaseAttempt{
+		{ID: "attempt-1", SelectorType: "mystery", Selector: json.RawMessage(`{"path": "spec/foo_spec.rb"}`)},
 	}
 
-	_, err := testCasesFromLeaseEntries(entries, "")
+	_, err := testCasesFromLeaseAttempts(attempts, "")
 	if err == nil {
-		t.Fatal("testCasesFromLeaseEntries() error = nil, want error")
+		t.Fatal("testCasesFromLeaseAttempts() error = nil, want error")
 	}
 
-	if want := `unsupported test pool entry type "mystery"`; !strings.Contains(err.Error(), want) {
-		t.Errorf("testCasesFromLeaseEntries() error = %q, want substring %q", err.Error(), want)
+	if want := `unsupported test pool attempt selector type "mystery"`; !strings.Contains(err.Error(), want) {
+		t.Errorf("testCasesFromLeaseAttempts() error = %q, want substring %q", err.Error(), want)
 	}
 }
 
-func TestTestCasesFromLeaseEntries_MissingPath(t *testing.T) {
-	entries := []api.SchedulerLeaseEntry{
-		{ID: "entry-1", Type: "file", Selector: json.RawMessage(`{}`)},
+func TestTestCasesFromLeaseAttempts_MissingPath(t *testing.T) {
+	attempts := []api.SchedulerLeaseAttempt{
+		{ID: "attempt-1", SelectorType: "file", Selector: json.RawMessage(`{}`)},
 	}
 
-	_, err := testCasesFromLeaseEntries(entries, "")
+	_, err := testCasesFromLeaseAttempts(attempts, "")
 	if err == nil {
-		t.Fatal("testCasesFromLeaseEntries() error = nil, want error")
+		t.Fatal("testCasesFromLeaseAttempts() error = nil, want error")
 	}
 
 	if want := "has no path in its selector"; !strings.Contains(err.Error(), want) {
-		t.Errorf("testCasesFromLeaseEntries() error = %q, want substring %q", err.Error(), want)
+		t.Errorf("testCasesFromLeaseAttempts() error = %q, want substring %q", err.Error(), want)
 	}
 }
 
@@ -183,7 +183,7 @@ func newPoolServer(t *testing.T, testPath string) (svr *httptest.Server, leaseCo
 					"lease": {
 						"id": "lease-uuid",
 						"expires_at": "2026-06-12T00:05:00Z",
-						"entries": [{"id": "entry-1", "type": "file", "selector": {"path": %q}, "custom_cost": 1, "priority": 1, "meta_data": null}]
+				"attempts": [{"id": "attempt-1", "pool_id": "pool-uuid", "entry_id": "entry-1", "attempt_index": 0, "selector_type": "file", "selector": {"path": %q}, "costs": {"custom": 1}, "priority": 1, "state": "leased", "lease_id": "lease-uuid", "lease_expires_at": "2026-06-12T00:05:00Z", "meta_data": null}]
 					}
 				}`, testPath)
 				return

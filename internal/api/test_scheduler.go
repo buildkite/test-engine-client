@@ -95,29 +95,45 @@ func (c Client) FetchSchedulerPools(ctx context.Context, params FetchSchedulerPo
 	return response.Pools, nil
 }
 
-// SchedulerLeaseEntry is a single unit of work leased from a Test Scheduler
-// pool. Selector and MetaData are arbitrary JSON; for plan-generated entries
-// (type "file" or "example") the selector is `{"path": "spec/foo_spec.rb"}`.
-type SchedulerLeaseEntry struct {
-	ID         string          `json:"id"`
-	Type       string          `json:"type"`
-	Selector   json.RawMessage `json:"selector"`
-	CustomCost float64         `json:"custom_cost"`
-	Priority   int             `json:"priority"`
-	MetaData   json.RawMessage `json:"meta_data"`
+// SchedulerLeaseAttempt is a single attempt leased from a Test Scheduler pool.
+// Selector and MetaData are arbitrary JSON; for plan-generated attempts
+// (selector_type "file" or "example") the selector is `{"path": "spec/foo_spec.rb"}`.
+type SchedulerLeaseAttempt struct {
+	ID             string          `json:"id"`
+	PoolID         string          `json:"pool_id"`
+	EntryID        string          `json:"entry_id"`
+	AttemptIndex   int             `json:"attempt_index"`
+	SelectorType   string          `json:"selector_type"`
+	Selector       json.RawMessage `json:"selector"`
+	Costs          SchedulerCosts  `json:"costs"`
+	Priority       int             `json:"priority"`
+	AffinityGroup  *string         `json:"affinity_group"`
+	State          string          `json:"state"`
+	LeaseID        string          `json:"lease_id"`
+	LeaseExpiresAt string          `json:"lease_expires_at"`
+	MetaData       json.RawMessage `json:"meta_data"`
 }
 
-// SchedulerLease is a batch of entries leased to this worker.
+type SchedulerCosts struct {
+	Custom float64 `json:"custom"`
+}
+
+// SchedulerLease is a batch of attempts leased to this worker.
 type SchedulerLease struct {
-	ID        string                `json:"id"`
-	ExpiresAt string                `json:"expires_at"`
-	Entries   []SchedulerLeaseEntry `json:"entries"`
+	ID        string                  `json:"id"`
+	ExpiresAt string                  `json:"expires_at"`
+	Attempts  []SchedulerLeaseAttempt `json:"attempts"`
 }
 
 // CreateSchedulerLeaseParams represents the request body for acquiring a lease.
 type CreateSchedulerLeaseParams struct {
-	TargetCostLimit float64 `json:"target_cost_limit,omitempty"`
+	TargetCostLimit float64 `json:"-"`
 	LeaseTTLSeconds int     `json:"lease_ttl_seconds,omitempty"`
+}
+
+type createSchedulerLeaseRequest struct {
+	TargetCostLimit *SchedulerCosts `json:"target_cost_limit,omitempty"`
+	LeaseTTLSeconds int             `json:"lease_ttl_seconds,omitempty"`
 }
 
 // CreateSchedulerLeaseResponse is the response from the lease endpoint.
@@ -135,7 +151,7 @@ func (c Client) CreateSchedulerLease(ctx context.Context, poolID string, params 
 	_, err := c.DoWithRetry(ctx, httpRequest{
 		Method:          http.MethodPost,
 		URL:             postURL,
-		Body:            params,
+		Body:            params.requestBody(),
 		noRetryConflict: true,
 	}, &response)
 	if err != nil {
@@ -143,6 +159,16 @@ func (c Client) CreateSchedulerLease(ctx context.Context, poolID string, params 
 	}
 
 	return response, nil
+}
+
+func (p CreateSchedulerLeaseParams) requestBody() createSchedulerLeaseRequest {
+	request := createSchedulerLeaseRequest{
+		LeaseTTLSeconds: p.LeaseTTLSeconds,
+	}
+	if p.TargetCostLimit != 0 {
+		request.TargetCostLimit = &SchedulerCosts{Custom: p.TargetCostLimit}
+	}
+	return request
 }
 
 // SchedulerLeaseRef identifies a lease in a complete request.
