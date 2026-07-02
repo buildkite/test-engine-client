@@ -136,8 +136,8 @@ the muted and skipped tests, and the timing metadata. It takes a destination:
 `-` for stdout, or a file path.
 
 ```sh
-./bktec plan --plan-out - > plan.json    # stdout
-./bktec plan --plan-out plan.json        # a file
+./bktec plan --plan-out -            # stdout
+./bktec plan --plan-out plan.json    # a file
 ```
 
 The human-readable split summary and any warnings are written to stderr, so
