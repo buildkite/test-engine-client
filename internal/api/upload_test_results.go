@@ -28,8 +28,8 @@ var (
 //
 // Transient failures (network errors, 429, 5xx) are retried via doWithRetry
 // before giving up. The multipart body is built once and re-sent on each attempt.
-func (c *Client) UploadTestResults(ctx context.Context, token string, filePath string, format string, locationPrefix string, tags map[string]string) error {
-	body, contentType, err := buildTestResultsMultipartBody(filePath, format, locationPrefix, tags)
+func (c *Client) UploadTestResults(ctx context.Context, token string, filePath string, format string, runner string, locationPrefix string, tags map[string]string) error {
+	body, contentType, err := buildTestResultsMultipartBody(filePath, format, runner, locationPrefix, tags)
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (c *Client) UploadTestResults(ctx context.Context, token string, filePath s
 	return nil
 }
 
-func buildTestResultsMultipartBody(filePath string, format string, locationPrefix string, tags map[string]string) (*bytes.Buffer, string, error) {
+func buildTestResultsMultipartBody(filePath string, format string, runner string, locationPrefix string, tags map[string]string) (*bytes.Buffer, string, error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 
@@ -88,6 +88,7 @@ func buildTestResultsMultipartBody(filePath string, format string, locationPrefi
 		"message":         os.Getenv("BUILDKITE_MESSAGE"),
 		"location_prefix": locationPrefix,
 		"collector":       "bktec",
+		"test_runner":     runner,
 		"version":         version.Version,
 	}
 	if buildID != "" {

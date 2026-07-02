@@ -69,7 +69,7 @@ func TestUploadTestResults(t *testing.T) {
 	defer svr.Close()
 
 	client := NewClient(ClientConfig{UploadBaseURL: svr.URL})
-	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "./", nil)
+	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "rspec", "./", nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, "Token token=my-token", gotToken)
@@ -92,7 +92,7 @@ func TestUploadTestResults_ServerError(t *testing.T) {
 	defer svr.Close()
 
 	client := NewClient(ClientConfig{UploadBaseURL: svr.URL})
-	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "", nil)
+	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "rspec", "", nil)
 	// 5xx is retried until the retry timeout, after which doWithRetry returns
 	// ErrRetryTimeout.
 	assert.ErrorIs(t, err, ErrRetryTimeout)
@@ -122,7 +122,7 @@ func TestUploadTestResults_RetriesThenSucceeds(t *testing.T) {
 	defer svr.Close()
 
 	client := NewClient(ClientConfig{UploadBaseURL: svr.URL})
-	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "", nil)
+	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "rspec", "", nil)
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), attempts.Load())
 	// The multipart body is re-sent in full on the retry.
@@ -146,7 +146,7 @@ func TestUploadTestResults_NoRetryOn4xx(t *testing.T) {
 	defer svr.Close()
 
 	client := NewClient(ClientConfig{UploadBaseURL: svr.URL})
-	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "", nil)
+	err = client.UploadTestResults(t.Context(), "my-token", resultFile.Name(), "rspec-json", "rspec", "", nil)
 	assert.ErrorContains(t, err, "upload failed with status 400")
 	assert.Equal(t, int32(1), attempts.Load())
 }
@@ -158,7 +158,7 @@ func TestUploadTestResults_MissingFile(t *testing.T) {
 	defer svr.Close()
 
 	client := NewClient(ClientConfig{UploadBaseURL: svr.URL})
-	err := client.UploadTestResults(t.Context(), "my-token", "/nonexistent/path/results.json", "rspec-json", "", nil)
+	err := client.UploadTestResults(t.Context(), "my-token", "/nonexistent/path/results.json", "rspec-json", "rspec", "", nil)
 	assert.ErrorContains(t, err, "opening result file")
 }
 
@@ -181,7 +181,7 @@ func TestBuildTestResultsMultipartBody(t *testing.T) {
 	require.NoError(t, err)
 	resultFile.Close()
 
-	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "my/prefix", nil)
+	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "rspec", "my/prefix", nil)
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(contentType, "multipart/form-data"))
 
@@ -213,6 +213,7 @@ func TestBuildTestResultsMultipartBody(t *testing.T) {
 	assert.Equal(t, "abc123", fields["run_env[commit_sha]"])
 	assert.Equal(t, "my/prefix", fields["run_env[location_prefix]"])
 	assert.Equal(t, "bktec", fields["run_env[collector]"])
+	assert.Equal(t, "rspec", fields["run_env[test_runner]"])
 	assert.Equal(t, dummyVersion, fields["run_env[version]"])
 	assert.Equal(t, cwd, fields["run_env[cwd]"])
 }
@@ -224,7 +225,7 @@ func TestBuildTestResultsMultipartBody_WithTags(t *testing.T) {
 	resultFile.Close()
 
 	tags := map[string]string{"env": "production", "team": "platform"}
-	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "", tags)
+	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "rspec", "", tags)
 	require.NoError(t, err)
 
 	_, params, err := mime.ParseMediaType(contentType)
@@ -256,7 +257,7 @@ func TestBuildTestResultsMultipartBody_NoCwdOutsideBuildkite(t *testing.T) {
 	defer os.Remove(resultFile.Name())
 	resultFile.Close()
 
-	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "", nil)
+	buf, contentType, err := buildTestResultsMultipartBody(resultFile.Name(), "rspec-json", "rspec", "", nil)
 	require.NoError(t, err)
 
 	_, params, err := mime.ParseMediaType(contentType)
