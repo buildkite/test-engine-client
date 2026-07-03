@@ -638,9 +638,11 @@ func freshFlag(f cli.Flag) cli.Flag {
 		c := *v
 		return &c
 	default:
-		// Unknown flag type: return as-is rather than silently dropping it. This
-		// preserves behaviour if a new flag type is introduced, at the cost of
-		// that flag not being isolated until added above.
+		// Unknown flag type: return the shared global as-is rather than dropping
+		// it, so the flag still registers and works. It is NOT isolated; its
+		// parse state can leak between commands until a case is added above.
+		// TestCommandFlagsAllReturnFreshInstances fails when an unhandled type
+		// reaches this branch, so the gap surfaces in CI rather than silently.
 		return f
 	}
 }
