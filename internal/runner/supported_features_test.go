@@ -27,7 +27,7 @@ func TestSupportedFeatures_SplitBySelectorSupportedRunners(t *testing.T) {
 	gotest := NewGoTest(runnerConfig)
 	cucumber := NewCucumber(runnerConfig)
 	nunit := NewNUnit(runnerConfig)
-  vitest := NewVitest(runnerConfig)
+	vitest := NewVitest(runnerConfig)
 
 	runners := []TestRunner{
 		custom,
