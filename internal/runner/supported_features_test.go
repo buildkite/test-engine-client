@@ -40,7 +40,7 @@ func TestSupportedFeatures_SplitBySelectorSupportedRunners(t *testing.T) {
 		gotest,
 		cucumber,
 		nunit,
-    vitest,
+		vitest,
 	}
 
 	supportedRunners := []string{gotest.Name(), rspec.Name(), custom.Name()}
