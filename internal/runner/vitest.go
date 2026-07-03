@@ -169,7 +169,11 @@ func (v Vitest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 
 		escapedTestCases := make([]string, len(testCases))
 		for i, testCase := range testCases {
-			escapedTestCases[i] = regexp.QuoteMeta(fmt.Sprintf("%s %s", testCase.Scope, testCase.Name))
+			fullName := testCase.Name
+			if testCase.Scope != "" {
+				fullName = fmt.Sprintf("%s %s", testCase.Scope, testCase.Name)
+			}
+			escapedTestCases[i] = regexp.QuoteMeta(fullName)
 		}
 
 		testNamePattern := fmt.Sprintf("(%s)", strings.Join(escapedTestCases, "|"))
