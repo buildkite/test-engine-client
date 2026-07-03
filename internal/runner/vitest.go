@@ -24,7 +24,7 @@ type Vitest struct {
 
 func NewVitest(v RunnerConfig) Vitest {
 	if v.TestCommand == "" {
-		v.TestCommand = "npx vitest run {{testExamples}} --reporter=json --outputFile {{resultPath}}"
+		v.TestCommand = "npx vitest run {{testExamples}} --reporter=default --reporter=json --outputFile {{resultPath}}"
 	}
 
 	if v.TestFilePattern == "" {
