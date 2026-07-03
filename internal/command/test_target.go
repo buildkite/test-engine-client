@@ -7,7 +7,11 @@ import (
 
 func getTestTargets(cfg *config.Config, runner runner.TestRunner, testFileList string) ([]string, error) {
 	if shouldUseSelectorSplitting(cfg, runner) {
-		return runner.GetSelectors()
+		if cfg.SelectorListPath != "" {
+			return getRowsFromFile(cfg.SelectorListPath)
+		} else {
+			return runner.GetSelectors()
+		}
 	}
 
 	return getTestFiles(testFileList, runner)

@@ -127,6 +127,29 @@ identifier, or, on a cache miss, creates and caches one under it. A reused
 identifier therefore returns the previously cached plan even if the inputs have
 changed, so keep the value unique per distinct plan.
 
+### Inspecting the full plan
+
+`--plan-out` makes `bktec plan` write the full test plan without running any
+tests. Unlike `--json`, which emits only the plan identifier and parallelism,
+`--plan-out` writes the whole plan: the tasks, the per-node breakdown of tests,
+the muted and skipped tests, and the timing metadata. It takes a destination:
+`-` for stdout, or a file path.
+
+```sh
+./bktec plan --plan-out -            # stdout
+./bktec plan --plan-out plan.json    # a file
+```
+
+The human-readable split summary and any warnings are written to stderr, so
+stdout carries only the plan. `--json`, `--plan-out` and `--pipeline-upload`
+are mutually exclusive; choose one.
+
+`--plan-out` writes what the server returns, unmodified. If the server cannot
+generate a plan it returns an empty plan, which is emitted as-is (a warning is
+printed to stderr). Only when the server cannot be reached at all does `bktec`
+fall back to a minimal locally-generated plan; this carries the identifier and
+parallelism but no tasks (it is not a computed split), and is noted on stderr.
+
 ### Preview: Test Selection
 You can pass test selection strategy configuration and additional change context to the test plan API request.
 This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).

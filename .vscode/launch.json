@@ -84,6 +84,24 @@
         "BUILDKITE_STEP_ID": "playwright",
         "BUILDKITE_BUILD_ID": "${input:build-id}"
       }
+    },
+    {
+      "name": "Debug custom run",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceRoot}",
+      "args": ["run"],
+      "cwd": "${workspaceFolder}/internal/runner/testdata/custom",
+      "envFile": "${workspaceFolder}/.vscode/.env",
+      "env": {
+        "BUILDKITE_TEST_ENGINE_TEST_RUNNER": "custom",
+        "BUILDKITE_TEST_ENGINE_TEST_CMD": "bats --report-formatter junit --output tmp/ . {{testExamples}}",
+        "BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN": "tests/*.bats",
+        "BUILDKITE_TEST_ENGINE_RESULT_PATH": "tmp/report.xml",
+        "BUILDKITE_STEP_ID": "custom",
+        "BUILDKITE_BUILD_ID": "${input:build-id}"
+      }
     }
   ],
   "inputs": [

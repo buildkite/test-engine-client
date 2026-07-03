@@ -19,7 +19,7 @@ func NewCustom(r RunnerConfig) (Custom, error) {
 		return Custom{}, errors.New("test command must be provided for custom runner")
 	}
 
-	if r.TestFilePattern == "" {
+	if r.TestFilePattern == "" && !r.splitBySelectorList() {
 		return Custom{}, errors.New("test file pattern must be provided for custom runner")
 	}
 
@@ -41,6 +41,7 @@ func (c Custom) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       false,
 		Mute:            true,
 		Skip:            false,
+		SplitBySelector: true,
 	}
 }
 
@@ -73,6 +74,10 @@ func (r Custom) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (r Custom) GetSelectors() ([]string, error) {
+	return nil, fmt.Errorf("use `--selector-file` or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE` to provide the list of selectors")
 }
 
 func (r Custom) GetExamples(files []string) ([]plan.TestCase, error) {

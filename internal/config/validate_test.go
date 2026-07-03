@@ -50,6 +50,69 @@ func TestConfigValidate_SelectorSplittingIsPermissive(t *testing.T) {
 	})
 }
 
+func TestConfigValidate_SelectorListRequiresSelectorSplitting(t *testing.T) {
+	t.Run("rejects a selector list without selector splitting", func(t *testing.T) {
+		c := createConfig()
+		c.SelectorListPath = "selectors.txt"
+
+		err := c.validate()
+		if err == nil {
+			t.Fatalf("config.validate() error = nil, want InvalidConfigError")
+		}
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("config.validate() error = %v, want InvalidConfigError", err)
+		}
+
+		want := "selector splitting must be enabled when a selector list is provided"
+		if got := invConfigError["selectors"][0].Error(); got != want {
+			t.Errorf("config.validate() error for selectors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("accepts a selector list when selector splitting is enabled", func(t *testing.T) {
+		c := createConfig()
+		c.SelectorListPath = "selectors.txt"
+		c.SelectorSplitting = true
+
+		if err := c.validate(); err != nil {
+			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+}
+
+func TestConfigValidate_CustomRunnerFilePatternWithSelectorList(t *testing.T) {
+	t.Run("requires a file pattern for the custom runner by default", func(t *testing.T) {
+		c := createConfig()
+		c.TestRunner = "custom"
+		c.TestCommand = "bin/test"
+		c.TestFilePattern = ""
+
+		err := c.validate()
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("config.validate() error = %v, want InvalidConfigError", err)
+		}
+		if _, ok := invConfigError["BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN"]; !ok {
+			t.Errorf("config.validate() = %v, want a TEST_FILE_PATTERN error", invConfigError)
+		}
+	})
+
+	t.Run("does not require a file pattern when splitting by a selector list", func(t *testing.T) {
+		c := createConfig()
+		c.TestRunner = "custom"
+		c.TestCommand = "bin/test"
+		c.TestFilePattern = ""
+		c.SelectorSplitting = true
+		c.SelectorListPath = "selectors.txt"
+
+		if err := c.validate(); err != nil {
+			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+}
+
 func TestConfigValidate_Empty(t *testing.T) {
 	c := Config{errs: InvalidConfigError{}}
 	err := c.validate()
@@ -378,13 +441,57 @@ func TestMaxParallelismOutOfRange(t *testing.T) {
 func TestValidateForPlan_SkipsParallelismAndNodeIndexValidation(t *testing.T) {
 	c := createConfig()
 
-	// These 2 fields are only required on ValidateForRun
+	// NodeIndex is only required on ValidateForRun. Parallelism may be 0 for
+	// plan as long as --max-parallelism supplies a non-zero parallelism.
 	c.Parallelism = 0
+	c.MaxParallelism = 10
 	c.NodeIndex = 0
 	err := c.ValidateForPlan()
 	if err != nil {
 		t.Errorf("config.validate() err = %v, want nil", err)
 	}
+}
+
+// plan resolves parallelism from --max-parallelism then
+// BUILDKITE_PARALLEL_JOB_COUNT; when both are 0 it would silently fall back to a
+// parallelism-0 plan that runs nothing, so validation must reject it up front.
+func TestValidateForPlan_RejectsNonPositiveParallelism(t *testing.T) {
+	for _, parallelism := range []int{0, -1} {
+		c := createConfig()
+		c.MaxParallelism = 0
+		c.Parallelism = parallelism
+
+		err := c.ValidateForPlan()
+
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("ValidateForPlan() with Parallelism=%d error = %v, want InvalidConfigError", parallelism, err)
+		}
+		if len(invConfigError["parallelism"]) != 1 {
+			t.Errorf("ValidateForPlan() with Parallelism=%d parallelism errors = %v, want 1", parallelism, invConfigError["parallelism"])
+		}
+	}
+}
+
+// Either parallelism source alone is enough to satisfy the parallelism > 0 rule.
+func TestValidateForPlan_ParallelismSourcesSatisfyGuard(t *testing.T) {
+	t.Run("BUILDKITE_PARALLEL_JOB_COUNT only", func(t *testing.T) {
+		c := createConfig()
+		c.MaxParallelism = 0
+		c.Parallelism = 5
+		if err := c.ValidateForPlan(); err != nil {
+			t.Errorf("ValidateForPlan() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("--max-parallelism only", func(t *testing.T) {
+		c := createConfig()
+		c.MaxParallelism = 5
+		c.Parallelism = 0
+		if err := c.ValidateForPlan(); err != nil {
+			t.Errorf("ValidateForPlan() error = %v, want nil", err)
+		}
+	})
 }
 
 func TestConfigValidate_SelectionParamsRequireStrategy(t *testing.T) {

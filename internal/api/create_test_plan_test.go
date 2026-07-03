@@ -104,6 +104,49 @@ func TestCreateTestPlan(t *testing.T) {
 	}
 }
 
+func TestCreateTestPlanRaw(t *testing.T) {
+	// Include a field the client struct does not model to confirm the raw bytes
+	// are returned verbatim.
+	serverBody := `{"identifier":"facecafe","parallelism":2,"tasks":{"0":{"node_number":0,"tests":[{"path":"sky_spec.rb"}]}},"server_only":"kept"}`
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = io.WriteString(w, serverBody)
+	}))
+	defer svr.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	apiClient := NewClient(ClientConfig{
+		AccessToken:      "asdf1234",
+		OrganizationSlug: "buildkite",
+		ServerBaseURL:    svr.URL,
+	})
+
+	gotPlan, gotRaw, err := apiClient.CreateTestPlanRaw(ctx, "rspec", TestPlanParams{Identifier: "facecafe"})
+	if err != nil {
+		t.Fatalf("CreateTestPlanRaw() error = %v", err)
+	}
+
+	// Raw bytes are returned unmodified.
+	if string(gotRaw) != serverBody {
+		t.Errorf("CreateTestPlanRaw() raw = %s, want %s", gotRaw, serverBody)
+	}
+
+	// The decoded plan is also returned for control-flow decisions.
+	wantPlan := plan.TestPlan{
+		Identifier:  "facecafe",
+		Parallelism: 2,
+		Tasks: map[string]*plan.Task{
+			"0": {NodeNumber: 0, Tests: []plan.TestCase{{Path: "sky_spec.rb"}}},
+		},
+	}
+	if diff := cmp.Diff(gotPlan, wantPlan); diff != "" {
+		t.Errorf("CreateTestPlanRaw() plan diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCreateTestPlan_SplitByExample(t *testing.T) {
 	params := TestPlanParams{
 		Identifier:  "abc123",

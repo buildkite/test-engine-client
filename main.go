@@ -51,9 +51,12 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid configuration...\n%w", err)
 	}
 
-	if cmd.Bool("json") {
+	switch {
+	case cmd.Bool("json"):
 		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputJSON, "")
-	} else {
+	case cmd.IsSet("plan-out"):
+		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputPlanOut, "")
+	default:
 		return command.Plan(ctx, &cfg, cmd.String("files"), command.PlanOutputPipelineUpload, cmd.String("pipeline-upload"))
 	}
 }

@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,7 @@ type PlanOutput int
 const (
 	PlanOutputJSON PlanOutput = iota
 	PlanOutputPipelineUpload
+	PlanOutputPlanOut
 )
 
 var planWriter io.Writer = os.Stdout
@@ -58,6 +60,12 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	})
 
 	debug.Println("Creating test plan via API")
+
+	// --plan-out emits what the server returns, so it takes a distinct path
+	// that does not substitute a local fallback for a server error plan.
+	if outputFormat == PlanOutputPlanOut {
+		return planOut(ctx, cfg, testTargets, apiClient, testRunner)
+	}
 
 	testPlan, err := createTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
 	if err != nil {
@@ -126,6 +134,99 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	return nil
 }
 
+// planOut writes the plan as the server's test_plan endpoint would return it to
+// the destination given by cfg.PlanOut ("-" for stdout, otherwise a file).
+// Unlike the --json and --pipeline-upload modes it does not substitute a local
+// fallback for a server error plan: the server's response (including an empty
+// error plan) is passed through verbatim, so the output faithfully reflects
+// what the server has. A locally-computed fallback is used only when the server
+// cannot be reached at all, since there is nothing to pass through.
+func planOut(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) error {
+	out, closeOut, err := planOutWriter(cfg.PlanOut)
+	if err != nil {
+		return err
+	}
+	defer closeOut()
+
+	testPlan, raw, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
+	if err != nil {
+		// Fatal errors (auth, forbidden, bad request) are returned; soft
+		// errors (timeout, billing, disabled, not found) fall through to a
+		// locally-computed fallback since the server returned nothing.
+		if handledErr := handleError(err); handledErr != nil {
+			return handledErr
+		}
+		return emitLocalFallback(out, cfg)
+	}
+
+	// The server responded. Emit its exact JSON, unmodified. An error plan
+	// (`{"tasks": {}}`) is passed through verbatim so --plan-out reflects the
+	// server's actual response. We warn on stderr, but not via warnErrorPlan:
+	// that appends a "falling back to non-intelligent splitting" notice, which
+	// is untrue here since we emit the server's plan rather than a fallback.
+	if len(testPlan.Tasks) == 0 {
+		fmt.Fprintln(os.Stderr, "⚠️ The Test Engine API returned an empty plan.")
+	}
+
+	debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
+	plan.PrintSplitSummary(os.Stderr, testPlan)
+	if testPlan.Parallelism == 0 {
+		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
+	}
+
+	return writeIndentedJSON(out, raw)
+}
+
+// planOutWriter resolves the --plan-out destination: "-" writes to planWriter
+// (stdout), any other value creates (or truncates) that file. The returned
+// close function closes a file destination, and is a no-op for stdout.
+func planOutWriter(dest string) (io.Writer, func(), error) {
+	if dest == "-" {
+		return planWriter, func() {}, nil
+	}
+
+	f, err := os.Create(dest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("opening --plan-out file: %w", err)
+	}
+	return f, func() { f.Close() }, nil
+}
+
+// emitLocalFallback writes a locally-computed fallback plan as JSON, used by
+// --plan-out when the server cannot be reached and there is nothing to pass
+// through. The fallback carries no tasks, so only the identifier and
+// parallelism are emitted.
+func emitLocalFallback(out io.Writer, cfg *config.Config) error {
+	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
+
+	// A fixed-shape struct of plain fields, so marshalling cannot fail.
+	encoded, _ := json.MarshalIndent(struct {
+		Identifier  string                `json:"identifier"`
+		Parallelism int                   `json:"parallelism"`
+		Tasks       map[string]*plan.Task `json:"tasks"`
+	}{
+		Identifier:  cfg.Identifier,
+		Parallelism: fallbackParallelism(cfg),
+		Tasks:       map[string]*plan.Task{},
+	}, "", "  ")
+
+	_, err := fmt.Fprintln(out, string(encoded))
+	return err
+}
+
+// writeIndentedJSON re-indents raw JSON and writes it to out, leaving the
+// content (keys, values, order) untouched.
+func writeIndentedJSON(out io.Writer, raw []byte) error {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(out, buf.String()); err != nil {
+		return err
+	}
+	return nil
+}
+
 func makePipelineUploadCommand(template string) *exec.Cmd {
 	args := append(pipelineUploadArgs, template)
 	cmd := exec.Command(pipelineUploadCommand, args...)
@@ -134,28 +235,53 @@ func makePipelineUploadCommand(template string) *exec.Cmd {
 	return cmd
 }
 
-func createTestPlan(ctx context.Context, cfg *config.Config, files []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
-	fallbackPlan := plan.TestPlan{
+// fallbackParallelism resolves the fallback plan's parallelism like bktec run
+// does: prefer --max-parallelism, else the static BUILDKITE_PARALLEL_JOB_COUNT.
+// Without this an unset --max-parallelism yields parallelism 0, so the fallback
+// runs nothing. Still 0 off-agent, where BUILDKITE_PARALLEL_JOB_COUNT is unset.
+func fallbackParallelism(cfg *config.Config) int {
+	if cfg.MaxParallelism > 0 {
+		return cfg.MaxParallelism
+	}
+	return cfg.Parallelism
+}
+
+// makeFallbackPlan returns the locally-computed fallback plan used when the
+// server cannot generate or return one.
+func makeFallbackPlan(cfg *config.Config) plan.TestPlan {
+	return plan.TestPlan{
 		Identifier:  cfg.Identifier,
-		Parallelism: cfg.MaxParallelism,
+		Parallelism: fallbackParallelism(cfg),
 		Fallback:    true,
 	}
+}
 
-	params, err := createRequestParam(ctx, cfg, files, *apiClient, testRunner)
+// requestTestPlan builds the request parameters and asks the server for a plan,
+// returning the decoded plan and the raw JSON response. It applies no fallback:
+// callers decide how to handle an error or an empty (error) plan.
+func requestTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, json.RawMessage, error) {
+	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
-		return fallbackPlan, err
+		return plan.TestPlan{}, nil, err
 	}
 
-	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+	return apiClient.CreateTestPlanRaw(ctx, cfg.SuiteSlug, params)
+}
+
+// createTestPlan requests a plan and substitutes a locally-computed fallback
+// when the server errors or returns an error plan, so the caller always gets a
+// plan. Used by the --json and --pipeline-upload output modes.
+func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner) (plan.TestPlan, error) {
+	testPlan, _, err := requestTestPlan(ctx, cfg, testTargets, apiClient, testRunner)
 	if err != nil {
-		return fallbackPlan, err
+		return makeFallbackPlan(cfg), err
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		warnErrorPlan()
-		return fallbackPlan, nil
+		return makeFallbackPlan(cfg), nil
 	}
 
 	return testPlan, nil

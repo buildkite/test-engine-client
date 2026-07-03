@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// splitBySelectorList reports whether the run is splitting work using a
+// user-provided selector list instead of discovered test files. In this mode
+// test file discovery is skipped, so TestFilePattern isn't required.
+func (c *Config) splitBySelectorList() bool {
+	return c.SelectorSplitting && c.SelectorListPath != ""
+}
+
 // Checks common to all commands
 func (c *Config) validate() error {
 	if c.MaxRetries < 0 {
@@ -68,7 +75,9 @@ func (c *Config) validate() error {
 		if c.TestCommand == "" {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_CMD", "must not be blank when using the custom test runner")
 		}
-		if c.TestFilePattern == "" {
+		// A selector list replaces test file discovery, so the file pattern
+		// isn't required when splitting by a provided selector list.
+		if c.TestFilePattern == "" && !c.splitBySelectorList() {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN", "must not be blank when using the custom test runner")
 		}
 	}
@@ -82,6 +91,10 @@ func (c *Config) validate() error {
 
 	if c.SelectionStrategy == "" && len(c.SelectionParams) > 0 {
 		c.errs.appendFieldError("selection-param", "selection strategy must be set when selection params are provided")
+	}
+
+	if c.SelectorListPath != "" && !c.SelectorSplitting {
+		c.errs.appendFieldError("selectors", "selector splitting must be enabled when a selector list is provided")
 	}
 
 	if len(c.errs) > 0 {
@@ -240,6 +253,15 @@ func (c *Config) ValidateForPlan() error {
 		if c.MaxParallelism < 0 || c.MaxParallelism > 1000 {
 			c.errs.appendFieldError("max-parallelism", "was %d, must be between 0 and 1000", c.MaxParallelism)
 		}
+	}
+
+	// The server enforces parallelism > 0 only when reachable. With both
+	// --max-parallelism and BUILDKITE_PARALLEL_JOB_COUNT at 0, parallelism
+	// resolves to 0; if the server is also unreachable the request is never
+	// validated and bktec falls back to a parallelism-0 plan (nothing runs).
+	// Enforce it client-side to fail fast, before any network call.
+	if c.MaxParallelism == 0 && c.Parallelism <= 0 {
+		c.errs.appendFieldError("parallelism", "parallelism must be greater than 0; set --max-parallelism or BUILDKITE_PARALLEL_JOB_COUNT")
 	}
 
 	if len(c.errs) > 0 {

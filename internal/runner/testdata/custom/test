@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-
-for arg in "$@"; do
-  bash "$arg"
-done

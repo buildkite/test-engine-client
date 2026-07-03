@@ -74,6 +74,37 @@ func TestPlanCommandIncludesPlanIdentifierFlag(t *testing.T) {
 	}
 }
 
+// --plan-out is registered in the plan command's mutually-exclusive PLAN
+// OUTPUT group, so it is a valid output mode and cannot be combined with --json
+// or --pipeline-upload.
+func TestPlanCommandIncludesPlanOutOutputFlag(t *testing.T) {
+	var planCmd *cli.Command
+	for _, c := range cliCommand.Commands {
+		if c.Name == "plan" {
+			planCmd = c
+		}
+	}
+	if planCmd == nil {
+		t.Fatal("cliCommand missing the plan subcommand")
+	}
+
+	found := false
+	for _, group := range planCmd.MutuallyExclusiveFlags {
+		if group.Category != "PLAN OUTPUT" {
+			continue
+		}
+		for _, flags := range group.Flags {
+			if hasFlag(flags, "plan-out") {
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		t.Fatal("plan command's PLAN OUTPUT group missing --plan-out")
+	}
+}
+
 func TestApplyPlanRequestContext_ClearsCollectGitMetadataWhenPreviewDisabled(t *testing.T) {
 	t.Setenv(previewSelectionEnvVar, "")
 
@@ -149,6 +180,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "/tmp/results.json")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_FILE", "selectors.txt")
 	t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "app/")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "3")
@@ -202,6 +234,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"ResultPath", cfg.ResultPath, "/tmp/results.json"},
 		{"SplitByExample", cfg.SplitByExample, true},
 		{"SelectorSplitting", cfg.SelectorSplitting, true},
+		{"SelectorListPath", cfg.SelectorListPath, "selectors.txt"},
 		{"FailOnNoTests", cfg.FailOnNoTests, true},
 		{"LocationPrefix", cfg.LocationPrefix, "app/"},
 		{"MaxRetries", cfg.MaxRetries, 3},

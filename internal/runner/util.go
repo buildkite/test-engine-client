@@ -13,7 +13,11 @@ func testCasesFromPaths(paths []string) []plan.TestCase {
 func pathsFromTestCases(testCases []plan.TestCase) []string {
 	paths := make([]string, len(testCases))
 	for i, tc := range testCases {
-		paths[i] = tc.Path
+		if tc.Format == plan.TestCaseFormatSelector {
+			paths[i] = tc.Value
+		} else {
+			paths[i] = tc.Path
+		}
 	}
 	return paths
 }

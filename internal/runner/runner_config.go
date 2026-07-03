@@ -16,6 +16,18 @@ type RunnerConfig struct {
 	TestFileExcludePattern string
 	TestFilePattern        string
 	uploadToken            string
+
+	// SelectorSplitting enables selector-based splitting for this runner.
+	SelectorSplitting bool
+	// SelectorListPath points at a file containing the selectors to run.
+	SelectorListPath string
+}
+
+// splitBySelectorList reports whether the runner is splitting work using a
+// user-provided selector list instead of discovered test files. In this mode
+// test file discovery is skipped, so TestFilePattern isn't required.
+func (rc RunnerConfig) splitBySelectorList() bool {
+	return rc.SelectorSplitting && rc.SelectorListPath != ""
 }
 
 func (rc RunnerConfig) LocationPrefix() string {
@@ -37,10 +49,9 @@ func (rc RunnerConfig) ResultFilePath() string {
 	return rc.ResultPath
 }
 
-// GetSelectors returns a "not supported" error by default. Selector based
-// splitting is currently only implemented by the Go runner, which overrides
-// this. Every other runner inherits this default until it gains selector
-// support.
+// GetSelectors returns a "not supported" error by default. Runners that
+// support selector based splitting override this. Every other runner
+// inherits this default until it gains selector support.
 func (rc RunnerConfig) GetSelectors() ([]string, error) {
 	return nil, fmt.Errorf("selector based splitting is not supported for the %s runner", rc.TestRunner)
 }

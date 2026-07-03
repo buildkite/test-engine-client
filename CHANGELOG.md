@@ -1,6 +1,8 @@
 # Changelog
 ## Unreleased
 - Add first-class support for the [Vitest](./docs/vitest.md) test runner (`BUILDKITE_TEST_ENGINE_TEST_RUNNER=vitest`), including test splitting by file, automatic retries, and muting. Vitest's JSON reporter is Jest-compatible, so results are parsed with the shared Jest report parser.
+- Add `--plan-out` to `bktec plan`. It writes the full test plan (tasks, per-node test breakdown, muted and skipped tests, and timing metadata) as the server's response, unmodified, without running the tests, so you can pull down a copy of the plan. Takes a destination: `-` for stdout, or a file path. `--json`, `--plan-out` and `--pipeline-upload` are mutually exclusive.
+- At parallelism 1 the split summary now prints only the case count without a known/unknown timing breakdown. The server no longer emits `known_timings_ratio` at parallelism 1 (it skips the timing fetch), so the previous breakdown was derived from a value the server no longer sends.
 - Add `--plan-identifier` (env: `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER`) to `bktec plan`. The identifier sets the plan's server-side cache key, and supplying it lets `plan` run off-agent without `BUILDKITE_BUILD_ID`/`BUILDKITE_STEP_ID`. Previously this flag was only available on `bktec run`.
 - `bktec plan` no longer requires `BUILDKITE_TEST_ENGINE_RESULT_PATH` (`--result-path`). The value is only used when running tests, so planning never needed it. `bktec run` still requires it for runners that read a result file.
 
