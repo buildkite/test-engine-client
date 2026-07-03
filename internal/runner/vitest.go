@@ -32,7 +32,7 @@ func NewVitest(v RunnerConfig) Vitest {
 	}
 
 	if v.RetryTestCommand == "" {
-		v.RetryTestCommand = "npx vitest run --testNamePattern '{{testNamePattern}}' --reporter=json --outputFile {{resultPath}}"
+		v.RetryTestCommand = "npx vitest run --testNamePattern '{{testNamePattern}}' --reporter=default --reporter=json --outputFile {{resultPath}}"
 	}
 
 	return Vitest{
