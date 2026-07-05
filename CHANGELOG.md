@@ -1,12 +1,15 @@
 # Changelog
-## Unreleased
-- Add `--plan-out` to `bktec plan`. It writes the full test plan (tasks, per-node test breakdown, muted and skipped tests, and timing metadata) as the server's response, unmodified, without running the tests, so you can pull down a copy of the plan. Takes a destination: `-` for stdout, or a file path. `--json`, `--plan-out` and `--pipeline-upload` are mutually exclusive.
-- At parallelism 1 the split summary now prints only the case count without a known/unknown timing breakdown. The server no longer emits `known_timings_ratio` at parallelism 1 (it skips the timing fetch), so the previous breakdown was derived from a value the server no longer sends.
-- Add `--plan-identifier` (env: `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER`) to `bktec plan`. The identifier sets the plan's server-side cache key, and supplying it lets `plan` run off-agent without `BUILDKITE_BUILD_ID`/`BUILDKITE_STEP_ID`. Previously this flag was only available on `bktec run`.
-- `bktec plan` no longer requires `BUILDKITE_TEST_ENGINE_RESULT_PATH` (`--result-path`). The value is only used when running tests, so planning never needed it. `bktec run` still requires it for runners that read a result file.
-
-## 2.8.2 - 2026-06-19
-- Treat pytest collection errors reported by `buildkite-test-collector` as terminal, and preserve their file-only node IDs when recording JSON results. Previously bktec could construct invalid retry selectors like `::tests/test_broken.py` for collection failures with empty scopes, then waste a retry on a failure that cannot be fixed by rerunning individual tests.
+## 2.9.0 - 2026-07-06
+- Add experimental selector-based test splitting for supported non-file runners (RSpec, custom runner, Go) via `--selector-splitting` and `--selector-file` (env: `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`), splitting by runnable selector rather than by file. `--selector-file` must be used alongside `--selector-splitting`.
+- Add `--plan-out` to `bktec plan` to write the server's full test plan (tasks, per-node breakdown, muted and skipped tests, timing metadata) to `-` for stdout or a file path, without running the tests. `--json`, `--plan-out` and `--pipeline-upload` are mutually exclusive.
+- Add `--plan-identifier` (env: `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER`) to `bktec plan`. It sets the plan's server-side cache key and lets `plan` run off-agent without `BUILDKITE_BUILD_ID`/`BUILDKITE_STEP_ID`. Previously only available on `bktec run`.
+- Add `--promise-failure` (env: `BUILDKITE_TEST_ENGINE_PROMISE_FAILURE`, opt-in) to `bktec run`. Once retries are exhausted and hard (non-muted) failures remain, bktec declares an early failure via `buildkite-agent job promise-failure`, letting a build cascade to failing before the job exits. Best-effort: it never changes the run's real exit status.
+- Change the pytest-pants runner to pick its output format from the test command: `--junit-xml` uses JUnit XML, `--json` uses `buildkite-test-collector`'s JSON output. The collector is now optional for pytest-pants; running with neither flag exits with a clear error.
+- `bktec plan` no longer requires `BUILDKITE_TEST_ENGINE_RESULT_PATH` (`--result-path`), which is only used when running tests. `bktec run` still requires it for runners that read a result file.
+- Skip Go packages with no tests when splitting, so the plan only bin-packs packages that contain tests.
+- At parallelism 1 the split summary now prints only the case count, since the server no longer emits the `known_timings_ratio` the timing breakdown was derived from.
+- Reject a parallelism of 0 in `bktec plan`, and resolve the API-unreachable fallback plan's parallelism as `bktec run` does (`--max-parallelism` -> `--parallelism` -> `BUILDKITE_PARALLEL_JOB_COUNT`). Previously an unset `--max-parallelism` silently skipped the suite: `--pipeline-upload` uploaded nothing and `--json` emitted "0".
+- Treat pytest collection errors reported by `buildkite-test-collector` as terminal, preserving their file-only node IDs when recording JSON results. Previously bktec built invalid retry selectors like `::tests/test_broken.py` and wasted a retry on a failure that rerunning cannot fix.
 
 ## 2.8.1 - 2026-06-16
 - Treat Go test build failures (`FAIL <pkg> [build failed]`) as terminal: bktec no longer retries when a package fails to compile, and exits non-zero with the failing package named in the report. Previously the build failure was recorded as a retryable "TestMain" failure that was silently dropped from the retry command, so a flaky test passing on retry could make the job pass despite the compile error.
