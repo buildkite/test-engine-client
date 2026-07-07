@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // prefixFilePaths prepends the given prefix to the file paths of the test cases.
@@ -15,6 +16,9 @@ func prefixPath(path string, prefix string) string {
 	// Some test collectors (e.g. Rspec) report file paths with a "./" by default.
 	// Since `filepath.Join` ignore "./", we need to handle this case separately to avoid losing the "./" prefix.
 	if prefix == "./" {
+		if strings.HasPrefix(path, "./") {
+			return path
+		}
 		prefixedPath = prefix + path
 	} else {
 		prefixedPath = filepath.Join(prefix, path)

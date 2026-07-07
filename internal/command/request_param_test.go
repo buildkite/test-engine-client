@@ -474,6 +474,85 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing
 	}
 }
 
+func TestCreateRequestParams_RSpecSelectorSplittingWithDotLocationPrefix(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `
+{
+	"tests": [
+		{ "path": "./testdata/rspec/spec/fruits/banana_spec.rb", "reason": "file contains 1 or more skipped tests" }
+	]
+}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "rspec",
+		SelectorSplitting: true,
+		LocationPrefix:    "./",
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: svr.URL,
+	})
+	selectors := []string{
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+	}
+
+	testRunner := metadataTestRunner{
+		name:           "rspec",
+		locationPrefix: "./",
+		supportedFeatures: runner.SupportedFeatures{
+			SplitByExample:  true,
+			SplitBySelector: true,
+			FilterTestFiles: true,
+			Skip:            true,
+		},
+		examples: []plan.TestCase{
+			{
+				Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+				Name:       "is yellow",
+				Path:       "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+				Scope:      "Banana",
+			},
+		},
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, selectors, *client, testRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "rspec",
+		Tests: api.TestPlanParamsTest{
+			Examples: []plan.TestCase{
+				{
+					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+					Name:       "is yellow",
+					Path:       "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+					Scope:      "Banana",
+				},
+			},
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 	cfg := config.Config{
 		Identifier:  "identifier",

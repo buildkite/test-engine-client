@@ -11,6 +11,7 @@ func TestPrefixFilePath(t *testing.T) {
 
 	cases := []struct {
 		prefix   string
+		path     string
 		expected string
 	}{
 		{
@@ -29,10 +30,19 @@ func TestPrefixFilePath(t *testing.T) {
 			prefix:   "./",
 			expected: "./spec/models/user_spec.rb",
 		},
+		{
+			prefix:   "./",
+			path:     "./spec/models/user_spec.rb",
+			expected: "./spec/models/user_spec.rb",
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.prefix, func(t *testing.T) {
+			path := path
+			if c.path != "" {
+				path = c.path
+			}
 			got := prefixPath(path, c.prefix)
 			if diff := cmp.Diff(got, c.expected); diff != "" {
 				t.Errorf("prefixPath() diff (-got +want):\n%s", diff)
