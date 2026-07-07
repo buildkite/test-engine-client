@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -231,6 +232,248 @@ func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 	}
 }
 
+func TestCreateRequestParams_RSpecSelectorSplittingExpandsFilteredFiles(t *testing.T) {
+	filterRequestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		filterRequestCount++
+		fmt.Fprint(w, `
+{
+	"tests": [
+		{ "path": "testdata/rspec/spec/fruits/banana_spec.rb", "reason": "file contains 1 or more skipped tests" }
+	]
+}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "rspec",
+		SelectorSplitting: true,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: svr.URL,
+	})
+	selectors := []string{
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+		"testdata/rspec/spec/fruits/cherry_spec.rb",
+	}
+
+	testRunner := metadataTestRunner{
+		name: "rspec",
+		supportedFeatures: runner.SupportedFeatures{
+			SplitByExample:  true,
+			SplitBySelector: true,
+			FilterTestFiles: true,
+			Skip:            true,
+		},
+		examples: []plan.TestCase{
+			{
+				Identifier: "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+				Name:       "is yellow",
+				Path:       "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+				Scope:      "Banana",
+			},
+		},
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, selectors, *client, testRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	if filterRequestCount != 1 {
+		t.Errorf("filter request count = %d, want 1", filterRequestCount)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "rspec",
+		Tests: api.TestPlanParamsTest{
+			Examples: []plan.TestCase{
+				{
+					Identifier: "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+					Name:       "is yellow",
+					Path:       "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+					Scope:      "Banana",
+				},
+			},
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/cherry_spec.rb"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_RSpecSelectorSplittingNoFilteredFiles(t *testing.T) {
+	filterRequestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		filterRequestCount++
+		fmt.Fprint(w, `{"tests": []}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "rspec",
+		SelectorSplitting: true,
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: svr.URL,
+	})
+	selectors := []string{
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+	}
+
+	testRunner := metadataTestRunner{
+		name: "rspec",
+		supportedFeatures: runner.SupportedFeatures{
+			SplitByExample:  true,
+			SplitBySelector: true,
+			FilterTestFiles: true,
+			Skip:            true,
+		},
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, selectors, *client, testRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	if filterRequestCount != 1 {
+		t.Errorf("filter request count = %d, want 1", filterRequestCount)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "rspec",
+		Tests: api.TestPlanParamsTest{
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/banana_spec.rb"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing.T) {
+	var gotFilterParams api.FilterTestsParams
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotFilterParams); err != nil {
+			t.Fatalf("decoding filter_tests request: %v", err)
+		}
+		fmt.Fprint(w, `
+{
+	"tests": [
+		{ "path": "my/project/testdata/rspec/spec/fruits/banana_spec.rb", "reason": "file contains 1 or more skipped tests" }
+	]
+}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "rspec",
+		SelectorSplitting: true,
+		LocationPrefix:    "my/project",
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: svr.URL,
+	})
+	selectors := []string{
+		"testdata/rspec/spec/fruits/apple_spec.rb",
+		"testdata/rspec/spec/fruits/banana_spec.rb",
+		"testdata/rspec/spec/fruits/cherry_spec.rb",
+	}
+
+	testRunner := metadataTestRunner{
+		name:           "rspec",
+		locationPrefix: "my/project",
+		supportedFeatures: runner.SupportedFeatures{
+			SplitByExample:  true,
+			SplitBySelector: true,
+			FilterTestFiles: true,
+			Skip:            true,
+		},
+		examples: []plan.TestCase{
+			{
+				Identifier: "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+				Name:       "is yellow",
+				Path:       "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+				Scope:      "Banana",
+			},
+		},
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, selectors, *client, testRunner)
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	wantFilterFiles := []plan.TestCase{
+		{Path: "my/project/testdata/rspec/spec/fruits/apple_spec.rb"},
+		{Path: "my/project/testdata/rspec/spec/fruits/banana_spec.rb"},
+		{Path: "my/project/testdata/rspec/spec/fruits/cherry_spec.rb"},
+	}
+	if diff := cmp.Diff(gotFilterParams.Files, wantFilterFiles); diff != "" {
+		t.Errorf("filter_tests files diff (-got +want):\n%s", diff)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "rspec",
+		Tests: api.TestPlanParamsTest{
+			Examples: []plan.TestCase{
+				{
+					Identifier: "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+					Name:       "is yellow",
+					Path:       "my/project/testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
+					Scope:      "Banana",
+				},
+			},
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/cherry_spec.rb"},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 	cfg := config.Config{
 		Identifier:  "identifier",
@@ -269,7 +512,55 @@ func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
 	}
 }
+func TestShouldExpandSelectorFilesForSkippedTests(t *testing.T) {
+	custom, err := runner.NewCustom(runner.RunnerConfig{
+		TestCommand:     "echo {{testExamples}}",
+		TestFilePattern: "tests/**/*",
+	})
+	if err != nil {
+		t.Fatalf("NewCustom() error = %v", err)
+	}
 
+	cases := []struct {
+		name       string
+		testRunner runner.TestRunner
+		want       bool
+	}{
+		{
+			name:       "RSpec selector-backed files support skipped-test expansion",
+			testRunner: runner.NewRspec(runner.RunnerConfig{}),
+			want:       true,
+		},
+		{
+			name:       "Cucumber selector-backed files support skipped-test expansion",
+			testRunner: runner.NewCucumber(runner.RunnerConfig{}),
+			want:       true,
+		},
+		{
+			name:       "Go selectors are not file-backed skipped-test runners",
+			testRunner: runner.NewGoTest(runner.RunnerConfig{}),
+			want:       false,
+		},
+		{
+			name:       "custom selectors do not support Test Engine skipped tests",
+			testRunner: custom,
+			want:       false,
+		},
+		{
+			name:       "selector-backed file runners without skip support do not use skipped-test expansion",
+			testRunner: runner.NewJest(runner.RunnerConfig{}),
+			want:       false,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := shouldExpandSelectorFilesForSkippedTests(c.testRunner); got != c.want {
+				t.Errorf("shouldExpandSelectorFilesForSkippedTests(%s) = %v, want %v", c.testRunner.Name(), got, c.want)
+			}
+		})
+	}
+}
 func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *testing.T) {
 	filterRequestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -457,11 +748,17 @@ func TestCreateRequestParams_WithSelectionAndMetadata_SplitAllFilesBranch(t *tes
 }
 
 type metadataTestRunner struct {
-	name     string
-	examples []plan.TestCase
+	name              string
+	examples          []plan.TestCase
+	locationPrefix    string
+	supportedFeatures runner.SupportedFeatures
 }
 
 func (r metadataTestRunner) SupportedFeatures() runner.SupportedFeatures {
+	if r.supportedFeatures != (runner.SupportedFeatures{}) {
+		return r.supportedFeatures
+	}
+
 	return runner.SupportedFeatures{
 		SplitByExample: true,
 	}
@@ -484,7 +781,7 @@ func (r metadataTestRunner) GetSelectors() ([]string, error) {
 }
 
 func (r metadataTestRunner) LocationPrefix() string {
-	return ""
+	return r.locationPrefix
 }
 
 func (r metadataTestRunner) UploadToken() string {
