@@ -23,7 +23,6 @@ func TestSupportedFeatures_SplitBySelectorSupportedRunners(t *testing.T) {
 	playwright := NewPlaywright(runnerConfig)
 	cypress := NewCypress(runnerConfig)
 	pytest := NewPytest(runnerConfig)
-	pytestPants := NewPytestPants(runnerConfig)
 	gotest := NewGoTest(runnerConfig)
 	cucumber := NewCucumber(runnerConfig)
 	nunit := NewNUnit(runnerConfig)
@@ -35,7 +34,6 @@ func TestSupportedFeatures_SplitBySelectorSupportedRunners(t *testing.T) {
 		playwright,
 		cypress,
 		pytest,
-		pytestPants,
 		gotest,
 		cucumber,
 		nunit,

@@ -33,8 +33,6 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		return NewPlaywright(runnerConfig), nil
 	case "pytest":
 		return NewPytest(runnerConfig), nil
-	case "pytest-pants":
-		return NewPytestPants(runnerConfig), nil
 	case "gotest":
 		return NewGoTest(runnerConfig), nil
 	case "cucumber":
@@ -45,6 +43,6 @@ func DetectRunner(cfg *config.Config) (TestRunner, error) {
 		return NewCustom(runnerConfig)
 	default:
 		// Update the error message to include the new runner
-		return nil, fmt.Errorf("runner value %q is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'pytest-pants', 'gotest', 'cucumber', 'nunit', or 'custom'", testRunner)
+		return nil, fmt.Errorf("runner value %q is invalid, possible values are 'rspec', 'jest', 'cypress', 'playwright', 'pytest', 'gotest', 'cucumber', 'nunit', or 'custom'", testRunner)
 	}
 }

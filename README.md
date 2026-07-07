@@ -6,15 +6,15 @@ bktec supports multiple test runners and offers various features to enhance your
 
 <!-- DO NOT MANUALLY EDIT THE TABLE BELOW. The contents can be generate with `go run util/supported_features/main.go` -->
 
-| Feature | RSpec | Jest | Playwright | Cypress | pytest | pytest-pants | gotest | Cucumber | NUnit | Custom test runner |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| Split tests by file[^1] | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example) | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| Filter test files | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Filter tests by tag | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Automatically retry failed test | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| Mute tests (ignore test failures) | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Skip tests | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Feature | RSpec | Jest | Playwright | Cypress | pytest | gotest | Cucumber | NUnit | Custom test runner |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Split tests by file[^1] | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example) | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Filter test files | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Filter tests by tag | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Automatically retry failed test | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Mute tests (ignore test failures) | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Skip tests | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 
 ## Installation
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
@@ -84,9 +84,6 @@ bktec run --tag env=production --tag region=us-east-1
 # As an environment variable (comma-separated)
 export BUILDKITE_TEST_ENGINE_TAGS="env=production,region=us-east-1"
 ```
-
-> [!NOTE]
-> `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS` is not supported for the `pytest-pants` runner. Use Option 2 below instead.
 
 **Option 2: Install a [Buildkite Test Collector](https://buildkite.com/docs/test-engine/test-collection)**
 
@@ -254,7 +251,6 @@ To configure the test runner for bktec, please refer to the detailed guides prov
 - [Playwright](./docs/playwright.md)
 - [Cypress](./docs/cypress.md)
 - [pytest](./docs/pytest.md)
-- [pytest pants](./docs/pytest-pants.md)
 - [go test](./docs/gotest.md)
 - [RSpec](./docs/rspec.md)
 - [Cucumber](./docs/cucumber.md)
@@ -312,4 +308,4 @@ To test, run:
 ./bin/test
 ```
 
-[^1]: NB: Test splitting is not supported for Pants, because Pants will decide which tests to run. For go test, test splitting is by package and not by file.
+[^1]: NB: For go test, test splitting is by package and not by file.
