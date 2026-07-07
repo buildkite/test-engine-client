@@ -37,6 +37,8 @@ type Config struct {
 	JobID      string `json:"-"`
 	// JobRetryCount is the count of the number of times the job has been retried.
 	JobRetryCount int `json:"-"`
+	// LeaseTTLSeconds is the scheduler lease TTL used in queue mode.
+	LeaseTTLSeconds int `json:"-"`
 	// LocationPrefix is prepended to test file paths when requesting a test plan.
 	// Use this when the test collector is configured to report files with a path prefix,
 	// so the test plan API can correctly match and bin-pack them across nodes.
@@ -59,10 +61,16 @@ type Config struct {
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"-"`
+	// PipelineSlug is the Buildkite pipeline slug or UUID used by scheduler queue mode.
+	PipelineSlug string `json:"-"`
 	// PlanOut is the destination for the `bktec plan --plan-out` output: "-" for
 	// stdout, or a file path. The full test plan is written as the server's
 	// response, unmodified.
 	PlanOut string `json:"-"`
+	// QueueKey is the scheduler pool key used in queue mode.
+	QueueKey string `json:"-"`
+	// QueueMode enables Test Scheduler queue mode instead of static test plans.
+	QueueMode bool `json:"-"`
 	// Remote is the git remote name for fetching missing commits and detecting default branch (default "origin").
 	Remote string `json:"-"`
 	// ResultPath is the path to the result file.
@@ -95,6 +103,8 @@ type Config struct {
 	// SplitByExample is the flag to enable split the test by example.
 	SplitByExample bool   `json:"-"`
 	StepID         string `json:"-"`
+	// SuiteAudience is the OIDC audience for the suite-scoped token.
+	SuiteAudience string `json:"-"`
 	// SuiteSlug is the slug of the suite.
 	SuiteSlug string `json:"-"`
 	// TagFilters filters test examples by execution tags.
@@ -107,8 +117,14 @@ type Config struct {
 	TestFileExcludePattern string `json:"-"`
 	// TestFilePattern is the pattern to match the test files.
 	TestFilePattern string `json:"-"`
+	// TestPoolID is the scheduler pool ID used by queue mode run workers.
+	TestPoolID string `json:"-"`
 	// TestRunner is the name of the runner.
 	TestRunner string `json:"-"`
+	// TestPoolTTLSeconds is the scheduler pool TTL used when creating a pool in queue mode.
+	TestPoolTTLSeconds int `json:"-"`
+	// TargetCostLimit is the scheduler lease target custom cost in queue mode.
+	TargetCostLimit float64 `json:"-"`
 
 	// Set to true if AccessToken was unset and an OIDC token was generated instead
 	accessTokenIsOIDC bool

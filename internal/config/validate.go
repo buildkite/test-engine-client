@@ -36,6 +36,10 @@ func (c *Config) validate() error {
 		}
 	}
 
+	if c.QueueKey == "" {
+		c.QueueKey = c.Identifier
+	}
+
 	if c.ServerBaseURL == "" {
 		c.ServerBaseURL = "https://api.buildkite.com"
 	} else {
@@ -44,7 +48,11 @@ func (c *Config) validate() error {
 		}
 	}
 
-	if c.AccessToken == "" {
+	if c.QueueMode && c.AccessToken == "" && c.SuiteAudience == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE", "must not be blank in queue mode when generating an OIDC token")
+	}
+
+	if c.AccessToken == "" && len(c.errs["BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE"]) == 0 {
 		token, err := c.generateOIDCToken()
 
 		if err != nil {
@@ -69,6 +77,10 @@ func (c *Config) validate() error {
 
 	if c.TestRunner == "" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "must not be blank")
+	}
+
+	if c.QueueMode {
+		c.validateQueueCommon()
 	}
 
 	if c.TestRunner == "custom" {
@@ -123,6 +135,15 @@ func (c *Config) ValidateForRun() error {
 	}
 	if c.ResultPath == "" && runnersWithResultPath[c.TestRunner] {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
+	}
+
+	if c.QueueMode {
+		if c.TestPoolID == "" {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_POOL_ID", "must not be blank in queue mode")
+		}
+		if c.JobID == "" {
+			c.errs.appendFieldError("BUILDKITE_JOB_ID", "must not be blank in queue mode")
+		}
 	}
 
 	// Upload token could come from the env BUILDKITE_ANALYTICS_TOKEN, but may be blank ...
@@ -240,6 +261,15 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 func (c *Config) ValidateForPlan() error {
 	_ = c.validate()
 
+	if c.QueueMode {
+		if c.BuildID == "" {
+			c.errs.appendFieldError("BUILDKITE_BUILD_ID", "must not be blank in queue mode")
+		}
+		if c.PipelineSlug == "" {
+			c.errs.appendFieldError("BUILDKITE_PIPELINE_SLUG", "must not be blank in queue mode")
+		}
+	}
+
 	if c.TargetTime != 0 {
 		if c.TargetTime <= 0 {
 			c.errs.appendFieldError("target-time", "was %s, must be greater than 0", c.TargetTime.String())
@@ -265,7 +295,7 @@ func (c *Config) ValidateForPlan() error {
 	// resolves to 0; if the server is also unreachable the request is never
 	// validated and bktec falls back to a parallelism-0 plan (nothing runs).
 	// Enforce it client-side to fail fast, before any network call.
-	if c.MaxParallelism == 0 && c.Parallelism <= 0 {
+	if !c.QueueMode && c.MaxParallelism == 0 && c.Parallelism <= 0 {
 		c.errs.appendFieldError("parallelism", "parallelism must be greater than 0; set --max-parallelism or BUILDKITE_PARALLEL_JOB_COUNT")
 	}
 
@@ -276,18 +306,56 @@ func (c *Config) ValidateForPlan() error {
 	return nil
 }
 
+func (c *Config) validateQueueCommon() {
+	if c.QueueKey == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_QUEUE_KEY", "must not be blank in queue mode")
+	}
+
+	if c.TestPoolTTLSeconds == 0 {
+		c.TestPoolTTLSeconds = 3600
+	}
+	if c.TestPoolTTLSeconds < 300 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_POOL_TTL_SECONDS", "was %d, must be greater than or equal to 300", c.TestPoolTTLSeconds)
+	}
+
+	if c.LeaseTTLSeconds == 0 {
+		c.LeaseTTLSeconds = 600
+	}
+	if c.LeaseTTLSeconds < 1 || c.LeaseTTLSeconds > 600 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_LEASE_TTL_SECONDS", "was %d, must be between 1 and 600", c.LeaseTTLSeconds)
+	}
+
+	if c.TargetCostLimit == 0 {
+		c.TargetCostLimit = 10
+	}
+	if c.TargetCostLimit < 0 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TARGET_COST_LIMIT", "was %v, must be greater than or equal to 0", c.TargetCostLimit)
+	}
+
+	if (c.AccessToken == "" || c.accessTokenIsOIDC) && c.SuiteAudience == "" && len(c.errs["BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE"]) == 0 {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE", "must not be blank in queue mode when generating an OIDC token")
+	}
+}
+
 func (c *Config) generateOIDCToken() (token string, err error) {
 	if !c.OIDC {
 		return "", nil
 	}
 
 	suiteURL := fmt.Sprintf("%s/v2/analytics/organizations/%s/suites/%s", c.ServerBaseURL, c.OrganizationSlug, c.SuiteSlug)
+	if c.SuiteAudience != "" {
+		suiteURL = c.SuiteAudience
+	}
 	var tokenWriter strings.Builder
 	var errorWriter strings.Builder
 	lifetime := strconv.Itoa(int(c.OIDCLifetime.Seconds()))
+	args := []string{"oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime}
+	if c.QueueMode {
+		args = append(args, "--claim", "organization_id,pipeline_id,build_id,job_id")
+	}
 	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
 	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
-	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime) //nolint:gosec
+	cmd := exec.Command(c.BuildkiteAgentCommand, args...) //nolint:gosec
 	cmd.Stderr = &errorWriter
 	cmd.Stdout = &tokenWriter
 	cmd.Env = os.Environ()

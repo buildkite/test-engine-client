@@ -162,6 +162,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 
 	t.Setenv("BUILDKITE_ORGANIZATION_SLUG", "my-org")
 	t.Setenv("BUILDKITE_BUILD_ID", "build-1")
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "pipeline-1")
 	t.Setenv("BUILDKITE_JOB_ID", "job-2")
 	t.Setenv("BUILDKITE_STEP_ID", "step-3")
 	t.Setenv("BUILDKITE_BRANCH", "main")
@@ -171,6 +172,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "access-token")
 	t.Setenv("BUILDKITE_ANALYTICS_TOKEN", "upload-token")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "my-suite")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE", "https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite")
 	t.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", "https://example.com")
 	t.Setenv("BUILDKITE_TEST_ENGINE_TAG_FILTERS", "fast")
 	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "go test ./...")
@@ -191,6 +193,11 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC", "false")
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC_LIFETIME", "1h")
 	t.Setenv("BUILDKITE_TEST_ENGINE_TAGS", "env=production,region=us-east-1")
+	t.Setenv("BUILDKITE_TEST_ENGINE_QUEUE", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_POOL_ID", "pool-1")
+	t.Setenv("BUILDKITE_TEST_ENGINE_QUEUE_KEY", "queue-1")
+	t.Setenv("BUILDKITE_TEST_ENGINE_LEASE_TTL_SECONDS", "300")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TARGET_COST_LIMIT", "25")
 
 	cmd := &cli.Command{
 		Name:  "bktec",
@@ -216,6 +223,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	}{
 		{"OrganizationSlug", cfg.OrganizationSlug, "my-org"},
 		{"BuildID", cfg.BuildID, "build-1"},
+		{"PipelineSlug", cfg.PipelineSlug, "pipeline-1"},
 		{"JobID", cfg.JobID, "job-2"},
 		{"StepID", cfg.StepID, "step-3"},
 		{"Branch", cfg.Branch, "main"},
@@ -225,6 +233,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"AccessToken", cfg.AccessToken, "access-token"},
 		{"UploadToken", cfg.UploadToken, "upload-token"},
 		{"SuiteSlug", cfg.SuiteSlug, "my-suite"},
+		{"SuiteAudience", cfg.SuiteAudience, "https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite"},
 		{"ServerBaseURL", cfg.ServerBaseURL, "https://example.com"},
 		{"TagFilters", cfg.TagFilters, "fast"},
 		{"TestCommand", cfg.TestCommand, "go test ./..."},
@@ -245,6 +254,11 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"DebugEnabled", cfg.DebugEnabled, true},
 		{"OIDC", cfg.OIDC, false},
 		{"OIDCLifetime", cfg.OIDCLifetime, time.Hour},
+		{"QueueMode", cfg.QueueMode, true},
+		{"TestPoolID", cfg.TestPoolID, "pool-1"},
+		{"QueueKey", cfg.QueueKey, "queue-1"},
+		{"LeaseTTLSeconds", cfg.LeaseTTLSeconds, 300},
+		{"TargetCostLimit", cfg.TargetCostLimit, 25.0},
 	}
 
 	for _, c := range checks {
@@ -304,5 +318,15 @@ func TestSelectorSplittingFlagBindsToPlanConfig(t *testing.T) {
 
 	if !cfg.SelectorSplitting {
 		t.Fatalf("cfg.SelectorSplitting = false, want true")
+	}
+}
+
+func TestQueueFlagsAreAvailableOnRunAndPlan(t *testing.T) {
+	for _, flags := range [][]cli.Flag{runCommandFlags(), planCommandFlags()} {
+		for _, name := range []string{"queue", "test-pool-id", "queue-key", "lease-ttl-seconds", "target-cost-limit"} {
+			if !hasFlag(flags, name) {
+				t.Fatalf("command flags missing --%s", name)
+			}
+		}
 	}
 }

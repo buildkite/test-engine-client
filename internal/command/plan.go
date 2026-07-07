@@ -59,6 +59,10 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
+	if cfg.QueueMode {
+		return planQueue(ctx, cfg, testTargets, apiClient, testRunner, outputFormat, template)
+	}
+
 	debug.Println("Creating test plan via API")
 
 	// --plan-out emits what the server returns, so it takes a distinct path

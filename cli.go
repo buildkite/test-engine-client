@@ -98,6 +98,15 @@ var buildIDFlag = &cli.StringFlag{
 	Hidden:      true,
 }
 
+var pipelineSlugFlag = &cli.StringFlag{
+	Name:        "pipeline-slug",
+	Category:    "BUILD ENVIRONMENT",
+	Usage:       "Buildkite pipeline slug or UUID",
+	Sources:     cli.EnvVars("BUILDKITE_PIPELINE_SLUG"),
+	Destination: &cfg.PipelineSlug,
+	Hidden:      true,
+}
+
 var jobIDFlag = &cli.StringFlag{
 	Name:        "job-id",
 	Category:    "BUILD ENVIRONMENT",
@@ -193,6 +202,15 @@ var suiteSlugFlag = &cli.StringFlag{
 	Usage:       "Buildkite suite slug",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SUITE_SLUG"),
 	Destination: &cfg.SuiteSlug,
+}
+
+var suiteAudienceFlag = &cli.StringFlag{
+	Name:        "suite-audience",
+	Category:    "TEST ENGINE",
+	Usage:       "Suite-scoped OIDC audience used when generating tokens",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE"),
+	Destination: &cfg.SuiteAudience,
+	Hidden:      true,
 }
 
 var selectionStrategyFlag = &cli.StringFlag{
@@ -436,6 +454,59 @@ var promiseFailureFlag = &cli.BoolFlag{
 	Destination: &cfg.PromiseFailure,
 }
 
+var queueFlag = &cli.BoolFlag{
+	Name:        "queue",
+	Category:    "TEST SCHEDULER",
+	Usage:       "Use experimental Test Scheduler queue mode instead of static plans",
+	Value:       false,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE"),
+	Destination: &cfg.QueueMode,
+}
+
+var testPoolIDFlag = &cli.StringFlag{
+	Name:        "test-pool-id",
+	Category:    "TEST SCHEDULER",
+	Usage:       "Test Scheduler pool ID to consume in queue mode",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TEST_POOL_ID"),
+	Destination: &cfg.TestPoolID,
+}
+
+var queueKeyFlag = &cli.StringFlag{
+	Name:        "queue-key",
+	Category:    "TEST SCHEDULER",
+	Usage:       "Test Scheduler pool key. Defaults to the plan identifier.",
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_QUEUE_KEY"),
+	Destination: &cfg.QueueKey,
+}
+
+var leaseTTLSecondsFlag = &cli.IntFlag{
+	Name:        "lease-ttl-seconds",
+	Category:    "TEST SCHEDULER",
+	Usage:       "Test Scheduler lease TTL in seconds",
+	Value:       600,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_LEASE_TTL_SECONDS"),
+	Destination: &cfg.LeaseTTLSeconds,
+}
+
+var targetCostLimitFlag = &cli.FloatFlag{
+	Name:        "target-cost-limit",
+	Category:    "TEST SCHEDULER",
+	Usage:       "Test Scheduler target custom cost per lease",
+	Value:       10,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TARGET_COST_LIMIT"),
+	Destination: &cfg.TargetCostLimit,
+}
+
+var testPoolTTLSecondsFlag = &cli.IntFlag{
+	Name:        "test-pool-ttl-seconds",
+	Category:    "TEST SCHEDULER",
+	Usage:       "Test Scheduler pool TTL in seconds",
+	Value:       3600,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_TEST_POOL_TTL_SECONDS"),
+	Destination: &cfg.TestPoolTTLSeconds,
+	Hidden:      true,
+}
+
 // `run` and `plan` command flags
 var planIdentifierFlag = &cli.StringFlag{
 	Name:        "plan-identifier",
@@ -564,6 +635,7 @@ var uploadFlag = &cli.StringFlag{
 var buildEnvironmentFlags = []cli.Flag{
 	organizationSlugFlag,
 	buildIDFlag,
+	pipelineSlugFlag,
 	jobIDFlag,
 	stepIDFlag,
 	branchFlag,
@@ -577,10 +649,20 @@ var testEngineFlags = []cli.Flag{
 	uploadResultsFlag,
 	uploadTagsFlag,
 	suiteSlugFlag,
+	suiteAudienceFlag,
 	baseURLFlag,
 	uploadBaseURLFlag,
 	oidcFlag,
 	oidcLifetimeFlag,
+}
+
+var testSchedulerFlags = []cli.Flag{
+	queueFlag,
+	testPoolIDFlag,
+	queueKeyFlag,
+	leaseTTLSecondsFlag,
+	targetCostLimitFlag,
+	testPoolTTLSecondsFlag,
 }
 
 var runnerEnvironmentFlags = []cli.Flag{
@@ -621,6 +703,7 @@ func runCommandFlags() []cli.Flag {
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)
+	flags = append(flags, testSchedulerFlags...)
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
 	flags = append(flags, failOnNoTestsFlag)
@@ -642,6 +725,7 @@ func planCommandFlags() []cli.Flag {
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)
+	flags = append(flags, testSchedulerFlags...)
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
 	flags = append(flags, previewSelectionFlags()...)

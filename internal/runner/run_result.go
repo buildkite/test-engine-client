@@ -111,6 +111,17 @@ func (r *RunResult) SkippedTests() []plan.TestCase {
 	return skippedTests
 }
 
+func (r *RunResult) TestResultFor(testCase plan.TestCase) (TestResult, bool) {
+	if r.tests == nil {
+		return TestResult{}, false
+	}
+	test, ok := r.tests[testIdentifier(testCase)]
+	if !ok {
+		return TestResult{}, false
+	}
+	return *test, true
+}
+
 func (r *RunResult) FailedMutedTests() []plan.TestCase {
 	var failedTests []plan.TestCase
 

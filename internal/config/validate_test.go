@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -78,6 +80,71 @@ func TestConfigValidate_SelectorListRequiresSelectorSplitting(t *testing.T) {
 
 		if err := c.validate(); err != nil {
 			t.Errorf("config.validate() error = %v, want nil", err)
+		}
+	})
+}
+
+func TestConfigValidate_QueueModeDefaultsAndRequirements(t *testing.T) {
+	t.Run("plan requires build and pipeline", func(t *testing.T) {
+		c := createConfig()
+		c.QueueMode = true
+		c.BuildID = ""
+		c.PipelineSlug = ""
+		c.SuiteAudience = "https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite"
+
+		err := c.ValidateForPlan()
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("ValidateForPlan() error = %v, want InvalidConfigError", err)
+		}
+		for _, field := range []string{"BUILDKITE_BUILD_ID", "BUILDKITE_PIPELINE_SLUG"} {
+			if len(invConfigError[field]) != 1 {
+				t.Errorf("ValidateForPlan() error for %s length = %d, want 1", field, len(invConfigError[field]))
+			}
+		}
+	})
+
+	t.Run("run requires pool and job", func(t *testing.T) {
+		c := createConfig()
+		c.QueueMode = true
+		c.JobID = ""
+		c.TestPoolID = ""
+		c.SuiteAudience = "https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite"
+
+		err := c.ValidateForRun()
+		var invConfigError InvalidConfigError
+		if !errors.As(err, &invConfigError) {
+			t.Fatalf("ValidateForRun() error = %v, want InvalidConfigError", err)
+		}
+		for _, field := range []string{"BUILDKITE_JOB_ID", "BUILDKITE_TEST_ENGINE_TEST_POOL_ID"} {
+			if len(invConfigError[field]) != 1 {
+				t.Errorf("ValidateForRun() error for %s length = %d, want 1", field, len(invConfigError[field]))
+			}
+		}
+	})
+
+	t.Run("defaults queue key and lease controls", func(t *testing.T) {
+		c := createConfig()
+		c.QueueMode = true
+		c.PipelineSlug = "pipeline"
+		c.JobID = "job"
+		c.TestPoolID = "pool"
+		c.SuiteAudience = "https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite"
+
+		if err := c.ValidateForRun(); err != nil {
+			t.Fatalf("ValidateForRun() error = %v", err)
+		}
+		if c.QueueKey != c.Identifier {
+			t.Errorf("QueueKey = %q, want identifier %q", c.QueueKey, c.Identifier)
+		}
+		if c.LeaseTTLSeconds != 600 {
+			t.Errorf("LeaseTTLSeconds = %d, want 600", c.LeaseTTLSeconds)
+		}
+		if c.TargetCostLimit != 10 {
+			t.Errorf("TargetCostLimit = %v, want 10", c.TargetCostLimit)
+		}
+		if c.TestPoolTTLSeconds != 3600 {
+			t.Errorf("TestPoolTTLSeconds = %d, want 3600", c.TestPoolTTLSeconds)
 		}
 	})
 }
@@ -809,6 +876,45 @@ func TestConfigValidate_OidcTokens(t *testing.T) {
 	}
 	if c.UploadToken != expectedToken {
 		t.Errorf("c.UploadToken expected %v, got %v", expectedToken, c.UploadToken)
+	}
+}
+
+func TestConfigValidate_QueueOidcUsesSuiteAudienceAndClaims(t *testing.T) {
+	tmp := t.TempDir()
+	argsPath := filepath.Join(tmp, "args.txt")
+	agentPath := filepath.Join(tmp, "agent")
+	script := "#!/bin/sh\nprintf '%s\n' \"$*\" > \"" + argsPath + "\"\necho mocktoken\n"
+	if err := os.WriteFile(agentPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write agent script: %v", err)
+	}
+
+	c := createConfig()
+	c.QueueMode = true
+	c.AccessToken = ""
+	c.OIDC = true
+	c.BuildkiteAgentCommand = agentPath
+	c.SuiteAudience = "https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite"
+	c.PipelineSlug = "pipeline"
+	c.JobID = "job"
+	c.TestPoolID = "pool"
+
+	if err := c.ValidateForRun(); err != nil {
+		t.Fatalf("ValidateForRun() error = %v", err)
+	}
+
+	args, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args: %v", err)
+	}
+	got := string(args)
+	for _, want := range []string{
+		"oidc request-token",
+		"--audience https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite",
+		"--claim organization_id,pipeline_id,build_id,job_id",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("oidc args = %q, want substring %q", got, want)
+		}
 	}
 }
 

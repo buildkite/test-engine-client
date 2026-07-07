@@ -126,6 +126,14 @@ func (e *UnprocessableEntityError) Error() string {
 	return e.Message
 }
 
+type ConflictError struct {
+	Message string
+}
+
+func (e *ConflictError) Error() string {
+	return e.Message
+}
+
 type responseError struct {
 	Message string `json:"message"`
 }
@@ -156,6 +164,16 @@ func (c *Client) doWithRetry(
 	ctx context.Context,
 	perAttemptTimeout time.Duration,
 	retryTimeout time.Duration,
+	newRequest func(ctx context.Context) (*http.Request, error),
+) (*http.Response, error) {
+	return c.doWithRetryPolicy(ctx, perAttemptTimeout, retryTimeout, true, newRequest)
+}
+
+func (c *Client) doWithRetryPolicy(
+	ctx context.Context,
+	perAttemptTimeout time.Duration,
+	retryTimeout time.Duration,
+	retryConflict bool,
 	newRequest func(ctx context.Context) (*http.Request, error),
 ) (*http.Response, error) {
 	r := roko.NewRetrier(
@@ -207,9 +225,10 @@ func (c *Client) doWithRetry(
 			return resp, fmt.Errorf("response code: 429")
 		}
 
-		// If we get a 409, we aren't the first client to create the plan so return
-		// and retry
-		if resp.StatusCode == http.StatusConflict {
+		// Test plan creation uses 409 as a transient cache-race signal. Test
+		// Scheduler endpoints use 409 for terminal conflicts, so callers can opt
+		// out of retrying it.
+		if retryConflict && resp.StatusCode == http.StatusConflict {
 			drainAndCloseBody(resp)
 			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
 		}
@@ -251,6 +270,10 @@ func drainAndCloseBody(resp *http.Response) {
 // For non-JSON requests (e.g. multipart uploads), use doWithRetry directly.
 // See doWithRetry for the retry behavior.
 func (c *Client) doJSONWithRetry(ctx context.Context, reqOptions httpRequest, v interface{}) (*http.Response, error) {
+	return c.doJSONWithRetryExpected(ctx, reqOptions, v, true, http.StatusOK)
+}
+
+func (c *Client) doJSONWithRetryExpected(ctx context.Context, reqOptions httpRequest, v interface{}, retryConflict bool, expectedStatuses ...int) (*http.Response, error) {
 	debug.Printf("Sending request %s %s", reqOptions.Method, reqOptions.URL)
 
 	// Each request times out after 15 seconds, chosen to provide some
@@ -275,7 +298,7 @@ func (c *Client) doJSONWithRetry(ctx context.Context, reqOptions httpRequest, v 
 		return req, nil
 	}
 
-	resp, err := c.doWithRetry(ctx, perAttemptTimeout, retryTimeout, newRequest)
+	resp, err := c.doWithRetryPolicy(ctx, perAttemptTimeout, retryTimeout, retryConflict, newRequest)
 	if err != nil {
 		return resp, err
 	}
@@ -286,7 +309,7 @@ func (c *Client) doJSONWithRetry(ctx context.Context, reqOptions httpRequest, v 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !statusIn(resp.StatusCode, expectedStatuses) {
 		var respError responseError
 		err = json.Unmarshal(responseBody, &respError)
 		if err != nil {
@@ -309,6 +332,8 @@ func (c *Client) doJSONWithRetry(ctx context.Context, reqOptions httpRequest, v 
 			return resp, &BadRequestError{Message: respError.Message}
 		case http.StatusUnprocessableEntity:
 			return resp, &UnprocessableEntityError{Message: respError.Message}
+		case http.StatusConflict:
+			return resp, &ConflictError{Message: respError.Message}
 		default:
 			return resp, &respError
 		}
@@ -323,4 +348,13 @@ func (c *Client) doJSONWithRetry(ctx context.Context, reqOptions httpRequest, v 
 	}
 
 	return resp, nil
+}
+
+func statusIn(status int, statuses []int) bool {
+	for _, expected := range statuses {
+		if status == expected {
+			return true
+		}
+	}
+	return false
 }
