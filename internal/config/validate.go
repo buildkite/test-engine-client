@@ -109,13 +109,19 @@ func (c *Config) ValidateForRun() error {
 	_ = c.validate()
 
 	// result-path is only consumed when running tests (command construction and
-	// report parsing), so it is required here but not for `plan`.
-	runnersWithoutResultPath := map[string]bool{
-		"cypress": true,
-		"pytest":  true,
-		"custom":  true,
+	// report parsing), so it is required here but not for `plan`. Checked as an
+	// inclusion list of runners that need it (rather than excluding the ones that
+	// don't), so an unrecognized runner value fails later with runner.DetectRunner's
+	// more informative "invalid runner" error instead of this one.
+	runnersWithResultPath := map[string]bool{
+		"rspec":      true,
+		"jest":       true,
+		"playwright": true,
+		"gotest":     true,
+		"cucumber":   true,
+		"nunit":      true,
 	}
-	if c.ResultPath == "" && !runnersWithoutResultPath[c.TestRunner] {
+	if c.ResultPath == "" && runnersWithResultPath[c.TestRunner] {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 
