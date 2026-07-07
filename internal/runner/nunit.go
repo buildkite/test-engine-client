@@ -195,14 +195,23 @@ func classNameFromTestCase(tc plan.TestCase) string {
 }
 
 // buildTestFilter constructs a dotnet test --filter expression from class names.
-// Each class name becomes a "FullyQualifiedName~.ClassName" predicate,
-// joined with "|" (OR).
-// The "~" operator is a "contains" match and the leading "." anchors to a
-// namespace boundary, preventing false positives on partial name matches.
+// Each class name becomes a "FullyQualifiedName~" predicate, joined with "|" (OR).
+// The "~" operator is a "contains" match.
+//
+// Namespace-qualified class names (e.g. "MyLib.Tests.CalculatorTests") already
+// spell out the full path from the root namespace, so they're matched as-is;
+// a leading "." would never match, since there's no namespace segment before
+// the root one. Bare class names (e.g. "CalculatorTests") get a leading "."
+// to anchor to a namespace/class boundary, preventing false positives on
+// partial name matches (e.g. "SubCalculatorTests").
 func buildTestFilter(classNames []string) string {
 	parts := make([]string, len(classNames))
 	for i, name := range classNames {
-		parts[i] = fmt.Sprintf("FullyQualifiedName~.%s", name)
+		if strings.Contains(name, ".") {
+			parts[i] = fmt.Sprintf("FullyQualifiedName~%s", name)
+		} else {
+			parts[i] = fmt.Sprintf("FullyQualifiedName~.%s", name)
+		}
 	}
 	return strings.Join(parts, "|")
 }

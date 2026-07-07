@@ -228,6 +228,14 @@ func TestNUnit_BuildTestFilter(t *testing.T) {
 			classNames: []string{"CalculatorTests", "StringUtilsTests"},
 			want:       "FullyQualifiedName~.CalculatorTests|FullyQualifiedName~.StringUtilsTests",
 		},
+		{
+			classNames: []string{"MyLib.Tests.CalculatorTests"},
+			want:       "FullyQualifiedName~MyLib.Tests.CalculatorTests",
+		},
+		{
+			classNames: []string{"MyLib.Tests.CalculatorTests", "StringUtilsTests"},
+			want:       "FullyQualifiedName~MyLib.Tests.CalculatorTests|FullyQualifiedName~.StringUtilsTests",
+		},
 	}
 
 	for _, c := range cases {
@@ -275,8 +283,8 @@ func TestNUnit_CommandNameAndArgs_Selector(t *testing.T) {
 	})
 
 	testCases := []plan.TestCase{
-		{Format: plan.TestCaseFormatSelector, Value: "CalculatorTests"},
-		{Format: plan.TestCaseFormatSelector, Value: "StringUtilsTests"},
+		{Format: plan.TestCaseFormatSelector, Value: "MyLib.Tests.CalculatorTests"},
+		{Format: plan.TestCaseFormatSelector, Value: "MyLib.Tests.StringUtilsTests"},
 	}
 
 	gotName, gotArgs, err := nunit.CommandNameAndArgs(testCases, false)
@@ -289,7 +297,7 @@ func TestNUnit_CommandNameAndArgs_Selector(t *testing.T) {
 		"test",
 		"--no-build",
 		"--filter",
-		"FullyQualifiedName~.CalculatorTests|FullyQualifiedName~.StringUtilsTests",
+		"FullyQualifiedName~MyLib.Tests.CalculatorTests|FullyQualifiedName~MyLib.Tests.StringUtilsTests",
 		"--logger",
 		"junit;LogFilePath=test-results.xml",
 	}
