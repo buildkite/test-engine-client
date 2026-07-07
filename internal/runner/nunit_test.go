@@ -1,6 +1,9 @@
 package runner
 
 import (
+	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
@@ -64,6 +67,116 @@ func TestNUnit_GetFiles(t *testing.T) {
 	}
 }
 
+func TestNUnit_GetSelectors(t *testing.T) {
+	changeCwd(t, "./testdata/nunit")
+
+	nunit := NewNUnit(RunnerConfig{
+		TestFilePattern: "tests/**/*Tests.cs",
+	})
+
+	got, err := nunit.GetSelectors()
+	if err != nil {
+		t.Errorf("NUnit.GetSelectors() error = %v", err)
+	}
+
+	want := []string{"MyLib.Tests.CalculatorTests", "MyLib.Tests.SimpleStackTests", "MyLib.Tests.StringUtilsTests"}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("NUnit.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
+// TestNUnit_GetSelectors_SameFilenameDifferentNamespace guards against the
+// collision extractClassNames has: two files with the same filename but
+// different namespaces used to collapse into a single, ambiguous class name.
+// GetSelectors should keep them distinct by qualifying each with its
+// namespace.
+func TestNUnit_GetSelectors_SameFilenameDifferentNamespace(t *testing.T) {
+	dir := t.TempDir()
+
+	writeTestFile := func(t *testing.T, subdir, namespace string) {
+		t.Helper()
+		fullDir := filepath.Join(dir, "tests", subdir)
+		if err := os.MkdirAll(fullDir, 0o755); err != nil {
+			t.Fatalf("os.MkdirAll() error = %v", err)
+		}
+		content := "namespace " + namespace + ";\n\npublic class CalculatorTests {}\n"
+		if err := os.WriteFile(filepath.Join(fullDir, "CalculatorTests.cs"), []byte(content), 0o644); err != nil {
+			t.Fatalf("os.WriteFile() error = %v", err)
+		}
+	}
+
+	writeTestFile(t, "MyLib.Tests", "MyLib.Tests")
+	writeTestFile(t, "OtherLib.Tests", "OtherLib.Tests")
+
+	changeCwd(t, dir)
+
+	nunit := NewNUnit(RunnerConfig{
+		TestFilePattern: "tests/**/*Tests.cs",
+	})
+
+	got, err := nunit.GetSelectors()
+	if err != nil {
+		t.Errorf("NUnit.GetSelectors() error = %v", err)
+	}
+
+	want := []string{"MyLib.Tests.CalculatorTests", "OtherLib.Tests.CalculatorTests"}
+
+	sort.Strings(got)
+	sort.Strings(want)
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("NUnit.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestNUnit_NamespacedClassNameForFile(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "block-scoped namespace",
+			content: "using NUnit.Framework;\n\nnamespace MyLib.Tests\n{\n    public class CalculatorTests {}\n}\n",
+			want:    "MyLib.Tests.CalculatorTests",
+		},
+		{
+			name:    "file-scoped namespace",
+			content: "using NUnit.Framework;\n\nnamespace MyLib.Tests;\n\npublic class CalculatorTests {}\n",
+			want:    "MyLib.Tests.CalculatorTests",
+		},
+		{
+			name:    "no namespace declared",
+			content: "public class CalculatorTests {}\n",
+			want:    "CalculatorTests",
+		},
+		{
+			name:    "commented out namespace line is ignored",
+			content: "// namespace NotTheRealNamespace;\nnamespace MyLib.Tests;\n\npublic class CalculatorTests {}\n",
+			want:    "MyLib.Tests.CalculatorTests",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := dir + "/CalculatorTests.cs"
+			if err := os.WriteFile(path, []byte(c.content), 0o644); err != nil {
+				t.Fatalf("os.WriteFile() error = %v", err)
+			}
+
+			got, err := namespacedClassNameForFile(path)
+			if err != nil {
+				t.Errorf("namespacedClassNameForFile() error = %v", err)
+			}
+			if got != c.want {
+				t.Errorf("namespacedClassNameForFile() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 func TestNUnit_GetExamples(t *testing.T) {
 	nunit := NewNUnit(RunnerConfig{})
 	_, err := nunit.GetExamples([]string{"tests/MyLib.Tests/CalculatorTests.cs"})
@@ -77,6 +190,21 @@ func TestNUnit_ExtractClassNames(t *testing.T) {
 		{Path: "tests/MyLib.Tests/CalculatorTests.cs"},
 		{Path: "tests/MyLib.Tests/StringUtilsTests.cs"},
 		{Path: "tests/MyLib.Tests/CalculatorTests.cs"}, // duplicate
+	}
+
+	got := extractClassNames(testCases)
+	want := []string{"CalculatorTests", "StringUtilsTests"}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("extractClassNames() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestNUnit_ExtractClassNames_Selector(t *testing.T) {
+	testCases := []plan.TestCase{
+		{Format: plan.TestCaseFormatSelector, Value: "CalculatorTests"},
+		{Format: plan.TestCaseFormatSelector, Value: "StringUtilsTests"},
+		{Format: plan.TestCaseFormatSelector, Value: "CalculatorTests"}, // duplicate
 	}
 
 	got := extractClassNames(testCases)
@@ -118,6 +246,40 @@ func TestNUnit_CommandNameAndArgs(t *testing.T) {
 	classNames := []plan.TestCase{{Path: "CalculatorTests"}, {Path: "StringUtilsTests"}}
 
 	gotName, gotArgs, err := nunit.CommandNameAndArgs(classNames, false)
+	if err != nil {
+		t.Errorf("commandNameAndArgs() error = %v", err)
+	}
+
+	wantName := "dotnet"
+	wantArgs := []string{
+		"test",
+		"--no-build",
+		"--filter",
+		"FullyQualifiedName~.CalculatorTests|FullyQualifiedName~.StringUtilsTests",
+		"--logger",
+		"junit;LogFilePath=test-results.xml",
+	}
+
+	if gotName != wantName {
+		t.Errorf("commandNameAndArgs() name = %v, want %v", gotName, wantName)
+	}
+
+	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
+		t.Errorf("commandNameAndArgs() args diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestNUnit_CommandNameAndArgs_Selector(t *testing.T) {
+	nunit := NewNUnit(RunnerConfig{
+		ResultPath: "test-results.xml",
+	})
+
+	testCases := []plan.TestCase{
+		{Format: plan.TestCaseFormatSelector, Value: "CalculatorTests"},
+		{Format: plan.TestCaseFormatSelector, Value: "StringUtilsTests"},
+	}
+
+	gotName, gotArgs, err := nunit.CommandNameAndArgs(testCases, false)
 	if err != nil {
 		t.Errorf("commandNameAndArgs() error = %v", err)
 	}

@@ -2,7 +2,9 @@ package runner
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
@@ -21,6 +23,7 @@ func (n NUnit) SupportedFeatures() SupportedFeatures {
 	return SupportedFeatures{
 		SplitByFile:     true,
 		SplitByExample:  false,
+		SplitBySelector: true,
 		FilterTestFiles: true,
 		FilterTestByTag: false,
 		AutoRetry:       true,
@@ -76,6 +79,62 @@ func (n NUnit) GetExamples(files []string) ([]plan.TestCase, error) {
 	return nil, fmt.Errorf("not supported in NUnit")
 }
 
+// namespaceDeclarationPattern matches a C# namespace declaration at the start
+// of a line, in either the block-scoped ("namespace Foo.Bar {") or
+// file-scoped ("namespace Foo.Bar;") form.
+var namespaceDeclarationPattern = regexp.MustCompile(`(?m)^\s*namespace\s+([\w.]+)\s*[{;]`)
+
+// GetSelectors returns the namespace-qualified class names discovered from the
+// test files, for use as the explicit selector list sent to the test plan
+// API. The namespace is read from each file's `namespace` declaration, since
+// that's the value NUnit itself writes as the JUnit `classname` attribute
+// (and what ta-ingestion attributes as test.selector.primary), so the
+// selectors bktec sends line up with the historical duration data keyed on
+// that same value.
+func (n NUnit) GetSelectors() ([]string, error) {
+	files, err := n.GetFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[string]bool{}
+	selectors := make([]string, 0, len(files))
+	for _, file := range files {
+		className, err := namespacedClassNameForFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine class name for %q: %w", file, err)
+		}
+		if !seen[className] {
+			selectors = append(selectors, className)
+			seen[className] = true
+		}
+	}
+
+	return selectors, nil
+}
+
+// namespacedClassNameForFile derives the namespace-qualified class name for a
+// .cs file, e.g. "MyLib.Tests.CalculatorTests" for a file declaring
+// "namespace MyLib.Tests" and relying on the documented NUnit convention (see
+// docs/nunit.md) that each file contains a single class matching its
+// filename. Files with no namespace declaration (the global namespace) fall
+// back to the bare class name.
+func namespacedClassNameForFile(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	className := strings.TrimSuffix(filepath.Base(path), ".cs")
+
+	match := namespaceDeclarationPattern.FindSubmatch(content)
+	if match == nil {
+		return className, nil
+	}
+
+	return string(match[1]) + "." + className, nil
+}
+
 // Run executes dotnet test with a --filter expression built from the test cases.
 // Test cases are mapped from .cs file paths to class names, and joined into a
 // FullyQualifiedName~ filter expression.
@@ -104,15 +163,17 @@ func (n NUnit) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 	return cmdErr
 }
 
-// extractClassNames extracts unique class names from test case paths.
-// Each path is expected to be a .cs file path like "tests/MyLib.Tests/CalculatorTests.cs".
-// The class name is the filename without extension, e.g. "CalculatorTests".
+// extractClassNames extracts unique class names from test cases.
+// For selector-based test cases, the class name is already resolved in
+// tc.Value. For file-based test cases, tc.Path is expected to be a .cs file
+// path like "tests/MyLib.Tests/CalculatorTests.cs", and the class name is the
+// filename without extension, e.g. "CalculatorTests".
 func extractClassNames(testCases []plan.TestCase) []string {
 	seen := map[string]bool{}
 	var classNames []string
 
 	for _, tc := range testCases {
-		className := strings.TrimSuffix(filepath.Base(tc.Path), ".cs")
+		className := classNameFromTestCase(tc)
 		if !seen[className] {
 			classNames = append(classNames, className)
 			seen[className] = true
@@ -120,6 +181,17 @@ func extractClassNames(testCases []plan.TestCase) []string {
 	}
 
 	return classNames
+}
+
+// classNameFromTestCase resolves the NUnit class name for a single test case,
+// mirroring how gotest's packageFromTestCase resolves a package name: use the
+// explicit selector value when the test plan already gave us one, otherwise
+// derive it from the .cs file path.
+func classNameFromTestCase(tc plan.TestCase) string {
+	if tc.Format == plan.TestCaseFormatSelector {
+		return tc.Value
+	}
+	return strings.TrimSuffix(filepath.Base(tc.Path), ".cs")
 }
 
 // buildTestFilter constructs a dotnet test --filter expression from class names.

@@ -1,1 +1,13 @@
-// Test fixture placeholder for bktec test splitting discovery.
+using NUnit.Framework;
+
+namespace MyLib.Tests
+{
+    public class SimpleStackTests
+    {
+        [Test]
+        public void PushAndPop()
+        {
+            Assert.Pass();
+        }
+    }
+}
