@@ -122,7 +122,11 @@ func shouldUseSelectorSplitting(cfg *config.Config, runner runner.TestRunner) bo
 	if cfg.TagFilters != "" {
 		return false
 	}
-
+// Pytest tag filters are applied during local example collection.
+// Selector requests skip that step, so fall back to example splitting.
+if cfg.TagFilters != "" {
+	return false
+}
 	return cfg.SelectorSplitting && runner.SupportedFeatures().SplitBySelector
 }
 
