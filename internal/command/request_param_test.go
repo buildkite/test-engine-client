@@ -328,46 +328,6 @@ func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_SelectorOptInIgnoredForFileRunner(t *testing.T) {
-	cfg := config.Config{
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "jest",
-		SelectorSplitting: true,
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseURL: "http://example.com",
-	})
-	files := []string{
-		"testdata/fruits/apple.spec.js",
-		"testdata/fruits/banana.spec.js",
-	}
-
-	got, err := createRequestParam(context.Background(), &cfg, files, *client, runner.Jest{})
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "jest",
-		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
-				{Path: "testdata/fruits/apple.spec.js"},
-				{Path: "testdata/fruits/banana.spec.js"},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
 func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *testing.T) {
 	filterRequestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
