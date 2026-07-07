@@ -56,6 +56,7 @@ func (p Playwright) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       true,
 		Mute:            true,
 		Skip:            false,
+		SplitBySelector: true,
 	}
 }
 
@@ -173,6 +174,10 @@ func (p Playwright) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (p Playwright) GetSelectors() ([]string, error) {
+	return p.GetFiles()
 }
 
 // GetExamples returns an array of test examples within the given files.

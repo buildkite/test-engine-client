@@ -264,6 +264,25 @@ func TestPlaywrightGetFiles(t *testing.T) {
 	}
 }
 
+func TestPlaywrightGetSelectors(t *testing.T) {
+	changeCwd(t, "./testdata/playwright")
+	playwright := NewPlaywright(RunnerConfig{})
+
+	gotFiles, err := playwright.GetFiles()
+	if err != nil {
+		t.Errorf("Playwright.GetFiles() error = %v", err)
+	}
+
+	gotSelectors, err := playwright.GetSelectors()
+	if err != nil {
+		t.Errorf("Playwright.GetSelectors() error = %v", err)
+	}
+
+	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
+		t.Errorf("Playwright.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestPlaywrightGetExamples(t *testing.T) {
 	changeCwd(t, "./testdata/playwright")
 

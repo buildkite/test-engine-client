@@ -53,6 +53,7 @@ func (c Cucumber) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       true,
 		Mute:            true,
 		Skip:            true,
+		SplitBySelector: true,
 	}
 }
 
@@ -79,6 +80,10 @@ func (c Cucumber) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (c Cucumber) GetSelectors() ([]string, error) {
+	return c.GetFiles()
 }
 
 // Run executes the Cucumber command and records results.
