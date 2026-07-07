@@ -119,6 +119,10 @@ func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []s
 }
 
 func shouldUseSelectorSplitting(cfg *config.Config, runner runner.TestRunner) bool {
+	if cfg.TagFilters != "" {
+		return false
+	}
+
 	return cfg.SelectorSplitting && runner.SupportedFeatures().SplitBySelector
 }
 
