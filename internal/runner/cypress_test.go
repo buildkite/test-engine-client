@@ -116,6 +116,24 @@ func TestCypressGetFiles(t *testing.T) {
 	}
 }
 
+func TestCypressGetSelectors(t *testing.T) {
+	cypress := NewCypress(RunnerConfig{})
+
+	gotFiles, err := cypress.GetFiles()
+	if err != nil {
+		t.Errorf("Cypress.GetFiles() error = %v", err)
+	}
+
+	gotSelectors, err := cypress.GetSelectors()
+	if err != nil {
+		t.Errorf("Cypress.GetSelectors() error = %v", err)
+	}
+
+	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
+		t.Errorf("Cypress.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCypressCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []plan.TestCase{{Path: "cypress/e2e/passing_spec.cy.js"}, {Path: "cypress/e2e/flaky_spec.cy.js"}}
 	testCommand := "cypress run --spec {{testExamples}}"

@@ -106,6 +106,7 @@ func (p Pytest) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       true,
 		Mute:            true,
 		Skip:            false,
+		SplitBySelector: true,
 	}
 }
 
@@ -275,6 +276,10 @@ func (p Pytest) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (p Pytest) GetSelectors() ([]string, error) {
+	return p.GetFiles()
 }
 
 // GetExamples returns an array of test examples within the given files.

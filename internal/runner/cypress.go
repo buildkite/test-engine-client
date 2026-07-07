@@ -45,6 +45,7 @@ func (c Cypress) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       false,
 		Mute:            false,
 		Skip:            false,
+		SplitBySelector: true,
 	}
 }
 
@@ -73,6 +74,10 @@ func (c Cypress) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (c Cypress) GetSelectors() ([]string, error) {
+	return c.GetFiles()
 }
 
 func (c Cypress) GetExamples(files []string) ([]plan.TestCase, error) {

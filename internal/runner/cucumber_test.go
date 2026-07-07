@@ -152,6 +152,29 @@ func TestCucumberGetFiles(t *testing.T) {
 	}
 }
 
+func TestCucumberGetSelectors(t *testing.T) {
+	cucumber := NewCucumber(RunnerConfig{
+		TestFilePattern: "testdata/cucumber/features/**/*.feature",
+	})
+
+	gotFiles, err := cucumber.GetFiles()
+	if err != nil {
+		t.Errorf("Cucumber.GetFiles() error = %v", err)
+	}
+
+	gotSelectors, err := cucumber.GetSelectors()
+	if err != nil {
+		t.Errorf("Cucumber.GetSelectors() error = %v", err)
+	}
+
+	sort.Strings(gotFiles)
+	sort.Strings(gotSelectors)
+
+	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
+		t.Errorf("Cucumber.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCucumberGetExamples(t *testing.T) {
 	changeCwd(t, "./testdata/cucumber")
 

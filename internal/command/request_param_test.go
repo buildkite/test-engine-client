@@ -328,46 +328,6 @@ func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_SelectorOptInIgnoredForFileRunner(t *testing.T) {
-	cfg := config.Config{
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "jest",
-		SelectorSplitting: true,
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseURL: "http://example.com",
-	})
-	files := []string{
-		"testdata/fruits/apple.spec.js",
-		"testdata/fruits/banana.spec.js",
-	}
-
-	got, err := createRequestParam(context.Background(), &cfg, files, *client, runner.Jest{})
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "jest",
-		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
-				{Path: "testdata/fruits/apple.spec.js"},
-				{Path: "testdata/fruits/banana.spec.js"},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
 func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *testing.T) {
 	filterRequestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -758,6 +718,68 @@ func TestCreateRequestParams_WithTagFilters(t *testing.T) {
 		Branch:           "main",
 		TestRunner:       "pytest",
 		TagFilters:       "team:frontend",
+	}
+
+	client := api.NewClient(api.ClientConfig{
+		ServerBaseURL: "example.com",
+	})
+
+	files := []string{
+		"../runner/testdata/pytest/failed_test.py",
+		"../runner/testdata/pytest/test_sample.py",
+		"../runner/testdata/pytest/spells/test_expelliarmus.py",
+	}
+
+	got, err := createRequestParam(context.Background(), &cfg, files, *client, runner.Pytest{
+		RunnerConfig: runner.RunnerConfig{
+			TestCommand: "pytest",
+			TagFilters:  "team:frontend",
+		},
+	})
+	if err != nil {
+		t.Errorf("createRequestParam() error = %v", err)
+	}
+
+	want := api.TestPlanParams{
+		Identifier:  "identifier",
+		Parallelism: 2,
+		Branch:      "main",
+		Runner:      "pytest",
+		Tests: api.TestPlanParamsTest{
+			Examples: []plan.TestCase{
+				{
+					Format:     "example",
+					Identifier: "runner/testdata/pytest/test_sample.py::test_happy",
+					Name:       "test_happy",
+					Path:       "runner/testdata/pytest/test_sample.py::test_happy",
+					Scope:      "runner/testdata/pytest/test_sample.py",
+				},
+				{
+					Format:     "example",
+					Identifier: "runner/testdata/pytest/spells/test_expelliarmus.py::TestExpelliarmus::test_knocks_wand_out",
+					Name:       "test_knocks_wand_out",
+					Path:       "runner/testdata/pytest/spells/test_expelliarmus.py::TestExpelliarmus::test_knocks_wand_out",
+					Scope:      "runner/testdata/pytest/spells/test_expelliarmus.py::TestExpelliarmus",
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_SelectorOptInIgnoredForTagFilters(t *testing.T) {
+	cfg := config.Config{
+		OrganizationSlug:  "my-org",
+		SuiteSlug:         "my-suite",
+		Identifier:        "identifier",
+		Parallelism:       2,
+		Branch:            "main",
+		TestRunner:        "pytest",
+		SelectorSplitting: true,
+		TagFilters:        "team:frontend",
 	}
 
 	client := api.NewClient(api.ClientConfig{

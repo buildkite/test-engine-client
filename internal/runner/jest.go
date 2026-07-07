@@ -45,6 +45,7 @@ func (j Jest) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       true,
 		Mute:            true,
 		Skip:            false,
+		SplitBySelector: true,
 	}
 }
 
@@ -71,6 +72,10 @@ func (j Jest) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (j Jest) GetSelectors() ([]string, error) {
+	return j.GetFiles()
 }
 
 func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {

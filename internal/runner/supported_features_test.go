@@ -41,7 +41,16 @@ func TestSupportedFeatures_SplitBySelectorSupportedRunners(t *testing.T) {
 		nunit,
 	}
 
-	supportedRunners := []string{gotest.Name(), rspec.Name(), custom.Name()}
+	supportedRunners := []string{
+		gotest.Name(),
+		rspec.Name(),
+		custom.Name(),
+		jest.Name(),
+		playwright.Name(),
+		cypress.Name(),
+		pytest.Name(),
+		cucumber.Name(),
+	}
 
 	for _, runner := range runners {
 		got := runner.SupportedFeatures().SplitBySelector

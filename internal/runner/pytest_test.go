@@ -496,6 +496,26 @@ func TestPytestGetFiles(t *testing.T) {
 	}
 }
 
+func TestPytestGetSelectors(t *testing.T) {
+	changeCwd(t, "./testdata/pytest")
+
+	pytest := NewPytest(RunnerConfig{})
+
+	gotFiles, err := pytest.GetFiles()
+	if err != nil {
+		t.Errorf("Pytest.GetFiles() error = %v", err)
+	}
+
+	gotSelectors, err := pytest.GetSelectors()
+	if err != nil {
+		t.Errorf("Pytest.GetSelectors() error = %v", err)
+	}
+
+	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
+		t.Errorf("Pytest.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestPytestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []plan.TestCase{{Path: "failed_test.py"}, {Path: "test_sample.py"}}
 	testCommand := "pytest {{testExamples}} --full-trace --json={{resultPath}}"

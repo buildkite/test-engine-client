@@ -624,3 +624,22 @@ func TestJestGetFiles(t *testing.T) {
 		t.Errorf("Jest.GetFiles() diff (-got +want):\n%s", diff)
 	}
 }
+
+func TestJestGetSelectors(t *testing.T) {
+	changeCwd(t, "./testdata/jest")
+	jest := NewJest(RunnerConfig{})
+
+	gotFiles, err := jest.GetFiles()
+	if err != nil {
+		t.Errorf("Jest.GetFiles() error = %v", err)
+	}
+
+	gotSelectors, err := jest.GetSelectors()
+	if err != nil {
+		t.Errorf("Jest.GetSelectors() error = %v", err)
+	}
+
+	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
+		t.Errorf("Jest.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
