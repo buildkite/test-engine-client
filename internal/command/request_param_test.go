@@ -162,64 +162,6 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_PytestPants(t *testing.T) {
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `
-{
-	"tests": [
-		{ "path": "test/banana_test.py", "reason": "slow file" },
-		{ "path": "test/fig_test.py", "reason": "slow file" }
-	]
-}`)
-	}))
-	defer svr.Close()
-
-	runner := runner.PytestPants{}
-
-	t.Run(runner.Name(), func(t *testing.T) {
-		cfg := config.Config{
-			OrganizationSlug: "my-org",
-			SuiteSlug:        "my-suite",
-			Identifier:       "identifier",
-			Parallelism:      7,
-			Branch:           "",
-			TestRunner:       runner.Name(),
-		}
-
-		client := api.NewClient(api.ClientConfig{
-			ServerBaseURL: svr.URL,
-		})
-		files := []string{
-			"test/apple_test.py",
-			"test/banana_test.py",
-			"test/cherry_test.py",
-		}
-
-		got, err := createRequestParam(context.Background(), &cfg, files, *client, runner)
-		if err != nil {
-			t.Errorf("createRequestParam() error = %v", err)
-		}
-
-		want := api.TestPlanParams{
-			Identifier:  "identifier",
-			Parallelism: 7,
-			Branch:      "",
-			Runner:      "pytest",
-			Tests: api.TestPlanParamsTest{
-				Files: []plan.TestCase{
-					{Path: "test/apple_test.py"},
-					{Path: "test/banana_test.py"},
-					{Path: "test/cherry_test.py"},
-				},
-			},
-		}
-
-		if diff := cmp.Diff(got, want); diff != "" {
-			t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-		}
-	})
-}
-
 func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("unexpected API request to %s", r.URL.Path)
@@ -413,47 +355,6 @@ func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *test
 			Files: []plan.TestCase{
 				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCreateRequestParams_SelectorOptInIgnoredForPytestPants(t *testing.T) {
-	cfg := config.Config{
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "pytest-pants",
-		SelectorSplitting: true,
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseURL: "http://example.com",
-	})
-	files := []string{
-		"test/apple_test.py",
-		"test/banana_test.py",
-	}
-
-	testRunner := runner.PytestPants{}
-	got, err := createRequestParam(context.Background(), &cfg, files, *client, testRunner)
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "pytest",
-		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
-				{Path: "test/apple_test.py"},
-				{Path: "test/banana_test.py"},
 			},
 		},
 	}

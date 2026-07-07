@@ -45,7 +45,6 @@ func main() {
 		runner.NewPlaywright(runnerConfig),
 		runner.NewCypress(runnerConfig),
 		runner.NewPytest(runnerConfig),
-		runner.NewPytestPants(runnerConfig),
 		runner.NewGoTest(runnerConfig),
 		runner.NewCucumber(runnerConfig),
 		runner.NewNUnit(runnerConfig),

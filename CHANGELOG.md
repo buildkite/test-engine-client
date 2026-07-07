@@ -1,4 +1,7 @@
 # Changelog
+## Unreleased
+- **Breaking:** Remove the `pytest-pants` runner. It had zero real usage over the last 3 months. Use the `custom` runner instead, which now supports selector-based test splitting (see `--selector-splitting` in 2.9.0).
+
 ## 2.9.0 - 2026-07-06
 - Add experimental selector-based test splitting for supported non-file runners (RSpec, custom runner, Go) via `--selector-splitting` and `--selector-file` (env: `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`), splitting by runnable selector rather than by file. `--selector-file` must be used alongside `--selector-splitting`.
 - Add `--plan-out` to `bktec plan` to write the server's full test plan (tasks, per-node breakdown, muted and skipped tests, timing metadata) to `-` for stdout or a file path, without running the tests. `--json`, `--plan-out` and `--pipeline-upload` are mutually exclusive.

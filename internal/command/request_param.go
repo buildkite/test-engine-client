@@ -71,14 +71,6 @@ func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []s
 			},
 		}
 
-		// This is a workaround for the fact that the pytest-pants runner is not
-		// supported by the Test Engine API. For now, we use the pytest runner. At
-		// some point, there may be a difference between the two runners, but for
-		// now the response from the Test Engine API is the same for both runners.
-		if cfg.TestRunner == "pytest-pants" {
-			params.Runner = "pytest"
-		}
-
 		return params, nil
 	}
 

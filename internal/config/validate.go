@@ -111,10 +111,9 @@ func (c *Config) ValidateForRun() error {
 	// result-path is only consumed when running tests (command construction and
 	// report parsing), so it is required here but not for `plan`.
 	runnersWithoutResultPath := map[string]bool{
-		"cypress":      true,
-		"pytest":       true,
-		"pytest-pants": true,
-		"custom":       true,
+		"cypress": true,
+		"pytest":  true,
+		"custom":  true,
 	}
 	if c.ResultPath == "" && !runnersWithoutResultPath[c.TestRunner] {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")

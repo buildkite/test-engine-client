@@ -16,4 +16,3 @@ RUN gem install bigdecimal -v 3.2.0
 RUN yarn global add jest
 RUN pip install pytest
 RUN pip install buildkite-test-collector>=1.3.0
-RUN curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash -s -- --bin-dir /usr/local/bin
