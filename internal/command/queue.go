@@ -250,9 +250,10 @@ func printCompletedQueueAttempts(attempts []queueAttempt, runResult runner.RunRe
 	if len(attempts) == 0 {
 		return
 	}
+	result := schedulerResultForRun(runResult)
 	fmt.Printf("+++ Buildkite Test Engine Client: Completed %d Test Scheduler spec(s) for lease %s\n", len(attempts), attempts[0].LeaseID)
 	for _, attempt := range attempts {
-		fmt.Printf("Buildkite Test Engine Client: completed %s as %s (attempt %s)\n", queueTestCaseLabel(attempt.TestCase), schedulerResultForTestCase(attempt.TestCase, runResult), attempt.AttemptID)
+		fmt.Printf("Buildkite Test Engine Client: completed %s as %s (attempt %s)\n", queueTestCaseLabel(attempt.TestCase), result, attempt.AttemptID)
 	}
 }
 
@@ -308,10 +309,11 @@ func testCaseFromSchedulerSelector(selector api.TestSchedulerEntrySelector) plan
 
 func completionParamsForAttempts(attempts []queueAttempt, runResult runner.RunResult) api.CompleteTestSchedulerLeasesParams {
 	completionAttempts := make([]api.CompleteTestSchedulerAttemptParams, 0, len(attempts))
+	result := schedulerResultForRun(runResult)
 	for _, attempt := range attempts {
 		completionAttempts = append(completionAttempts, api.CompleteTestSchedulerAttemptParams{
 			AttemptID: attempt.AttemptID,
-			Result:    schedulerResultForTestCase(attempt.TestCase, runResult),
+			Result:    result,
 		})
 	}
 	leaseID := ""
@@ -326,15 +328,11 @@ func completionParamsForAttempts(attempts []queueAttempt, runResult runner.RunRe
 	}
 }
 
-func schedulerResultForTestCase(testCase plan.TestCase, runResult runner.RunResult) string {
-	result, ok := runResult.TestResultFor(testCase)
-	if !ok {
-		return "errored"
-	}
-	switch result.Status {
-	case runner.TestStatusPassed, runner.TestStatusSkipped:
+func schedulerResultForRun(runResult runner.RunResult) string {
+	switch runResult.Status() {
+	case runner.RunStatusPassed:
 		return "passed"
-	case runner.TestStatusFailed:
+	case runner.RunStatusFailed:
 		return "failed"
 	default:
 		return "errored"

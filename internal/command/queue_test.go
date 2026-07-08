@@ -72,32 +72,67 @@ func TestQueueAttemptsFromLeaseDecodesSelectorsAndTrimsLocationPrefix(t *testing
 	}
 }
 
-func TestCompletionParamsForAttemptsMapsRunnerResults(t *testing.T) {
-	passed := plan.TestCase{Path: "passed_spec.rb"}
-	failed := plan.TestCase{Path: "failed_spec.rb"}
-	skipped := plan.TestCase{Path: "skipped_spec.rb"}
-	missing := plan.TestCase{Path: "missing_spec.rb"}
+func TestCompletionParamsForAttemptsMapsAggregateRunnerResult(t *testing.T) {
+	file := plan.TestCase{Path: "spec/a_spec.rb"}
+	example := plan.TestCase{Path: "spec/a_spec.rb[1:1]"}
+	other := plan.TestCase{Path: "spec/other_spec.rb"}
 
 	runResult := runner.NewRunResult(nil)
-	runResult.RecordTestResult(passed, runner.TestStatusPassed)
-	runResult.RecordTestResult(failed, runner.TestStatusFailed)
-	runResult.RecordTestResult(skipped, runner.TestStatusSkipped)
+	runResult.RecordTestResult(example, runner.TestStatusPassed)
 
 	params := completionParamsForAttempts([]queueAttempt{
-		{LeaseID: "lease", AttemptID: "a1", TestCase: passed},
-		{LeaseID: "lease", AttemptID: "a2", TestCase: failed},
-		{LeaseID: "lease", AttemptID: "a3", TestCase: skipped},
-		{LeaseID: "lease", AttemptID: "a4", TestCase: missing},
+		{LeaseID: "lease", AttemptID: "a1", TestCase: file},
+		{LeaseID: "lease", AttemptID: "a2", TestCase: other},
 	}, *runResult)
 
 	got := []string{}
 	for _, attempt := range params.Leases[0].Attempts {
 		got = append(got, attempt.Result)
 	}
-	want := []string{"passed", "failed", "passed", "errored"}
+	want := []string{"passed", "passed"}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("completion results = %v, want %v", got, want)
 		}
+	}
+}
+
+func TestSchedulerResultForRun(t *testing.T) {
+	tests := []struct {
+		name   string
+		result runner.RunResult
+		want   string
+	}{
+		{
+			name: "passed",
+			result: func() runner.RunResult {
+				r := runner.NewRunResult(nil)
+				r.RecordTestResult(plan.TestCase{Path: "spec/a_spec.rb[1:1]"}, runner.TestStatusPassed)
+				return *r
+			}(),
+			want: "passed",
+		},
+		{
+			name: "failed",
+			result: func() runner.RunResult {
+				r := runner.NewRunResult(nil)
+				r.RecordTestResult(plan.TestCase{Path: "spec/a_spec.rb[1:1]"}, runner.TestStatusFailed)
+				return *r
+			}(),
+			want: "failed",
+		},
+		{
+			name:   "unknown",
+			result: *runner.NewRunResult(nil),
+			want:   "errored",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := schedulerResultForRun(tt.result); got != tt.want {
+				t.Fatalf("schedulerResultForRun() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
