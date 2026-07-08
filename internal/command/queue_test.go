@@ -72,24 +72,20 @@ func TestQueueAttemptsFromLeaseDecodesSelectorsAndTrimsLocationPrefix(t *testing
 	}
 }
 
-func TestCompletionParamsForAttemptsMapsAggregateRunnerResult(t *testing.T) {
+func TestCompletionParamsForAttemptResultsUsesEachAttemptResult(t *testing.T) {
 	file := plan.TestCase{Path: "spec/a_spec.rb"}
-	example := plan.TestCase{Path: "spec/a_spec.rb[1:1]"}
 	other := plan.TestCase{Path: "spec/other_spec.rb"}
 
-	runResult := runner.NewRunResult(nil)
-	runResult.RecordTestResult(example, runner.TestStatusPassed)
-
-	params := completionParamsForAttempts([]queueAttempt{
-		{LeaseID: "lease", AttemptID: "a1", TestCase: file},
-		{LeaseID: "lease", AttemptID: "a2", TestCase: other},
-	}, *runResult)
+	params := completionParamsForAttemptResults([]queueAttemptResult{
+		{queueAttempt: queueAttempt{LeaseID: "lease", AttemptID: "a1", TestCase: file}, SchedulerResult: "passed"},
+		{queueAttempt: queueAttempt{LeaseID: "lease", AttemptID: "a2", TestCase: other}, SchedulerResult: "failed"},
+	})
 
 	got := []string{}
 	for _, attempt := range params.Leases[0].Attempts {
 		got = append(got, attempt.Result)
 	}
-	want := []string{"passed", "passed"}
+	want := []string{"passed", "failed"}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("completion results = %v, want %v", got, want)

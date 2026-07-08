@@ -22,6 +22,11 @@ type queueAttempt struct {
 	TestCase  plan.TestCase
 }
 
+type queueAttemptResult struct {
+	queueAttempt
+	SchedulerResult string
+}
+
 func planQueue(ctx context.Context, cfg *config.Config, testTargets []string, apiClient *api.Client, testRunner runner.TestRunner, outputFormat PlanOutput, template string) error {
 	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
@@ -204,28 +209,32 @@ func runQueue(ctx context.Context, cfg *config.Config, apiClient *api.Client, te
 			break
 		}
 
-		attempts, testCases, err := queueAttemptsFromLease(lease, testRunner.LocationPrefix())
+		attempts, _, err := queueAttemptsFromLease(lease, testRunner.LocationPrefix())
 		if err != nil {
 			return err
 		}
 		printLeasedQueueAttempts(lease.ID, attempts)
 
-		var timeline []api.Timeline
-		runCases := append([]plan.TestCase(nil), testCases...)
-		runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &runCases, cfg.MaxRetries, nil, &timeline, cfg.RetryForMutedTest, true)
+		attemptResults := make([]queueAttemptResult, 0, len(attempts))
+		for _, attempt := range attempts {
+			var timeline []api.Timeline
+			runCases := []plan.TestCase{attempt.TestCase}
+			runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &runCases, cfg.MaxRetries, nil, &timeline, cfg.RetryForMutedTest, true)
+			attemptResults = append(attemptResults, queueAttemptResult{queueAttempt: attempt, SchedulerResult: schedulerResultForRun(runResult)})
 
-		completion := completionParamsForAttempts(attempts, runResult)
+			printReport(runResult, nil, testRunner.Name())
+
+			if firstRunErr == nil && runErr != nil {
+				firstRunErr = runErr
+			}
+		}
+
+		completion := completionParamsForAttemptResults(attemptResults)
 		if _, err := apiClient.CompleteTestSchedulerLeases(ctx, cfg.TestPoolID, completion); err != nil {
 			firstCompletionErr = err
 			break
 		}
-		printCompletedQueueAttempts(attempts, runResult)
-
-		printReport(runResult, nil, testRunner.Name())
-
-		if firstRunErr == nil && runErr != nil {
-			firstRunErr = runErr
-		}
+		printCompletedQueueAttempts(attemptResults)
 	}
 
 	if firstCompletionErr != nil {
@@ -246,14 +255,13 @@ func printLeasedQueueAttempts(leaseID string, attempts []queueAttempt) {
 	}
 }
 
-func printCompletedQueueAttempts(attempts []queueAttempt, runResult runner.RunResult) {
-	if len(attempts) == 0 {
+func printCompletedQueueAttempts(attemptResults []queueAttemptResult) {
+	if len(attemptResults) == 0 {
 		return
 	}
-	result := schedulerResultForRun(runResult)
-	fmt.Printf("+++ Buildkite Test Engine Client: Completed %d Test Scheduler spec(s) for lease %s\n", len(attempts), attempts[0].LeaseID)
-	for _, attempt := range attempts {
-		fmt.Printf("Buildkite Test Engine Client: completed %s as %s (attempt %s)\n", queueTestCaseLabel(attempt.TestCase), result, attempt.AttemptID)
+	fmt.Printf("+++ Buildkite Test Engine Client: Completed %d Test Scheduler spec(s) for lease %s\n", len(attemptResults), attemptResults[0].LeaseID)
+	for _, attemptResult := range attemptResults {
+		fmt.Printf("Buildkite Test Engine Client: completed %s as %s (attempt %s)\n", queueTestCaseLabel(attemptResult.TestCase), attemptResult.SchedulerResult, attemptResult.AttemptID)
 	}
 }
 
@@ -307,18 +315,17 @@ func testCaseFromSchedulerSelector(selector api.TestSchedulerEntrySelector) plan
 	})
 }
 
-func completionParamsForAttempts(attempts []queueAttempt, runResult runner.RunResult) api.CompleteTestSchedulerLeasesParams {
-	completionAttempts := make([]api.CompleteTestSchedulerAttemptParams, 0, len(attempts))
-	result := schedulerResultForRun(runResult)
-	for _, attempt := range attempts {
+func completionParamsForAttemptResults(attemptResults []queueAttemptResult) api.CompleteTestSchedulerLeasesParams {
+	completionAttempts := make([]api.CompleteTestSchedulerAttemptParams, 0, len(attemptResults))
+	for _, attempt := range attemptResults {
 		completionAttempts = append(completionAttempts, api.CompleteTestSchedulerAttemptParams{
 			AttemptID: attempt.AttemptID,
-			Result:    result,
+			Result:    attempt.SchedulerResult,
 		})
 	}
 	leaseID := ""
-	if len(attempts) > 0 {
-		leaseID = attempts[0].LeaseID
+	if len(attemptResults) > 0 {
+		leaseID = attemptResults[0].LeaseID
 	}
 	return api.CompleteTestSchedulerLeasesParams{
 		Leases: []api.CompleteTestSchedulerLeaseParams{{
