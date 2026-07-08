@@ -47,7 +47,6 @@ func main() {
 		runner.NewPytest(runnerConfig),
 		runner.NewGoTest(runnerConfig),
 		runner.NewCucumber(runnerConfig),
-		runner.NewNUnit(runnerConfig),
 		custom,
 	}
 

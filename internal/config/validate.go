@@ -119,7 +119,6 @@ func (c *Config) ValidateForRun() error {
 		"playwright": true,
 		"gotest":     true,
 		"cucumber":   true,
-		"nunit":      true,
 	}
 	if c.ResultPath == "" && runnersWithResultPath[c.TestRunner] {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")

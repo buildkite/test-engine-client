@@ -1,6 +1,7 @@
 # Changelog
 ## Unreleased
 - **Breaking:** Remove the `pytest-pants` runner. It had zero real usage over the last 3 months. Use the `custom` runner instead, which now supports selector-based test splitting (see `--selector-splitting` in 2.9.0).
+- **Breaking:** Remove the `nunit` runner. It saw almost no real usage, and had known issues splitting tests by file (result path handling, and class name collisions across namespaces).
 
 ## 2.9.0 - 2026-07-06
 - Add experimental selector-based test splitting for supported non-file runners (RSpec, custom runner, Go) via `--selector-splitting` and `--selector-file` (env: `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`), splitting by runnable selector rather than by file. `--selector-file` must be used alongside `--selector-splitting`.
