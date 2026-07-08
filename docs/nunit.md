@@ -8,10 +8,10 @@ dotnet add package JUnitXml.TestLogger
 
 ## How it works
 
-`bktec` discovers `.cs` test files using a glob pattern, then maps each file to a class name (the filename without the `.cs` extension). When selector based splitting is enabled, `bktec` also reads each file's `namespace` declaration and qualifies the class name with it (e.g. `MyLib.Tests.CalculatorTests`), since that's the value NUnit itself writes to the `classname` attribute in its JUnit output. It builds a `dotnet test --filter` expression using `FullyQualifiedName~.ClassName` predicates joined with `|` (OR), so only the test classes assigned to this node are executed.
+`bktec` discovers `.cs` test files using a glob pattern, then maps each file to a class name (the filename without the `.cs` extension). It builds a `dotnet test --filter` expression using `FullyQualifiedName~.ClassName` predicates joined with `|` (OR), so only the test classes assigned to this node are executed.
 
 > [!IMPORTANT]
-> Because test splitting is based on file/class name mapping, each `.cs` test file should contain a single test class whose name matches the filename (e.g. `CalculatorTests.cs` contains class `CalculatorTests`), declared in a single `namespace`. This is the standard NUnit convention.
+> Because test splitting is based on file/class name mapping, each `.cs` test file should contain a single test class whose name matches the filename (e.g. `CalculatorTests.cs` contains class `CalculatorTests`). This is the standard NUnit convention.
 
 ## Quick start
 
