@@ -119,6 +119,10 @@ func (n NUnit) GetSelectors() ([]string, error) {
 // docs/nunit.md) that each file contains a single class matching its
 // filename. Files with no namespace declaration (the global namespace) fall
 // back to the bare class name.
+//
+// Nested block-scoped namespaces (e.g. "namespace MyLib { namespace Tests {
+// ... } }") are collected in order and joined, since each nested declaration
+// only contributes its own segment to the fully qualified name.
 func namespacedClassNameForFile(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -127,12 +131,18 @@ func namespacedClassNameForFile(path string) (string, error) {
 
 	className := strings.TrimSuffix(filepath.Base(path), ".cs")
 
-	match := namespaceDeclarationPattern.FindSubmatch(content)
-	if match == nil {
+	matches := namespaceDeclarationPattern.FindAllSubmatch(content, -1)
+	if matches == nil {
 		return className, nil
 	}
 
-	return string(match[1]) + "." + className, nil
+	segments := make([]string, 0, len(matches)+1)
+	for _, match := range matches {
+		segments = append(segments, string(match[1]))
+	}
+	segments = append(segments, className)
+
+	return strings.Join(segments, "."), nil
 }
 
 // Run executes dotnet test with a --filter expression built from the test cases.

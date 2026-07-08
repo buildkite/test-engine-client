@@ -156,6 +156,11 @@ func TestNUnit_NamespacedClassNameForFile(t *testing.T) {
 			content: "// namespace NotTheRealNamespace;\nnamespace MyLib.Tests;\n\npublic class CalculatorTests {}\n",
 			want:    "MyLib.Tests.CalculatorTests",
 		},
+		{
+			name:    "nested block-scoped namespaces",
+			content: "using NUnit.Framework;\n\nnamespace MyLib\n{\n    namespace Tests\n    {\n        public class CalculatorTests {}\n    }\n}\n",
+			want:    "MyLib.Tests.CalculatorTests",
+		},
 	}
 
 	for _, c := range cases {
