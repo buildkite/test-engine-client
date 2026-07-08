@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,12 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
+
+// utf8BOM is the byte sequence Visual Studio commonly writes at the start of
+// a .cs file. Go's regexp \s class doesn't treat it as whitespace, so a
+// namespace declaration on the file's first line would otherwise fail to
+// match namespaceDeclarationPattern's "^" anchor.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 type NUnit struct {
 	RunnerConfig
@@ -124,6 +131,7 @@ func namespacedClassNameForFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	content = bytes.TrimPrefix(content, utf8BOM)
 
 	className := strings.TrimSuffix(filepath.Base(path), ".cs")
 

@@ -171,6 +171,11 @@ func TestNUnit_NamespacedClassNameForFile(t *testing.T) {
 			content: "namespace Helpers\n{\n    public class SomeHelper {}\n}\n\nnamespace MyLib.Tests\n{\n    public class CalculatorTests {}\n}\n",
 			want:    "MyLib.Tests.CalculatorTests",
 		},
+		{
+			name:    "UTF-8 BOM before a namespace on the first line",
+			content: "\xEF\xBB\xBFnamespace MyLib.Tests;\n\npublic class CalculatorTests {}\n",
+			want:    "MyLib.Tests.CalculatorTests",
+		},
 	}
 
 	for _, c := range cases {
