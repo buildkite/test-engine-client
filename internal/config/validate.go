@@ -52,7 +52,20 @@ func (c *Config) validate() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE", "must not be blank in queue mode when generating an OIDC token")
 	}
 
-	if c.AccessToken == "" && len(c.errs["BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE"]) == 0 {
+	if c.QueueMode && c.OIDC && c.SuiteAudience != "" {
+		// Test Scheduler endpoints require suite-scoped OIDC tokens with
+		// scheduler-specific claims. Some Buildkite plugins provide a Test
+		// Engine access token without those claims, so queue mode must mint the
+		// token it needs rather than reusing an existing generic one.
+		token, err := c.generateOIDCToken()
+
+		if err != nil {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "%v", err)
+		} else {
+			c.AccessToken = token
+			c.accessTokenIsOIDC = true
+		}
+	} else if c.AccessToken == "" && len(c.errs["BUILDKITE_TEST_ENGINE_SUITE_AUDIENCE"]) == 0 {
 		token, err := c.generateOIDCToken()
 
 		if err != nil {

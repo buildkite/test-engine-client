@@ -918,6 +918,49 @@ func TestConfigValidate_QueueOidcUsesSuiteAudienceAndClaims(t *testing.T) {
 	}
 }
 
+func TestConfigValidate_QueueOidcReplacesExistingAccessToken(t *testing.T) {
+	tmp := t.TempDir()
+	argsPath := filepath.Join(tmp, "args.txt")
+	agentPath := filepath.Join(tmp, "agent")
+	script := "#!/bin/sh\nprintf '%s\n' \"$*\" > \"" + argsPath + "\"\necho scheduler-token\n"
+	if err := os.WriteFile(agentPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write agent script: %v", err)
+	}
+
+	c := createConfig()
+	c.QueueMode = true
+	c.AccessToken = "plugin-token-without-scheduler-claims"
+	c.OIDC = true
+	c.BuildkiteAgentCommand = agentPath
+	c.SuiteAudience = "https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite"
+	c.PipelineSlug = "pipeline"
+	c.JobID = "job"
+	c.TestPoolID = "pool"
+
+	if err := c.ValidateForRun(); err != nil {
+		t.Fatalf("ValidateForRun() error = %v", err)
+	}
+
+	if c.AccessToken != "scheduler-token" {
+		t.Errorf("c.AccessToken = %q, want queue OIDC token", c.AccessToken)
+	}
+
+	args, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args: %v", err)
+	}
+	got := string(args)
+	for _, want := range []string{
+		"oidc request-token",
+		"--audience https://buildkite.example.com/organizations/my-org/analytics/suites/my-suite",
+		"--claim organization_id,pipeline_id,build_id,job_id",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("oidc args = %q, want substring %q", got, want)
+		}
+	}
+}
+
 func TestConfigValidate_OidcTokensAccessTokenAlreadySet(t *testing.T) {
 	c := createConfig()
 	c.OIDC = true
