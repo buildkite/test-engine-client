@@ -3,6 +3,7 @@ package runner
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
@@ -76,8 +77,12 @@ func (r Custom) GetFiles() ([]string, error) {
 	return files, nil
 }
 
+// GetSelectors falls back to file-pattern discovery, since the custom runner
+// has no way to discover selectors on its own without a selector file
+// (in which case bktec reads selectors from the file directly, without calling this).
 func (r Custom) GetSelectors() ([]string, error) {
-	return nil, fmt.Errorf("use `--selector-file` or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE` to provide the list of selectors")
+	fmt.Fprintln(os.Stderr, "Buildkite Test Engine Client: --selector-file (or BUILDKITE_TEST_ENGINE_SELECTOR_FILE) is not set for the custom runner. Falling back to test files collection.")
+	return r.GetFiles()
 }
 
 func (r Custom) GetExamples(files []string) ([]plan.TestCase, error) {
