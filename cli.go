@@ -617,6 +617,8 @@ func previewSelectionFlags() []cli.Flag {
 // urfave/cli's per-flag parse state (hasBeenSet, applied, count, value) does not
 // leak between commands built from the same package-global flag definitions. The
 // copy keeps the shared Destination pointer, so parsed values still land in cfg.
+// urfave/cli v3 exposes no public reset for that state, so a fresh copy per
+// command is the mechanism, matching the library's own per-command flag pattern.
 func freshFlag(f cli.Flag) cli.Flag {
 	switch v := f.(type) {
 	case *cli.BoolFlag:
