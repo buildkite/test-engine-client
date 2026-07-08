@@ -297,3 +297,27 @@ func TestPrintSplitSummary_SkipsFallback(t *testing.T) {
 		t.Errorf("expected no output for fallback plan, got: %s", buf.String())
 	}
 }
+
+func TestPercentOf(t *testing.T) {
+	tests := []struct {
+		name  string
+		n     int
+		total int
+		want  string
+	}{
+		{name: "zero total", n: 0, total: 0, want: "0%"},
+		{name: "whole percentage", n: 3, total: 5, want: "60%"},
+		{name: "rounds to one decimal", n: 1, total: 3, want: "33.3%"},
+		{name: "small non-zero percentage", n: 1, total: 200, want: "0.5%"},
+		{name: "tiny non-zero percentage", n: 1, total: 10000, want: "<0.1%"},
+		{name: "nearly all but not all", n: 9999, total: 10000, want: ">99.9%"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := percentOf(tt.n, tt.total); got != tt.want {
+				t.Errorf("percentOf(%d, %d) = %q, want %q", tt.n, tt.total, got, tt.want)
+			}
+		})
+	}
+}
