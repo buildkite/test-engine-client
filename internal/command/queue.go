@@ -208,6 +208,7 @@ func runQueue(ctx context.Context, cfg *config.Config, apiClient *api.Client, te
 		if err != nil {
 			return err
 		}
+		printLeasedQueueAttempts(lease.ID, attempts)
 
 		var timeline []api.Timeline
 		runCases := append([]plan.TestCase(nil), testCases...)
@@ -218,6 +219,7 @@ func runQueue(ctx context.Context, cfg *config.Config, apiClient *api.Client, te
 			firstCompletionErr = err
 			break
 		}
+		printCompletedQueueAttempts(attempts, runResult)
 
 		printReport(runResult, nil, testRunner.Name())
 
@@ -235,6 +237,39 @@ func runQueue(ctx context.Context, cfg *config.Config, apiClient *api.Client, te
 		}
 	}
 	return firstRunErr
+}
+
+func printLeasedQueueAttempts(leaseID string, attempts []queueAttempt) {
+	fmt.Printf("+++ Buildkite Test Engine Client: Leased %d Test Scheduler spec(s) from lease %s\n", len(attempts), leaseID)
+	for _, attempt := range attempts {
+		fmt.Printf("Buildkite Test Engine Client: leased %s (attempt %s)\n", queueTestCaseLabel(attempt.TestCase), attempt.AttemptID)
+	}
+}
+
+func printCompletedQueueAttempts(attempts []queueAttempt, runResult runner.RunResult) {
+	if len(attempts) == 0 {
+		return
+	}
+	fmt.Printf("+++ Buildkite Test Engine Client: Completed %d Test Scheduler spec(s) for lease %s\n", len(attempts), attempts[0].LeaseID)
+	for _, attempt := range attempts {
+		fmt.Printf("Buildkite Test Engine Client: completed %s as %s (attempt %s)\n", queueTestCaseLabel(attempt.TestCase), schedulerResultForTestCase(attempt.TestCase, runResult), attempt.AttemptID)
+	}
+}
+
+func queueTestCaseLabel(testCase plan.TestCase) string {
+	if testCase.Path != "" && testCase.Name != "" {
+		return fmt.Sprintf("%s (%s)", testCase.Path, testCase.Name)
+	}
+	if testCase.Path != "" {
+		return testCase.Path
+	}
+	if testCase.Value != "" {
+		return testCase.Value
+	}
+	if testCase.Identifier != "" {
+		return testCase.Identifier
+	}
+	return "<unknown>"
 }
 
 func queueAttemptsFromLease(lease *api.TestSchedulerLease, locationPrefix string) ([]queueAttempt, []plan.TestCase, error) {
