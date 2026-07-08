@@ -613,6 +613,53 @@ func previewSelectionFlags() []cli.Flag {
 	}
 }
 
+// freshFlag returns a shallow copy of a flag with a distinct backing struct, so
+// urfave/cli's per-flag parse state (hasBeenSet, applied, count, value) does not
+// leak between commands built from the same package-global flag definitions. The
+// copy keeps the shared Destination pointer, so parsed values still land in cfg.
+// urfave/cli v3 exposes no public reset for that state, so a fresh copy per
+// command is the mechanism, matching the library's own per-command flag pattern.
+// urfave/cli's own tests reset flags the same way, reassigning fresh flag
+// literals before re-running a command "since they are set previously":
+// https://github.com/urfave/cli/blob/4937c163f8e8bd88fdb06c4eab67cde61436c205/command_test.go#L3202
+func freshFlag(f cli.Flag) cli.Flag {
+	switch v := f.(type) {
+	case *cli.BoolFlag:
+		c := *v
+		return &c
+	case *cli.StringFlag:
+		c := *v
+		return &c
+	case *cli.IntFlag:
+		c := *v
+		return &c
+	case *cli.DurationFlag:
+		c := *v
+		return &c
+	case *cli.StringSliceFlag:
+		c := *v
+		return &c
+	case *cli.BoolWithInverseFlag:
+		c := *v
+		return &c
+	default:
+		// Unknown flag type: return the shared global as-is rather than dropping
+		// it, so the flag still registers and works. It is NOT isolated; its
+		// parse state can leak between commands until a case is added above.
+		// TestCommandFlagsAllReturnFreshInstances fails when an unhandled type
+		// reaches this branch, so the gap surfaces in CI rather than silently.
+		return f
+	}
+}
+
+func freshFlags(flags []cli.Flag) []cli.Flag {
+	out := make([]cli.Flag, len(flags))
+	for i, f := range flags {
+		out[i] = freshFlag(f)
+	}
+	return out
+}
+
 func runCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
 		filesFlag,
@@ -626,7 +673,7 @@ func runCommandFlags() []cli.Flag {
 	flags = append(flags, failOnNoTestsFlag)
 	flags = append(flags, promiseFailureFlag)
 	flags = append(flags, previewSelectionFlags()...)
-	return flags
+	return freshFlags(flags)
 }
 
 func planCommandFlags() []cli.Flag {
@@ -645,7 +692,7 @@ func planCommandFlags() []cli.Flag {
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
 	flags = append(flags, previewSelectionFlags()...)
-	return flags
+	return freshFlags(flags)
 }
 
 var cliCommand = &cli.Command{
@@ -671,9 +718,9 @@ var cliCommand = &cli.Command{
 					Required: true,
 					Category: "PLAN OUTPUT",
 					Flags: [][]cli.Flag{
-						{jsonFlag},
-						{planOutFlag},
-						{pipelineUploadFlag},
+						{freshFlag(jsonFlag)},
+						{freshFlag(planOutFlag)},
+						{freshFlag(pipelineUploadFlag)},
 					},
 				},
 			},
