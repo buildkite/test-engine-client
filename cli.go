@@ -619,6 +619,9 @@ func previewSelectionFlags() []cli.Flag {
 // copy keeps the shared Destination pointer, so parsed values still land in cfg.
 // urfave/cli v3 exposes no public reset for that state, so a fresh copy per
 // command is the mechanism, matching the library's own per-command flag pattern.
+// urfave/cli's own tests reset flags the same way, reassigning fresh flag
+// literals before re-running a command "since they are set previously":
+// https://github.com/urfave/cli/blob/4937c163f8e8bd88fdb06c4eab67cde61436c205/command_test.go#L3202
 func freshFlag(f cli.Flag) cli.Flag {
 	switch v := f.(type) {
 	case *cli.BoolFlag:
