@@ -161,6 +161,16 @@ func TestNUnit_NamespacedClassNameForFile(t *testing.T) {
 			content: "using NUnit.Framework;\n\nnamespace MyLib\n{\n    namespace Tests\n    {\n        public class CalculatorTests {}\n    }\n}\n",
 			want:    "MyLib.Tests.CalculatorTests",
 		},
+		{
+			name:    "sibling namespace after the target class is ignored",
+			content: "namespace MyLib.Tests\n{\n    public class CalculatorTests {}\n}\n\nnamespace Helpers\n{\n    public class SomeHelper {}\n}\n",
+			want:    "MyLib.Tests.CalculatorTests",
+		},
+		{
+			name:    "sibling namespace before the target class is ignored",
+			content: "namespace Helpers\n{\n    public class SomeHelper {}\n}\n\nnamespace MyLib.Tests\n{\n    public class CalculatorTests {}\n}\n",
+			want:    "MyLib.Tests.CalculatorTests",
+		},
 	}
 
 	for _, c := range cases {
