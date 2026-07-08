@@ -97,6 +97,33 @@ func TestCustom_GetFiles(t *testing.T) {
 	}
 }
 
+func TestCustom_GetSelectors_FallsBackToFilePatternMatching(t *testing.T) {
+	changeCwd(t, "./testdata/custom")
+	custom, err := NewCustom(RunnerConfig{
+		TestCommand:     "bats {{testExamples}}",
+		TestFilePattern: "tests/*.bats",
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to create Custom runner: %v", err)
+	}
+
+	got, err := custom.GetSelectors()
+	if err != nil {
+		t.Errorf("Custom.GetSelectors() error = %v", err)
+	}
+
+	want := []string{
+		"tests/failed_test.bats",
+		"tests/flaky_test.bats",
+		"tests/happy_test.bats",
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Custom.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestCustom_CommandNameAndArgs(t *testing.T) {
 	testCases := []plan.TestCase{{Path: "tests/test_a.sh"}, {Path: "tests/test_b.sh"}}
 
