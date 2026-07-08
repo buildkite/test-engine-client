@@ -3,6 +3,7 @@ package plan
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 )
 
@@ -134,23 +135,34 @@ func printFormatBreakdown(w io.Writer, total, known int, noun string, meta *Form
 	}
 
 	unknown := total - known
-	fmt.Fprintf(w, "%s%*d%s (%d%%) estimated from past historical durations\n",
+	fmt.Fprintf(w, "%s%*d%s (%s) estimated from past historical durations\n",
 		indent, width, known, itemNounFor(known), percentOf(known, total))
 	if unknown > 0 {
 		suffix := ""
 		if meta != nil && meta.MedianDuration != nil {
 			suffix = fmt.Sprintf(" — assumed median (%s)", formatDurationMS(*meta.MedianDuration))
 		}
-		fmt.Fprintf(w, "%s%*d%s (%d%%) had no history%s\n",
+		fmt.Fprintf(w, "%s%*d%s (%s) had no history%s\n",
 			indent, width, unknown, itemNounFor(unknown), percentOf(unknown, total), suffix)
 	}
 }
 
-func percentOf(n, total int) int {
+func percentOf(n, total int) string {
 	if total == 0 {
-		return 0
+		return "0%"
 	}
-	return n * 100 / total
+	percent := float64(n) / float64(total) * 100
+	rounded := math.Round(percent*10) / 10
+	if rounded == 0 && n > 0 {
+		return "<0.1%"
+	}
+	if rounded == 100 && n < total {
+		return ">99.9%"
+	}
+	if rounded == math.Trunc(rounded) {
+		return fmt.Sprintf("%.0f%%", rounded)
+	}
+	return fmt.Sprintf("%.1f%%", rounded)
 }
 
 func formatDurationMS(ms float64) string {
