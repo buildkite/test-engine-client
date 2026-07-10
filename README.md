@@ -2,7 +2,7 @@
 
 The Buildkite Test Engine Client (`bktec`) is a command-line tool for running test suites with Buildkite Test Engine.
 
-Its main responsibilities are discovering runnable tests, requesting a test plan from Test Engine, running the tests assigned to the current parallel job, reading the test runner's results for retries and test state handling, and uploading results to Test Engine when result upload is enabled.
+Its main responsibilities are discovering runnable tests, requesting a test plan from Test Engine, running the tests assigned to the current parallel job, reading runner results, and uploading results when configured.
 
 Use `bktec` to split test work across parallel Buildkite jobs using timing data from Test Engine. It can also retry failed tests and mute or skip known failures for runners that support those features, while leaving you in control of the command your test runner executes.
 
@@ -82,7 +82,7 @@ The RSpec runner defaults to:
 bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}
 ```
 
-`bktec` replaces `{{testExamples}}` with the tests assigned to the current parallel job and `{{resultPath}}` with the configured result path. Other runners may need different result output settings or test commands; see the [runner guides](#runner-guides) before adapting this example.
+`bktec` replaces `{{testExamples}}` with the tests assigned to the current parallel job and `{{resultPath}}` with the configured result path. Other runners may need different result output settings or commands; see the [runner guides](#runner-guides) before adapting this example.
 
 For complete Buildkite pipeline examples across supported runners, see the [test-engine-client-examples repository](https://github.com/buildkite/test-engine-client-examples).
 
