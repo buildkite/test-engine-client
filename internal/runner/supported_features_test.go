@@ -25,6 +25,7 @@ func TestSupportedFeatures_SplitBySelectorSupportedRunners(t *testing.T) {
 	pytest := NewPytest(runnerConfig)
 	gotest := NewGoTest(runnerConfig)
 	cucumber := NewCucumber(runnerConfig)
+	vitest := NewVitest(runnerConfig)
 
 	runners := []TestRunner{
 		custom,
@@ -35,6 +36,7 @@ func TestSupportedFeatures_SplitBySelectorSupportedRunners(t *testing.T) {
 		pytest,
 		gotest,
 		cucumber,
+		vitest,
 	}
 
 	supportedRunners := []string{

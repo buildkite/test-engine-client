@@ -1,5 +1,6 @@
 # Changelog
 ## Unreleased
+- Add first-class support for the [Vitest](./docs/vitest.md) test runner (`BUILDKITE_TEST_ENGINE_TEST_RUNNER=vitest`), including test splitting by file, automatic retries, and muting. Vitest's JSON reporter is Jest-compatible, so results are parsed with the shared Jest report parser.
 - **Breaking:** Remove the `pytest-pants` runner. It had zero real usage over the last 3 months. Use the `custom` runner instead, which now supports selector-based test splitting (see `--selector-splitting` in 2.9.0).
 - **Breaking:** Remove the `nunit` runner. It saw almost no real usage, and had known issues splitting tests by file (result path handling, and class name collisions across namespaces).
 

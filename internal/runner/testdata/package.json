@@ -4,6 +4,7 @@
   "workspaces": [
     "cypress",
     "jest",
-    "playwright"
+    "playwright",
+    "vitest"
   ]
 }

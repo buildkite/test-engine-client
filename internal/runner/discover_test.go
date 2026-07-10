@@ -92,6 +92,9 @@ func TestDiscoverTestFiles_ExcludeNodeModules(t *testing.T) {
 		"testdata/playwright/tests/example.spec.js",
 		"testdata/playwright/tests/failed.spec.js",
 		"testdata/playwright/tests/skipped.spec.js",
+		"testdata/vitest/failure.spec.js",
+		"testdata/vitest/skipped.spec.js",
+		"testdata/vitest/spells/expelliarmus.spec.js",
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
