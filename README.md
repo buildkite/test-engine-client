@@ -1,8 +1,33 @@
 # Buildkite Test Engine Client
 
-Buildkite Test Engine Client (bktec) is an open source tool to orchestrate your test suites. It uses your Buildkite Test Engine suite data to intelligently partition and parallelize your tests.
+The Buildkite Test Engine Client (`bktec`) is a command-line tool for running test suites with Buildkite Test Engine.
 
-bktec supports multiple test runners and offers various features to enhance your testing workflow. Below is a comparison of the features supported by each test runner:
+Its main responsibilities are discovering runnable tests, requesting a test plan from Test Engine, running the tests assigned to the current parallel job, reading the test runner's results for retries and test state handling, and uploading results to Test Engine when result upload is enabled.
+
+Use `bktec` to split test work across parallel Buildkite jobs using timing data from Test Engine. It can also retry failed tests and mute or skip known failures for runners that support those features, while leaving you in control of the command your test runner executes.
+
+For runner-specific setup, see the [runner guides](#runner-guides).
+
+## How bktec works
+
+In a Buildkite parallel step, `bktec run` follows this general flow:
+
+```text
+Discover tests
+→ request or reuse a test plan from Test Engine
+→ run the tests assigned to this parallel job
+→ read test runner results
+→ upload results when configured
+→ improve future timing data
+```
+
+`bktec` discovers tests using the configured runner, sends the discovered work and parallel job details to Test Engine, and receives a plan for the current job. It then runs only the assigned tests by expanding runner-specific placeholders such as `{{testExamples}}` and `{{resultPath}}` in the test command.
+
+Splitting quality depends on the timing data available for the suite. First runs, newly added tests, or large changes to the test suite may be less evenly balanced until Test Engine has more recent results. Different runners support different features, and Buildkite Pipelines provides `BUILDKITE_PARALLEL_JOB` and `BUILDKITE_PARALLEL_JOB_COUNT` when `parallelism` is configured on the step.
+
+## Supported runners and features
+
+`bktec` supports multiple test runners. The table below shows the features supported by each runner:
 
 <!-- DO NOT MANUALLY EDIT THE TABLE BELOW. The contents can be generate with `go run util/supported_features/main.go` -->
 
@@ -17,12 +42,15 @@ bktec supports multiple test runners and offers various features to enhance your
 | Skip tests | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 
 ## Installation
+
 The latest version of bktec can be downloaded from https://github.com/buildkite/test-engine-client/releases
 
 ### Supported OS/Architecture
+
 ARM and AMD architecture for linux, darwin, and windows
 
 The available Go binaries
+
 - bktec-darwin-amd64
 - bktec-darwin-arm64
 - bktec-linux-amd64
@@ -30,10 +58,52 @@ The available Go binaries
 - bktec-windows-amd64.exe
 - bktec-windows-arm64.exe
 
+## Quickstart
+
+Download `bktec` from the [latest release](https://github.com/buildkite/test-engine-client/releases), make it available in your test environment, and configure your Test Engine suite for authentication. From bktec 2.6.0, the default authentication path uses a Buildkite Agent OIDC token. See [Authentication](#authentication) for details.
+
+This example runs RSpec across 10 parallel Buildkite jobs and uploads results using bktec's built-in upload support:
+
+```yaml
+steps:
+  - label: ":rspec: RSpec"
+    command: bktec run
+    parallelism: 10
+    env:
+      BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
+      BUILDKITE_TEST_ENGINE_TEST_RUNNER: rspec
+      BUILDKITE_TEST_ENGINE_RESULT_PATH: tmp/rspec-result.json
+      BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS: "true"
+```
+
+The RSpec runner defaults to:
+
+```sh
+bundle exec rspec --format progress --format json --out {{resultPath}} {{testExamples}}
+```
+
+`bktec` replaces `{{testExamples}}` with the tests assigned to the current parallel job and `{{resultPath}}` with the configured result path. Other runners may need different result output settings or test commands; see the [runner guides](#runner-guides) before adapting this example.
+
+For complete Buildkite pipeline examples across supported runners, see the [test-engine-client-examples repository](https://github.com/buildkite/test-engine-client-examples).
+
+## Check that it worked
+
+In the Buildkite job log, check that `bktec`:
+
+- authenticated successfully, either with OIDC or an API access token
+- created or reused a test plan for the current build step
+- received tests for the current parallel job
+- ran the configured test command with assigned test files, examples, packages, or selectors
+- uploaded results to Test Engine when `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true`
+
+If the first run is uneven, check whether the suite has recent timing data. You can inspect the generated plan with `bktec plan --plan-out -`, or enable debug output with `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED=true`.
+
 ## Using bktec
 
 ### Buildkite Pipeline environment variables
+
 bktec uses the following Buildkite Pipeline provided environment variables.
+
 | Environment Variable | Description|
 | -------------------- | ----------- |
 | `BUILDKITE_BUILD_ID` | The UUID of the Buildkite build. bktec uses this UUID along with `BUILDKITE_STEP_ID` to uniquely identify the test plan. |
@@ -41,7 +111,7 @@ bktec uses the following Buildkite Pipeline provided environment variables.
 | `BUILDKITE_ORGANIZATION_SLUG` | The slug of your Buildkite organization. |
 | `BUILDKITE_PARALLEL_JOB` | The index number of a parallel job created from a Buildkite parallel build step. <br>Make sure you configure `parallelism` in your pipeline definition.  You can read more about Buildkite parallel build step on this [page](https://buildkite.com/docs/pipelines/controlling-concurrency#concurrency-and-parallelism).|
 | `BUILDKITE_PARALLEL_JOB_COUNT` | The total number of parallel jobs created from a Buildkite parallel build step. <br>Make sure you configure `parallelism` in your pipeline definition.  You can read more about Buildkite parallel build step on this [page](https://buildkite.com/docs/pipelines/controlling-concurrency#concurrency-and-parallelism). |
-| `BUILDKITE_STEP_ID` | The UUID of the step group in Buildkite build. bktec uses this UUID along with `BUILDKITE_BUILD_ID` to uniquely identify the test plan.
+| `BUILDKITE_STEP_ID` | The UUID of the step group in Buildkite build. bktec uses this UUID along with `BUILDKITE_BUILD_ID` to uniquely identify the test plan. |
 
 > [!IMPORTANT]
 > Please make sure that the above environment variables are available in your testing environment, particularly if you use Docker or some other type of containerization to run your tests.
@@ -57,6 +127,7 @@ export BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN=token
 ```
 
 ### Configure Test Engine suite slug
+
 To use bktec, you need to configure the `BUILDKITE_TEST_ENGINE_SUITE_SLUG` environment variable with your Test Engine suite slug. You can find the suite slug in the URL of your suite. For example, in the URL `https://buildkite.com/organizations/my-organization/analytics/suites/my-suite`, the slug is `my-suite`.
 
 ```sh
@@ -148,17 +219,20 @@ fall back to a minimal locally-generated plan; this carries the identifier and
 parallelism but no tasks (it is not a computed split), and is noted on stderr.
 
 ### Preview: Test Selection
+
 You can pass test selection strategy configuration and additional change context to the test plan API request.
 This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).
 This functionality is under development, and these flags currently have undefined behavior.
 
 Environment variables:
+
 ```sh
 export BKTEC_PREVIEW_SELECTION=true
 export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=percent
 ```
 
 Command-line flags:
+
 ```sh
 BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
   --selection-param percent=40
@@ -212,6 +286,7 @@ BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
 `--selection-param` and `--metadata` are only supported as repeatable CLI flags.
 
 ### Preview: Commit Metadata Backfill
+
 bktec can collect historical git commit metadata from your repository and upload it to Buildkite for training test selection models. This is useful for bootstrapping models with historical changeset data so that test selection can identify which tests are relevant to your code changes.
 
 The `tools` subcommands are hidden from `bktec --help` by default. Setting `BKTEC_PREVIEW_SELECTION` to a truthy value (`1`, `true`, `yes`, or `on`) makes them visible in help output. The commands can always be invoked directly regardless of this setting.
@@ -219,6 +294,7 @@ The `tools` subcommands are hidden from `bktec --help` by default. Setting `BKTE
 Two commands are available under `bktec tools`:
 
 **Collect and upload commit metadata:**
+
 ```sh
 bktec tools backfill-commit-metadata \
   --access-token "bkua_..." \
@@ -227,6 +303,7 @@ bktec tools backfill-commit-metadata \
 ```
 
 **Generate the tarball locally for inspection before uploading:**
+
 ```sh
 bktec tools backfill-commit-metadata --output commit-metadata.tar.gz
 
@@ -245,8 +322,19 @@ The API access token requires `read_suites` and `write_suites` scopes.
 
 For detailed usage, flags, and configuration options, see the [Commit Metadata Backfill](./docs/commit-metadata-backfill.md) guide.
 
-### Configure the test runner
-To configure the test runner for bktec, please refer to the detailed guides provided for each supported test runner. You can find the guides at the following links:
+### Where to go next
+
+- Configure the runner-specific command and result output for your test framework.
+- Inspect a generated plan with `bktec plan --plan-out -` when you need to understand how work was split.
+- Configure result uploads with `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true` or a Buildkite Test Collector so future runs have timing data.
+- Configure retries, muting, or skipping where your runner supports them.
+- Use `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED=true` when troubleshooting authentication, uneven splits, or runner command issues.
+- Run `bktec --help`, `bktec run --help`, or `bktec plan --help` for the current CLI options.
+
+You can also find example configurations and usage instructions for each test runner in the [examples repository](https://github.com/buildkite/test-engine-client-examples).
+
+### Runner guides
+
 - [Jest](./docs/jest.md)
 - [Playwright](./docs/playwright.md)
 - [Cypress](./docs/cypress.md)
@@ -256,26 +344,8 @@ To configure the test runner for bktec, please refer to the detailed guides prov
 - [Cucumber](./docs/cucumber.md)
 - [Custom Test Runner](./docs/custom-test-runner.md)
 
-
-### Running bktec
-Please download the executable and make it available in your testing environment.
-To parallelize your tests in your Buildkite build, you can amend your pipeline step configuration to:
-```
-steps:
-  - name: "Rspec"
-    command: ./bktec run
-    parallelism: 10
-    env:
-      BUILDKITE_TEST_ENGINE_SUITE_SLUG: my-suite
-      BUILDKITE_TEST_ENGINE_TEST_RUNNER: rspec
-      BUILDKITE_TEST_ENGINE_RESULT_PATH: tmp/result.json
-```
-
-> [!TIP]
-> You can find example configurations and usage instructions for each test runner in our [examples repository](https://github.com/buildkite/test-engine-client-examples).
-
-
 ### Debugging
+
 To enable debug mode, set the `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED` environment variable to `true`. This will print detailed output to assist in debugging bktec.
 
 ### Possible exit statuses
