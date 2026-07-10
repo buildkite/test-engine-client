@@ -62,7 +62,7 @@ The available Go binaries
 
 Download `bktec` from the [latest release](https://github.com/buildkite/test-engine-client/releases), make it available in your test environment, and configure your Test Engine suite for authentication. From bktec 2.6.0, the default authentication path uses a Buildkite Agent OIDC token. See [Authentication](#authentication) for details.
 
-This example runs RSpec across 10 parallel Buildkite jobs and uploads results using bktec's built-in upload support:
+This example runs RSpec across 10 parallel Buildkite jobs and uploads results using bktec's built-in upload support, available in bktec 2.7.0 or later:
 
 ```yaml
 steps:
@@ -88,7 +88,7 @@ For complete Buildkite pipeline examples across supported runners, see the [test
 
 ## Check that it worked
 
-In the Buildkite job log, check that `bktec`:
+After the step runs, use the Buildkite job log and Test Engine suite page to check that `bktec`:
 
 - authenticated successfully, either with OIDC or an API access token
 - created or reused a test plan for the current build step
