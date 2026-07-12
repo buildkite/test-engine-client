@@ -1,6 +1,6 @@
 # Buildkite Test Engine Client
 
-The Buildkite Test Engine Client (`bktec`) is a command-line tool for running test suites with Buildkite Test Engine.
+Buildkite Test Engine Client (`bktec`) is a command-line tool for running test suites with Buildkite Test Engine.
 
 Its main responsibilities are discovering runnable tests, requesting a test plan from Test Engine, running the tests assigned to the current parallel job, reading runner results, and uploading results when configured.
 
