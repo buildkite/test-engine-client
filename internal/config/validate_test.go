@@ -281,16 +281,24 @@ func TestConfigValidateForRun_ResultPathOptionalWithPytest(t *testing.T) {
 	}
 }
 
-func TestConfigValidateForRun_ResultPathRequiredWithRspec(t *testing.T) {
-	c := createConfig()
-	c.ResultPath = ""
-	c.TestRunner = "rspec"
+func TestConfigValidateForRun_ResultPathRequiredWithResultParsingRunners(t *testing.T) {
+	for _, testRunner := range []string{"rspec", "jest", "vitest", "playwright", "gotest", "cucumber"} {
+		t.Run(testRunner, func(t *testing.T) {
+			c := createConfig()
+			c.ResultPath = ""
+			c.TestRunner = testRunner
 
-	err := c.ValidateForRun()
+			err := c.ValidateForRun()
 
-	var invConfigError InvalidConfigError
-	if !errors.As(err, &invConfigError) {
-		t.Errorf("ValidateForRun() error = %v, want InvalidConfigError", err)
+			var invConfigError InvalidConfigError
+			if !errors.As(err, &invConfigError) {
+				t.Errorf("ValidateForRun() error = %v, want InvalidConfigError", err)
+			}
+
+			if _, ok := invConfigError["BUILDKITE_TEST_ENGINE_RESULT_PATH"]; !ok {
+				t.Errorf("ValidateForRun() errors = %v, want BUILDKITE_TEST_ENGINE_RESULT_PATH error", invConfigError)
+			}
+		})
 	}
 }
 

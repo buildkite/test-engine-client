@@ -31,15 +31,15 @@ Splitting quality depends on the timing data available for the suite. First runs
 
 <!-- DO NOT MANUALLY EDIT THE TABLE BELOW. The contents can be generate with `go run util/supported_features/main.go` -->
 
-| Feature | RSpec | Jest | Playwright | Cypress | pytest | gotest | Cucumber | Custom test runner |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| Split tests by file[^1] | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example) | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
-| Filter test files | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| Filter tests by tag | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Automatically retry failed test | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
-| Mute tests (ignore test failures) | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Skip tests | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Feature | RSpec | Jest | Vitest | Playwright | Cypress | pytest | gotest | Cucumber | Custom test runner |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Split tests by file[^1] | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
+| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example) | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| Filter test files | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
+| Filter tests by tag | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Automatically retry failed test | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
+| Mute tests (ignore test failures) | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Skip tests | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 
 ## Installation
 
@@ -336,6 +336,7 @@ You can also find example configurations and usage instructions for each test ru
 ### Runner guides
 
 - [Jest](./docs/jest.md)
+- [Vitest](./docs/vitest.md)
 - [Playwright](./docs/playwright.md)
 - [Cypress](./docs/cypress.md)
 - [pytest](./docs/pytest.md)

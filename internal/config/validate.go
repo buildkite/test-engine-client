@@ -116,6 +116,7 @@ func (c *Config) ValidateForRun() error {
 	runnersWithResultPath := map[string]bool{
 		"rspec":      true,
 		"jest":       true,
+		"vitest":     true,
 		"playwright": true,
 		"gotest":     true,
 		"cucumber":   true,
