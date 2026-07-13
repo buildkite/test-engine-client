@@ -32,6 +32,7 @@ type TestPlanParams struct {
 	MaxParallelism int                `json:"max_parallelism,omitempty"`
 	TargetTime     float64            `json:"target_time,omitempty"`
 	Branch         string             `json:"branch"`
+	LocationPrefix string             `json:"location_prefix,omitempty"`
 	Tests          TestPlanParamsTest `json:"tests"`
 	Selection      *SelectionParams   `json:"selection,omitempty"`
 	Metadata       map[string]string  `json:"metadata,omitempty"`

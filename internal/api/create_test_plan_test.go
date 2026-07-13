@@ -252,9 +252,10 @@ func TestCreateTestPlan_SplitByExample(t *testing.T) {
 
 func TestCreateTestPlan_Selector(t *testing.T) {
 	params := TestPlanParams{
-		Runner:      "gotest",
-		Identifier:  "abc123",
-		Parallelism: 2,
+		Runner:         "gotest",
+		Identifier:     "abc123",
+		Parallelism:    2,
+		LocationPrefix: "components/backend",
 		Tests: TestPlanParamsTest{
 			Selectors: []TestPlanParamsSelector{
 				{Value: "github.com/buildkite/test-engine-client/internal/api"},
@@ -269,6 +270,7 @@ func TestCreateTestPlan_Selector(t *testing.T) {
 			"identifier": "abc123",
 			"parallelism": 2,
 			"branch": "",
+			"location_prefix": "components/backend",
 			"tests": {
 				"selectors": [
 					{"value": "github.com/buildkite/test-engine-client/internal/api"},
