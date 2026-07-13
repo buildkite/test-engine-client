@@ -209,6 +209,7 @@ func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 		Parallelism:    2,
 		MaxParallelism: 4,
 		Branch:         "main",
+		LocationPrefix: "my/project",
 		Runner:         "gotest",
 		Selection: &api.SelectionParams{
 			Strategy: "least-reliable",
@@ -449,10 +450,11 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing
 	}
 
 	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "rspec",
+		Identifier:     "identifier",
+		Parallelism:    2,
+		Branch:         "main",
+		LocationPrefix: "my/project",
+		Runner:         "rspec",
 		Tests: api.TestPlanParamsTest{
 			Examples: []plan.TestCase{
 				{
@@ -529,10 +531,11 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithDotLocationPrefix(t *test
 	}
 
 	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "rspec",
+		Identifier:     "identifier",
+		Parallelism:    2,
+		Branch:         "main",
+		LocationPrefix: "./",
+		Runner:         "rspec",
 		Tests: api.TestPlanParamsTest{
 			Examples: []plan.TestCase{
 				{
