@@ -1,10 +1,12 @@
 package command
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v2/internal/api"
+	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -101,4 +103,31 @@ func TestWarnErrorPlan(t *testing.T) {
 	assert.Contains(t, stderr, "⚠️ Error Plan:")
 	assert.Contains(t, stderr, "Test Engine API failed to generate a plan")
 	assert.Contains(t, stderr, "Falling back to non-intelligent splitting")
+}
+
+func TestPrintSplitSummaryWarnsWhenSelectorHistoryIsUnavailable(t *testing.T) {
+	testPlan := plan.TestPlan{
+		Parallelism: 2,
+		Tasks: map[string]*plan.Task{
+			"0": {NodeNumber: 0, Tests: []plan.TestCase{
+				{Value: "spec/models/user_spec.rb", Format: plan.TestCaseFormatSelector},
+			}},
+			"1": {NodeNumber: 1, Tests: []plan.TestCase{
+				{Value: "spec/models/team_spec.rb", Format: plan.TestCaseFormatSelector},
+			}},
+		},
+		TimingMetadata: &plan.TimingMetadata{
+			Selector: &plan.FormatTimingMetadata{DefaultDuration: 1000},
+		},
+	}
+
+	var buf bytes.Buffer
+	printSplitSummary(&buf, testPlan)
+	output := buf.String()
+
+	assert.Contains(t, output, colorYellow+colorBold+"⚠️ Selector splitting used default durations")
+	assert.Contains(t, output, "If these tests have not run before, run them once to record selector timings")
+	assert.Contains(t, output, "Otherwise, update your collector and run them again")
+	assert.Contains(t, output, "Ruby gem: buildkite-test_collector v2.14.0+")
+	assert.Contains(t, output, "JavaScript npm package: buildkite-test-collector v1.10.0+")
 }

@@ -80,7 +80,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
 	}
 
-	plan.PrintSplitSummary(os.Stderr, testPlan)
+	printSplitSummary(os.Stderr, testPlan)
 
 	switch outputFormat {
 
@@ -169,7 +169,7 @@ func planOut(ctx context.Context, cfg *config.Config, testTargets []string, apiC
 	}
 
 	debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
-	plan.PrintSplitSummary(os.Stderr, testPlan)
+	printSplitSummary(os.Stderr, testPlan)
 	if testPlan.Parallelism == 0 {
 		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
 	}
