@@ -518,7 +518,7 @@ func TestFetchOrCreateTestPlan_CollectsGitMetadataWhenSelectionActive(t *testing
 	// reports a current branch, so collection produces at least one metadata key
 	// regardless of the host checkout state.
 	withGitRunner(t, &git.FakeGitRunner{Responses: map[string]string{
-		"rev-parse --git-dir":                          ".git\n",
+		"rev-parse --git-dir":                           ".git\n",
 		"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
 		"merge-base origin/main HEAD":                   "abc123\n",
 		"branch --show-current":                         "my-feature\n",
