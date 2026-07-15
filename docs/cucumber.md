@@ -56,3 +56,16 @@ export BUILDKITE_TEST_ENGINE_RETRY_CMD="bundle exec cucumber {{testExamples}} --
 
 ## Split by example
 Splitting slow files by individual scenario is supported for Cucumber. When bktec identifies slow files, it can request a plan that splits these files into individual scenarios. The `{{testExamples}}` placeholder in your test command will then be populated with specific `file:line` identifiers for each scenario to be run.
+
+## Selector-based test splitting
+
+Cucumber supports [selector-based test splitting](../README.md#selector-based-test-splitting). It doesn't change how your tests are split: the selector sent to Test Engine is the same feature file path that file-based splitting already discovers using `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` / `_EXCLUDE_PATTERN`, so file discovery and the `{{testExamples}}` command placeholder work the same way.
+
+> [!NOTE]
+> If you upload results with the [Ruby test collector](https://buildkite.com/docs/test-engine/test-collection/ruby-collectors), we recommend updating to `buildkite-test_collector` v2.14.0 or later so selectors are attributed directly. If you do not, nothing breaks: Test Engine [falls back to the file path](../README.md#how-selectors-are-matched) when a selector is not attributed, which keeps file-based matching working. Updating matters most if you use a location prefix (`--location-prefix` / `BUILDKITE_TEST_ENGINE_LOCATION_PREFIX`), since the fallback only handles the prefix on a best-effort basis.
+
+To enable it:
+
+```sh
+export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
+```
