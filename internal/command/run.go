@@ -449,7 +449,6 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	debug.Println("No test plan found, creating a new plan")
 
 	// Auto-collect git metadata when selection is active, mirroring `bktec plan`.
-	// Only relevant on the cache-miss path, since a cached plan is reused as-is.
 	if cfg.SelectionStrategy != "" {
 		autoCollectGitMetadata(ctx, cfg, newGitRunner())
 	}
