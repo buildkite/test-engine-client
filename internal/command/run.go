@@ -28,6 +28,10 @@ _  /_/ /  ,<  / /_ /  __/ /__
 /_.___//_/|_| \__/ \___/\___/
 `
 
+// newGitRunner constructs the git runner used for metadata auto-collection.
+// Overridable in tests to inject a deterministic fake.
+var newGitRunner = func() git.GitRunner { return &git.ExecGitRunner{} }
+
 func Run(ctx context.Context, cfg *config.Config, testListFilename string) error {
 	printStartUpMessage()
 
@@ -447,7 +451,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	// Auto-collect git metadata when selection is active, mirroring `bktec plan`.
 	// Only relevant on the cache-miss path, since a cached plan is reused as-is.
 	if cfg.SelectionStrategy != "" {
-		autoCollectGitMetadata(ctx, cfg, &git.ExecGitRunner{})
+		autoCollectGitMetadata(ctx, cfg, newGitRunner())
 	}
 
 	// If the cache is empty, create a new plan.

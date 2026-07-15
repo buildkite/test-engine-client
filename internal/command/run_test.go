@@ -11,12 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/buildkite/test-engine-client/v2/internal/api"
 	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v2/internal/git"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/buildkite/test-engine-client/v2/internal/runner"
 	"github.com/buildkite/test-engine-client/v2/internal/version"
@@ -467,21 +467,62 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	}
 }
 
+// withGitRunner overrides the package git-runner seam for the duration of a
+// test and restores it on cleanup.
+func withGitRunner(t *testing.T, r git.GitRunner) {
+	t.Helper()
+	prev := newGitRunner
+	newGitRunner = func() git.GitRunner { return r }
+	t.Cleanup(func() { newGitRunner = prev })
+}
+
+// captureRequestBody serves a cache-miss on GET and records the POST body used
+// to create the plan, returning the server and a getter for the captured body.
+func captureRequestBody(t *testing.T) (*httptest.Server, func() []byte) {
+	t.Helper()
+	var body []byte
+	response := `{"tasks": {"0": {"node_number": 0, "tests": [{"path": "apple", "format": "file"}]}}}`
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message": "Not Found"}`)
+			return
+		}
+		body, _ = io.ReadAll(r.Body)
+		fmt.Fprint(w, response)
+	}))
+	t.Cleanup(svr.Close)
+	return svr, func() []byte { return body }
+}
+
+func requestMetadata(t *testing.T, body []byte) map[string]any {
+	t.Helper()
+	if len(body) == 0 {
+		return nil
+	}
+	var params map[string]any
+	if err := json.Unmarshal(body, &params); err != nil {
+		t.Fatalf("failed to unmarshal request body: %v", err)
+	}
+	metadata, _ := params["metadata"].(map[string]any)
+	return metadata
+}
+
 func TestFetchOrCreateTestPlan_CollectsGitMetadataWhenSelectionActive(t *testing.T) {
 	files := []string{"apple"}
 	testRunner := runner.Rspec{}
 
-	response := `{"tasks": {"0": {"node_number": 0, "tests": [{"path": "apple", "format": "file"}]}}}`
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Cache miss on GET so plan creation (and metadata auto-collection) runs.
-		if r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprint(w, `{"message": "Not Found"}`)
-		} else {
-			fmt.Fprint(w, response)
-		}
-	}))
-	defer svr.Close()
+	svr, getBody := captureRequestBody(t)
+
+	// Deterministic git responses: a repo that resolves its default branch and
+	// reports a current branch, so collection produces at least one metadata key
+	// regardless of the host checkout state.
+	withGitRunner(t, &git.FakeGitRunner{Responses: map[string]string{
+		"rev-parse --git-dir":                          ".git\n",
+		"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
+		"merge-base origin/main HEAD":                   "abc123\n",
+		"branch --show-current":                         "my-feature\n",
+	}})
 
 	ctx := context.Background()
 	cfg := config.Config{
@@ -489,25 +530,18 @@ func TestFetchOrCreateTestPlan_CollectsGitMetadataWhenSelectionActive(t *testing
 		Parallelism:       10,
 		Identifier:        "identifier",
 		ServerBaseURL:     svr.URL,
+		Remote:            "origin",
 		SelectionStrategy: "least-reliable",
 	}
 	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL})
-
-	getStderr := captureStderr(t)
 
 	if _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner); err != nil {
 		t.Fatalf("fetchOrCreateTestPlan(...) error = %v", err)
 	}
 
-	stderrOutput := getStderr()
-
-	// Auto-collection should have been entered. Outside a git repo it warns and
-	// skips; inside a git checkout it resolves the base branch. Either proves the
-	// gate was passed.
-	if !strings.Contains(stderrOutput, "Not a git repository") &&
-		!strings.Contains(stderrOutput, "auto-detected base branch") &&
-		!strings.Contains(stderrOutput, "Could not resolve base branch") {
-		t.Errorf("expected git metadata auto-collection to run when SelectionStrategy is set, stderr: %s", stderrOutput)
+	metadata := requestMetadata(t, getBody())
+	if metadata["branch"] != "my-feature" {
+		t.Errorf("expected collected git metadata in request body, got metadata = %v", metadata)
 	}
 }
 
@@ -515,16 +549,10 @@ func TestFetchOrCreateTestPlan_NoGitMetadataWithoutSelection(t *testing.T) {
 	files := []string{"apple"}
 	testRunner := runner.Rspec{}
 
-	response := `{"tasks": {"0": {"node_number": 0, "tests": [{"path": "apple", "format": "file"}]}}}`
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprint(w, `{"message": "Not Found"}`)
-		} else {
-			fmt.Fprint(w, response)
-		}
-	}))
-	defer svr.Close()
+	svr, getBody := captureRequestBody(t)
+
+	// The runner must never be consulted when no selection strategy is set.
+	withGitRunner(t, &failingGitRunner{t: t})
 
 	ctx := context.Background()
 	cfg := config.Config{
@@ -536,20 +564,28 @@ func TestFetchOrCreateTestPlan_NoGitMetadataWithoutSelection(t *testing.T) {
 	}
 	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL})
 
-	getStderr := captureStderr(t)
-
 	if _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner); err != nil {
 		t.Fatalf("fetchOrCreateTestPlan(...) error = %v", err)
 	}
 
-	stderrOutput := getStderr()
-
-	if strings.Contains(stderrOutput, "Not a git repository") ||
-		strings.Contains(stderrOutput, "auto-detected base branch") ||
-		strings.Contains(stderrOutput, "skipping metadata auto-collection") ||
-		strings.Contains(stderrOutput, "Could not resolve base branch") {
-		t.Errorf("auto-collection should not run when SelectionStrategy is unset, stderr: %s", stderrOutput)
+	if metadata := requestMetadata(t, getBody()); metadata != nil {
+		t.Errorf("expected no metadata in request when SelectionStrategy is unset, got: %v", metadata)
 	}
+}
+
+// failingGitRunner fails the test if any git command is run.
+type failingGitRunner struct{ t *testing.T }
+
+func (f *failingGitRunner) Output(ctx context.Context, args ...string) (string, error) {
+	f.t.Helper()
+	f.t.Fatalf("git runner unexpectedly invoked with args: %v", args)
+	return "", nil
+}
+
+func (f *failingGitRunner) OutputWithStdin(ctx context.Context, stdin string, args ...string) (string, error) {
+	f.t.Helper()
+	f.t.Fatalf("git runner unexpectedly invoked with args: %v", args)
+	return "", nil
 }
 
 func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
