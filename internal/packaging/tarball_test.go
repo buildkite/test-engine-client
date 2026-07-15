@@ -48,12 +48,14 @@ func sampleRecords() []CommitRecord {
 
 func sampleMetadata() ArchiveMetadata {
 	return ArchiveMetadata{
-		SchemaVersion:    1,
+		SchemaVersion:    2,
 		Tool:             "bktec",
 		ToolVersion:      "2.3.0",
 		GeneratedAt:      "2026-03-30T12:00:00Z",
 		OrganizationSlug: "my-org",
 		SuiteSlug:        "my-suite",
+		OrganizationUUID: "11111111-1111-1111-1111-111111111111",
+		SuiteUUID:        "22222222-2222-2222-2222-222222222222",
 		CommitCount:      2,
 		SkippedCommits:   1,
 		Days:             90,
@@ -186,6 +188,17 @@ func TestCreateTarball_SchemaVersion(t *testing.T) {
 	}
 	if got["schema_version"] != float64(1) {
 		t.Errorf("schema_version: got %v, want 1", got["schema_version"])
+	}
+
+	metadata := FindTarEntry(t, files, "/metadata.json")
+	for _, want := range []string{
+		`"schema_version": 2`,
+		`"organization_uuid": "11111111-1111-1111-1111-111111111111"`,
+		`"suite_uuid": "22222222-2222-2222-2222-222222222222"`,
+	} {
+		if !strings.Contains(metadata, want) {
+			t.Errorf("metadata.json missing %q", want)
+		}
 	}
 }
 

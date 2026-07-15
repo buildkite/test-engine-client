@@ -37,6 +37,8 @@ type ArchiveMetadata struct {
 	GeneratedAt      string `json:"generated_at"`
 	OrganizationSlug string `json:"organization_slug"`
 	SuiteSlug        string `json:"suite_slug"`
+	OrganizationUUID string `json:"organization_uuid"`
+	SuiteUUID        string `json:"suite_uuid"`
 	CommitCount      int    `json:"commit_count"`
 	SkippedCommits   int    `json:"skipped_commits"`
 	// Config options used for this export
