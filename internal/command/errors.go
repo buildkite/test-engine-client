@@ -42,10 +42,10 @@ func printWarn(label, message string, hints ...string) {
 }
 
 // printSplitSummary prints the plan summary and warns when a selector plan had
-// to use only default durations because no timing history was available.
+// to use default durations because no selector timing history was available.
 func printSplitSummary(w io.Writer, testPlan plan.TestPlan) {
 	plan.PrintSplitSummary(w, testPlan)
-	if testPlan.SelectorPlanUsesOnlyDefaultDurations() {
+	if testPlan.HasNoSelectorTimingHistory() {
 		printWarning(
 			w,
 			"Selector splitting used default durations because no historical selector timings were found.",
