@@ -200,7 +200,7 @@ func TestPrintSplitSummary_SelectorMode(t *testing.T) {
 	if strings.Contains(got, " files ") || strings.Contains(got, " examples ") {
 		t.Errorf("expected no file/example wording in selector-mode output, got:\n%s", got)
 	}
-	if p.HasNoSelectorTimingHistory() {
+	if p.SelectorPlanUsesOnlyDefaultDurations() {
 		t.Error("expected plan with selector history not to report missing selector timings")
 	}
 }
@@ -232,7 +232,7 @@ func TestPrintSplitSummary_SelectorModeNoHistoryUsesDefaultDuration(t *testing.T
 			t.Errorf("output missing %q\nfull output:\n%s", want, got)
 		}
 	}
-	if !p.HasNoSelectorTimingHistory() {
+	if !p.SelectorPlanUsesOnlyDefaultDurations() {
 		t.Error("expected plan to report no selector timing history")
 	}
 }
@@ -255,8 +255,8 @@ func TestPrintSplitSummary_SelectorModeParallelismOneDoesNotWarn(t *testing.T) {
 	if !strings.Contains(got, "1 selector across 1 node") {
 		t.Errorf("output missing count line\nfull output:\n%s", got)
 	}
-	if strings.Contains(got, "update it and run the suite once") {
-		t.Errorf("unexpected collector warning at parallelism 1, got:\n%s", got)
+	if p.SelectorPlanUsesOnlyDefaultDurations() {
+		t.Error("expected single-node plan not to report missing selector timings")
 	}
 }
 
@@ -336,8 +336,8 @@ func TestPrintSplitSummary_MixedFormatsWithSelectors(t *testing.T) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "update it and run the suite once") {
-		t.Errorf("unexpected collector warning when selector history exists, got:\n%s", got)
+	if p.SelectorPlanUsesOnlyDefaultDurations() {
+		t.Error("expected mixed plan with history not to report missing selector timings")
 	}
 }
 

@@ -131,3 +131,27 @@ func TestPrintSplitSummaryWarnsWhenSelectorHistoryIsUnavailable(t *testing.T) {
 	assert.Contains(t, output, "Ruby gem: buildkite-test_collector v2.14.0+")
 	assert.Contains(t, output, "JavaScript npm package: buildkite-test-collector v1.10.0+")
 }
+
+func TestPrintSplitSummaryDoesNotWarnWhenMixedPlanHasExampleHistory(t *testing.T) {
+	median := 500.0
+	testPlan := plan.TestPlan{
+		Parallelism: 2,
+		Tasks: map[string]*plan.Task{
+			"0": {NodeNumber: 0, Tests: []plan.TestCase{
+				{Value: "spec/models/user_spec.rb", Format: plan.TestCaseFormatSelector},
+			}},
+			"1": {NodeNumber: 1, Tests: []plan.TestCase{
+				{Path: "spec/models/team_spec.rb[1:1]", Format: plan.TestCaseFormatExample, TimingSampleSize: 3},
+			}},
+		},
+		TimingMetadata: &plan.TimingMetadata{
+			Example:  &plan.FormatTimingMetadata{MedianDuration: &median, DefaultDuration: 1000},
+			Selector: &plan.FormatTimingMetadata{DefaultDuration: 1000},
+		},
+	}
+
+	var buf bytes.Buffer
+	printSplitSummary(&buf, testPlan)
+
+	assert.NotContains(t, buf.String(), "⚠️ Selector splitting used default durations")
+}
