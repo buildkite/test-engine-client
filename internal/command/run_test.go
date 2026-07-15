@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -463,6 +464,91 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
+	}
+}
+
+func TestFetchOrCreateTestPlan_CollectsGitMetadataWhenSelectionActive(t *testing.T) {
+	files := []string{"apple"}
+	testRunner := runner.Rspec{}
+
+	response := `{"tasks": {"0": {"node_number": 0, "tests": [{"path": "apple", "format": "file"}]}}}`
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Cache miss on GET so plan creation (and metadata auto-collection) runs.
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message": "Not Found"}`)
+		} else {
+			fmt.Fprint(w, response)
+		}
+	}))
+	defer svr.Close()
+
+	ctx := context.Background()
+	cfg := config.Config{
+		NodeIndex:         0,
+		Parallelism:       10,
+		Identifier:        "identifier",
+		ServerBaseURL:     svr.URL,
+		SelectionStrategy: "least-reliable",
+	}
+	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL})
+
+	getStderr := captureStderr(t)
+
+	if _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner); err != nil {
+		t.Fatalf("fetchOrCreateTestPlan(...) error = %v", err)
+	}
+
+	stderrOutput := getStderr()
+
+	// Auto-collection should have been entered. Outside a git repo it warns and
+	// skips; inside a git checkout it resolves the base branch. Either proves the
+	// gate was passed.
+	if !strings.Contains(stderrOutput, "Not a git repository") &&
+		!strings.Contains(stderrOutput, "auto-detected base branch") &&
+		!strings.Contains(stderrOutput, "Could not resolve base branch") {
+		t.Errorf("expected git metadata auto-collection to run when SelectionStrategy is set, stderr: %s", stderrOutput)
+	}
+}
+
+func TestFetchOrCreateTestPlan_NoGitMetadataWithoutSelection(t *testing.T) {
+	files := []string{"apple"}
+	testRunner := runner.Rspec{}
+
+	response := `{"tasks": {"0": {"node_number": 0, "tests": [{"path": "apple", "format": "file"}]}}}`
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message": "Not Found"}`)
+		} else {
+			fmt.Fprint(w, response)
+		}
+	}))
+	defer svr.Close()
+
+	ctx := context.Background()
+	cfg := config.Config{
+		NodeIndex:     0,
+		Parallelism:   10,
+		Identifier:    "identifier",
+		ServerBaseURL: svr.URL,
+		// SelectionStrategy intentionally unset.
+	}
+	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL})
+
+	getStderr := captureStderr(t)
+
+	if _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner); err != nil {
+		t.Fatalf("fetchOrCreateTestPlan(...) error = %v", err)
+	}
+
+	stderrOutput := getStderr()
+
+	if strings.Contains(stderrOutput, "Not a git repository") ||
+		strings.Contains(stderrOutput, "auto-detected base branch") ||
+		strings.Contains(stderrOutput, "skipping metadata auto-collection") ||
+		strings.Contains(stderrOutput, "Could not resolve base branch") {
+		t.Errorf("auto-collection should not run when SelectionStrategy is unset, stderr: %s", stderrOutput)
 	}
 }
 

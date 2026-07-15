@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/api"
 	"github.com/buildkite/test-engine-client/v2/internal/config"
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/git"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/buildkite/test-engine-client/v2/internal/runner"
 	"github.com/buildkite/test-engine-client/v2/internal/version"
@@ -442,6 +443,13 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	}
 
 	debug.Println("No test plan found, creating a new plan")
+
+	// Auto-collect git metadata when selection is active, mirroring `bktec plan`.
+	// Only relevant on the cache-miss path, since a cached plan is reused as-is.
+	if cfg.SelectionStrategy != "" {
+		autoCollectGitMetadata(ctx, cfg, &git.ExecGitRunner{})
+	}
+
 	// If the cache is empty, create a new plan.
 	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
