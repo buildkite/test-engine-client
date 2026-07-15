@@ -48,6 +48,7 @@ func TestSupportedFeatures_SplitBySelectorSupportedRunners(t *testing.T) {
 		cypress.Name(),
 		pytest.Name(),
 		cucumber.Name(),
+		vitest.Name(),
 	}
 
 	for _, runner := range runners {
