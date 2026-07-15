@@ -77,6 +77,12 @@ func main() {
 
 	printRow(
 		runners,
+		"[Selector-based test splitting](https://github.com/buildkite/test-engine-client/blob/main/README.md#selector-based-test-splitting)",
+		func(r runner.TestRunner) bool { return r.SupportedFeatures().SplitBySelector },
+	)
+
+	printRow(
+		runners,
 		"Filter test files",
 		func(r runner.TestRunner) bool { return r.SupportedFeatures().FilterTestFiles },
 	)

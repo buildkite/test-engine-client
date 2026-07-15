@@ -356,7 +356,6 @@ var selectorSplittingFlag = &cli.BoolFlag{
 	Value:       false,
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING"),
 	Destination: &cfg.SelectorSplitting,
-	Hidden:      true,
 }
 
 var failOnNoTestsFlag = &cli.BoolFlag{
