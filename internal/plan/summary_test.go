@@ -200,8 +200,8 @@ func TestPrintSplitSummary_SelectorMode(t *testing.T) {
 	if strings.Contains(got, " files ") || strings.Contains(got, " examples ") {
 		t.Errorf("expected no file/example wording in selector-mode output, got:\n%s", got)
 	}
-	if strings.Contains(got, "update it and run the suite once") {
-		t.Errorf("unexpected collector warning when selector history exists, got:\n%s", got)
+	if p.HasNoSelectorTimingHistory() {
+		t.Error("expected plan with selector history not to report missing selector timings")
 	}
 }
 
