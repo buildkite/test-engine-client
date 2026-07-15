@@ -72,6 +72,25 @@ func TestVitestGetFiles(t *testing.T) {
 	}
 }
 
+func TestVitestGetSelectors(t *testing.T) {
+	changeCwd(t, "./testdata/vitest")
+	vitest := NewVitest(RunnerConfig{})
+
+	gotFiles, err := vitest.GetFiles()
+	if err != nil {
+		t.Errorf("Vitest.GetFiles() error = %v", err)
+	}
+
+	gotSelectors, err := vitest.GetSelectors()
+	if err != nil {
+		t.Errorf("Vitest.GetSelectors() error = %v", err)
+	}
+
+	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
+		t.Errorf("Vitest.GetSelectors() diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestVitestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 	testCases := []plan.TestCase{{Path: "src/user.spec.ts"}, {Path: "src/billing.spec.ts"}}
 	testCommand := "vitest run {{testExamples}} --reporter=json --outputFile {{resultPath}}"

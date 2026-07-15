@@ -49,6 +49,7 @@ func (v Vitest) SupportedFeatures() SupportedFeatures {
 		AutoRetry:       true,
 		Mute:            true,
 		Skip:            false,
+		SplitBySelector: true,
 	}
 }
 
@@ -75,6 +76,10 @@ func (v Vitest) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (v Vitest) GetSelectors() ([]string, error) {
+	return v.GetFiles()
 }
 
 func (v Vitest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
