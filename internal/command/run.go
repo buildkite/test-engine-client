@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/api"
 	"github.com/buildkite/test-engine-client/v2/internal/config"
 	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v2/internal/git"
 	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/buildkite/test-engine-client/v2/internal/runner"
 	"github.com/buildkite/test-engine-client/v2/internal/version"
@@ -26,6 +27,10 @@ __  __ \_  //_/  __/  _ \  ___/
 _  /_/ /  ,<  / /_ /  __/ /__
 /_.___//_/|_| \__/ \___/\___/
 `
+
+// newGitRunner constructs the git runner used for metadata auto-collection.
+// Overridable in tests to inject a deterministic fake.
+var newGitRunner = func() git.GitRunner { return &git.ExecGitRunner{} }
 
 func Run(ctx context.Context, cfg *config.Config, testListFilename string) error {
 	printStartUpMessage()
@@ -442,6 +447,12 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	}
 
 	debug.Println("No test plan found, creating a new plan")
+
+	// Auto-collect git metadata when selection is active, mirroring `bktec plan`.
+	if cfg.SelectionStrategy != "" {
+		autoCollectGitMetadata(ctx, cfg, newGitRunner())
+	}
+
 	// If the cache is empty, create a new plan.
 	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
