@@ -139,9 +139,8 @@ func shouldUseSelectorSplitting(cfg *config.Config, runner runner.TestRunner) bo
 
 func shouldFilterAndSplitSelectorFiles(cfg *config.Config, runner runner.TestRunner) bool {
 	features := runner.SupportedFeatures()
-	canSplitFilteredFiles := features.SplitByExample && features.FilterTestFiles
 	needsFilteredFiles := cfg.SplitByExample || features.Skip
-	return canSplitFilteredFiles && needsFilteredFiles
+	return features.SplitByExample && needsFilteredFiles
 }
 
 func selectorParamsFromValues(values []string) []api.TestPlanParamsSelector {
