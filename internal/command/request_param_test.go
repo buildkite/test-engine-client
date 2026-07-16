@@ -1148,7 +1148,10 @@ func TestCreateRequestParams_WithTagFilters(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_SelectorOptInIgnoredForTagFilters(t *testing.T) {
+// When selector splitting and tag filters are both enabled, every file is expanded into
+// tag-filtered examples so that nothing goes out as a raw selector that would ignore the
+// tag filter.
+func TestCreateRequestParams_SelectorSplittingWithTagFilters(t *testing.T) {
 	cfg := config.Config{
 		OrganizationSlug:  "my-org",
 		SuiteSlug:         "my-suite",
