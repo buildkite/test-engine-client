@@ -594,7 +594,7 @@ func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
 	}
 }
-func TestShouldExpandSelectorFiles(t *testing.T) {
+func TestShouldFilterAndSplitSelectorFiles(t *testing.T) {
 	custom, err := runner.NewCustom(runner.RunnerConfig{
 		TestCommand:     "echo {{testExamples}}",
 		TestFilePattern: "tests/**/*",
@@ -661,8 +661,8 @@ func TestShouldExpandSelectorFiles(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cfg := config.Config{SplitByExample: c.split}
-			if got := shouldExpandSelectorFiles(&cfg, c.testRunner); got != c.want {
-				t.Errorf("shouldExpandSelectorFiles(%s) = %v, want %v", c.testRunner.Name(), got, c.want)
+			if got := shouldFilterAndSplitSelectorFiles(&cfg, c.testRunner); got != c.want {
+				t.Errorf("shouldFilterAndSplitSelectorFiles(%s) = %v, want %v", c.testRunner.Name(), got, c.want)
 			}
 		})
 	}
