@@ -25,7 +25,7 @@ import (
 // Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
 	if shouldUseSelectorSplitting(cfg, runner) {
-		if shouldExpandSelectorFilesForSkippedTests(runner) {
+		if shouldFilterAndSplitSelectorFiles(cfg, runner) {
 			testParams, err := filterAndSplitSelectorFiles(ctx, cfg, client, testTargets, runner)
 			if err != nil {
 				return api.TestPlanParams{}, err
@@ -137,9 +137,10 @@ func shouldUseSelectorSplitting(cfg *config.Config, runner runner.TestRunner) bo
 	return cfg.SelectorSplitting && runner.SupportedFeatures().SplitBySelector
 }
 
-func shouldExpandSelectorFilesForSkippedTests(runner runner.TestRunner) bool {
+func shouldFilterAndSplitSelectorFiles(cfg *config.Config, runner runner.TestRunner) bool {
 	features := runner.SupportedFeatures()
-	return features.SplitBySelector && features.SplitByExample && features.FilterTestFiles && features.Skip
+	needsFilteredFiles := cfg.SplitByExample || features.Skip
+	return features.SplitByExample && needsFilteredFiles
 }
 
 func selectorParamsFromValues(values []string) []api.TestPlanParamsSelector {

@@ -594,7 +594,7 @@ func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
 	}
 }
-func TestShouldExpandSelectorFilesForSkippedTests(t *testing.T) {
+func TestShouldFilterAndSplitSelectorFiles(t *testing.T) {
 	custom, err := runner.NewCustom(runner.RunnerConfig{
 		TestCommand:     "echo {{testExamples}}",
 		TestFilePattern: "tests/**/*",
@@ -606,6 +606,7 @@ func TestShouldExpandSelectorFilesForSkippedTests(t *testing.T) {
 	cases := []struct {
 		name       string
 		testRunner runner.TestRunner
+		split      bool
 		want       bool
 	}{
 		{
@@ -633,16 +634,113 @@ func TestShouldExpandSelectorFilesForSkippedTests(t *testing.T) {
 			testRunner: runner.NewJest(runner.RunnerConfig{}),
 			want:       false,
 		},
+		{
+			name:       "Playwright selector-backed files support slow-file expansion when split by example is enabled",
+			testRunner: runner.NewPlaywright(runner.RunnerConfig{}),
+			split:      true,
+			want:       true,
+		},
+		{
+			name:       "Playwright selector-backed files do not expand when split by example is disabled",
+			testRunner: runner.NewPlaywright(runner.RunnerConfig{}),
+			want:       false,
+		},
+		{
+			name:       "pytest selector-backed files support slow-file expansion when split by example is enabled",
+			testRunner: runner.Pytest{},
+			split:      true,
+			want:       true,
+		},
+		{
+			name:       "pytest selector-backed files do not expand when split by example is disabled",
+			testRunner: runner.Pytest{},
+			want:       false,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := shouldExpandSelectorFilesForSkippedTests(c.testRunner); got != c.want {
-				t.Errorf("shouldExpandSelectorFilesForSkippedTests(%s) = %v, want %v", c.testRunner.Name(), got, c.want)
+			cfg := config.Config{SplitByExample: c.split}
+			if got := shouldFilterAndSplitSelectorFiles(&cfg, c.testRunner); got != c.want {
+				t.Errorf("shouldFilterAndSplitSelectorFiles(%s) = %v, want %v", c.testRunner.Name(), got, c.want)
 			}
 		})
 	}
 }
+
+func TestCreateRequestParams_SelectorSplittingExpandsSlowFilesForSplitByExampleRunners(t *testing.T) {
+	for _, testRunner := range []string{"playwright", "pytest"} {
+		t.Run(testRunner, func(t *testing.T) {
+			filterRequestCount := 0
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				filterRequestCount++
+				fmt.Fprint(w, `
+{
+	"tests": [
+		{ "path": "tests/slow_test", "reason": "slow file" }
+	]
+}`)
+			}))
+			defer svr.Close()
+
+			cfg := config.Config{
+				OrganizationSlug:  "my-org",
+				SuiteSlug:         "my-suite",
+				Identifier:        "identifier",
+				Parallelism:       2,
+				TestRunner:        testRunner,
+				SelectorSplitting: true,
+				SplitByExample:    true,
+			}
+
+			client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
+			selectors := []string{"tests/fast_test", "tests/slow_test"}
+			stubRunner := metadataTestRunner{
+				name: testRunner,
+				supportedFeatures: runner.SupportedFeatures{
+					SplitByExample:  true,
+					SplitBySelector: true,
+					FilterTestFiles: true,
+				},
+				examples: []plan.TestCase{
+					{
+						Identifier: "tests/slow_test::example",
+						Path:       "tests/slow_test::example",
+						Scope:      "tests/slow_test",
+						Name:       "example",
+						Format:     plan.TestCaseFormatExample,
+					},
+				},
+			}
+
+			got, err := createRequestParam(context.Background(), &cfg, selectors, *client, stubRunner)
+			if err != nil {
+				t.Fatalf("createRequestParam() error = %v", err)
+			}
+
+			if filterRequestCount != 1 {
+				t.Errorf("filter request count = %d, want 1", filterRequestCount)
+			}
+
+			want := api.TestPlanParams{
+				Identifier:  "identifier",
+				Parallelism: 2,
+				Runner:      testRunner,
+				Tests: api.TestPlanParamsTest{
+					Examples: stubRunner.examples,
+					Selectors: []api.TestPlanParamsSelector{
+						{Value: "tests/fast_test"},
+					},
+				},
+			}
+
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *testing.T) {
 	filterRequestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
