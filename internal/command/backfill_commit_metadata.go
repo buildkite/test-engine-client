@@ -53,8 +53,8 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 
 	// 3. Request the presigned upload URL now (before the git work) so the
 	// suite-scoped auth check fails fast, and reuse the held response at the
-	// upload site below. Skipped when --output is set, because there's no
-	// upload to authorise.
+	// upload site below. With --output, fetch UUIDs with GetSuite instead.
+	var organizationID, suiteID string
 	var presigned api.PresignedUploadResponse
 	if cfg.Output == "" {
 		fmt.Fprintln(os.Stderr, "Requesting presigned upload URL...")
@@ -62,7 +62,19 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		if err != nil {
 			return fmt.Errorf("presigning upload: %w", err)
 		}
+		organizationID = presigned.OrganizationID
+		suiteID = presigned.SuiteID
 		debug.Println("Held presigned upload URL for use after git work")
+	} else {
+		suite, err := apiClient.GetSuite(ctx, cfg.SuiteSlug)
+		if err != nil {
+			return err
+		}
+		organizationID = suite.OrganizationID
+		suiteID = suite.ID
+	}
+	if organizationID == "" || suiteID == "" {
+		return errors.New("API response missing organization_id or suite_id")
 	}
 
 	// 4. Detect default branch
@@ -173,12 +185,14 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	// 11. Package as tar.gz
 	fmt.Fprintln(os.Stderr, "Packaging tarball...")
 	archiveMeta := packaging.ArchiveMetadata{
-		SchemaVersion:    1,
+		SchemaVersion:    2,
 		Tool:             "bktec",
 		ToolVersion:      version.Version,
 		GeneratedAt:      time.Now().UTC().Format(time.RFC3339),
 		OrganizationSlug: cfg.OrganizationSlug,
 		SuiteSlug:        cfg.SuiteSlug,
+		OrganizationUUID: organizationID,
+		SuiteUUID:        suiteID,
 		CommitCount:      len(records),
 		SkippedCommits:   len(missingCommits),
 		Days:             cfg.Days,
