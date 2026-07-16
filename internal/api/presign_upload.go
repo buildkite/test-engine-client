@@ -11,8 +11,10 @@ import (
 
 // PresignedUploadResponse is the response from the presigned upload endpoint.
 type PresignedUploadResponse struct {
-	URI  string                     `json:"uri"`
-	Form upload.PresignedUploadForm `json:"form"`
+	URI            string                     `json:"uri"`
+	Form           upload.PresignedUploadForm `json:"form"`
+	OrganizationID string                     `json:"organization_id"`
+	SuiteID        string                     `json:"suite_id"`
 }
 
 // PresignUpload requests a presigned S3 upload URL for commit metadata.

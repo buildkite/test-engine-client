@@ -19,6 +19,11 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/packaging"
 )
 
+const (
+	testOrganizationUUID = "11111111-1111-1111-1111-111111111111"
+	testSuiteUUID        = "22222222-2222-2222-2222-222222222222"
+)
+
 func getBackfillConfig(serverURL string) *config.Config {
 	cfg := config.New()
 	cfg.AccessToken = "test-token"
@@ -65,13 +70,22 @@ func newFakeGitRunner() *git.FakeGitRunner {
 // endpoint, pointing the form at s3URL.
 func writePresignedUploadJSON(w http.ResponseWriter, s3URL string) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"uri": "s3://bucket/test.tar.gz",
+		"uri": fmt.Sprintf("s3://bucket/backfill/org=%s/suite=%s/test.tar.gz", testOrganizationUUID, testSuiteUUID),
 		"form": map[string]interface{}{
 			"method":     "POST",
 			"url":        s3URL,
 			"data":       map[string]string{"key": "test.tar.gz"},
 			"file_input": "file",
 		},
+		"organization_id": testOrganizationUUID,
+		"suite_id":        testSuiteUUID,
+	})
+}
+
+func writeSuiteJSON(w http.ResponseWriter) {
+	json.NewEncoder(w).Encode(map[string]string{
+		"id":              testSuiteUUID,
+		"organization_id": testOrganizationUUID,
 	})
 }
 
@@ -81,6 +95,8 @@ func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
+		case "/v2/analytics/organizations/my-org/suites/my-suite":
+			writeSuiteJSON(w)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -130,6 +146,20 @@ func TestBackfillCommitMetadata_HappyPath(t *testing.T) {
 	if record.SchemaVersion != 1 {
 		t.Errorf("SchemaVersion: got %d, want 1", record.SchemaVersion)
 	}
+
+	var metadata packaging.ArchiveMetadata
+	if err := json.Unmarshal([]byte(packaging.FindTarEntry(t, files, "/metadata.json")), &metadata); err != nil {
+		t.Fatalf("parsing metadata.json: %v", err)
+	}
+	if metadata.SchemaVersion != 2 {
+		t.Errorf("metadata SchemaVersion: got %d, want 2", metadata.SchemaVersion)
+	}
+	if metadata.OrganizationUUID != testOrganizationUUID {
+		t.Errorf("OrganizationUUID: got %q, want %q", metadata.OrganizationUUID, testOrganizationUUID)
+	}
+	if metadata.SuiteUUID != testSuiteUUID {
+		t.Errorf("SuiteUUID: got %q, want %q", metadata.SuiteUUID, testSuiteUUID)
+	}
 }
 
 func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
@@ -138,6 +168,8 @@ func TestBackfillCommitMetadata_SkipDiffs(t *testing.T) {
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
+		case "/v2/analytics/organizations/my-org/suites/my-suite":
+			writeSuiteJSON(w)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -341,6 +373,18 @@ func TestBackfillCommitMetadata_Upload(t *testing.T) {
 	if uploadedFileContent == "" {
 		t.Error("uploaded file content was empty")
 	}
+	uploadedPath := t.TempDir() + "/uploaded.tar.gz"
+	if err := os.WriteFile(uploadedPath, []byte(uploadedFileContent), 0o600); err != nil {
+		t.Fatalf("writing captured upload: %v", err)
+	}
+	uploadedFiles := packaging.ReadTarball(t, uploadedPath)
+	var uploadedMetadata packaging.ArchiveMetadata
+	if err := json.Unmarshal([]byte(packaging.FindTarEntry(t, uploadedFiles, "/metadata.json")), &uploadedMetadata); err != nil {
+		t.Fatalf("parsing uploaded metadata.json: %v", err)
+	}
+	if uploadedMetadata.SchemaVersion != 2 || uploadedMetadata.OrganizationUUID != testOrganizationUUID || uploadedMetadata.SuiteUUID != testSuiteUUID {
+		t.Errorf("uploaded metadata identity/schema = %#v", uploadedMetadata)
+	}
 	// On the happy path the held URL is reused; a second PresignUpload call
 	// would mean the held-response optimisation has regressed.
 	if got := atomic.LoadInt32(&presignHits); got != 1 {
@@ -436,6 +480,43 @@ func TestBackfillCommitMetadata_ReadScopeMissing_FailsAtFetchCommitList(t *testi
 	}
 }
 
+func TestBackfillCommitMetadata_MissingUUID(t *testing.T) {
+	tests := []struct {
+		name   string
+		output bool
+	}{
+		{name: "presigned response missing suite ID"},
+		{name: "suite response missing organization ID", output: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
+					_, _ = w.Write([]byte("abc123\n"))
+				case "/v2/analytics/organizations/my-org/suites/my-suite":
+					json.NewEncoder(w).Encode(map[string]string{"id": testSuiteUUID})
+				case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
+					json.NewEncoder(w).Encode(map[string]string{"organization_id": testOrganizationUUID})
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer svr.Close()
+
+			cfg := getBackfillConfig(svr.URL)
+			if tt.output {
+				cfg.Output = t.TempDir() + "/output.tar.gz"
+			}
+			err := BackfillCommitMetadata(t.Context(), cfg, nil)
+			if err == nil || !strings.Contains(err.Error(), "missing organization_id or suite_id") {
+				t.Fatalf("BackfillCommitMetadata() error = %v", err)
+			}
+		})
+	}
+}
+
 // TestBackfillCommitMetadata_OutputSkipsPresignPreflight asserts that
 // --output (write-tarball-locally) does not call PresignUpload, so a user
 // who opts out of the upload is not blocked by a missing write_suites scope.
@@ -447,6 +528,8 @@ func TestBackfillCommitMetadata_OutputSkipsPresignPreflight(t *testing.T) {
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write([]byte("abc123\n"))
+		case "/v2/analytics/organizations/my-org/suites/my-suite":
+			writeSuiteJSON(w)
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
 			atomic.AddInt32(&presignHits, 1)
 			// If this is called, the test should fail, but respond plausibly
