@@ -55,7 +55,7 @@ func (p Playwright) SupportedFeatures() SupportedFeatures {
 		FilterTestByTag: false,
 		AutoRetry:       true,
 		Mute:            true,
-		Skip:            false,
+		Skip:            true,
 		SplitBySelector: true,
 	}
 }

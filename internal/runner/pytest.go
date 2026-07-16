@@ -105,7 +105,7 @@ func (p Pytest) SupportedFeatures() SupportedFeatures {
 		FilterTestByTag: true,
 		AutoRetry:       true,
 		Mute:            true,
-		Skip:            false,
+		Skip:            true,
 		SplitBySelector: true,
 	}
 }
