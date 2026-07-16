@@ -384,7 +384,7 @@ func TestPytestRun_JUnit_TestPassed(t *testing.T) {
 			Identifier: "test_sample.py::test_happy",
 			Name:       "test_happy",
 			Path:       "test_sample.py::test_happy",
-			Scope:      "test_sample.py",
+			Scope:      "test_sample",
 		},
 	}
 	if diff := cmp.Diff(passedTests, wantPassedTests); diff != "" {
@@ -424,7 +424,7 @@ func TestPytestRun_JUnit_TestFailed(t *testing.T) {
 			Identifier: "tests/failed_test.py::test_failed",
 			Name:       "test_failed",
 			Path:       "tests/failed_test.py::test_failed",
-			Scope:      "tests/failed_test.py",
+			Scope:      "tests.failed_test",
 		},
 	}
 
@@ -706,37 +706,31 @@ func TestPytestNodeIDFromJUnit(t *testing.T) {
 		{
 			classname: "test_sample",
 			name:      "test_happy",
-			wantScope: "test_sample.py",
 			wantPath:  "test_sample.py::test_happy",
 		},
 		{
 			classname: "tests.test_sample",
 			name:      "test_happy",
-			wantScope: "tests/test_sample.py",
 			wantPath:  "tests/test_sample.py::test_happy",
 		},
 		{
 			classname: "tests.failed_test",
 			name:      "test_failed",
-			wantScope: "tests/failed_test.py",
 			wantPath:  "tests/failed_test.py::test_failed",
 		},
 		{
 			classname: "test_auth.TestLogin",
 			name:      "test_success",
-			wantScope: "test_auth.py::TestLogin",
 			wantPath:  "test_auth.py::TestLogin::test_success",
 		},
 		{
 			classname: "tests.test_auth.TestLogin",
 			name:      "test_success",
-			wantScope: "tests/test_auth.py::TestLogin",
 			wantPath:  "tests/test_auth.py::TestLogin::test_success",
 		},
 		{
 			classname: "",
 			name:      "test_something",
-			wantScope: "test_something",
 			wantPath:  "test_something",
 		},
 		{
@@ -750,17 +744,13 @@ func TestPytestNodeIDFromJUnit(t *testing.T) {
 			// Uppercase package directory with no class: MyTest is a directory.
 			classname: "tests.MyTest.test_add",
 			name:      "test_add",
-			wantScope: "tests/MyTest/test_add.py",
 			wantPath:  "tests/MyTest/test_add.py::test_add",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.classname+"::"+tt.name, func(t *testing.T) {
-			gotScope, gotPath := pytestNodeIDFromJUnit(tt.classname, tt.name)
-			if gotScope != tt.wantScope {
-				t.Errorf("pytestNodeIDFromJUnit(%q, %q) scope = %q, want %q", tt.classname, tt.name, gotScope, tt.wantScope)
-			}
+			gotPath := pytestNodeIDFromJUnit(tt.classname, tt.name)
 			if gotPath != tt.wantPath {
 				t.Errorf("pytestNodeIDFromJUnit(%q, %q) path = %q, want %q", tt.classname, tt.name, gotPath, tt.wantPath)
 			}

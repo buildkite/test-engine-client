@@ -195,13 +195,14 @@ func (p Pytest) runParseJUnit(result *RunResult) error {
 	}
 
 	for _, test := range tests {
-		scope, path := pytestNodeIDFromJUnit(test.Classname, test.Name)
+		path := pytestNodeIDFromJUnit(test.Classname, test.Name)
 		result.RecordTestResult(plan.TestCase{
 			Identifier: path,
 			Format:     plan.TestCaseFormatExample,
-			Scope:      scope,
-			Name:       test.Name,
-			Path:       path,
+			// JUnit XML ingestion set Scope to the raw classname
+			Scope: test.Classname,
+			Name:  test.Name,
+			Path:  path,
 		}, test.Result)
 	}
 
@@ -219,9 +220,9 @@ func (p Pytest) runParseJUnit(result *RunResult) error {
 //	classname="tests.test_auth.TestLogin",            name="test_success" → scope="tests/test_auth.py::TestLogin",           path="tests/test_auth.py::TestLogin::test_success"
 //	classname="tests.MyTest.test_subtract.TestClass", name="test_positive"→ scope="tests/MyTest/test_subtract.py::TestClass",path="tests/MyTest/test_subtract.py::TestClass::test_positive"
 //	classname="tests.MyTest.test_add",                name="test_add"     → scope="tests/MyTest/test_add.py",                path="tests/MyTest/test_add.py::test_add"
-func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
+func pytestNodeIDFromJUnit(classname, name string) (path string) {
 	if classname == "" {
-		return name, name
+		return name
 	}
 
 	parts := strings.Split(classname, ".")
@@ -252,11 +253,9 @@ func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
 	classParts := parts[moduleEnd:]
 
 	if len(classParts) == 0 {
-		scope = modulePath
 		path = modulePath + "::" + name
 	} else {
 		classPath := strings.Join(classParts, "::")
-		scope = modulePath + "::" + classPath
 		path = modulePath + "::" + classPath + "::" + name
 	}
 	return
