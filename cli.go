@@ -289,7 +289,6 @@ var selectorsFlag = &cli.StringFlag{
 	Usage:       "Path to a file containing a list of selectors to run (one per line). Must be used alongside `selector-splitting`",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_FILE"),
 	Destination: &cfg.SelectorListPath,
-	Hidden:      true,
 }
 
 var tagFiltersFlag = &cli.StringFlag{
