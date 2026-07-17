@@ -85,6 +85,19 @@ To enable automatic retry, set the following environment variable:
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
 
+## Selector-based test splitting
+
+RSpec supports [selector-based test splitting](../README.md#selector-based-test-splitting). It doesn't change how your tests are split: the selector sent to Test Engine is the same test file path that file-based splitting already discovers using `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` / `_EXCLUDE_PATTERN`, so file discovery and the `{{testExamples}}` command placeholder work the same way.
+
+> [!NOTE]
+> If you upload results with the [Ruby test collector](https://buildkite.com/docs/test-engine/test-collection/ruby-collectors), we recommend updating to `buildkite-test_collector` v2.14.0 or later so selectors are attributed directly. If you do not, nothing breaks: Test Engine [falls back to the file path](../README.md#how-selectors-are-matched) when a selector is not attributed, which keeps file-based matching working. Updating matters most if you use a [location prefix](#location-prefix), since the fallback only handles the prefix on a best-effort basis.
+
+To enable it:
+
+```sh
+export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
+```
+
 ## Split slow files by individual test example
 By default, bktec splits your test suite into batches of test files. In some scenarios, e.g. if your test suite has a few test files that take a very long time to run, you may want to split slow test files into individual test examples for execution. To enable this, you can set the `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE` environment variable to `true`. This setting enables bktec to dynamically split slow test files across multiple partitions based on their duration and the number of parallelism.
 

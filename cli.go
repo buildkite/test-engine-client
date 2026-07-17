@@ -289,7 +289,6 @@ var selectorsFlag = &cli.StringFlag{
 	Usage:       "Path to a file containing a list of selectors to run (one per line). Must be used alongside `selector-splitting`",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_FILE"),
 	Destination: &cfg.SelectorListPath,
-	Hidden:      true,
 }
 
 var tagFiltersFlag = &cli.StringFlag{
@@ -352,11 +351,10 @@ var splitByExampleFlag = &cli.BoolFlag{
 var selectorSplittingFlag = &cli.BoolFlag{
 	Name:        "selector-splitting",
 	Category:    "TEST RUNNER",
-	Usage:       "Enable experimental selector-based test splitting for supported non-file runners",
+	Usage:       "Enable experimental selector-based test splitting",
 	Value:       false,
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING"),
 	Destination: &cfg.SelectorSplitting,
-	Hidden:      true,
 }
 
 var failOnNoTestsFlag = &cli.BoolFlag{
