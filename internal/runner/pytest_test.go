@@ -789,8 +789,10 @@ func TestParsePytestCollectOutput_JUnit(t *testing.T) {
 test_auth.py::TestLogin::test_success
 test_auth.py::test_param[value1]
 tests/test_another.py::WithClass::test_method
+tests/test_nested.py::TestOuter::TestInner::test_deep
+tests/pkg.py/test_auth.py::TestLogin::test_success
 
-3 tests collected in 0.05s`
+6 tests collected in 0.05s`
 	got, err := pytest.parsePytestCollectOutput(output)
 	if err != nil {
 		t.Fatalf("parsePytestCollectOutput() error = %v", err)
@@ -801,6 +803,10 @@ tests/test_another.py::WithClass::test_method
 		{Identifier: "test_auth.py::TestLogin::test_success", Path: "test_auth.py::TestLogin::test_success", Scope: "test_auth.TestLogin", Name: "test_success", Format: plan.TestCaseFormatExample},
 		{Identifier: "test_auth.py::test_param[value1]", Path: "test_auth.py::test_param[value1]", Scope: "test_auth", Name: "test_param[value1]", Format: plan.TestCaseFormatExample},
 		{Identifier: "tests/test_another.py::WithClass::test_method", Path: "tests/test_another.py::WithClass::test_method", Scope: "tests.test_another.WithClass", Name: "test_method", Format: plan.TestCaseFormatExample},
+		// Nested classes produce more than one `::` in the scope.
+		{Identifier: "tests/test_nested.py::TestOuter::TestInner::test_deep", Path: "tests/test_nested.py::TestOuter::TestInner::test_deep", Scope: "tests.test_nested.TestOuter.TestInner", Name: "test_deep", Format: plan.TestCaseFormatExample},
+		// A directory ending in `.py` must keep its extension; only the file loses it.
+		{Identifier: "tests/pkg.py/test_auth.py::TestLogin::test_success", Path: "tests/pkg.py/test_auth.py::TestLogin::test_success", Scope: "tests.pkg.py.test_auth.TestLogin", Name: "test_success", Format: plan.TestCaseFormatExample},
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
