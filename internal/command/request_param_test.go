@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/buildkite/test-engine-client/v2/internal/api"
 	"github.com/buildkite/test-engine-client/v2/internal/config"
@@ -401,6 +402,8 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing
 		SuiteSlug:         "my-suite",
 		Identifier:        "identifier",
 		Parallelism:       2,
+		MaxParallelism:    10,
+		TargetTime:        5 * time.Minute,
 		Branch:            "main",
 		TestRunner:        "rspec",
 		SelectorSplitting: true,
@@ -449,9 +452,18 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing
 		t.Errorf("filter_tests files diff (-got +want):\n%s", diff)
 	}
 
+	if gotFilterParams.MaxParallelism != 10 {
+		t.Errorf("filter_tests max_parallelism = %d, want 10", gotFilterParams.MaxParallelism)
+	}
+	if gotFilterParams.TargetTime != 300 {
+		t.Errorf("filter_tests target_time = %v, want 300", gotFilterParams.TargetTime)
+	}
+
 	want := api.TestPlanParams{
 		Identifier:     "identifier",
 		Parallelism:    2,
+		MaxParallelism: 10,
+		TargetTime:     300,
 		Branch:         "main",
 		LocationPrefix: "my/project",
 		Runner:         "rspec",
