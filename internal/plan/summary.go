@@ -54,6 +54,18 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	fmt.Fprintln(w)
 }
 
+// HasNoSelectorTimingHistory reports whether a multi-node selector plan used
+// default durations because no historical selector timings were available.
+func (p TestPlan) HasNoSelectorTimingHistory() bool {
+	if p.Fallback || p.Parallelism <= 1 || p.TimingMetadata == nil ||
+		p.TimingMetadata.Selector == nil || p.TimingMetadata.Selector.MedianDuration != nil {
+		return false
+	}
+
+	selectorTotal, selectorKnown := countByFormat(p, TestCaseFormatSelector)
+	return selectorTotal > 0 && selectorKnown == 0
+}
+
 // countByFormat returns (total, known) for cases of the given format. The
 // empty (default) Format value is treated as TestCaseFormatFile.
 func countByFormat(p TestPlan, format TestCaseFormat) (total, known int) {

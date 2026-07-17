@@ -200,6 +200,64 @@ func TestPrintSplitSummary_SelectorMode(t *testing.T) {
 	if strings.Contains(got, " files ") || strings.Contains(got, " examples ") {
 		t.Errorf("expected no file/example wording in selector-mode output, got:\n%s", got)
 	}
+	if p.HasNoSelectorTimingHistory() {
+		t.Error("expected plan with selector history not to report missing selector timings")
+	}
+}
+
+func TestPrintSplitSummary_SelectorModeNoHistoryUsesDefaultDuration(t *testing.T) {
+	p := TestPlan{
+		Parallelism: 2,
+		Tasks: map[string]*Task{
+			"0": {NodeNumber: 0, Tests: []TestCase{
+				{Value: "spec/models/user_spec.rb", Format: TestCaseFormatSelector},
+			}},
+			"1": {NodeNumber: 1, Tests: []TestCase{
+				{Value: "spec/models/team_spec.rb", Format: TestCaseFormatSelector},
+			}},
+		},
+		TimingMetadata: &TimingMetadata{
+			Selector: &FormatTimingMetadata{MedianDuration: nil, DefaultDuration: 1000},
+		},
+	}
+
+	var buf bytes.Buffer
+	PrintSplitSummary(&buf, p)
+	got := buf.String()
+
+	for _, want := range []string{
+		"2 selectors (100%) had no history and used the default duration (1.0s)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, got)
+		}
+	}
+	if !p.HasNoSelectorTimingHistory() {
+		t.Error("expected plan to report no selector timing history")
+	}
+}
+
+func TestPrintSplitSummary_SelectorModeParallelismOneDoesNotWarn(t *testing.T) {
+	p := TestPlan{
+		Parallelism: 1,
+		Tasks: map[string]*Task{
+			"0": {NodeNumber: 0, Tests: []TestCase{
+				{Value: "spec/models/user_spec.rb", Format: TestCaseFormatSelector},
+			}},
+		},
+		TimingMetadata: &TimingMetadata{},
+	}
+
+	var buf bytes.Buffer
+	PrintSplitSummary(&buf, p)
+	got := buf.String()
+
+	if !strings.Contains(got, "1 selector across 1 node") {
+		t.Errorf("output missing count line\nfull output:\n%s", got)
+	}
+	if strings.Contains(got, "update it and run the suite once") {
+		t.Errorf("unexpected collector warning at parallelism 1, got:\n%s", got)
+	}
 }
 
 func TestPrintSplitSummary_MixedFormats(t *testing.T) {
@@ -277,6 +335,9 @@ func TestPrintSplitSummary_MixedFormatsWithSelectors(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "update it and run the suite once") {
+		t.Errorf("unexpected collector warning when selector history exists, got:\n%s", got)
 	}
 }
 

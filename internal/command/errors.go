@@ -3,9 +3,11 @@ package command
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/buildkite/test-engine-client/v2/internal/api"
+	"github.com/buildkite/test-engine-client/v2/internal/plan"
 )
 
 const fallbackExtra = "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual."
@@ -25,14 +27,33 @@ func ansi(code string) string {
 	return code
 }
 
+// printWarning prints a warning and optional hints to w.
+func printWarning(w io.Writer, message string, hints ...string) {
+	fmt.Fprintf(w, "%s⚠️ %s%s\n", colorYellow+colorBold, message, colorReset)
+	for _, h := range hints {
+		fmt.Fprintln(w, colorYellow+h+colorReset)
+	}
+}
+
 // printWarn prints a recoverable warning to stderr followed by an optional hint
 // and the fallback notice.
 func printWarn(label, message string, hints ...string) {
-	fmt.Fprintf(os.Stderr, "%s⚠️ %s: %s\n", colorYellow+colorBold, label, message)
-	for _, h := range hints {
-		fmt.Fprintln(os.Stderr, colorYellow+h+colorReset)
+	printWarning(os.Stderr, label+": "+message, append(hints, fallbackExtra)...)
+}
+
+// printSplitSummary prints the plan summary and warns when a selector plan had
+// to use default durations because no selector timing history was available.
+func printSplitSummary(w io.Writer, testPlan plan.TestPlan) {
+	plan.PrintSplitSummary(w, testPlan)
+	if testPlan.HasNoSelectorTimingHistory() {
+		printWarning(
+			w,
+			"Selector splitting used default durations because no historical selector timings were found.",
+			"If these tests have not run before, run them once to record selector timings. Otherwise, update your collector and run them again:",
+			"  Ruby gem: buildkite-test_collector v2.14.0+",
+			"  JavaScript npm package: buildkite-test-collector v1.10.0+",
+		)
 	}
-	fmt.Fprintf(os.Stderr, "%s%s%s\n", colorYellow, fallbackExtra, colorReset)
 }
 
 // fatal formats an unrecoverable error message with red bold styling.
