@@ -25,29 +25,10 @@ import (
 // Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
 	if shouldUseSelectorSplitting(cfg, runner) {
-		if shouldFilterAndSplitSelectorFiles(cfg, runner) {
-			testParams, err := filterAndSplitSelectorFiles(ctx, cfg, client, testTargets, runner)
-			if err != nil {
-				return api.TestPlanParams{}, err
-			}
-
-			return api.TestPlanParams{
-				Identifier:     cfg.Identifier,
-				Parallelism:    cfg.Parallelism,
-				MaxParallelism: cfg.MaxParallelism,
-				TargetTime:     cfg.TargetTime.Seconds(),
-				Branch:         cfg.Branch,
-				LocationPrefix: cfg.LocationPrefix,
-				Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
-				Metadata:       cfg.Metadata,
-				Runner:         cfg.TestRunner,
-				Tests:          testParams,
-			}, nil
+		testParams, err := selectorTestParams(ctx, cfg, client, testTargets, runner)
+		if err != nil {
+			return api.TestPlanParams{}, err
 		}
-
-		// For selector-capable runners, discovered test targets are already runnable
-		// selector values, e.g. Go package import paths, not file paths.
-		selectors := selectorParamsFromValues(testTargets)
 
 		return api.TestPlanParams{
 			Identifier:     cfg.Identifier,
@@ -59,9 +40,7 @@ func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []s
 			Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
 			Metadata:       cfg.Metadata,
 			Runner:         cfg.TestRunner,
-			Tests: api.TestPlanParamsTest{
-				Selectors: selectors,
-			},
+			Tests:          testParams,
 		}, nil
 	}
 
@@ -129,12 +108,30 @@ func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []s
 }
 
 func shouldUseSelectorSplitting(cfg *config.Config, runner runner.TestRunner) bool {
-	// Pytest tag filters are applied during local example collection.
-	// Selector requests skip that step, so fall back to example splitting.
-	if cfg.TagFilters != "" {
-		return false
-	}
 	return cfg.SelectorSplitting && runner.SupportedFeatures().SplitBySelector
+}
+
+// selectorTestParams builds the Tests payload for selector-capable runners.
+//
+// When tag filters are set, every file is expanded into tag-filtered examples so that
+// nothing goes out as a raw selector, which would run all of the file's tests and
+// ignore the tag filter. Tag filtering is currently only supported for pytest.
+//
+// Otherwise, slow or skipped files are expanded into examples and the rest are sent as
+// raw selectors, or everything is sent as raw selectors when the runner doesn't need
+// filtered files.
+func selectorTestParams(ctx context.Context, cfg *config.Config, client api.Client, testTargets []string, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
+	if cfg.TagFilters != "" && runner.Name() == "pytest" {
+		return splitAllSelectorFiles(testTargets, runner)
+	}
+
+	if shouldFilterAndSplitSelectorFiles(cfg, runner) {
+		return filterAndSplitSelectorFiles(ctx, cfg, client, testTargets, runner)
+	}
+
+	return api.TestPlanParamsTest{
+		Selectors: selectorParamsFromValues(testTargets),
+	}, nil
 }
 
 func shouldFilterAndSplitSelectorFiles(cfg *config.Config, runner runner.TestRunner) bool {
@@ -226,6 +223,18 @@ func splitAllFiles(files []plan.TestCase, runner runner.TestRunner) (api.TestPla
 	return api.TestPlanParamsTest{
 		Examples: examples,
 	}, nil
+}
+
+// splitAllSelectorFiles expands every selector-backed file into examples to support tag filtering.
+// Selector-capable runners send file targets as raw selectors by default, which would ignore tag
+// filters, so all files are expanded into tag-filtered examples instead.
+func splitAllSelectorFiles(selectors []string, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
+	testFiles := make([]plan.TestCase, 0, len(selectors))
+	for _, selector := range selectors {
+		testFiles = append(testFiles, plan.TestCase{Path: prefixPath(selector, runner.LocationPrefix())})
+	}
+
+	return splitAllFiles(testFiles, runner)
 }
 
 // filterAndSplitSelectorFiles filters selector-backed file targets through the Test Engine API and splits
