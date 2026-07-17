@@ -765,7 +765,7 @@ test_auth.py::test_param[value1]
 
 3 tests collected in 0.05s`
 
-	pytest := NewPytest(RunnerConfig{})
+	pytest := Pytest{useJUnit: false}
 
 	got, err := pytest.parsePytestCollectOutput(output)
 	if err != nil {
