@@ -10,8 +10,10 @@ import (
 )
 
 type FilterTestsParams struct {
-	Files []plan.TestCase   `json:"files"`
-	Env   config.EnvPayload `json:"env"`
+	Files          []plan.TestCase   `json:"files"`
+	Env            config.EnvPayload `json:"env"`
+	MaxParallelism int               `json:"max_parallelism,omitempty"`
+	TargetTime     float64           `json:"target_time,omitempty"`
 }
 
 type FilteredTest struct {

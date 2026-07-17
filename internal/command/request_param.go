@@ -302,8 +302,10 @@ func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Cli
 func filterAndExpandFiles(ctx context.Context, cfg *config.Config, client api.Client, files []plan.TestCase, runner runner.TestRunner, label string) ([]plan.TestCase, map[string]bool, error) {
 	debug.Printf("Filtering %d %s", len(files), label)
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
-		Files: files,
-		Env:   cfg.EnvPayload(),
+		Files:          files,
+		Env:            cfg.EnvPayload(),
+		MaxParallelism: cfg.MaxParallelism,
+		TargetTime:     cfg.TargetTime.Seconds(),
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("filter tests: %w", err)

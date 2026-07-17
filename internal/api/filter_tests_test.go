@@ -25,7 +25,9 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 			{Path: "./dog_spec.rb"},
 			{Path: "./turtle_spec.rb"},
 		},
-		Env: cfg.EnvPayload(),
+		Env:            cfg.EnvPayload(),
+		MaxParallelism: 10,
+		TargetTime:     300,
 	}
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +50,8 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 				{"path": "./dog_spec.rb"},
 				{"path": "./turtle_spec.rb"}
 			],
+			"max_parallelism": 10,
+			"target_time": 300,
 			"env": {
 				"BUILDKITE_BUILD_ID": "",
 				"BUILDKITE_TEST_ENGINE_DEBUG_ENABLED": false,
