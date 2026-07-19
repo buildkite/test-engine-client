@@ -384,7 +384,7 @@ func TestPytestRun_JUnit_TestPassed(t *testing.T) {
 			Identifier: "test_sample.py::test_happy",
 			Name:       "test_happy",
 			Path:       "test_sample.py::test_happy",
-			Scope:      "test_sample.py",
+			Scope:      "test_sample",
 		},
 	}
 	if diff := cmp.Diff(passedTests, wantPassedTests); diff != "" {
@@ -424,7 +424,7 @@ func TestPytestRun_JUnit_TestFailed(t *testing.T) {
 			Identifier: "tests/failed_test.py::test_failed",
 			Name:       "test_failed",
 			Path:       "tests/failed_test.py::test_failed",
-			Scope:      "tests/failed_test.py",
+			Scope:      "tests.failed_test",
 		},
 	}
 
@@ -706,37 +706,31 @@ func TestPytestNodeIDFromJUnit(t *testing.T) {
 		{
 			classname: "test_sample",
 			name:      "test_happy",
-			wantScope: "test_sample.py",
 			wantPath:  "test_sample.py::test_happy",
 		},
 		{
 			classname: "tests.test_sample",
 			name:      "test_happy",
-			wantScope: "tests/test_sample.py",
 			wantPath:  "tests/test_sample.py::test_happy",
 		},
 		{
 			classname: "tests.failed_test",
 			name:      "test_failed",
-			wantScope: "tests/failed_test.py",
 			wantPath:  "tests/failed_test.py::test_failed",
 		},
 		{
 			classname: "test_auth.TestLogin",
 			name:      "test_success",
-			wantScope: "test_auth.py::TestLogin",
 			wantPath:  "test_auth.py::TestLogin::test_success",
 		},
 		{
 			classname: "tests.test_auth.TestLogin",
 			name:      "test_success",
-			wantScope: "tests/test_auth.py::TestLogin",
 			wantPath:  "tests/test_auth.py::TestLogin::test_success",
 		},
 		{
 			classname: "",
 			name:      "test_something",
-			wantScope: "test_something",
 			wantPath:  "test_something",
 		},
 		{
@@ -750,17 +744,13 @@ func TestPytestNodeIDFromJUnit(t *testing.T) {
 			// Uppercase package directory with no class: MyTest is a directory.
 			classname: "tests.MyTest.test_add",
 			name:      "test_add",
-			wantScope: "tests/MyTest/test_add.py",
 			wantPath:  "tests/MyTest/test_add.py::test_add",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.classname+"::"+tt.name, func(t *testing.T) {
-			gotScope, gotPath := pytestNodeIDFromJUnit(tt.classname, tt.name)
-			if gotScope != tt.wantScope {
-				t.Errorf("pytestNodeIDFromJUnit(%q, %q) scope = %q, want %q", tt.classname, tt.name, gotScope, tt.wantScope)
-			}
+			gotPath := pytestNodeIDFromJUnit(tt.classname, tt.name)
 			if gotPath != tt.wantPath {
 				t.Errorf("pytestNodeIDFromJUnit(%q, %q) path = %q, want %q", tt.classname, tt.name, gotPath, tt.wantPath)
 			}
@@ -775,7 +765,9 @@ test_auth.py::test_param[value1]
 
 3 tests collected in 0.05s`
 
-	got, err := parsePytestCollectOutput(output)
+	pytest := Pytest{useJUnit: false}
+
+	got, err := pytest.parsePytestCollectOutput(output)
 	if err != nil {
 		t.Fatalf("parsePytestCollectOutput() error = %v", err)
 	}
@@ -784,6 +776,37 @@ test_auth.py::test_param[value1]
 		{Identifier: "test_sample.py::test_happy", Path: "test_sample.py::test_happy", Scope: "test_sample.py", Name: "test_happy", Format: plan.TestCaseFormatExample},
 		{Identifier: "test_auth.py::TestLogin::test_success", Path: "test_auth.py::TestLogin::test_success", Scope: "test_auth.py::TestLogin", Name: "test_success", Format: plan.TestCaseFormatExample},
 		{Identifier: "test_auth.py::test_param[value1]", Path: "test_auth.py::test_param[value1]", Scope: "test_auth.py", Name: "test_param[value1]", Format: plan.TestCaseFormatExample},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsePytestCollectOutput() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestParsePytestCollectOutput_JUnit(t *testing.T) {
+	pytest := Pytest{useJUnit: true}
+	output := `test_sample.py::test_happy
+test_auth.py::TestLogin::test_success
+test_auth.py::test_param[value1]
+tests/test_another.py::WithClass::test_method
+tests/test_nested.py::TestOuter::TestInner::test_deep
+tests/pkg.py/test_auth.py::TestLogin::test_success
+
+6 tests collected in 0.05s`
+	got, err := pytest.parsePytestCollectOutput(output)
+	if err != nil {
+		t.Fatalf("parsePytestCollectOutput() error = %v", err)
+	}
+
+	want := []plan.TestCase{
+		{Identifier: "test_sample.py::test_happy", Path: "test_sample.py::test_happy", Scope: "test_sample", Name: "test_happy", Format: plan.TestCaseFormatExample},
+		{Identifier: "test_auth.py::TestLogin::test_success", Path: "test_auth.py::TestLogin::test_success", Scope: "test_auth.TestLogin", Name: "test_success", Format: plan.TestCaseFormatExample},
+		{Identifier: "test_auth.py::test_param[value1]", Path: "test_auth.py::test_param[value1]", Scope: "test_auth", Name: "test_param[value1]", Format: plan.TestCaseFormatExample},
+		{Identifier: "tests/test_another.py::WithClass::test_method", Path: "tests/test_another.py::WithClass::test_method", Scope: "tests.test_another.WithClass", Name: "test_method", Format: plan.TestCaseFormatExample},
+		// Nested classes produce more than one `::` in the scope.
+		{Identifier: "tests/test_nested.py::TestOuter::TestInner::test_deep", Path: "tests/test_nested.py::TestOuter::TestInner::test_deep", Scope: "tests.test_nested.TestOuter.TestInner", Name: "test_deep", Format: plan.TestCaseFormatExample},
+		// A directory ending in `.py` must keep its extension; only the file loses it.
+		{Identifier: "tests/pkg.py/test_auth.py::TestLogin::test_success", Path: "tests/pkg.py/test_auth.py::TestLogin::test_success", Scope: "tests.pkg.py.test_auth.TestLogin", Name: "test_success", Format: plan.TestCaseFormatExample},
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {

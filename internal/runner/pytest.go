@@ -105,7 +105,7 @@ func (p Pytest) SupportedFeatures() SupportedFeatures {
 		FilterTestByTag: true,
 		AutoRetry:       true,
 		Mute:            true,
-		Skip:            false,
+		Skip:            true,
 		SplitBySelector: true,
 	}
 }
@@ -195,13 +195,14 @@ func (p Pytest) runParseJUnit(result *RunResult) error {
 	}
 
 	for _, test := range tests {
-		scope, path := pytestNodeIDFromJUnit(test.Classname, test.Name)
+		path := pytestNodeIDFromJUnit(test.Classname, test.Name)
 		result.RecordTestResult(plan.TestCase{
 			Identifier: path,
 			Format:     plan.TestCaseFormatExample,
-			Scope:      scope,
-			Name:       test.Name,
-			Path:       path,
+			// JUnit XML ingestion set Scope to the raw classname
+			Scope: test.Classname,
+			Name:  test.Name,
+			Path:  path,
 		}, test.Result)
 	}
 
@@ -219,9 +220,9 @@ func (p Pytest) runParseJUnit(result *RunResult) error {
 //	classname="tests.test_auth.TestLogin",            name="test_success" → scope="tests/test_auth.py::TestLogin",           path="tests/test_auth.py::TestLogin::test_success"
 //	classname="tests.MyTest.test_subtract.TestClass", name="test_positive"→ scope="tests/MyTest/test_subtract.py::TestClass",path="tests/MyTest/test_subtract.py::TestClass::test_positive"
 //	classname="tests.MyTest.test_add",                name="test_add"     → scope="tests/MyTest/test_add.py",                path="tests/MyTest/test_add.py::test_add"
-func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
+func pytestNodeIDFromJUnit(classname, name string) (path string) {
 	if classname == "" {
-		return name, name
+		return name
 	}
 
 	parts := strings.Split(classname, ".")
@@ -252,11 +253,9 @@ func pytestNodeIDFromJUnit(classname, name string) (scope, path string) {
 	classParts := parts[moduleEnd:]
 
 	if len(classParts) == 0 {
-		scope = modulePath
 		path = modulePath + "::" + name
 	} else {
 		classPath := strings.Join(classParts, "::")
-		scope = modulePath + "::" + classPath
 		path = modulePath + "::" + classPath + "::" + name
 	}
 	return
@@ -312,7 +311,7 @@ func (p Pytest) GetExamples(files []string) ([]plan.TestCase, error) {
 		return nil, fmt.Errorf("pytest collection failed: %w", err)
 	}
 
-	return parsePytestCollectOutput(string(output))
+	return p.parsePytestCollectOutput(string(output))
 }
 
 // parsePytestCollectOutput parses the output of `pytest --collect-only -q`
@@ -325,7 +324,7 @@ func (p Pytest) GetExamples(files []string) ([]plan.TestCase, error) {
 //	test_auth.py::test_param[value1]
 //
 //	3 tests collected in 0.05s
-func parsePytestCollectOutput(output string) ([]plan.TestCase, error) {
+func (p Pytest) parsePytestCollectOutput(output string) ([]plan.TestCase, error) {
 	var testCases []plan.TestCase
 
 	for _, line := range strings.Split(output, "\n") {
@@ -337,7 +336,7 @@ func parsePytestCollectOutput(output string) ([]plan.TestCase, error) {
 		}
 
 		// Parse node ID: "file.py::TestClass::test_method" or "file.py::test_func"
-		testCases = append(testCases, mapNodeIDToTestCase(line))
+		testCases = append(testCases, p.mapNodeIDToTestCase(line))
 	}
 
 	return testCases, nil
@@ -347,7 +346,7 @@ func parsePytestCollectOutput(output string) ([]plan.TestCase, error) {
 // Node ID format: file_path::class::method or file_path::function
 // Must match the format used by buildkite-test-collector for pytest.
 // Scope is everything except the final component, Name is the last component.
-func mapNodeIDToTestCase(nodeID string) plan.TestCase {
+func (p Pytest) mapNodeIDToTestCase(nodeID string) plan.TestCase {
 	// Split on the last :: to get scope (everything before) and name (last component)
 	lastIdx := strings.LastIndex(nodeID, "::")
 	scope := ""
@@ -357,6 +356,11 @@ func mapNodeIDToTestCase(nodeID string) plan.TestCase {
 		name = nodeID[lastIdx+2:]
 	}
 
+	// There is difference between the scope reported by test-collector and native JUnit XML.
+	if p.useJUnit {
+		scope = collectorScopeToJunitScope(scope)
+	}
+
 	return plan.TestCase{
 		Identifier: nodeID,
 		Path:       nodeID,
@@ -364,6 +368,32 @@ func mapNodeIDToTestCase(nodeID string) plan.TestCase {
 		Name:       name,
 		Format:     plan.TestCaseFormatExample,
 	}
+}
+
+// collectorScopeToJunitScope converts a pytest scope (from test-collector) to a JUnit scope (from JUnit XML).
+// test-collector reports the scope as the file path (e.g. tests/test_auth.py::TestLogin),
+// while JUnit XML reports the scope as the raw classname (e.g. tests.test_auth.TestLogin).
+// Strip the `.py` extension from the file path, then replace `::` and `/` with `.`.
+// The file path is always the part before the first `::`, so we only trim the suffix on
+// that part. Doing so avoids mangling a directory that happens to end in `.py`.
+// Example:
+//
+//	test_sample.py -> test_sample
+//	tests/test_auth.py::TestLogin -> tests.test_auth.TestLogin
+//	tests/MyTest/test_subtract.py::TestClass -> tests.MyTest.test_subtract.TestClass
+//	tests/test_auth.py::TestOuter::TestInner -> tests.test_auth.TestOuter.TestInner
+//	tests/pkg.py/test_auth.py::TestLogin -> tests.pkg.py.test_auth.TestLogin
+func collectorScopeToJunitScope(scope string) string {
+	path, rest, hasClass := strings.Cut(scope, "::")
+	path = strings.TrimSuffix(path, ".py")
+	if hasClass {
+		path = path + "::" + rest
+	}
+
+	classname := strings.ReplaceAll(path, "::", ".")
+	classname = strings.ReplaceAll(classname, "/", ".")
+
+	return classname
 }
 
 func (p Pytest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {

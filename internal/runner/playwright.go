@@ -55,6 +55,12 @@ func (p Playwright) SupportedFeatures() SupportedFeatures {
 		FilterTestByTag: false,
 		AutoRetry:       true,
 		Mute:            true,
+		// Skip stays disabled for now. The same test can run across multiple
+		// Playwright projects (e.g. Chromium and Firefox) as separate examples
+		// that share the same Path (file:line). The value we hand to Playwright
+		// is just that Path, which is not project-specific, so skipping one
+		// project's example while keeping another's would still rerun both.
+		// Enabling skip needs a project-scoped selector first.
 		Skip:            false,
 		SplitBySelector: true,
 	}
