@@ -664,9 +664,9 @@ func TestShouldFilterAndSplitSelectorFiles(t *testing.T) {
 			want:       true,
 		},
 		{
-			name:       "pytest selector-backed files do not expand when split by example is disabled",
+			name:       "pytest selector-backed files support skipped-test expansion",
 			testRunner: runner.Pytest{},
-			want:       false,
+			want:       true,
 		},
 	}
 
