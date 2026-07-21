@@ -25,7 +25,7 @@ builds:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
-    ldflags: "-X 'github.com/buildkite/test-engine-client/v2/internal/version.Version=v{{ .Version }}'"
+    ldflags: "-X 'github.com/buildkite/test-engine-client/v3/internal/version.Version=v{{ .Version }}'"
     binary: bktec
 
 checksum:

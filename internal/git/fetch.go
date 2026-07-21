@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
 )
 
 const fetchChunkSize = 1000

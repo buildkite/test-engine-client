@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
 )
 
 // CommitDiffs holds the diff information for a single commit relative to its fork-point.

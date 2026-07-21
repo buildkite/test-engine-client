@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/buildkite/test-engine-client/v2/internal/api"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
 const fallbackExtra = "⚠️ Falling back to non-intelligent splitting. Your build may take longer than usual."

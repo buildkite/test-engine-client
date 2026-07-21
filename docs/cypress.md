@@ -47,9 +47,3 @@ Cypress supports [selector-based test splitting](../README.md#selector-based-tes
 
 > [!NOTE]
 > If you upload results with the [JavaScript test collector](https://buildkite.com/docs/test-engine/test-collection/javascript-collectors), we recommend updating to `buildkite-test-collector` v1.10.0 or later so selectors are attributed directly. If you do not, nothing breaks: Test Engine [falls back to the file path](../README.md#how-selectors-are-matched) when a selector is not attributed, which keeps file-based matching working. Updating matters most if you use a location prefix, since the fallback only handles the prefix on a best-effort basis.
-
-To enable it:
-
-```sh
-export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
-```

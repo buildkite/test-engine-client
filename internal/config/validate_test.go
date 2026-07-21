@@ -30,58 +30,6 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
-func TestConfigValidate_SelectorSplittingIsPermissive(t *testing.T) {
-	t.Run("run accepts selector opt-in for file-based runners", func(t *testing.T) {
-		c := createConfig()
-		c.SelectorSplitting = true
-
-		if err := c.ValidateForRun(); err != nil {
-			t.Errorf("ValidateForRun() error = %v, want nil", err)
-		}
-	})
-
-	t.Run("plan accepts selector opt-in for file-based runners", func(t *testing.T) {
-		c := createConfig()
-		c.SelectorSplitting = true
-
-		if err := c.ValidateForPlan(); err != nil {
-			t.Errorf("ValidateForPlan() error = %v, want nil", err)
-		}
-	})
-}
-
-func TestConfigValidate_SelectorListRequiresSelectorSplitting(t *testing.T) {
-	t.Run("rejects a selector list without selector splitting", func(t *testing.T) {
-		c := createConfig()
-		c.SelectorListPath = "selectors.txt"
-
-		err := c.validate()
-		if err == nil {
-			t.Fatalf("config.validate() error = nil, want InvalidConfigError")
-		}
-
-		var invConfigError InvalidConfigError
-		if !errors.As(err, &invConfigError) {
-			t.Fatalf("config.validate() error = %v, want InvalidConfigError", err)
-		}
-
-		want := "selector splitting must be enabled when a selector list is provided"
-		if got := invConfigError["selectors"][0].Error(); got != want {
-			t.Errorf("config.validate() error for selectors = %q, want %q", got, want)
-		}
-	})
-
-	t.Run("accepts a selector list when selector splitting is enabled", func(t *testing.T) {
-		c := createConfig()
-		c.SelectorListPath = "selectors.txt"
-		c.SelectorSplitting = true
-
-		if err := c.validate(); err != nil {
-			t.Errorf("config.validate() error = %v, want nil", err)
-		}
-	})
-}
-
 func TestConfigValidate_CustomRunnerFilePatternWithSelectorList(t *testing.T) {
 	t.Run("requires a file pattern for the custom runner by default", func(t *testing.T) {
 		c := createConfig()
@@ -104,7 +52,6 @@ func TestConfigValidate_CustomRunnerFilePatternWithSelectorList(t *testing.T) {
 		c.TestRunner = "custom"
 		c.TestCommand = "bin/test"
 		c.TestFilePattern = ""
-		c.SelectorSplitting = true
 		c.SelectorListPath = "selectors.txt"
 
 		if err := c.validate(); err != nil {

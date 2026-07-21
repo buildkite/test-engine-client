@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-engine-client/v2/internal/version"
+	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -69,15 +69,11 @@ export BUILDKITE_TEST_ENGINE_TEST_CMD="go test -json {{packages}}"
 
 ## Selector-based test splitting
 
-go test supports [selector-based test splitting](../README.md#selector-based-test-splitting). Without selector splitting, `bktec` splits packages evenly by count. With it enabled, the selector for gotest is the Go package import path, and Test Engine can use historical package duration data to balance packages across nodes instead of just splitting by count.
+go test supports [selector-based test splitting](../README.md#selector-based-test-splitting). It is enabled by default. The selector is the Go package import path, and Test Engine uses historical package duration data to balance packages across nodes instead of splitting them evenly by count.
 
-To enable it:
+Go suites must use [Go JSONL output](#use-go-jsonl-output) so the package import path is reported for selector attribution. Configure `gotestsum --jsonfile={{resultPath}}` or `go test -json` as described above.
 
-```sh
-export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
-```
-
-If `--selector-splitting` is enabled but `--selector-file` isn't set, `bktec` still discovers packages itself using `go list`, the same discovery used without selector splitting; only the split strategy changes. You can also provide a fixed list of package import paths with `--selector-file` (or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`) instead of relying on `go list` discovery.
+If `--selector-file` isn't set, `bktec` discovers packages itself using `go list`. You can instead provide a fixed list of package import paths with `--selector-file` (or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`).
 
 ## Filter packages
 

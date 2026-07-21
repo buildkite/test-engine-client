@@ -15,8 +15,6 @@ type RunnerConfig struct {
 	TestFilePattern        string
 	uploadToken            string
 
-	// SelectorSplitting enables selector-based splitting for this runner.
-	SelectorSplitting bool
 	// SelectorListPath points at a file containing the selectors to run.
 	SelectorListPath string
 }
@@ -25,7 +23,7 @@ type RunnerConfig struct {
 // user-provided selector list instead of discovered test files. In this mode
 // test file discovery is skipped, so TestFilePattern isn't required.
 func (rc RunnerConfig) splitBySelectorList() bool {
-	return rc.SelectorSplitting && rc.SelectorListPath != ""
+	return rc.SelectorListPath != ""
 }
 
 func (rc RunnerConfig) LocationPrefix() string {

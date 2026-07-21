@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/buildkite/test-engine-client/v2/internal/upload"
+	"github.com/buildkite/test-engine-client/v3/internal/upload"
 )
 
 // PresignedUploadResponse is the response from the presigned upload endpoint.

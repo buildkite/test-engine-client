@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 )
 
 func printTableRow(cols ...string) {

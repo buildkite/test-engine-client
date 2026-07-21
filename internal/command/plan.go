@@ -10,13 +10,13 @@ import (
 	"os/exec"
 	"strconv"
 
-	"github.com/buildkite/test-engine-client/v2/internal/api"
-	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/debug"
-	"github.com/buildkite/test-engine-client/v2/internal/git"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
-	"github.com/buildkite/test-engine-client/v2/internal/version"
+	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/git"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/version"
 )
 
 type PlanOutput int

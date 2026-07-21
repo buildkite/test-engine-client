@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-engine-client/v2/internal/api"
-	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -176,7 +176,6 @@ func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 		MaxParallelism:    4,
 		Branch:            "main",
 		TestRunner:        "gotest",
-		SelectorSplitting: true,
 		LocationPrefix:    "my/project",
 		SelectionStrategy: "least-reliable",
 		SelectionParams: map[string]string{
@@ -292,13 +291,12 @@ func TestCreateRequestParams_RSpecSelectorSplittingExpandsFilteredFiles(t *testi
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "rspec",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -372,13 +370,12 @@ func TestCreateRequestParams_RSpecSelectorSplittingNoFilteredFiles(t *testing.T)
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "rspec",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -442,16 +439,15 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		MaxParallelism:    10,
-		TargetTime:        5 * time.Minute,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
-		LocationPrefix:    "my/project",
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		MaxParallelism:   10,
+		TargetTime:       5 * time.Minute,
+		Branch:           "main",
+		TestRunner:       "rspec",
+		LocationPrefix:   "my/project",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -544,14 +540,13 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithDotLocationPrefix(t *test
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
-		LocationPrefix:    "./",
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "rspec",
+		LocationPrefix:   "./",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -603,45 +598,6 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithDotLocationPrefix(t *test
 			},
 			Selectors: []api.TestPlanParamsSelector{
 				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
-	cfg := config.Config{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		TestRunner:  "gotest",
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseURL: "http://example.com",
-	})
-	packages := []string{
-		"github.com/buildkite/test-engine-client/internal/api",
-		"github.com/buildkite/test-engine-client/internal/runner",
-	}
-
-	got, err := createRequestParam(context.Background(), &cfg, packages, *client, runner.NewGoTest(runner.RunnerConfig{}))
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "gotest",
-		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "github.com/buildkite/test-engine-client/internal/api"},
-				{Path: "github.com/buildkite/test-engine-client/internal/runner"},
 			},
 		},
 	}
@@ -875,13 +831,12 @@ func TestCreateRequestParams_SelectorSplittingExpandsSlowFilesForSplitByExampleR
 			defer svr.Close()
 
 			cfg := config.Config{
-				OrganizationSlug:  "my-org",
-				SuiteSlug:         "my-suite",
-				Identifier:        "identifier",
-				Parallelism:       2,
-				TestRunner:        testRunner,
-				SelectorSplitting: true,
-				SplitByExample:    true,
+				OrganizationSlug: "my-org",
+				SuiteSlug:        "my-suite",
+				Identifier:       "identifier",
+				Parallelism:      2,
+				TestRunner:       testRunner,
+				SplitByExample:   true,
 			}
 
 			client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
@@ -932,7 +887,7 @@ func TestCreateRequestParams_SelectorSplittingExpandsSlowFilesForSplitByExampleR
 	}
 }
 
-func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *testing.T) {
+func TestCreateRequestParams_UnsupportedSelectorRunnerUsesFilePayload(t *testing.T) {
 	filterRequestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		filterRequestCount++
@@ -941,13 +896,12 @@ func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *test
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "rspec",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -1356,14 +1310,13 @@ func TestCreateRequestParams_WithTagFilters(t *testing.T) {
 // tag filter.
 func TestCreateRequestParams_SelectorSplittingWithTagFilters(t *testing.T) {
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "pytest",
-		SelectorSplitting: true,
-		TagFilters:        "team:frontend",
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "pytest",
+		TagFilters:       "team:frontend",
 	}
 
 	client := api.NewClient(api.ClientConfig{

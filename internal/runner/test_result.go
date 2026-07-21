@@ -1,6 +1,6 @@
 package runner
 
-import "github.com/buildkite/test-engine-client/v2/internal/plan"
+import "github.com/buildkite/test-engine-client/v3/internal/plan"
 
 type TestStatus string
 

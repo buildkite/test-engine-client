@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/test-engine-client/v2/internal/debug"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
 
@@ -340,7 +340,6 @@ func (g GoTest) DiscoverTestTargets() ([]string, error) {
 	}
 	return validPackages, nil
 }
-
 func (g GoTest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {
 	packages, err := g.getPackages(testCases)
 	if err != nil {

@@ -221,37 +221,28 @@ parallelism but no tasks (it is not a computed split), and is noted on stderr.
 
 ### Selector-based test splitting
 
-By default, `bktec` discovers tests as files (or Go packages for gotest) and requests a plan by sending those files to Test Engine. Selector-based splitting changes what `bktec` sends: instead of file paths, it sends runner-specific **selectors**, the values Test Engine looks up when computing a split for the current job. For every runner except gotest, the selector is the same file path file-based splitting already discovers, so enabling it doesn't change which tests run where, only how that path is reported and matched. gotest is the exception: its selector is a Go package import path from `go list`, and enabling selector splitting replaces the current even-count package split with duration-aware splitting, so Go users may see a different (and better balanced) split once historical timing data is available.
+By default, `bktec` discovers tests and requests a plan by sending runner-specific **selectors**, the values Test Engine looks up when computing a split for the current job. For every runner except gotest, the selector is the same file path that bktec discovers, so selector splitting doesn't change which tests run where, only how that path is reported and matched. gotest is the exception: its selector is a Go package import path from `go list`, and selector splitting replaces the legacy even-count package split with duration-aware splitting, so Go users may see a different (and better balanced) split once historical timing data is available.
 
 > [!NOTE]
-> You don't need to enable this. It's opt-in, off by default, and for every runner except gotest it doesn't change how your tests are split, only how that split is reported internally. The one exception is gotest: enabling it turns on duration-aware package splitting, instead of the current even-count package split.
-
-Enable it with `--selector-splitting` (or `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true`):
-
-```sh
-export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
-```
+> bktec v3 always uses selector splitting for supported runners. Existing bktec v2 releases continue to use file-based splitting; remain on v2 if file-based requests are required.
 
 This is supported for RSpec, Jest, Vitest, Cypress, Playwright, pytest, gotest, Cucumber, and the custom runner.
 
 By default, `bktec` still discovers selectors itself: the same file discovery used for file-based splitting for every runner except gotest (which uses `go list` output) and custom (which falls back to its normal file-pattern collection). You can instead provide a fixed list of selectors with `--selector-file` (or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`), a path to a newline-delimited file of selector values:
 
 ```sh
-export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
 export BUILDKITE_TEST_ENGINE_SELECTOR_FILE=selectors.txt
 ```
-
-`--selector-file` requires `--selector-splitting` to also be enabled; `bktec` exits with a configuration error otherwise.
 
 #### How selectors are matched
 
 When Test Engine computes a plan, it matches the selectors bktec sends against historical executions tagged with `test.selector.primary`. That tag is attributed automatically when results are uploaded via bktec's built-in upload, or via the Ruby, JavaScript, or Python collector at the minimum version noted in the [runner guides](#runner-guides).
 
-If an execution has no `test.selector.primary` (for example an older collector, or the custom runner), nothing breaks: Test Engine falls back to the file name for matching, and for the file-based runners the selector is the file path anyway, so the fallback keeps their history matching. If you upload with a collector, we recommend updating to the minimum version noted in the runner guides so selectors are attributed directly. The fallback strips a configured location prefix on a best-effort basis, so updating matters most if you use a location prefix.
+If an execution has no `test.selector.primary` (for example an older collector, or the custom runner), Test Engine falls back to the file name for matching. If no selector history can be matched, Test Engine uses default duration estimates rather than legacy file timings, and bktec prints a warning. Run the tests once to record selector timings, or update to the minimum collector version noted in the runner guides if historical executions should already be available. The file-name fallback strips a configured location prefix on a best-effort basis, so updating matters most if you use a location prefix.
 
 The custom runner is the main case that needs attention, since its selector might not be a file path. See the [custom runner guide](./docs/custom-test-runner.md#selector-based-test-splitting).
 
-A future bktec release will make selector-based splitting the default. Existing bktec versions will keep working with file-based splitting unchanged. See the [runner guides](#runner-guides) for runner-specific selector details.
+See the [runner guides](#runner-guides) for runner-specific selector details and collector requirements.
 
 ### Preview: Test Selection
 

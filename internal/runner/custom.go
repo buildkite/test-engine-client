@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/test-engine-client/v2/internal/debug"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
 
@@ -63,9 +63,7 @@ func (r Custom) ResultFormat() string {
 // DiscoverTestTargets returns file names using the discovery pattern. Custom
 // selector splitting without a selector list falls back to file discovery.
 func (r Custom) DiscoverTestTargets() ([]string, error) {
-	if r.SelectorSplitting {
-		fmt.Fprintln(os.Stderr, "Buildkite Test Engine Client: --selector-file (or BUILDKITE_TEST_ENGINE_SELECTOR_FILE) is not set for the custom runner. Falling back to test files collection.")
-	}
+	fmt.Fprintln(os.Stderr, "Buildkite Test Engine Client: --selector-file (or BUILDKITE_TEST_ENGINE_SELECTOR_FILE) is not set for the custom runner. Discovering selector values with the configured test file pattern.")
 	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
 	files, err := discoverTestFiles(r.TestFilePattern, r.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -80,7 +78,6 @@ func (r Custom) DiscoverTestTargets() ([]string, error) {
 
 	return files, nil
 }
-
 func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
 	cmd, err := buildCommand(r, testCases, retry)
 	if err != nil {

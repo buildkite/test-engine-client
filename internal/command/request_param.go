@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/test-engine-client/v2/internal/api"
-	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/debug"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 )
 
 type requestMode uint8
@@ -36,7 +36,7 @@ type requestTarget struct {
 // If tag filtering is enabled, all files are split into examples to support filtering.
 // Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
-	selectorSplitting := shouldUseSelectorSplitting(cfg, runner)
+	selectorSplitting := shouldUseSelectorSplitting(runner)
 	mode := requestByFile
 	if selectorSplitting {
 		mode = requestBySelector
@@ -103,8 +103,8 @@ func requestTestParams(ctx context.Context, cfg *config.Config, client api.Clien
 	return filterAndExpandTargets(ctx, cfg, client, targets, runner, mode, label)
 }
 
-func shouldUseSelectorSplitting(cfg *config.Config, runner runner.TestRunner) bool {
-	return cfg.SelectorSplitting && runner.SupportedFeatures().SplitBySelector
+func shouldUseSelectorSplitting(runner runner.TestRunner) bool {
+	return runner.SupportedFeatures().SplitBySelector
 }
 
 func shouldFilterAndSplitSelectorFiles(cfg *config.Config, runner runner.TestRunner) bool {

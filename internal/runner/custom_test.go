@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
@@ -43,10 +43,9 @@ func TestCustom_NewCustom_SelectorListWithoutTestFilePattern(t *testing.T) {
 	// When splitting by a provided selector list, test file discovery is
 	// skipped, so an empty TestFilePattern should be allowed.
 	_, err := NewCustom(RunnerConfig{
-		TestCommand:       "bin/test",
-		TestFilePattern:   "",
-		SelectorSplitting: true,
-		SelectorListPath:  "selectors.txt",
+		TestCommand:      "bin/test",
+		TestFilePattern:  "",
+		SelectorListPath: "selectors.txt",
 	})
 
 	if err != nil {
@@ -84,9 +83,8 @@ func TestCustom_DiscoverTestTargets(t *testing.T) {
 func TestCustom_DiscoverTestTargets_SelectorSplittingFallsBackToFilePatternMatching(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
-		TestCommand:       "bats {{testExamples}}",
-		TestFilePattern:   "tests/*.bats",
-		SelectorSplitting: true,
+		TestCommand:     "bats {{testExamples}}",
+		TestFilePattern: "tests/*.bats",
 	})
 
 	if err != nil {

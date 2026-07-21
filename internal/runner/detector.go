@@ -3,7 +3,7 @@ package runner
 import (
 	"fmt"
 
-	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
 )
 
 func DetectRunner(cfg *config.Config) (TestRunnerWithTargetDiscovery, error) {
@@ -18,7 +18,6 @@ func DetectRunner(cfg *config.Config) (TestRunnerWithTargetDiscovery, error) {
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		TestFilePattern:        cfg.TestFilePattern,
 		uploadToken:            cfg.UploadToken,
-		SelectorSplitting:      cfg.SelectorSplitting,
 		SelectorListPath:       cfg.SelectorListPath,
 	}
 
