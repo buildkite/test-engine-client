@@ -111,12 +111,34 @@ func TestPlanCommandIncludesPlanIdentifierFlag(t *testing.T) {
 	}
 }
 
-func TestSelectorSplittingIsNotConfigurable(t *testing.T) {
-	if hasFlag(runCommandFlags(), "selector-splitting") {
-		t.Fatal("runCommandFlags() includes removed --selector-splitting flag")
-	}
-	if hasFlag(planCommandFlags(), "selector-splitting") {
-		t.Fatal("planCommandFlags() includes removed --selector-splitting flag")
+func TestSelectorSplittingCompatibilityFlagIsAccepted(t *testing.T) {
+	for _, command := range []string{"run", "plan"} {
+		for _, suffix := range []string{"", "=true", "=false"} {
+			t.Run(command+"/"+suffix, func(t *testing.T) {
+				cfg = config.New()
+				t.Cleanup(func() { cfg = config.New() })
+				flags := runCommandFlags()
+				if command == "plan" {
+					flags = planCommandFlags()
+				}
+
+				cmd := &cli.Command{
+					Name: "bktec",
+					Commands: []*cli.Command{
+						{
+							Name:   command,
+							Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+							Flags:  flags,
+						},
+					},
+				}
+
+				args := []string{"bktec", command, "--selector-splitting" + suffix}
+				if err := cmd.Run(context.Background(), args); err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			})
+		}
 	}
 }
 

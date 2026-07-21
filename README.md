@@ -225,6 +225,7 @@ By default, `bktec` discovers tests and requests a plan by sending runner-specif
 
 > [!NOTE]
 > bktec v3 always uses selector splitting for supported runners. Existing bktec v2 releases continue to use file-based splitting; remain on v2 if file-based requests are required.
+> The deprecated `--selector-splitting` flag and `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING` environment variable are accepted so existing pipeline configuration continues to work, but their values have no effect in v3.
 
 This is supported for RSpec, Jest, Vitest, Cypress, Playwright, pytest, gotest, Cucumber, and the custom runner.
 

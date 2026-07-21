@@ -349,6 +349,17 @@ var splitByExampleFlag = &cli.BoolFlag{
 	Destination: &cfg.SplitByExample,
 }
 
+// selectorSplittingCompatibilityFlag preserves CLI and environment compatibility
+// for pipelines that explicitly enabled selector splitting before v3. Selector
+// splitting is unconditional in v3, so the parsed value is intentionally unused.
+var selectorSplittingCompatibilityFlag = &cli.BoolFlag{
+	Name:    "selector-splitting",
+	Usage:   "Deprecated; selector-based test splitting is always enabled",
+	Value:   true,
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING"),
+	Hidden:  true,
+}
+
 var failOnNoTestsFlag = &cli.BoolFlag{
 	Name:        "fail-on-no-tests",
 	Category:    "TEST RUNNER",
@@ -580,6 +591,7 @@ var runnerEnvironmentFlags = []cli.Flag{
 	testRunnerFlag,
 	resultPathFlag,
 	splitByExampleFlag,
+	selectorSplittingCompatibilityFlag,
 	selectorsFlag,
 	locationPrefixFlag,
 	// Runner Retry Flags
