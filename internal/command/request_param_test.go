@@ -67,14 +67,14 @@ func TestCreateRequestParams(t *testing.T) {
 		Branch:      "",
 		Runner:      "rspec",
 		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []api.TestPlanFile{
 				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/cherry_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/dragonfruit_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/elderberry_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/grape_spec.rb"},
 			},
-			Examples: []plan.TestCase{
+			Examples: []api.TestPlanExample{
 				{
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",
@@ -149,7 +149,7 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 				Branch:      "",
 				Runner:      r.Name(),
 				Tests: api.TestPlanParamsTest{
-					Files: []plan.TestCase{
+					Files: []api.TestPlanFile{
 						{Path: "testdata/fruits/apple.spec.js"},
 						{Path: "testdata/fruits/banana.spec.js"},
 						{Path: "testdata/fruits/cherry.spec.js"},
@@ -343,7 +343,7 @@ func TestCreateRequestParams_RSpecSelectorSplittingExpandsFilteredFiles(t *testi
 		Branch:      "main",
 		Runner:      "rspec",
 		Tests: api.TestPlanParamsTest{
-			Examples: []plan.TestCase{
+			Examples: []api.TestPlanExample{
 				{
 					Identifier: "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",
@@ -487,7 +487,7 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing
 		t.Errorf("createRequestParam() error = %v", err)
 	}
 
-	wantFilterFiles := []plan.TestCase{
+	wantFilterFiles := []api.TestPlanFile{
 		{Path: "my/project/testdata/rspec/spec/fruits/apple_spec.rb"},
 		{Path: "my/project/testdata/rspec/spec/fruits/banana_spec.rb"},
 		{Path: "my/project/testdata/rspec/spec/fruits/cherry_spec.rb"},
@@ -512,7 +512,7 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing
 		LocationPrefix: "my/project",
 		Runner:         "rspec",
 		Tests: api.TestPlanParamsTest{
-			Examples: []plan.TestCase{
+			Examples: []api.TestPlanExample{
 				{
 					Identifier: "testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",
@@ -593,7 +593,7 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithDotLocationPrefix(t *test
 		LocationPrefix: "./",
 		Runner:         "rspec",
 		Tests: api.TestPlanParamsTest{
-			Examples: []plan.TestCase{
+			Examples: []api.TestPlanExample{
 				{
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",
@@ -639,7 +639,7 @@ func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
 		Branch:      "main",
 		Runner:      "gotest",
 		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []api.TestPlanFile{
 				{Path: "github.com/buildkite/test-engine-client/internal/api"},
 				{Path: "github.com/buildkite/test-engine-client/internal/runner"},
 			},
@@ -783,7 +783,7 @@ func TestCreateRequestParams_SelectorSplittingExpandsSlowFilesForSplitByExampleR
 				Parallelism: 2,
 				Runner:      testRunner,
 				Tests: api.TestPlanParamsTest{
-					Examples: stubRunner.examples,
+					Examples: exampleParamsFromTestCases(stubRunner.examples),
 					Selectors: []api.TestPlanParamsSelector{
 						{Value: "tests/fast_test"},
 					},
@@ -839,7 +839,7 @@ func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *test
 		Branch:      "main",
 		Runner:      "rspec",
 		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []api.TestPlanFile{
 				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
 			},
@@ -897,7 +897,7 @@ func TestCreateRequestParams_WithSelectionAndMetadata_NonRSpec(t *testing.T) {
 			"source":   "cli",
 		},
 		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []api.TestPlanFile{
 				{Path: "testdata/fruits/apple.spec.js"},
 				{Path: "testdata/fruits/banana.spec.js"},
 			},
@@ -966,7 +966,7 @@ func TestCreateRequestParams_WithSelectionAndMetadata_SplitAllFilesBranch(t *tes
 			"git_diff": "line1\nline2",
 		},
 		Tests: api.TestPlanParamsTest{
-			Examples: []plan.TestCase{
+			Examples: []api.TestPlanExample{
 				{
 					Identifier: "test_sample.py::test_happy",
 					Path:       "test_sample.py::test_happy",
@@ -1126,7 +1126,7 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 		Parallelism: 7,
 		Branch:      "",
 		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []api.TestPlanFile{
 				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/cherry_spec.rb"},
@@ -1180,7 +1180,7 @@ func TestCreateRequestParams_WithTagFilters(t *testing.T) {
 		Branch:      "main",
 		Runner:      "pytest",
 		Tests: api.TestPlanParamsTest{
-			Examples: []plan.TestCase{
+			Examples: []api.TestPlanExample{
 				{
 					Format:     "example",
 					Identifier: "runner/testdata/pytest/test_sample.py::test_happy",
@@ -1245,7 +1245,7 @@ func TestCreateRequestParams_SelectorSplittingWithTagFilters(t *testing.T) {
 		Branch:      "main",
 		Runner:      "pytest",
 		Tests: api.TestPlanParamsTest{
-			Examples: []plan.TestCase{
+			Examples: []api.TestPlanExample{
 				{
 					Format:     "example",
 					Identifier: "runner/testdata/pytest/test_sample.py::test_happy",
@@ -1312,7 +1312,7 @@ func TestCreateRequestParams_WithTagFilters_NonPytest(t *testing.T) {
 		Branch:      "main",
 		Runner:      "rspec",
 		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []api.TestPlanFile{
 				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
 				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
 			},
@@ -1354,11 +1354,11 @@ func TestCreateRequestParams_WithLocationPrefix(t *testing.T) {
 
 	cases := []struct {
 		prefix    string
-		wantFiles []plan.TestCase
+		wantFiles []api.TestPlanFile
 	}{
 		{
 			prefix: "./",
-			wantFiles: []plan.TestCase{
+			wantFiles: []api.TestPlanFile{
 				{Path: "./testdata/rspec/spec/fruits/apple_spec.rb"},
 				{Path: "./testdata/rspec/spec/fruits/banana_spec.rb"},
 				{Path: "./testdata/rspec/spec/fruits/cherry_spec.rb"},
@@ -1366,7 +1366,7 @@ func TestCreateRequestParams_WithLocationPrefix(t *testing.T) {
 		},
 		{
 			prefix: "monorepo/project-abc",
-			wantFiles: []plan.TestCase{
+			wantFiles: []api.TestPlanFile{
 				{Path: "monorepo/project-abc/testdata/rspec/spec/fruits/apple_spec.rb"},
 				{Path: "monorepo/project-abc/testdata/rspec/spec/fruits/banana_spec.rb"},
 				{Path: "monorepo/project-abc/testdata/rspec/spec/fruits/cherry_spec.rb"},
@@ -1499,11 +1499,11 @@ func TestCreateRequestParams_WithLocationPrefix_SplitByExample(t *testing.T) {
 		Branch:      "",
 		Runner:      "rspec",
 		Tests: api.TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []api.TestPlanFile{
 				{Path: "my/project/testdata/rspec/spec/fruits/apple_spec.rb"},
 				{Path: "my/project/testdata/rspec/spec/fruits/cherry_spec.rb"},
 			},
-			Examples: []plan.TestCase{
+			Examples: []api.TestPlanExample{
 				{
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
 					Name:       "is yellow",

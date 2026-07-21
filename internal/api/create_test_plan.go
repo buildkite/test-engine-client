@@ -10,9 +10,21 @@ import (
 )
 
 type TestPlanParamsTest struct {
-	Files     []plan.TestCase          `json:"files,omitempty"`
-	Examples  []plan.TestCase          `json:"examples,omitempty"`
+	Files     []TestPlanFile           `json:"files,omitempty"`
+	Examples  []TestPlanExample        `json:"examples,omitempty"`
 	Selectors []TestPlanParamsSelector `json:"selectors,omitempty"`
+}
+
+type TestPlanFile struct {
+	Path string `json:"path"`
+}
+
+type TestPlanExample struct {
+	Format     plan.TestCaseFormat `json:"format,omitempty"`
+	Identifier string              `json:"identifier,omitempty"`
+	Name       string              `json:"name,omitempty"`
+	Path       string              `json:"path"`
+	Scope      string              `json:"scope,omitempty"`
 }
 
 type TestPlanParamsSelector struct {

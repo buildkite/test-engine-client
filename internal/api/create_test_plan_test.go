@@ -29,7 +29,7 @@ func TestCreateTestPlan(t *testing.T) {
 			"git_diff": "line1\nline2",
 		},
 		Tests: TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []TestPlanFile{
 				{Path: "sky_spec.rb"},
 			},
 		},
@@ -161,11 +161,12 @@ func TestCreateTestPlan_SplitByExample(t *testing.T) {
 			"source": "cli",
 		},
 		Tests: TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []TestPlanFile{
 				{Path: "sky_spec.rb"},
 			},
-			Examples: []plan.TestCase{
+			Examples: []TestPlanExample{
 				{
+					Format:     plan.TestCaseFormatExample,
 					Path:       "sea_spec.rb:4",
 					Name:       "is blue",
 					Scope:      "sea",
@@ -185,6 +186,7 @@ func TestCreateTestPlan_SplitByExample(t *testing.T) {
 			"tests": {
 				"files": [{"path": "sky_spec.rb"}],
 				"examples": [{
+					"format": "example",
 					"path": "sea_spec.rb:4",
 					"name": "is blue",
 					"scope": "sea",
@@ -376,7 +378,7 @@ func TestCreateTestPlan_MutedTests(t *testing.T) {
 		Identifier:  "abc123",
 		Parallelism: 3,
 		Tests: TestPlanParamsTest{
-			Files: []plan.TestCase{
+			Files: []TestPlanFile{
 				{Path: "sky_spec.rb"},
 			},
 		},
