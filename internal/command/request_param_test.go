@@ -234,6 +234,50 @@ func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 	}
 }
 
+func TestCreateRequestParams_LocationPrefixOnlySetForSelectorSplitting(t *testing.T) {
+	testRunner := metadataTestRunner{
+		name:           "gotest",
+		locationPrefix: "my/project",
+		supportedFeatures: runner.SupportedFeatures{
+			SplitBySelector: true,
+		},
+	}
+
+	tests := []struct {
+		name              string
+		selectorSplitting bool
+		want              string
+	}{
+		{
+			name: "file splitting",
+		},
+		{
+			name:              "selector splitting",
+			selectorSplitting: true,
+			want:              "my/project",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := config.Config{
+				TestRunner:        "gotest",
+				SelectorSplitting: test.selectorSplitting,
+				LocationPrefix:    "my/project",
+			}
+
+			got, err := createRequestParam(context.Background(), &cfg, []string{"example.com/project/package"}, api.Client{}, testRunner)
+			if err != nil {
+				t.Fatalf("createRequestParam() error = %v", err)
+			}
+
+			if got.LocationPrefix != test.want {
+				t.Errorf("createRequestParam().LocationPrefix = %q, want %q", got.LocationPrefix, test.want)
+			}
+		})
+	}
+}
+
 func TestCreateRequestParams_RSpecSelectorSplittingExpandsFilteredFiles(t *testing.T) {
 	filterRequestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

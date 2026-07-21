@@ -24,26 +24,38 @@ import (
 // If tag filtering is enabled, all files are split into examples to support filtering.
 // Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
-	if shouldUseSelectorSplitting(cfg, runner) {
-		testParams, err := selectorTestParams(ctx, cfg, client, testTargets, runner)
-		if err != nil {
-			return api.TestPlanParams{}, err
-		}
+	selectorSplitting := shouldUseSelectorSplitting(cfg, runner)
 
-		return api.TestPlanParams{
-			Identifier:     cfg.Identifier,
-			Parallelism:    cfg.Parallelism,
-			MaxParallelism: cfg.MaxParallelism,
-			TargetTime:     cfg.TargetTime.Seconds(),
-			Branch:         cfg.Branch,
-			LocationPrefix: cfg.LocationPrefix,
-			Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
-			Metadata:       cfg.Metadata,
-			Runner:         cfg.TestRunner,
-			Tests:          testParams,
-		}, nil
+	var testParams api.TestPlanParamsTest
+	var err error
+	if selectorSplitting {
+		testParams, err = selectorTestParams(ctx, cfg, client, testTargets, runner)
+	} else {
+		testParams, err = fileTestParams(ctx, cfg, client, testTargets, runner)
+	}
+	if err != nil {
+		return api.TestPlanParams{}, err
 	}
 
+	params := api.TestPlanParams{
+		Identifier:     cfg.Identifier,
+		Parallelism:    cfg.Parallelism,
+		MaxParallelism: cfg.MaxParallelism,
+		TargetTime:     cfg.TargetTime.Seconds(),
+		Branch:         cfg.Branch,
+		Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
+		Metadata:       cfg.Metadata,
+		Runner:         cfg.TestRunner,
+		Tests:          testParams,
+	}
+	if selectorSplitting {
+		params.LocationPrefix = cfg.LocationPrefix
+	}
+
+	return params, nil
+}
+
+func fileTestParams(ctx context.Context, cfg *config.Config, client api.Client, testTargets []string, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
 	testFiles := []plan.TestCase{}
 
 	for _, file := range testTargets {
@@ -54,57 +66,24 @@ func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []s
 
 	// Short circuit here if the runner doesn't support split by example
 	if !runner.SupportedFeatures().SplitByExample {
-		params := api.TestPlanParams{
-			Identifier:     cfg.Identifier,
-			Parallelism:    cfg.Parallelism,
-			MaxParallelism: cfg.MaxParallelism,
-			TargetTime:     cfg.TargetTime.Seconds(),
-			Branch:         cfg.Branch,
-			Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
-			Metadata:       cfg.Metadata,
-			Runner:         cfg.TestRunner,
-			Tests: api.TestPlanParamsTest{
-				Files: testFiles,
-			},
-		}
-
-		return params, nil
+		return api.TestPlanParamsTest{Files: testFiles}, nil
 	}
 
 	if cfg.SplitByExample {
 		debug.Println("Splitting by example")
 	}
 
-	var testParams api.TestPlanParamsTest
-	var err error
-
 	// If tag filtering is enabled, we must split all files to allow to enable filtering.
 	// Tag filtering is currently only supported for pytest.
 	if cfg.TagFilters != "" && runner.Name() == "pytest" {
-		testParams, err = splitAllFiles(testFiles, runner)
-	} else {
-		// The SplitByExample flag indicates whether to split slow files into examples.
-		// Regardless of the flag's state, the API will still return other test files that need to
-		// be split by example, such as those containing skipped tests.
-		// Therefore, we must fetch and split files even when SplitByExample is disabled.
-		testParams, err = filterAndSplitFiles(ctx, cfg, client, testFiles, runner)
+		return splitAllFiles(testFiles, runner)
 	}
 
-	if err != nil {
-		return api.TestPlanParams{}, err
-	}
-
-	return api.TestPlanParams{
-		Identifier:     cfg.Identifier,
-		Parallelism:    cfg.Parallelism,
-		MaxParallelism: cfg.MaxParallelism,
-		TargetTime:     cfg.TargetTime.Seconds(),
-		Branch:         cfg.Branch,
-		Selection:      buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams),
-		Metadata:       cfg.Metadata,
-		Runner:         cfg.TestRunner,
-		Tests:          testParams,
-	}, nil
+	// The SplitByExample flag indicates whether to split slow files into examples.
+	// Regardless of the flag's state, the API will still return other test files that need to
+	// be split by example, such as those containing skipped tests.
+	// Therefore, we must fetch and split files even when SplitByExample is disabled.
+	return filterAndSplitFiles(ctx, cfg, client, testFiles, runner)
 }
 
 func shouldUseSelectorSplitting(cfg *config.Config, runner runner.TestRunner) bool {
