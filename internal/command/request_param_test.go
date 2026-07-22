@@ -724,6 +724,141 @@ func TestShouldFilterAndSplitSelectorFiles(t *testing.T) {
 	}
 }
 
+func TestEncodeRequestTargets(t *testing.T) {
+	targets := newRequestTargets([]string{"first_test", "second_test"}, "project")
+	tests := []struct {
+		name string
+		mode requestMode
+		want api.TestPlanParamsTest
+	}{
+		{
+			name: "files use prefixed paths",
+			mode: requestByFile,
+			want: api.TestPlanParamsTest{
+				Files: []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/second_test"}},
+			},
+		},
+		{
+			name: "selectors use original values",
+			mode: requestBySelector,
+			want: api.TestPlanParamsTest{
+				Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "second_test"}},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if diff := cmp.Diff(encodeRequestTargets(targets, test.mode), test.want); diff != "" {
+				t.Errorf("encodeRequestTargets() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFilterAndExpandTargets(t *testing.T) {
+	var gotFilterParams api.FilterTestsParams
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotFilterParams); err != nil {
+			t.Fatalf("decoding filter_tests request: %v", err)
+		}
+		fmt.Fprint(w, `{"tests":[{"path":"project/middle_test","reason":"slow file"}]}`)
+	}))
+	defer svr.Close()
+
+	client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
+	targets := newRequestTargets([]string{"first_test", "middle_test", "third_test"}, "project")
+	var exampleFiles []string
+	testRunner := metadataTestRunner{
+		name:           "playwright",
+		locationPrefix: "project",
+		exampleFiles:   &exampleFiles,
+		examples: []plan.TestCase{
+			{
+				Format:     plan.TestCaseFormatExample,
+				Identifier: "middle_test::example",
+				Name:       "example",
+				Path:       "middle_test::example",
+			},
+		},
+	}
+
+	tests := []struct {
+		name string
+		mode requestMode
+		want api.TestPlanParamsTest
+	}{
+		{
+			name: "file mode preserves prefixed files",
+			mode: requestByFile,
+			want: api.TestPlanParamsTest{
+				Files: []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/third_test"}},
+			},
+		},
+		{
+			name: "selector mode preserves raw selector values",
+			mode: requestBySelector,
+			want: api.TestPlanParamsTest{
+				Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "third_test"}},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testRunner.examples[0].Path = "middle_test::example"
+			got, err := filterAndExpandTargets(context.Background(), &config.Config{}, *client, targets, testRunner, test.mode, "targets")
+			if err != nil {
+				t.Fatalf("filterAndExpandTargets() error = %v", err)
+			}
+
+			test.want.Examples = []api.TestPlanExample{
+				{
+					Format:     plan.TestCaseFormatExample,
+					Identifier: "middle_test::example",
+					Name:       "example",
+					Path:       "project/middle_test::example",
+				},
+			}
+			if diff := cmp.Diff(got, test.want); diff != "" {
+				t.Errorf("filterAndExpandTargets() diff (-got +want):\n%s", diff)
+			}
+
+			wantFilterFiles := []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/middle_test"}, {Path: "project/third_test"}}
+			if diff := cmp.Diff(gotFilterParams.Files, wantFilterFiles); diff != "" {
+				t.Errorf("filter_tests files diff (-got +want):\n%s", diff)
+			}
+			if diff := cmp.Diff(exampleFiles, []string{"middle_test"}); diff != "" {
+				t.Errorf("GetExamples() files diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCreateRequestParams_PlaywrightFileModeAlwaysFilters(t *testing.T) {
+	filterRequestCount := 0
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		filterRequestCount++
+		fmt.Fprint(w, `{"tests":[]}`)
+	}))
+	defer svr.Close()
+
+	cfg := config.Config{
+		SuiteSlug:      "my-suite",
+		TestRunner:     "playwright",
+		SplitByExample: false,
+	}
+	client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
+
+	_, err := createRequestParam(context.Background(), &cfg, []string{"first.spec.js"}, *client, runner.NewPlaywright(runner.RunnerConfig{}))
+	if err != nil {
+		t.Fatalf("createRequestParam() error = %v", err)
+	}
+	if filterRequestCount != 1 {
+		t.Errorf("filter request count = %d, want 1", filterRequestCount)
+	}
+}
+
 func TestCreateRequestParams_SelectorSplittingExpandsSlowFilesForSplitByExampleRunners(t *testing.T) {
 	for _, testRunner := range []string{"playwright", "pytest"} {
 		t.Run(testRunner, func(t *testing.T) {
@@ -986,6 +1121,7 @@ func TestCreateRequestParams_WithSelectionAndMetadata_SplitAllFilesBranch(t *tes
 type metadataTestRunner struct {
 	name              string
 	examples          []plan.TestCase
+	exampleFiles      *[]string
 	locationPrefix    string
 	supportedFeatures runner.SupportedFeatures
 }
@@ -1005,6 +1141,9 @@ func (r metadataTestRunner) Name() string {
 }
 
 func (r metadataTestRunner) GetExamples(files []string) ([]plan.TestCase, error) {
+	if r.exampleFiles != nil {
+		*r.exampleFiles = append((*r.exampleFiles)[:0], files...)
+	}
 	return r.examples, nil
 }
 
