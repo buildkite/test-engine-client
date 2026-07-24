@@ -56,10 +56,10 @@ func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []s
 }
 
 func fileTestParams(ctx context.Context, cfg *config.Config, client api.Client, testTargets []string, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
-	testFiles := []plan.TestCase{}
+	testFiles := make([]api.TestPlanFile, 0, len(testTargets))
 
 	for _, file := range testTargets {
-		testFiles = append(testFiles, plan.TestCase{
+		testFiles = append(testFiles, api.TestPlanFile{
 			Path: prefixPath(file, runner.LocationPrefix()),
 		})
 	}
@@ -127,6 +127,20 @@ func selectorParamsFromValues(values []string) []api.TestPlanParamsSelector {
 	return selectors
 }
 
+func exampleParamsFromTestCases(testCases []plan.TestCase) []api.TestPlanExample {
+	examples := make([]api.TestPlanExample, 0, len(testCases))
+	for _, testCase := range testCases {
+		examples = append(examples, api.TestPlanExample{
+			Format:     testCase.Format,
+			Identifier: testCase.Identifier,
+			Name:       testCase.Name,
+			Path:       testCase.Path,
+			Scope:      testCase.Scope,
+		})
+	}
+	return examples
+}
+
 // buildSelectionParams returns the selection payload sent to the Test Engine
 // API, or nil when no strategy was requested.
 //
@@ -185,7 +199,7 @@ func getExamplesWithPrefix(filePaths []string, runner runner.TestRunner) ([]plan
 }
 
 // Splits all the test files into examples to support tag filtering.
-func splitAllFiles(files []plan.TestCase, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
+func splitAllFiles(files []api.TestPlanFile, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
 	debug.Printf("Splitting all %d files", len(files))
 	filePaths := make([]string, 0, len(files))
 	for _, file := range files {
@@ -200,7 +214,7 @@ func splitAllFiles(files []plan.TestCase, runner runner.TestRunner) (api.TestPla
 	debug.Printf("Got %d examples from all files", len(examples))
 
 	return api.TestPlanParamsTest{
-		Examples: examples,
+		Examples: exampleParamsFromTestCases(examples),
 	}, nil
 }
 
@@ -208,9 +222,9 @@ func splitAllFiles(files []plan.TestCase, runner runner.TestRunner) (api.TestPla
 // Selector-capable runners send file targets as raw selectors by default, which would ignore tag
 // filters, so all files are expanded into tag-filtered examples instead.
 func splitAllSelectorFiles(selectors []string, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
-	testFiles := make([]plan.TestCase, 0, len(selectors))
+	testFiles := make([]api.TestPlanFile, 0, len(selectors))
 	for _, selector := range selectors {
-		testFiles = append(testFiles, plan.TestCase{Path: prefixPath(selector, runner.LocationPrefix())})
+		testFiles = append(testFiles, api.TestPlanFile{Path: prefixPath(selector, runner.LocationPrefix())})
 	}
 
 	return splitAllFiles(testFiles, runner)
@@ -219,9 +233,9 @@ func splitAllSelectorFiles(selectors []string, runner runner.TestRunner) (api.Te
 // filterAndSplitSelectorFiles filters selector-backed file targets through the Test Engine API and splits
 // filtered files into examples. It returns examples for the filtered files and selectors for the remaining files.
 func filterAndSplitSelectorFiles(ctx context.Context, cfg *config.Config, client api.Client, selectors []string, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
-	testFiles := make([]plan.TestCase, 0, len(selectors))
+	testFiles := make([]api.TestPlanFile, 0, len(selectors))
 	for _, selector := range selectors {
-		testFiles = append(testFiles, plan.TestCase{Path: prefixPath(selector, runner.LocationPrefix())})
+		testFiles = append(testFiles, api.TestPlanFile{Path: prefixPath(selector, runner.LocationPrefix())})
 	}
 
 	examples, filteredFilesMap, err := filterAndExpandFiles(ctx, cfg, client, testFiles, runner, "selector-backed files")
@@ -251,7 +265,7 @@ func filterAndSplitSelectorFiles(ctx context.Context, cfg *config.Config, client
 // filterAndSplitFiles filters the test files through the Test Engine API and splits the filtered files into examples.
 // It returns the test plan parameters with the examples from the filtered files and the remaining files that are not filtered.
 // An error is returned if there is a failure in any of the process.
-func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Client, allTestFiles []plan.TestCase, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
+func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Client, allTestFiles []api.TestPlanFile, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
 	examples, filteredFilesMap, err := filterAndExpandFiles(ctx, cfg, client, allTestFiles, runner, "files")
 	if err != nil {
 		return api.TestPlanParamsTest{}, err
@@ -265,7 +279,7 @@ func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Cli
 	}
 
 	// Get the remaining files that are not filtered.
-	remainingFiles := make([]plan.TestCase, 0, len(allTestFiles)-len(filteredFilesMap))
+	remainingFiles := make([]api.TestPlanFile, 0, len(allTestFiles)-len(filteredFilesMap))
 	for _, file := range allTestFiles {
 		if _, ok := filteredFilesMap[file.Path]; !ok {
 			remainingFiles = append(remainingFiles, file)
@@ -278,7 +292,7 @@ func filterAndSplitFiles(ctx context.Context, cfg *config.Config, client api.Cli
 	}, nil
 }
 
-func filterAndExpandFiles(ctx context.Context, cfg *config.Config, client api.Client, files []plan.TestCase, runner runner.TestRunner, label string) ([]plan.TestCase, map[string]bool, error) {
+func filterAndExpandFiles(ctx context.Context, cfg *config.Config, client api.Client, files []api.TestPlanFile, runner runner.TestRunner, label string) ([]api.TestPlanExample, map[string]bool, error) {
 	debug.Printf("Filtering %d %s", len(files), label)
 	filteredFiles, err := client.FilterTests(ctx, cfg.SuiteSlug, api.FilterTestsParams{
 		Files:          files,
@@ -314,5 +328,5 @@ func filterAndExpandFiles(ctx context.Context, cfg *config.Config, client api.Cl
 	}
 
 	debug.Printf("Got %d examples within the filtered %s", len(examples), label)
-	return examples, filteredFilesMap, nil
+	return exampleParamsFromTestCases(examples), filteredFilesMap, nil
 }

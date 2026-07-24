@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -20,7 +19,7 @@ func TestFilterTests_SlowFiles(t *testing.T) {
 	cfg.SplitByExample = true
 
 	params := FilterTestsParams{
-		Files: []plan.TestCase{
+		Files: []TestPlanFile{
 			{Path: "./cat_spec.rb"},
 			{Path: "./dog_spec.rb"},
 			{Path: "./turtle_spec.rb"},
@@ -115,7 +114,7 @@ func TestFilterTests_InternalServerError(t *testing.T) {
 	})
 
 	_, err := c.FilterTests(context.Background(), "my-suite", FilterTestsParams{
-		Files: []plan.TestCase{},
+		Files: []TestPlanFile{},
 	})
 
 	if !errors.Is(err, ErrRetryTimeout) {

@@ -6,11 +6,10 @@ import (
 	"net/http"
 
 	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
 )
 
 type FilterTestsParams struct {
-	Files          []plan.TestCase   `json:"files"`
+	Files          []TestPlanFile    `json:"files"`
 	Env            config.EnvPayload `json:"env"`
 	MaxParallelism int               `json:"max_parallelism,omitempty"`
 	TargetTime     float64           `json:"target_time,omitempty"`
