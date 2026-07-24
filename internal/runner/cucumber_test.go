@@ -127,14 +127,14 @@ func TestCucumberRun_TestFailed(t *testing.T) {
 	}
 }
 
-func TestCucumberGetFiles(t *testing.T) {
+func TestCucumberDiscoverTestTargets(t *testing.T) {
 	cucumber := NewCucumber(RunnerConfig{
 		TestFilePattern: "testdata/cucumber/features/**/*.feature",
 	})
 
-	got, err := cucumber.GetFiles()
+	got, err := cucumber.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Cucumber.GetFiles() error = %v", err)
+		t.Errorf("Cucumber.DiscoverTestTargets() error = %v", err)
 	}
 
 	want := []string{
@@ -148,30 +148,7 @@ func TestCucumberGetFiles(t *testing.T) {
 	sort.Strings(want)
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cucumber.GetFiles() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCucumberGetSelectors(t *testing.T) {
-	cucumber := NewCucumber(RunnerConfig{
-		TestFilePattern: "testdata/cucumber/features/**/*.feature",
-	})
-
-	gotFiles, err := cucumber.GetFiles()
-	if err != nil {
-		t.Errorf("Cucumber.GetFiles() error = %v", err)
-	}
-
-	gotSelectors, err := cucumber.GetSelectors()
-	if err != nil {
-		t.Errorf("Cucumber.GetSelectors() error = %v", err)
-	}
-
-	sort.Strings(gotFiles)
-	sort.Strings(gotSelectors)
-
-	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
-		t.Errorf("Cucumber.GetSelectors() diff (-got +want):\n%s", diff)
+		t.Errorf("Cucumber.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 

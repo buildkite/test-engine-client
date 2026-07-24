@@ -166,7 +166,7 @@ func (p Playwright) parseReport(path string) (PlaywrightReport, error) {
 	return report, nil
 }
 
-func (p Playwright) GetFiles() ([]string, error) {
+func (p Playwright) DiscoverTestTargets() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", p.TestFilePattern, "exclude pattern:", p.TestFileExcludePattern)
 	files, err := discoverTestFiles(p.TestFilePattern, p.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -180,10 +180,6 @@ func (p Playwright) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-func (p Playwright) GetSelectors() ([]string, error) {
-	return p.GetFiles()
 }
 
 // GetExamples returns an array of test examples within the given files.

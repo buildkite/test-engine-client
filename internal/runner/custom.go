@@ -60,8 +60,12 @@ func (r Custom) ResultFormat() string {
 	return "json"
 }
 
-// GetFiles returns an array of file names using the discovery pattern.
-func (r Custom) GetFiles() ([]string, error) {
+// DiscoverTestTargets returns file names using the discovery pattern. Custom
+// selector splitting without a selector list falls back to file discovery.
+func (r Custom) DiscoverTestTargets() ([]string, error) {
+	if r.SelectorSplitting {
+		fmt.Fprintln(os.Stderr, "Buildkite Test Engine Client: --selector-file (or BUILDKITE_TEST_ENGINE_SELECTOR_FILE) is not set for the custom runner. Falling back to test files collection.")
+	}
 	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
 	files, err := discoverTestFiles(r.TestFilePattern, r.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -75,18 +79,6 @@ func (r Custom) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-// GetSelectors falls back to file-pattern discovery, since the custom runner
-// has no way to discover selectors on its own without a selector file
-// (in which case bktec reads selectors from the file directly, without calling this).
-func (r Custom) GetSelectors() ([]string, error) {
-	fmt.Fprintln(os.Stderr, "Buildkite Test Engine Client: --selector-file (or BUILDKITE_TEST_ENGINE_SELECTOR_FILE) is not set for the custom runner. Falling back to test files collection.")
-	return r.GetFiles()
-}
-
-func (r Custom) GetExamples(files []string) ([]plan.TestCase, error) {
-	return nil, fmt.Errorf("not supported for custom runner")
 }
 
 func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {

@@ -4,9 +4,6 @@ import "github.com/buildkite/test-engine-client/v2/internal/plan"
 
 type TestRunner interface {
 	Run(result *RunResult, testCases []plan.TestCase, retry bool) error
-	GetExamples(files []string) ([]plan.TestCase, error)
-	GetFiles() ([]string, error)
-	GetSelectors() ([]string, error)
 	Name() string
 	CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error)
 	LocationPrefix() string
@@ -19,3 +16,33 @@ type TestRunner interface {
 	// ResultFilePath returns the path to the runner's raw result file.
 	ResultFilePath() string
 }
+
+type TestTargetDiscoverer interface {
+	DiscoverTestTargets() ([]string, error)
+}
+
+type ExampleDiscoverer interface {
+	GetExamples(files []string) ([]plan.TestCase, error)
+}
+
+type TestRunnerWithTargetDiscovery interface {
+	TestRunner
+	TestTargetDiscoverer
+}
+
+var (
+	_ TestTargetDiscoverer = (*Custom)(nil)
+	_ TestTargetDiscoverer = (*Cucumber)(nil)
+	_ TestTargetDiscoverer = (*Cypress)(nil)
+	_ TestTargetDiscoverer = (*GoTest)(nil)
+	_ TestTargetDiscoverer = (*Jest)(nil)
+	_ TestTargetDiscoverer = (*Playwright)(nil)
+	_ TestTargetDiscoverer = (*Pytest)(nil)
+	_ TestTargetDiscoverer = (*Rspec)(nil)
+	_ TestTargetDiscoverer = (*Vitest)(nil)
+
+	_ ExampleDiscoverer = (*Cucumber)(nil)
+	_ ExampleDiscoverer = (*Playwright)(nil)
+	_ ExampleDiscoverer = (*Pytest)(nil)
+	_ ExampleDiscoverer = (*Rspec)(nil)
+)

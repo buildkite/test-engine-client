@@ -5,17 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
 )
-
-func getTestFiles(fileList string, testRunner runner.TestRunner) ([]string, error) {
-	if fileList != "" {
-		return getRowsFromFile(fileList)
-	} else {
-		return testRunner.GetFiles()
-	}
-}
 
 // getRowsFromFile reads a text file and returns each non-empty, trimmed line as
 // a row. It's used for any newline-delimited list, such as test files or selectors.

@@ -97,12 +97,12 @@ func TestCypressRun_SignaledError(t *testing.T) {
 	}
 }
 
-func TestCypressGetFiles(t *testing.T) {
+func TestCypressDiscoverTestTargets(t *testing.T) {
 	cypress := NewCypress(RunnerConfig{})
 
-	got, err := cypress.GetFiles()
+	got, err := cypress.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Cypress.GetFiles() error = %v", err)
+		t.Errorf("Cypress.DiscoverTestTargets() error = %v", err)
 	}
 
 	want := []string{
@@ -112,25 +112,7 @@ func TestCypressGetFiles(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Cypress.GetFiles() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCypressGetSelectors(t *testing.T) {
-	cypress := NewCypress(RunnerConfig{})
-
-	gotFiles, err := cypress.GetFiles()
-	if err != nil {
-		t.Errorf("Cypress.GetFiles() error = %v", err)
-	}
-
-	gotSelectors, err := cypress.GetSelectors()
-	if err != nil {
-		t.Errorf("Cypress.GetSelectors() error = %v", err)
-	}
-
-	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
-		t.Errorf("Cypress.GetSelectors() diff (-got +want):\n%s", diff)
+		t.Errorf("Cypress.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 

@@ -243,13 +243,13 @@ func TestPlaywrightCommandNameAndArgs_WithoutPlaceholder(t *testing.T) {
 	}
 }
 
-func TestPlaywrightGetFiles(t *testing.T) {
+func TestPlaywrightDiscoverTestTargets(t *testing.T) {
 	changeCwd(t, "./testdata/playwright")
 	playwright := NewPlaywright(RunnerConfig{})
 
-	got, err := playwright.GetFiles()
+	got, err := playwright.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Playwright.GetFiles() error = %v", err)
+		t.Errorf("Playwright.DiscoverTestTargets() error = %v", err)
 	}
 
 	want := []string{
@@ -260,26 +260,7 @@ func TestPlaywrightGetFiles(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Playwright.GetFiles() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestPlaywrightGetSelectors(t *testing.T) {
-	changeCwd(t, "./testdata/playwright")
-	playwright := NewPlaywright(RunnerConfig{})
-
-	gotFiles, err := playwright.GetFiles()
-	if err != nil {
-		t.Errorf("Playwright.GetFiles() error = %v", err)
-	}
-
-	gotSelectors, err := playwright.GetSelectors()
-	if err != nil {
-		t.Errorf("Playwright.GetSelectors() error = %v", err)
-	}
-
-	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
-		t.Errorf("Playwright.GetSelectors() diff (-got +want):\n%s", diff)
+		t.Errorf("Playwright.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 

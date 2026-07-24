@@ -61,8 +61,8 @@ func (v Vitest) ResultFormat() string {
 	return "jest-json"
 }
 
-// GetFiles returns an array of file names using the discovery pattern.
-func (v Vitest) GetFiles() ([]string, error) {
+// DiscoverTestTargets returns file names using the discovery pattern.
+func (v Vitest) DiscoverTestTargets() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", v.TestFilePattern, "exclude pattern:", v.TestFileExcludePattern)
 	files, err := discoverTestFiles(v.TestFilePattern, v.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -76,10 +76,6 @@ func (v Vitest) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-func (v Vitest) GetSelectors() ([]string, error) {
-	return v.GetFiles()
 }
 
 func (v Vitest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
@@ -214,8 +210,4 @@ func (v Vitest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 	words = slices.Replace(words, outputIdx, outputIdx+1, v.ResultPath)
 
 	return words[0], words[1:], nil
-}
-
-func (v Vitest) GetExamples(files []string) ([]plan.TestCase, error) {
-	return nil, fmt.Errorf("not supported in Vitest")
 }

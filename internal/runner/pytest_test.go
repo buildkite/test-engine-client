@@ -475,14 +475,14 @@ func TestPytestRun_CommandFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 }
 
-func TestPytestGetFiles(t *testing.T) {
+func TestPytestDiscoverTestTargets(t *testing.T) {
 	changeCwd(t, "./testdata/pytest")
 
 	pytest := NewPytest(RunnerConfig{})
 
-	got, err := pytest.GetFiles()
+	got, err := pytest.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Pytest.GetFiles() error = %v", err)
+		t.Errorf("Pytest.DiscoverTestTargets() error = %v", err)
 	}
 
 	want := []string{
@@ -492,27 +492,7 @@ func TestPytestGetFiles(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Pytest.GetFiles() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestPytestGetSelectors(t *testing.T) {
-	changeCwd(t, "./testdata/pytest")
-
-	pytest := NewPytest(RunnerConfig{})
-
-	gotFiles, err := pytest.GetFiles()
-	if err != nil {
-		t.Errorf("Pytest.GetFiles() error = %v", err)
-	}
-
-	gotSelectors, err := pytest.GetSelectors()
-	if err != nil {
-		t.Errorf("Pytest.GetSelectors() error = %v", err)
-	}
-
-	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
-		t.Errorf("Pytest.GetSelectors() diff (-got +want):\n%s", diff)
+		t.Errorf("Pytest.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -676,7 +656,7 @@ func TestPytestGetExamples_TagFilter(t *testing.T) {
 		},
 	)
 
-	files, _ := pytest.GetFiles()
+	files, _ := pytest.DiscoverTestTargets()
 
 	got, err := pytest.GetExamples(files)
 	if err != nil {

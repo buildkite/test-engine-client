@@ -54,23 +54,7 @@ func TestCustom_NewCustom_SelectorListWithoutTestFilePattern(t *testing.T) {
 	}
 }
 
-func TestCustom_GetExamples(t *testing.T) {
-	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "bin/test",
-		TestFilePattern: "tests/**/test_*.sh",
-	})
-
-	if err != nil {
-		t.Fatalf("Failed to create Custom runner: %v", err)
-	}
-
-	_, err = custom.GetExamples([]string{"tests/test_a.sh", "tests/test_b.sh"})
-	if err == nil || err.Error() != "not supported for custom runner" {
-		t.Errorf("GetExamples() error = %v, want %q", err, "not supported for custom runner")
-	}
-}
-
-func TestCustom_GetFiles(t *testing.T) {
+func TestCustom_DiscoverTestTargets(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
 		TestCommand:     "bats {{testExamples}}",
@@ -81,9 +65,9 @@ func TestCustom_GetFiles(t *testing.T) {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}
 
-	got, err := custom.GetFiles()
+	got, err := custom.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Custom.GetFiles() error = %v", err)
+		t.Errorf("Custom.DiscoverTestTargets() error = %v", err)
 	}
 
 	want := []string{
@@ -93,24 +77,25 @@ func TestCustom_GetFiles(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Custom.GetFiles() diff (-got +want):\n%s", diff)
+		t.Errorf("Custom.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestCustom_GetSelectors_FallsBackToFilePatternMatching(t *testing.T) {
+func TestCustom_DiscoverTestTargets_SelectorSplittingFallsBackToFilePatternMatching(t *testing.T) {
 	changeCwd(t, "./testdata/custom")
 	custom, err := NewCustom(RunnerConfig{
-		TestCommand:     "bats {{testExamples}}",
-		TestFilePattern: "tests/*.bats",
+		TestCommand:       "bats {{testExamples}}",
+		TestFilePattern:   "tests/*.bats",
+		SelectorSplitting: true,
 	})
 
 	if err != nil {
 		t.Fatalf("Failed to create Custom runner: %v", err)
 	}
 
-	got, err := custom.GetSelectors()
+	got, err := custom.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Custom.GetSelectors() error = %v", err)
+		t.Errorf("Custom.DiscoverTestTargets() error = %v", err)
 	}
 
 	want := []string{
@@ -120,7 +105,7 @@ func TestCustom_GetSelectors_FallsBackToFilePatternMatching(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Custom.GetSelectors() diff (-got +want):\n%s", diff)
+		t.Errorf("Custom.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 

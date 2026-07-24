@@ -52,13 +52,13 @@ func TestNewVitest(t *testing.T) {
 	}
 }
 
-func TestVitestGetFiles(t *testing.T) {
+func TestVitestDiscoverTestTargets(t *testing.T) {
 	changeCwd(t, "./testdata/vitest")
 	vitest := NewVitest(RunnerConfig{})
 
-	got, err := vitest.GetFiles()
+	got, err := vitest.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Vitest.GetFiles() error = %v", err)
+		t.Errorf("Vitest.DiscoverTestTargets() error = %v", err)
 	}
 
 	want := []string{
@@ -68,26 +68,7 @@ func TestVitestGetFiles(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Vitest.GetFiles() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestVitestGetSelectors(t *testing.T) {
-	changeCwd(t, "./testdata/vitest")
-	vitest := NewVitest(RunnerConfig{})
-
-	gotFiles, err := vitest.GetFiles()
-	if err != nil {
-		t.Errorf("Vitest.GetFiles() error = %v", err)
-	}
-
-	gotSelectors, err := vitest.GetSelectors()
-	if err != nil {
-		t.Errorf("Vitest.GetSelectors() error = %v", err)
-	}
-
-	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
-		t.Errorf("Vitest.GetSelectors() diff (-got +want):\n%s", diff)
+		t.Errorf("Vitest.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 
