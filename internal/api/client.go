@@ -78,6 +78,24 @@ var (
 
 var ErrRetryTimeout = errors.New("request retry timeout")
 
+// RetryTimeoutError preserves the last error that caused a request to be
+// retried before the overall retry timeout elapsed.
+type RetryTimeoutError struct {
+	LastError error
+}
+
+func (e *RetryTimeoutError) Error() string {
+	return fmt.Sprintf("%s: %v", ErrRetryTimeout, e.LastError)
+}
+
+func (e *RetryTimeoutError) Is(target error) bool {
+	return target == ErrRetryTimeout
+}
+
+func (e *RetryTimeoutError) Unwrap() error {
+	return e.LastError
+}
+
 type BillingError struct {
 	Message string
 }
@@ -146,8 +164,9 @@ type httpRequest struct {
 // The request is retried when the server returns 429, 409, or 5xx, or when there
 // is a network error. retryTimeout caps the total time spent across all attempts,
 // and perAttemptTimeout caps each individual attempt. After exhausting the retry
-// timeout, the function returns ErrRetryTimeout. newRequest builds a fresh request
-// for each attempt (so a body can be re-sent on retry).
+// timeout, the function returns an error matching ErrRetryTimeout that preserves
+// the last retryable error. newRequest builds a fresh request for each attempt
+// (so a body can be re-sent on retry).
 //
 // On a response that is not retried, doWithRetry returns it with a nil error
 // and the caller is responsible for reading and closing the response body. When
@@ -168,6 +187,8 @@ func (c *Client) doWithRetry(
 	// retries, not while a single attempt is in flight (that's perAttemptTimeout).
 	retryContext, cancelRetryContext := context.WithTimeout(ctx, retryTimeout)
 	defer cancelRetryContext()
+
+	var lastRetryError error
 
 	// retry loop
 	resp, err := roko.DoFunc(retryContext, r, func(r *roko.Retrier) (*http.Response, error) {
@@ -193,6 +214,7 @@ func (c *Client) doWithRetry(
 		// we should return and retry.
 		if err != nil {
 			debug.Printf("Error sending request: %v", err)
+			lastRetryError = err
 			return nil, err
 		}
 
@@ -204,20 +226,23 @@ func (c *Client) doWithRetry(
 				r.SetNextInterval(time.Duration(rateLimitReset) * time.Second)
 			}
 			drainAndCloseBody(resp)
-			return resp, fmt.Errorf("response code: 429")
+			lastRetryError = fmt.Errorf("response code: 429")
+			return resp, lastRetryError
 		}
 
 		// If we get a 409, we aren't the first client to create the plan so return
 		// and retry
 		if resp.StatusCode == http.StatusConflict {
 			drainAndCloseBody(resp)
-			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
+			lastRetryError = fmt.Errorf("response code: %d", resp.StatusCode)
+			return resp, lastRetryError
 		}
 
 		// If we get a 5xx, we should return and retry
 		if resp.StatusCode >= 500 {
 			drainAndCloseBody(resp)
-			return resp, fmt.Errorf("response code: %d", resp.StatusCode)
+			lastRetryError = fmt.Errorf("response code: %d", resp.StatusCode)
+			return resp, lastRetryError
 		}
 
 		// Other than above cases, we stop retrying and let the caller handle the
@@ -227,6 +252,9 @@ func (c *Client) doWithRetry(
 	})
 
 	if errors.Is(err, context.DeadlineExceeded) {
+		if lastRetryError != nil {
+			return resp, &RetryTimeoutError{LastError: lastRetryError}
+		}
 		return resp, ErrRetryTimeout
 	}
 

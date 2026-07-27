@@ -23,6 +23,22 @@ func TestHandleError_RetryTimeout(t *testing.T) {
 	assert.Contains(t, stderr, "Falling back to non-intelligent splitting")
 }
 
+func TestHandleError_RetryTimeoutIncludesLastError(t *testing.T) {
+	getStderr := captureStderr(t)
+
+	err := handleError(&api.RetryTimeoutError{
+		LastError: fmt.Errorf("tls: failed to verify certificate: x509: certificate signed by unknown authority"),
+	})
+
+	assert.Nil(t, err)
+
+	stderr := getStderr()
+	assert.Contains(t, stderr, "⚠️ Timeout:")
+	assert.Contains(t, stderr, "Last request error:")
+	assert.Contains(t, stderr, "x509: certificate signed by unknown authority")
+	assert.Contains(t, stderr, "Falling back to non-intelligent splitting")
+}
+
 func TestHandleError_BillingError(t *testing.T) {
 	getStderr := captureStderr(t)
 

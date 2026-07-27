@@ -70,7 +70,12 @@ func fatal(label string, a any) error {
 // or a fatal error with a formatted message for unrecoverable failures.
 func handleError(err error) error {
 	if errors.Is(err, api.ErrRetryTimeout) {
-		printWarn("Timeout", "Test Engine API timed out")
+		var timeoutError *api.RetryTimeoutError
+		if errors.As(err, &timeoutError) {
+			printWarn("Timeout", "Test Engine API timed out", "Last request error: "+timeoutError.LastError.Error())
+		} else {
+			printWarn("Timeout", "Test Engine API timed out")
+		}
 		return nil
 	}
 

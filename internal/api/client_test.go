@@ -222,27 +222,39 @@ func TestDoJSONWithRetry_Succesful_GET(t *testing.T) {
 
 func TestDoJSONWithRetry_RequestError(t *testing.T) {
 	originalTimeout := retryTimeout
-	retryTimeout = 300 * time.Millisecond
+	originalInitialDelay := initialDelay
+	retryTimeout = 100 * time.Millisecond
+	initialDelay = 1 * time.Millisecond
 	t.Cleanup(func() {
 		retryTimeout = originalTimeout
+		initialDelay = originalInitialDelay
 	})
 
-	cfg := ClientConfig{
-		AccessToken:      "asdf1234",
-		OrganizationSlug: "my-org",
-	}
+	svr := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer svr.Close()
 
-	c := NewClient(cfg)
+	c := NewClient(ClientConfig{})
 	resp, err := c.doJSONWithRetry(context.Background(), httpRequest{
 		Method: http.MethodGet,
-		URL:    "http://build.kite",
+		URL:    svr.URL,
 	}, nil)
 
-	fmt.Println(resp)
-
-	// it retries the request and returns ErrRetryTimeout with nil response.
+	// It retries the request and returns ErrRetryTimeout with the final TLS
+	// verification error preserved for user-facing diagnostics.
 	if !errors.Is(err, ErrRetryTimeout) {
 		t.Errorf("doJSONWithRetry() error = %v, want %v", err, ErrRetryTimeout)
+	}
+	var timeoutErr *RetryTimeoutError
+	if !errors.As(err, &timeoutErr) {
+		t.Fatalf("doJSONWithRetry() error type = %T, want *RetryTimeoutError", err)
+	}
+	if !strings.Contains(timeoutErr.LastError.Error(), "certificate signed by unknown authority") {
+		t.Errorf("doJSONWithRetry() last error = %v, want TLS certificate verification failure", timeoutErr.LastError)
+	}
+	if !strings.Contains(err.Error(), "certificate signed by unknown authority") {
+		t.Errorf("doJSONWithRetry() error = %v, want TLS certificate verification failure", err)
 	}
 
 	if resp != nil {
