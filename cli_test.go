@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -65,6 +66,42 @@ func TestCollectGitMetadataFlagIsGatedByPreviewEnv(t *testing.T) {
 func TestPlanCommandIncludesParallelismFlag(t *testing.T) {
 	if !hasFlag(planCommandFlags(), "parallelism") {
 		t.Fatalf("planCommandFlags() missing --parallelism flag; BUILDKITE_PARALLEL_JOB_COUNT will not be bound to cfg.Parallelism for `bktec plan`, breaking split-by-example slow-file detection")
+	}
+}
+
+func TestRunCommandDefaultsParallelismToOne(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+
+	parallelism, wasSet := os.LookupEnv("BUILDKITE_PARALLEL_JOB_COUNT")
+	if err := os.Unsetenv("BUILDKITE_PARALLEL_JOB_COUNT"); err != nil {
+		t.Fatalf("os.Unsetenv(BUILDKITE_PARALLEL_JOB_COUNT) error = %v", err)
+	}
+	t.Cleanup(func() {
+		if wasSet {
+			_ = os.Setenv("BUILDKITE_PARALLEL_JOB_COUNT", parallelism)
+		} else {
+			_ = os.Unsetenv("BUILDKITE_PARALLEL_JOB_COUNT")
+		}
+	})
+
+	cmd := &cli.Command{
+		Name: "bktec",
+		Commands: []*cli.Command{
+			{
+				Name:   "run",
+				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+				Flags:  runCommandFlags(),
+			},
+		},
+	}
+
+	if err := cmd.Run(context.Background(), []string{"bktec", "run"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Parallelism != 1 {
+		t.Errorf("cfg.Parallelism = %d, want 1", cfg.Parallelism)
 	}
 }
 

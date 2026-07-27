@@ -147,6 +147,7 @@ var parallelismFlag = &cli.IntFlag{
 	Name:        "parallelism",
 	Category:    "BUILD ENVIRONMENT",
 	Usage:       "Run the specified number of bktec processes in parallel",
+	Value:       1,
 	Sources:     cli.EnvVars("BUILDKITE_PARALLEL_JOB_COUNT"),
 	Destination: &cfg.Parallelism,
 }
