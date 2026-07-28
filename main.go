@@ -33,7 +33,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if err := cfg.ValidateForRun(); err != nil {
-		return fmt.Errorf("invalid configuration...\n%w", err)
+		return fmt.Errorf("bktec run: invalid configuration:\n%w", err)
 	}
 
 	return command.Run(ctx, &cfg, cmd.String("files"))
@@ -48,7 +48,7 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if err := cfg.ValidateForPlan(); err != nil {
-		return fmt.Errorf("invalid configuration...\n%w", err)
+		return fmt.Errorf("bktec plan: invalid configuration:\n%w", err)
 	}
 
 	switch {
@@ -66,7 +66,7 @@ func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 	debug.SetOutput(os.Stderr)
 
 	if err := cfg.ValidateForBackfillCommitMetadata(); err != nil {
-		return fmt.Errorf("invalid configuration...\n%w", err)
+		return fmt.Errorf("bktec tools backfill-commit-metadata: invalid configuration:\n%w", err)
 	}
 
 	return command.BackfillCommitMetadata(ctx, &cfg, &git.ExecGitRunner{})
