@@ -66,7 +66,7 @@ func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 	debug.SetOutput(os.Stderr)
 
 	if err := cfg.ValidateForBackfillCommitMetadata(); err != nil {
-		return fmt.Errorf("bktec backfill-commit-metadata: invalid configuration:\n%w", err)
+		return fmt.Errorf("bktec tools backfill-commit-metadata: invalid configuration:\n%w", err)
 	}
 
 	return command.BackfillCommitMetadata(ctx, &cfg, &git.ExecGitRunner{})
