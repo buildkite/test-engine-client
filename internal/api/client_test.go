@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -223,13 +225,14 @@ func TestDoJSONWithRetry_Succesful_GET(t *testing.T) {
 func TestDoJSONWithRetry_RequestError(t *testing.T) {
 	originalTimeout := retryTimeout
 	originalInitialDelay := initialDelay
-	retryTimeout = 100 * time.Millisecond
+	retryTimeout = 1500 * time.Millisecond
 	initialDelay = 1 * time.Millisecond
 	t.Cleanup(func() {
 		retryTimeout = originalTimeout
 		initialDelay = originalInitialDelay
 	})
 
+	getStderr := captureClientStderr(t)
 	svr := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -240,6 +243,7 @@ func TestDoJSONWithRetry_RequestError(t *testing.T) {
 		Method: http.MethodGet,
 		URL:    svr.URL,
 	}, nil)
+	stderr := getStderr()
 
 	// It retries the request and returns ErrRetryTimeout with the final TLS
 	// verification error preserved for user-facing diagnostics.
@@ -255,6 +259,18 @@ func TestDoJSONWithRetry_RequestError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "certificate signed by unknown authority") {
 		t.Errorf("doJSONWithRetry() error = %v, want TLS certificate verification failure", err)
+	}
+
+	failedAttempts := strings.Count(stderr, "Buildkite Test Engine Client: API request failed:")
+	retries := strings.Count(stderr, "Buildkite Test Engine Client: Retrying API request")
+	if failedAttempts < 2 {
+		t.Errorf("failed attempt log count = %d, want at least 2; stderr = %q", failedAttempts, stderr)
+	}
+	if retries != failedAttempts-1 {
+		t.Errorf("retry log count = %d, want %d; stderr = %q", retries, failedAttempts-1, stderr)
+	}
+	if !strings.Contains(stderr, "certificate signed by unknown authority") {
+		t.Errorf("stderr = %q, want TLS certificate verification failure", stderr)
 	}
 
 	if resp != nil {
@@ -584,5 +600,24 @@ func TestDoJSONWithRetry_BillingError(t *testing.T) {
 
 	if billingError := new(BillingError); !errors.As(err, &billingError) {
 		t.Errorf("doJSONWithRetry() error type = %T, want %T", err, BillingError{})
+	}
+}
+
+func captureClientStderr(t *testing.T) func() string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	original := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = original })
+
+	return func() string {
+		_ = w.Close()
+		var output bytes.Buffer
+		_, _ = io.Copy(&output, r)
+		_ = r.Close()
+		return output.String()
 	}
 }

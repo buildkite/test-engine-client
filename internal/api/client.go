@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -193,7 +194,7 @@ func (c *Client) doWithRetry(
 	// retry loop
 	resp, err := roko.DoFunc(retryContext, r, func(r *roko.Retrier) (*http.Response, error) {
 		if r.AttemptCount() > 0 {
-			debug.Printf("Retrying requests, attempt %d", r.AttemptCount())
+			fmt.Fprintf(os.Stderr, "Buildkite Test Engine Client: Retrying API request (attempt %d)\n", r.AttemptCount()+1)
 		}
 
 		req, err := newRequest(ctx)
@@ -213,8 +214,8 @@ func (c *Client) doWithRetry(
 		// which means there is a network error (e.g. protocol error, timeout),
 		// we should return and retry.
 		if err != nil {
-			debug.Printf("Error sending request: %v", err)
 			lastRetryError = err
+			printRetryError(err)
 			return nil, err
 		}
 
@@ -227,6 +228,7 @@ func (c *Client) doWithRetry(
 			}
 			drainAndCloseBody(resp)
 			lastRetryError = fmt.Errorf("response code: 429")
+			printRetryError(lastRetryError)
 			return resp, lastRetryError
 		}
 
@@ -235,6 +237,7 @@ func (c *Client) doWithRetry(
 		if resp.StatusCode == http.StatusConflict {
 			drainAndCloseBody(resp)
 			lastRetryError = fmt.Errorf("response code: %d", resp.StatusCode)
+			printRetryError(lastRetryError)
 			return resp, lastRetryError
 		}
 
@@ -242,6 +245,7 @@ func (c *Client) doWithRetry(
 		if resp.StatusCode >= 500 {
 			drainAndCloseBody(resp)
 			lastRetryError = fmt.Errorf("response code: %d", resp.StatusCode)
+			printRetryError(lastRetryError)
 			return resp, lastRetryError
 		}
 
@@ -259,6 +263,10 @@ func (c *Client) doWithRetry(
 	}
 
 	return resp, err
+}
+
+func printRetryError(err error) {
+	fmt.Fprintf(os.Stderr, "Buildkite Test Engine Client: API request failed: %v\n", err)
 }
 
 // drainAndCloseBody reads resp.Body to the end and closes it. An HTTP request
