@@ -1,4 +1,11 @@
 # Changelog
+## 2.11.0 - 2026-07-28
+- Enable skipped-test filtering for [pytest](./docs/pytest.md). Pytest already supported split-by-example; skip uses the same example-level path (matching RSpec and Cucumber). Playwright remains without skip until project-scoped selectors exist, because the same file:line path can run across multiple projects.
+- Default static parallelism to 1 when `BUILDKITE_PARALLEL_JOB_COUNT` is unset, matching Buildkite's serial command-step behaviour. Explicit `--parallelism` / env values are unchanged.
+- Surface API request failures during retries: print transport errors (for example TLS certificate verification failures) on each attempt, announce retries, and keep the underlying cause when the retry budget expires instead of only a generic timeout.
+- Improve invalid configuration errors by prefixing them with `bktec <subcommand>: invalid configuration:` so failures are attributable when bktec is wrapped by plugins or other tooling.
+- Internal: consolidate file- vs selector-based test plan request construction and target processing (no intended wire-format change).
+
 ## 2.10.0 - 2026-07-17
 - Expand experimental selector-based test splitting (introduced in 2.9.0 via `--selector-splitting`) beyond RSpec, custom, and Go. Jest, Playwright, Cypress, Cucumber, Pytest, and Vitest now support it, where a selector is a file. Slow files can still be split by example alongside selector splitting (Playwright, Pytest), skipped-test filtering is honored (RSpec, Cucumber), and tag filters are honored (Pytest). The custom runner falls back to file-pattern collection when `--selector-splitting` is set without `--selector-file`, instead of erroring. The configured location prefix is now sent on selector-split requests so selector timing history is scoped correctly in monorepos. bktec also warns when a multi-node selector split has no historical timings and falls back to default durations.
 - Add first-class support for the [Vitest](./docs/vitest.md) test runner (`BUILDKITE_TEST_ENGINE_TEST_RUNNER=vitest`), including test splitting by file, automatic retries, and muting. Vitest's JSON reporter is Jest-compatible, so results are parsed with the shared Jest report parser.
