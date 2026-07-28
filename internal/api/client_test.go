@@ -261,8 +261,8 @@ func TestDoJSONWithRetry_RequestError(t *testing.T) {
 		t.Errorf("doJSONWithRetry() error = %v, want TLS certificate verification failure", err)
 	}
 
-	failedAttempts := strings.Count(stderr, "Buildkite Test Engine Client: API request failed:")
-	retries := strings.Count(stderr, "Buildkite Test Engine Client: Retrying API request")
+	failedAttempts := strings.Count(stderr, "bktec: API request failed:")
+	retries := strings.Count(stderr, "bktec: Retrying API request")
 	if failedAttempts < 2 {
 		t.Errorf("failed attempt log count = %d, want at least 2; stderr = %q", failedAttempts, stderr)
 	}

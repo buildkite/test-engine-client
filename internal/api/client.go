@@ -194,7 +194,7 @@ func (c *Client) doWithRetry(
 	// retry loop
 	resp, err := roko.DoFunc(retryContext, r, func(r *roko.Retrier) (*http.Response, error) {
 		if r.AttemptCount() > 0 {
-			fmt.Fprintf(os.Stderr, "Buildkite Test Engine Client: Retrying API request (attempt %d)\n", r.AttemptCount()+1)
+			fmt.Fprintf(os.Stderr, "bktec: Retrying API request (attempt %d)\n", r.AttemptCount()+1)
 		}
 
 		req, err := newRequest(ctx)
@@ -266,7 +266,7 @@ func (c *Client) doWithRetry(
 }
 
 func printRetryError(err error) {
-	fmt.Fprintf(os.Stderr, "Buildkite Test Engine Client: API request failed: %v\n", err)
+	fmt.Fprintf(os.Stderr, "bktec: API request failed: %v\n", err)
 }
 
 // drainAndCloseBody reads resp.Body to the end and closes it. An HTTP request
