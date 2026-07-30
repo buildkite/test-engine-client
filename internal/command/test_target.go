@@ -10,7 +10,6 @@ func getTestTargets(cfg *config.Config, testRunner runner.TestRunnerWithTargetDi
 		if cfg.SelectorListPath != "" {
 			return getRowsFromFile(cfg.SelectorListPath)
 		}
-		return testRunner.DiscoverTestTargets()
 	}
 
 	if testFileList != "" {

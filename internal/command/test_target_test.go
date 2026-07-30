@@ -53,9 +53,14 @@ func TestGetTestTargets(t *testing.T) {
 			want:             []string{"selector-a", "selector-b"},
 		},
 		{
-			name:            "supported runner discovers targets when selector list is absent",
+			name:            "supported runner uses file list when selector list is absent",
 			selectorSupport: true,
 			testFileList:    testFileList,
+			want:            []string{"file-a", "file-b"},
+		},
+		{
+			name:            "supported runner discovers targets when lists are absent",
+			selectorSupport: true,
 			want:            []string{"discovered-a", "discovered-b"},
 			wantDiscoveries: 1,
 		},
