@@ -175,8 +175,8 @@ func buildSelectionParams(strategy string, params map[string]string) *api.Select
 	}
 }
 
-func getExamplesWithPrefix(filePaths []string, runner runner.TestRunner) ([]plan.TestCase, error) {
-	prefix := runner.LocationPrefix()
+func getExamplesWithPrefix(filePaths []string, testRunner runner.TestRunner) ([]plan.TestCase, error) {
+	prefix := testRunner.LocationPrefix()
 	trimmedPaths := make([]string, len(filePaths))
 
 	// runner.GetExamples will call the test runner with the file paths.
@@ -190,7 +190,12 @@ func getExamplesWithPrefix(filePaths []string, runner runner.TestRunner) ([]plan
 		trimmedPaths[i] = path
 	}
 
-	examples, err := runner.GetExamples(trimmedPaths)
+	discoverer, ok := testRunner.(runner.ExampleDiscoverer)
+	if !ok {
+		return nil, fmt.Errorf("runner %q advertises split by example but does not implement example discovery", testRunner.Name())
+	}
+
+	examples, err := discoverer.GetExamples(trimmedPaths)
 	if err != nil {
 		return nil, fmt.Errorf("get examples: %w", err)
 	}

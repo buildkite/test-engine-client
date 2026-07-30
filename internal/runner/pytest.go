@@ -261,7 +261,7 @@ func pytestNodeIDFromJUnit(classname, name string) (path string) {
 	return
 }
 
-func (p Pytest) GetFiles() ([]string, error) {
+func (p Pytest) DiscoverTestTargets() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", p.TestFilePattern, "exclude pattern:", p.TestFileExcludePattern)
 	files, err := discoverTestFiles(p.TestFilePattern, p.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -275,10 +275,6 @@ func (p Pytest) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-func (p Pytest) GetSelectors() ([]string, error) {
-	return p.GetFiles()
 }
 
 // GetExamples returns an array of test examples within the given files.

@@ -60,7 +60,7 @@ func (c Cypress) Run(result *RunResult, testCases []plan.TestCase, retry bool) e
 	return err
 }
 
-func (c Cypress) GetFiles() ([]string, error) {
+func (c Cypress) DiscoverTestTargets() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", c.TestFilePattern, "exclude pattern:", c.TestFileExcludePattern)
 	files, err := discoverTestFiles(c.TestFilePattern, c.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -74,14 +74,6 @@ func (c Cypress) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-func (c Cypress) GetSelectors() ([]string, error) {
-	return c.GetFiles()
-}
-
-func (c Cypress) GetExamples(files []string) ([]plan.TestCase, error) {
-	return nil, fmt.Errorf("not supported in Cypress")
 }
 
 func (c Cypress) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string, []string, error) {

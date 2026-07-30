@@ -63,8 +63,8 @@ func (r Rspec) ResultFormat() string {
 	return "rspec-json"
 }
 
-// GetFiles returns an array of file names using the discovery pattern.
-func (r Rspec) GetFiles() ([]string, error) {
+// DiscoverTestTargets returns file names using the discovery pattern.
+func (r Rspec) DiscoverTestTargets() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", r.TestFilePattern, "exclude pattern:", r.TestFileExcludePattern)
 	files, err := discoverTestFiles(r.TestFilePattern, r.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -78,10 +78,6 @@ func (r Rspec) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-func (r Rspec) GetSelectors() ([]string, error) {
-	return r.GetFiles()
 }
 
 // Run executes the test command with the given test cases.

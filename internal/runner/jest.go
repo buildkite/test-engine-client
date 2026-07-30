@@ -57,8 +57,8 @@ func (j Jest) ResultFormat() string {
 	return "jest-json"
 }
 
-// GetFiles returns an array of file names using the discovery pattern.
-func (j Jest) GetFiles() ([]string, error) {
+// DiscoverTestTargets returns file names using the discovery pattern.
+func (j Jest) DiscoverTestTargets() ([]string, error) {
 	debug.Println("Discovering test files with include pattern:", j.TestFilePattern, "exclude pattern:", j.TestFileExcludePattern)
 	files, err := discoverTestFiles(j.TestFilePattern, j.TestFileExcludePattern)
 	debug.Println("Discovered", len(files), "files")
@@ -72,10 +72,6 @@ func (j Jest) GetFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-func (j Jest) GetSelectors() ([]string, error) {
-	return j.GetFiles()
 }
 
 func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
@@ -236,8 +232,4 @@ func (j Jest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string,
 	words = slices.Replace(words, outputIdx, outputIdx+1, j.ResultPath)
 
 	return words[0], words[1:], nil
-}
-
-func (j Jest) GetExamples(files []string) ([]plan.TestCase, error) {
-	return nil, fmt.Errorf("not supported in Jest")
 }

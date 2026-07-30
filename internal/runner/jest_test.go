@@ -603,13 +603,13 @@ func TestJestRetryCommandNameAndArgs_WithTestExamplesPlaceholder(t *testing.T) {
 	}
 }
 
-func TestJestGetFiles(t *testing.T) {
+func TestJestDiscoverTestTargets(t *testing.T) {
 	changeCwd(t, "./testdata/jest")
 	jest := NewJest(RunnerConfig{})
 
-	got, err := jest.GetFiles()
+	got, err := jest.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Jest.GetFiles() error = %v", err)
+		t.Errorf("Jest.DiscoverTestTargets() error = %v", err)
 	}
 
 	want := []string{
@@ -621,25 +621,6 @@ func TestJestGetFiles(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Jest.GetFiles() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestJestGetSelectors(t *testing.T) {
-	changeCwd(t, "./testdata/jest")
-	jest := NewJest(RunnerConfig{})
-
-	gotFiles, err := jest.GetFiles()
-	if err != nil {
-		t.Errorf("Jest.GetFiles() error = %v", err)
-	}
-
-	gotSelectors, err := jest.GetSelectors()
-	if err != nil {
-		t.Errorf("Jest.GetSelectors() error = %v", err)
-	}
-
-	if diff := cmp.Diff(gotSelectors, gotFiles); diff != "" {
-		t.Errorf("Jest.GetSelectors() diff (-got +want):\n%s", diff)
+		t.Errorf("Jest.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }

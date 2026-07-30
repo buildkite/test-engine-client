@@ -6,7 +6,7 @@ import (
 	"github.com/buildkite/test-engine-client/v2/internal/config"
 )
 
-func DetectRunner(cfg *config.Config) (TestRunner, error) {
+func DetectRunner(cfg *config.Config) (TestRunnerWithTargetDiscovery, error) {
 	runnerConfig := RunnerConfig{
 		TestRunner: cfg.TestRunner,
 

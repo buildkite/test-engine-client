@@ -371,22 +371,20 @@ func TestRspecCommandNameAndArgs_InvalidTestCommand(t *testing.T) {
 	}
 }
 
-func TestRspecGetSelectors(t *testing.T) {
+func TestRspecDiscoverTestTargets(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestFilePattern: "testdata/rspec/spec/spells/**/*_spec.rb",
 	})
 
-	got, err := rspec.GetSelectors()
+	got, err := rspec.DiscoverTestTargets()
 	if err != nil {
-		t.Errorf("Rspec.GetSelectors() error = %v", err)
+		t.Errorf("Rspec.DiscoverTestTargets() error = %v", err)
 	}
 
-	// Selector based splitting for RSpec splits by file, so the selectors are
-	// the discovered test files (the same result as GetFiles).
 	want := []string{"testdata/rspec/spec/spells/expelliarmus_spec.rb"}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Rspec.GetSelectors() diff (-got +want):\n%s", diff)
+		t.Errorf("Rspec.DiscoverTestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 

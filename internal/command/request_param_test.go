@@ -1147,14 +1147,6 @@ func (r metadataTestRunner) GetExamples(files []string) ([]plan.TestCase, error)
 	return r.examples, nil
 }
 
-func (r metadataTestRunner) GetFiles() ([]string, error) {
-	return nil, nil
-}
-
-func (r metadataTestRunner) GetSelectors() ([]string, error) {
-	return nil, nil
-}
-
 func (r metadataTestRunner) LocationPrefix() string {
 	return r.locationPrefix
 }
@@ -1182,6 +1174,22 @@ func (r metadataTestRunner) CommandNameAndArgs(testCases []plan.TestCase, retry 
 	}
 
 	return "metadata-test-runner", paths, nil
+}
+
+type mismatchedExampleRunner struct {
+	runner.Jest
+}
+
+func (m mismatchedExampleRunner) SupportedFeatures() runner.SupportedFeatures {
+	return runner.SupportedFeatures{SplitByExample: true}
+}
+
+func TestGetExamplesWithPrefix_RequiresExampleDiscoverer(t *testing.T) {
+	_, err := getExamplesWithPrefix([]string{"example.spec.js"}, mismatchedExampleRunner{})
+	want := `runner "Jest" advertises split by example but does not implement example discovery`
+	if err == nil || err.Error() != want {
+		t.Errorf("getExamplesWithPrefix() error = %v, want %q", err, want)
+	}
 }
 
 func TestCreateRequestParams_FilterTestsError(t *testing.T) {
