@@ -31,7 +31,7 @@ var _ TestRunner = (*GoTest)(nil)
 
 func NewGoTest(c RunnerConfig) GoTest {
 	if c.TestCommand == "" {
-		c.TestCommand = "gotestsum --junitfile={{resultPath}} {{packages}}"
+		c.TestCommand = "gotestsum --jsonfile={{resultPath}} {{packages}}"
 	}
 
 	if c.RetryTestCommand == "" {
