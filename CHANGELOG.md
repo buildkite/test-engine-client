@@ -1,9 +1,6 @@
 # Changelog
 ## 3.0.0 - 2026-07-31
-- ⚠️ **BREAKING:** Selector-based splitting now replaces file-based splitting for supported runners. The deprecated `--selector-splitting` flag and `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING` environment variable are still accepted for upgrade compatibility, but their values no longer affect behavior. Existing bktec v2 releases continue to send file-based requests and remain compatible with file-based splitting; remain on v2 if file-based requests are required.
-- If results are uploaded with a collector, selector attribution requires `buildkite-test_collector` v2.14.0 or later for Ruby, or `buildkite-test-collector` v1.10.0 or later for JavaScript. bktec's built-in result upload also attributes selectors directly.
-- Go suites must produce JSONL output using `gotestsum --jsonfile {{resultPath}}` or `go test -json`; selector splitting balances the package import paths reported in that output. See the [Go runner guide](./docs/gotest.md#use-go-jsonl-output).
-- When no selector history is available, Test Engine uses default duration estimates (rather than legacy file timings) and bktec prints a warning. Run the tests once to record selector timings, or update the collector if the tests have historical executions that are not being matched.
+- ⚠️ **BREAKING:** Selector-based splitting now replaces file-based splitting for supported runners. The deprecated `--selector-splitting` flag and `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING` environment variable are still accepted for upgrade compatibility, but their values no longer affect behavior. Existing bktec v2 releases continue to send file-based requests and remain compatible with file-based splitting; remain on v2 if file-based requests are required. See [Migrating from bktec v2 to v3](./docs/migrating-to-v3.md).
 - The Go module path is now `github.com/buildkite/test-engine-client/v3`.
 
 ## 2.11.0 - 2026-07-28
