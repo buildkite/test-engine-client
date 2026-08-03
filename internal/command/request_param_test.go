@@ -638,33 +638,12 @@ func TestShouldFilterAndSplitSelectorFiles(t *testing.T) {
 
 func TestEncodeRequestTargets(t *testing.T) {
 	targets := newRequestTargets([]string{"first_test", "second_test"}, "project")
-	tests := []struct {
-		name string
-		mode requestMode
-		want api.TestPlanParamsTest
-	}{
-		{
-			name: "files use prefixed paths",
-			mode: requestByFile,
-			want: api.TestPlanParamsTest{
-				Files: []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/second_test"}},
-			},
-		},
-		{
-			name: "selectors use original values",
-			mode: requestBySelector,
-			want: api.TestPlanParamsTest{
-				Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "second_test"}},
-			},
-		},
+	want := api.TestPlanParamsTest{
+		Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "second_test"}},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if diff := cmp.Diff(encodeRequestTargets(targets, test.mode), test.want); diff != "" {
-				t.Errorf("encodeRequestTargets() diff (-got +want):\n%s", diff)
-			}
-		})
+	if diff := cmp.Diff(encodeRequestTargets(targets), want); diff != "" {
+		t.Errorf("encodeRequestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -695,55 +674,33 @@ func TestFilterAndExpandTargets(t *testing.T) {
 		},
 	}
 
-	tests := []struct {
-		name string
-		mode requestMode
-		want api.TestPlanParamsTest
-	}{
-		{
-			name: "file mode preserves prefixed files",
-			mode: requestByFile,
-			want: api.TestPlanParamsTest{
-				Files: []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/third_test"}},
-			},
-		},
-		{
-			name: "selector mode preserves raw selector values",
-			mode: requestBySelector,
-			want: api.TestPlanParamsTest{
-				Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "third_test"}},
-			},
-		},
+	want := api.TestPlanParamsTest{
+		Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "third_test"}},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			testRunner.examples[0].Path = "middle_test::example"
-			got, err := filterAndExpandTargets(context.Background(), &config.Config{}, *client, targets, testRunner, test.mode, "targets")
-			if err != nil {
-				t.Fatalf("filterAndExpandTargets() error = %v", err)
-			}
+	got, err := filterAndExpandTargets(context.Background(), &config.Config{}, *client, targets, testRunner)
+	if err != nil {
+		t.Fatalf("filterAndExpandTargets() error = %v", err)
+	}
 
-			test.want.Examples = []api.TestPlanExample{
-				{
-					Format:     plan.TestCaseFormatExample,
-					Identifier: "middle_test::example",
-					Name:       "example",
-					Path:       "project/middle_test::example",
-				},
-			}
-			if diff := cmp.Diff(got, test.want); diff != "" {
-				t.Errorf("filterAndExpandTargets() diff (-got +want):\n%s", diff)
-			}
+	want.Examples = []api.TestPlanExample{
+		{
+			Format:     plan.TestCaseFormatExample,
+			Identifier: "middle_test::example",
+			Name:       "example",
+			Path:       "project/middle_test::example",
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("filterAndExpandTargets() diff (-got +want):\n%s", diff)
+	}
 
-			wantFilterFiles := []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/middle_test"}, {Path: "project/third_test"}}
-			if diff := cmp.Diff(gotFilterParams.Files, wantFilterFiles); diff != "" {
-				t.Errorf("filter_tests files diff (-got +want):\n%s", diff)
-			}
-			if diff := cmp.Diff(exampleFiles, []string{"middle_test"}); diff != "" {
-				t.Errorf("GetExamples() files diff (-got +want):\n%s", diff)
-			}
-		})
+	wantFilterFiles := []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/middle_test"}, {Path: "project/third_test"}}
+	if diff := cmp.Diff(gotFilterParams.Files, wantFilterFiles); diff != "" {
+		t.Errorf("filter_tests files diff (-got +want):\n%s", diff)
+	}
+	if diff := cmp.Diff(exampleFiles, []string{"middle_test"}); diff != "" {
+		t.Errorf("GetExamples() files diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -816,59 +773,6 @@ func TestCreateRequestParams_SelectorSplittingExpandsSlowFilesForSplitByExampleR
 				t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
 			}
 		})
-	}
-}
-
-func TestCreateRequestParams_UnsupportedSelectorRunnerUsesFilePayload(t *testing.T) {
-	filterRequestCount := 0
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		filterRequestCount++
-		fmt.Fprint(w, `{"tests": []}`)
-	}))
-	defer svr.Close()
-
-	cfg := config.Config{
-		OrganizationSlug: "my-org",
-		SuiteSlug:        "my-suite",
-		Identifier:       "identifier",
-		Parallelism:      2,
-		Branch:           "main",
-		TestRunner:       "rspec",
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseURL: svr.URL,
-	})
-	files := []string{
-		"testdata/rspec/spec/fruits/apple_spec.rb",
-		"testdata/rspec/spec/fruits/banana_spec.rb",
-	}
-
-	testRunner := metadataTestRunner{name: "rspec"}
-	got, err := createRequestParam(context.Background(), &cfg, files, *client, testRunner)
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	if filterRequestCount != 1 {
-		t.Errorf("filter request count = %d, want 1", filterRequestCount)
-	}
-
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "rspec",
-		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
 	}
 }
 

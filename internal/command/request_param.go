@@ -12,13 +12,6 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 )
 
-type requestMode uint8
-
-const (
-	requestByFile requestMode = iota
-	requestBySelector
-)
-
 type requestTarget struct {
 	value string
 	file  api.TestPlanFile
@@ -36,13 +29,7 @@ type requestTarget struct {
 // If tag filtering is enabled, all files are split into examples to support filtering.
 // Currently only the Pytest runner supports tag filtering.
 func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []string, client api.Client, runner runner.TestRunner) (api.TestPlanParams, error) {
-	selectorSplitting := shouldUseSelectorSplitting(runner)
-	mode := requestByFile
-	if selectorSplitting {
-		mode = requestBySelector
-	}
-
-	testParams, err := requestTestParams(ctx, cfg, client, newRequestTargets(testTargets, runner.LocationPrefix()), runner, mode)
+	testParams, err := requestTestParams(ctx, cfg, client, newRequestTargets(testTargets, runner.LocationPrefix()), runner)
 	if err != nil {
 		return api.TestPlanParams{}, err
 	}
@@ -57,9 +44,7 @@ func createRequestParam(ctx context.Context, cfg *config.Config, testTargets []s
 		Metadata:       cfg.Metadata,
 		Runner:         cfg.TestRunner,
 		Tests:          testParams,
-	}
-	if selectorSplitting {
-		params.LocationPrefix = cfg.LocationPrefix
+		LocationPrefix: cfg.LocationPrefix,
 	}
 
 	return params, nil
@@ -76,14 +61,10 @@ func newRequestTargets(values []string, prefix string) []requestTarget {
 	return targets
 }
 
-func requestTestParams(ctx context.Context, cfg *config.Config, client api.Client, targets []requestTarget, runner runner.TestRunner, mode requestMode) (api.TestPlanParamsTest, error) {
+func requestTestParams(ctx context.Context, cfg *config.Config, client api.Client, targets []requestTarget, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
 	features := runner.SupportedFeatures()
 	if !features.SplitByExample {
-		return encodeRequestTargets(targets, mode), nil
-	}
-
-	if mode == requestByFile && cfg.SplitByExample {
-		debug.Println("Splitting by example")
+		return encodeRequestTargets(targets), nil
 	}
 
 	// If tag filtering is enabled, we must split all files to allow to enable filtering.
@@ -92,15 +73,11 @@ func requestTestParams(ctx context.Context, cfg *config.Config, client api.Clien
 		return expandAllTargets(targets, runner)
 	}
 
-	if mode == requestBySelector && !shouldFilterAndSplitSelectorFiles(cfg, runner) {
-		return encodeRequestTargets(targets, mode), nil
+	if !shouldFilterAndSplitSelectorFiles(cfg, runner) {
+		return encodeRequestTargets(targets), nil
 	}
 
-	label := "files"
-	if mode == requestBySelector {
-		label = "selector-backed files"
-	}
-	return filterAndExpandTargets(ctx, cfg, client, targets, runner, mode, label)
+	return filterAndExpandTargets(ctx, cfg, client, targets, runner)
 }
 
 func shouldUseSelectorSplitting(runner runner.TestRunner) bool {
@@ -135,20 +112,12 @@ func exampleParamsFromTestCases(testCases []plan.TestCase) []api.TestPlanExample
 	return examples
 }
 
-func encodeRequestTargets(targets []requestTarget, mode requestMode) api.TestPlanParamsTest {
-	if mode == requestBySelector {
-		values := make([]string, 0, len(targets))
-		for _, target := range targets {
-			values = append(values, target.value)
-		}
-		return api.TestPlanParamsTest{Selectors: selectorParamsFromValues(values)}
-	}
-
-	files := make([]api.TestPlanFile, 0, len(targets))
+func encodeRequestTargets(targets []requestTarget) api.TestPlanParamsTest {
+	values := make([]string, 0, len(targets))
 	for _, target := range targets {
-		files = append(files, target.file)
+		values = append(values, target.value)
 	}
-	return api.TestPlanParamsTest{Files: files}
+	return api.TestPlanParamsTest{Selectors: selectorParamsFromValues(values)}
 }
 
 // buildSelectionParams returns the selection payload sent to the Test Engine
@@ -234,20 +203,20 @@ func expandAllTargets(targets []requestTarget, runner runner.TestRunner) (api.Te
 }
 
 // filterAndExpandTargets filters targets through the Test Engine API, expands filtered targets
-// into examples, and encodes the remaining targets according to the request mode.
-func filterAndExpandTargets(ctx context.Context, cfg *config.Config, client api.Client, targets []requestTarget, runner runner.TestRunner, mode requestMode, label string) (api.TestPlanParamsTest, error) {
+// into examples, and encodes the remaining targets as selectors.
+func filterAndExpandTargets(ctx context.Context, cfg *config.Config, client api.Client, targets []requestTarget, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
 	files := make([]api.TestPlanFile, 0, len(targets))
 	for _, target := range targets {
 		files = append(files, target.file)
 	}
 
-	examples, filteredFilesMap, err := filterAndExpandFiles(ctx, cfg, client, files, runner, label)
+	examples, filteredFilesMap, err := filterAndExpandFiles(ctx, cfg, client, files, runner, "selector-backed files")
 	if err != nil {
 		return api.TestPlanParamsTest{}, err
 	}
 
 	if len(filteredFilesMap) == 0 {
-		return encodeRequestTargets(targets, mode), nil
+		return encodeRequestTargets(targets), nil
 	}
 
 	remainingTargets := make([]requestTarget, 0, len(targets)-len(filteredFilesMap))
@@ -257,7 +226,7 @@ func filterAndExpandTargets(ctx context.Context, cfg *config.Config, client api.
 		}
 	}
 
-	params := encodeRequestTargets(remainingTargets, mode)
+	params := encodeRequestTargets(remainingTargets)
 	params.Examples = examples
 	return params, nil
 }
