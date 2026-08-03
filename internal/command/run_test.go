@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-engine-client/v2/internal/api"
-	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/git"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
-	"github.com/buildkite/test-engine-client/v2/internal/version"
+	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/git"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
@@ -763,14 +763,13 @@ func TestFetchOrCreateTestPlan_SelectorOptInFallbackUsesPathTasks(t *testing.T) 
 	defer cancel()
 
 	cfg := config.Config{
-		NodeIndex:         0,
-		Parallelism:       2,
-		Identifier:        "identifier",
-		Branch:            "main",
-		ServerBaseURL:     svr.URL,
-		SuiteSlug:         "my-suite",
-		TestRunner:        "gotest",
-		SelectorSplitting: true,
+		NodeIndex:     0,
+		Parallelism:   2,
+		Identifier:    "identifier",
+		Branch:        "main",
+		ServerBaseURL: svr.URL,
+		SuiteSlug:     "my-suite",
+		TestRunner:    "gotest",
 	}
 	apiClient := api.NewClient(api.ClientConfig{
 		ServerBaseURL: cfg.ServerBaseURL,

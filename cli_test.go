@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/urfave/cli/v3"
 )
 
@@ -108,6 +108,37 @@ func TestRunCommandDefaultsParallelismToOne(t *testing.T) {
 func TestPlanCommandIncludesPlanIdentifierFlag(t *testing.T) {
 	if !hasFlag(planCommandFlags(), "plan-identifier") {
 		t.Fatalf("planCommandFlags() missing --plan-identifier flag; an off-agent `bktec plan` cannot set the plan cache key or skip the BUILDKITE_BUILD_ID/BUILDKITE_STEP_ID guards")
+	}
+}
+
+func TestSelectorSplittingCompatibilityFlagIsAccepted(t *testing.T) {
+	for _, command := range []string{"run", "plan"} {
+		for _, suffix := range []string{"", "=true", "=false"} {
+			t.Run(command+"/"+suffix, func(t *testing.T) {
+				cfg = config.New()
+				t.Cleanup(func() { cfg = config.New() })
+				flags := runCommandFlags()
+				if command == "plan" {
+					flags = planCommandFlags()
+				}
+
+				cmd := &cli.Command{
+					Name: "bktec",
+					Commands: []*cli.Command{
+						{
+							Name:   command,
+							Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
+							Flags:  flags,
+						},
+					},
+				}
+
+				args := []string{"bktec", command, "--selector-splitting" + suffix}
+				if err := cmd.Run(context.Background(), args); err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			})
+		}
 	}
 }
 
@@ -216,7 +247,6 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "gotest")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "/tmp/results.json")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
-	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_FILE", "selectors.txt")
 	t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "app/")
@@ -270,7 +300,6 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"TestRunner", cfg.TestRunner, "gotest"},
 		{"ResultPath", cfg.ResultPath, "/tmp/results.json"},
 		{"SplitByExample", cfg.SplitByExample, true},
-		{"SelectorSplitting", cfg.SelectorSplitting, true},
 		{"SelectorListPath", cfg.SelectorListPath, "selectors.txt"},
 		{"FailOnNoTests", cfg.FailOnNoTests, true},
 		{"LocationPrefix", cfg.LocationPrefix, "app/"},
@@ -296,54 +325,6 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	}
 }
 
-func TestSelectorSplittingFlagBindsToConfig(t *testing.T) {
-	cfg = config.New()
-	t.Cleanup(func() { cfg = config.New() })
-
-	cmd := &cli.Command{
-		Name: "bktec",
-		Commands: []*cli.Command{
-			{
-				Name:   "run",
-				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
-				Flags:  runCommandFlags(),
-			},
-		},
-	}
-
-	if err := cmd.Run(context.Background(), []string{"bktec", "run", "--selector-splitting"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !cfg.SelectorSplitting {
-		t.Fatalf("cfg.SelectorSplitting = false, want true")
-	}
-}
-
-func TestSelectorSplittingFlagBindsToPlanConfig(t *testing.T) {
-	cfg = config.New()
-	t.Cleanup(func() { cfg = config.New() })
-
-	cmd := &cli.Command{
-		Name: "bktec",
-		Commands: []*cli.Command{
-			{
-				Name:   "plan",
-				Action: func(ctx context.Context, cmd *cli.Command) error { return nil },
-				Flags:  planCommandFlags(),
-			},
-		},
-	}
-
-	if err := cmd.Run(context.Background(), []string{"bktec", "plan", "--selector-splitting"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !cfg.SelectorSplitting {
-		t.Fatalf("cfg.SelectorSplitting = false, want true")
-	}
-}
-
 // TestRunCommandFlagsDoNotShareParseState guards against the order-dependent
 // failure from TE-6257: runCommandFlags() must hand out fresh flag instances so
 // that explicitly setting a flag on one command does not leave urfave/cli's
@@ -353,7 +334,7 @@ func TestRunCommandFlagsDoNotShareParseState(t *testing.T) {
 	cfg = config.New()
 	t.Cleanup(func() { cfg = config.New() })
 
-	// First command parses --selector-splitting on the CLI.
+	// First command parses --split-by-example on the CLI.
 	first := &cli.Command{
 		Name: "bktec",
 		Commands: []*cli.Command{
@@ -364,7 +345,7 @@ func TestRunCommandFlagsDoNotShareParseState(t *testing.T) {
 			},
 		},
 	}
-	if err := first.Run(context.Background(), []string{"bktec", "run", "--selector-splitting"}); err != nil {
+	if err := first.Run(context.Background(), []string{"bktec", "run", "--split-by-example"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -372,7 +353,7 @@ func TestRunCommandFlagsDoNotShareParseState(t *testing.T) {
 	// two commands shared the same flag instance, the flag's hasBeenSet state
 	// from the first parse would suppress the env var here.
 	cfg = config.New()
-	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING", "true")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
 	second := &cli.Command{
 		Name: "bktec",
 		Commands: []*cli.Command{
@@ -387,8 +368,8 @@ func TestRunCommandFlagsDoNotShareParseState(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !cfg.SelectorSplitting {
-		t.Fatalf("cfg.SelectorSplitting = false, want true; flag parse state leaked between commands")
+	if !cfg.SplitByExample {
+		t.Fatalf("cfg.SplitByExample = false, want true; flag parse state leaked between commands")
 	}
 }
 

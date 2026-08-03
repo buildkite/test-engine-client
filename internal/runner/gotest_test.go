@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,7 +17,7 @@ func TestGotestRun(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath: getRandomXMLTempFilename(),
+		ResultPath: filepath.Join(t.TempDir(), "test-results.jsonl"),
 	})
 	testCases := []plan.TestCase{
 		{Path: "example.com/hello"},
@@ -42,7 +42,7 @@ func TestGotestRun_TestFailed(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath: getRandomXMLTempFilename(),
+		ResultPath: filepath.Join(t.TempDir(), "test-results.jsonl"),
 	})
 	testCases := []plan.TestCase{
 		{Path: "example.com/hello/bad"},
@@ -62,7 +62,7 @@ func TestGotestRun_BuildFailed(t *testing.T) {
 	changeCwd(t, "./testdata/go")
 
 	gotest := NewGoTest(RunnerConfig{
-		ResultPath: getRandomXMLTempFilename(),
+		ResultPath: filepath.Join(t.TempDir(), "test-results.jsonl"),
 	})
 	testCases := []plan.TestCase{
 		{Path: "example.com/hello/broken"},
@@ -276,11 +276,11 @@ func TestGotestRun_CommandFailed(t *testing.T) {
 	}
 }
 
-func TestGotestUploadResult_DefaultsToJUnit(t *testing.T) {
-	gotest := NewGoTest(RunnerConfig{ResultPath: "junit.xml"})
+func TestGotestUploadResult_DefaultsToGoJSONL(t *testing.T) {
+	gotest := NewGoTest(RunnerConfig{ResultPath: "go-test.jsonl"})
 
-	assert.Equal(t, "junit", gotest.ResultFormat())
-	assert.Equal(t, "junit.xml", gotest.ResultFilePath())
+	assert.Equal(t, "go-jsonl", gotest.ResultFormat())
+	assert.Equal(t, "go-test.jsonl", gotest.ResultFilePath())
 }
 
 func TestGotestUploadResult_DetectsGoJSONLFromGoTestJSONCommand(t *testing.T) {

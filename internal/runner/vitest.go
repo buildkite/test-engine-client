@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/buildkite/test-engine-client/v2/internal/debug"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/kballard/go-shellquote"
 )
 

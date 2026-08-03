@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -38,36 +38,37 @@ func TestGetTestTargets(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		selectorSplitting bool
-		selectorSupport   bool
-		selectorListPath  string
-		testFileList      string
-		want              []string
-		wantDiscoveries   int
+		name             string
+		selectorSupport  bool
+		selectorListPath string
+		testFileList     string
+		want             []string
+		wantDiscoveries  int
 	}{
 		{
-			name:              "selector mode uses selector list",
-			selectorSplitting: true,
-			selectorSupport:   true,
-			selectorListPath:  selectorList,
-			testFileList:      testFileList,
-			want:              []string{"selector-a", "selector-b"},
+			name:             "supported runner uses selector list",
+			selectorSupport:  true,
+			selectorListPath: selectorList,
+			testFileList:     testFileList,
+			want:             []string{"selector-a", "selector-b"},
 		},
 		{
-			name:              "selector mode discovers targets when selector list is absent",
-			selectorSplitting: true,
-			selectorSupport:   true,
-			testFileList:      testFileList,
-			want:              []string{"discovered-a", "discovered-b"},
-			wantDiscoveries:   1,
+			name:            "supported runner uses file list when selector list is absent",
+			selectorSupport: true,
+			testFileList:    testFileList,
+			want:            []string{"file-a", "file-b"},
 		},
 		{
-			name:              "unsupported selector mode retains file list precedence",
-			selectorSplitting: true,
-			selectorListPath:  selectorList,
-			testFileList:      testFileList,
-			want:              []string{"file-a", "file-b"},
+			name:            "supported runner discovers targets when lists are absent",
+			selectorSupport: true,
+			want:            []string{"discovered-a", "discovered-b"},
+			wantDiscoveries: 1,
+		},
+		{
+			name:             "unsupported runner retains file list precedence",
+			selectorListPath: selectorList,
+			testFileList:     testFileList,
+			want:             []string{"file-a", "file-b"},
 		},
 		{
 			name:         "file mode uses test file list",
@@ -87,10 +88,7 @@ func TestGetTestTargets(t *testing.T) {
 				targets:         []string{"discovered-a", "discovered-b"},
 				selectorSupport: test.selectorSupport,
 			}
-			cfg := config.Config{
-				SelectorSplitting: test.selectorSplitting,
-				SelectorListPath:  test.selectorListPath,
-			}
+			cfg := config.Config{SelectorListPath: test.selectorListPath}
 
 			got, err := getTestTargets(&cfg, testRunner, test.testFileList)
 			if err != nil {

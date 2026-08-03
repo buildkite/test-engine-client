@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
 )
 
 type FilterTestsParams struct {

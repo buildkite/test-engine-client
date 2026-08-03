@@ -15,7 +15,7 @@ cd ../../../..
 
 echo '+++ Building bktec from source'
 go build \
-  -ldflags "-X 'github.com/buildkite/test-engine-client/v2/internal/version.Version=${BUILDKITE_COMMIT:-dev}'" \
+  -ldflags "-X 'github.com/buildkite/test-engine-client/v3/internal/version.Version=${BUILDKITE_COMMIT:-dev}'" \
   -o /tmp/bktec .
 
 echo '+++ Running tests'

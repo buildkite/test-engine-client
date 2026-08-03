@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/test-engine-client/v2/internal/api"
-	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -67,13 +67,6 @@ func TestCreateRequestParams(t *testing.T) {
 		Branch:      "",
 		Runner:      "rspec",
 		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/cherry_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/dragonfruit_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/elderberry_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/grape_spec.rb"},
-			},
 			Examples: []api.TestPlanExample{
 				{
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
@@ -93,6 +86,13 @@ func TestCreateRequestParams(t *testing.T) {
 					Path:       "./testdata/rspec/spec/fruits/fig_spec.rb[1:1]",
 					Scope:      "Fig",
 				},
+			},
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/cherry_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/dragonfruit_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/elderberry_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/grape_spec.rb"},
 			},
 		},
 	}
@@ -149,10 +149,10 @@ func TestCreateRequestParams_NonRSpec(t *testing.T) {
 				Branch:      "",
 				Runner:      r.Name(),
 				Tests: api.TestPlanParamsTest{
-					Files: []api.TestPlanFile{
-						{Path: "testdata/fruits/apple.spec.js"},
-						{Path: "testdata/fruits/banana.spec.js"},
-						{Path: "testdata/fruits/cherry.spec.js"},
+					Selectors: []api.TestPlanParamsSelector{
+						{Value: "testdata/fruits/apple.spec.js"},
+						{Value: "testdata/fruits/banana.spec.js"},
+						{Value: "testdata/fruits/cherry.spec.js"},
 					},
 				},
 			}
@@ -176,7 +176,6 @@ func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 		MaxParallelism:    4,
 		Branch:            "main",
 		TestRunner:        "gotest",
-		SelectorSplitting: true,
 		LocationPrefix:    "my/project",
 		SelectionStrategy: "least-reliable",
 		SelectionParams: map[string]string{
@@ -234,50 +233,6 @@ func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 	}
 }
 
-func TestCreateRequestParams_LocationPrefixOnlySetForSelectorSplitting(t *testing.T) {
-	testRunner := metadataTestRunner{
-		name:           "gotest",
-		locationPrefix: "my/project",
-		supportedFeatures: runner.SupportedFeatures{
-			SplitBySelector: true,
-		},
-	}
-
-	tests := []struct {
-		name              string
-		selectorSplitting bool
-		want              string
-	}{
-		{
-			name: "file splitting",
-		},
-		{
-			name:              "selector splitting",
-			selectorSplitting: true,
-			want:              "my/project",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := config.Config{
-				TestRunner:        "gotest",
-				SelectorSplitting: test.selectorSplitting,
-				LocationPrefix:    "my/project",
-			}
-
-			got, err := createRequestParam(context.Background(), &cfg, []string{"example.com/project/package"}, api.Client{}, testRunner)
-			if err != nil {
-				t.Fatalf("createRequestParam() error = %v", err)
-			}
-
-			if got.LocationPrefix != test.want {
-				t.Errorf("createRequestParam().LocationPrefix = %q, want %q", got.LocationPrefix, test.want)
-			}
-		})
-	}
-}
-
 func TestCreateRequestParams_RSpecSelectorSplittingExpandsFilteredFiles(t *testing.T) {
 	filterRequestCount := 0
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -292,13 +247,12 @@ func TestCreateRequestParams_RSpecSelectorSplittingExpandsFilteredFiles(t *testi
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "rspec",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -372,13 +326,12 @@ func TestCreateRequestParams_RSpecSelectorSplittingNoFilteredFiles(t *testing.T)
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "rspec",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -442,16 +395,15 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithLocationPrefix(t *testing
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		MaxParallelism:    10,
-		TargetTime:        5 * time.Minute,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
-		LocationPrefix:    "my/project",
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		MaxParallelism:   10,
+		TargetTime:       5 * time.Minute,
+		Branch:           "main",
+		TestRunner:       "rspec",
+		LocationPrefix:   "my/project",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -544,14 +496,13 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithDotLocationPrefix(t *test
 	defer svr.Close()
 
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
-		LocationPrefix:    "./",
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "rspec",
+		LocationPrefix:   "./",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -603,45 +554,6 @@ func TestCreateRequestParams_RSpecSelectorSplittingWithDotLocationPrefix(t *test
 			},
 			Selectors: []api.TestPlanParamsSelector{
 				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestCreateRequestParams_GoTestSelectorSplittingOptInOff(t *testing.T) {
-	cfg := config.Config{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		TestRunner:  "gotest",
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseURL: "http://example.com",
-	})
-	packages := []string{
-		"github.com/buildkite/test-engine-client/internal/api",
-		"github.com/buildkite/test-engine-client/internal/runner",
-	}
-
-	got, err := createRequestParam(context.Background(), &cfg, packages, *client, runner.NewGoTest(runner.RunnerConfig{}))
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "gotest",
-		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "github.com/buildkite/test-engine-client/internal/api"},
-				{Path: "github.com/buildkite/test-engine-client/internal/runner"},
 			},
 		},
 	}
@@ -726,33 +638,12 @@ func TestShouldFilterAndSplitSelectorFiles(t *testing.T) {
 
 func TestEncodeRequestTargets(t *testing.T) {
 	targets := newRequestTargets([]string{"first_test", "second_test"}, "project")
-	tests := []struct {
-		name string
-		mode requestMode
-		want api.TestPlanParamsTest
-	}{
-		{
-			name: "files use prefixed paths",
-			mode: requestByFile,
-			want: api.TestPlanParamsTest{
-				Files: []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/second_test"}},
-			},
-		},
-		{
-			name: "selectors use original values",
-			mode: requestBySelector,
-			want: api.TestPlanParamsTest{
-				Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "second_test"}},
-			},
-		},
+	want := api.TestPlanParamsTest{
+		Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "second_test"}},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if diff := cmp.Diff(encodeRequestTargets(targets, test.mode), test.want); diff != "" {
-				t.Errorf("encodeRequestTargets() diff (-got +want):\n%s", diff)
-			}
-		})
+	if diff := cmp.Diff(encodeRequestTargets(targets), want); diff != "" {
+		t.Errorf("encodeRequestTargets() diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -783,79 +674,33 @@ func TestFilterAndExpandTargets(t *testing.T) {
 		},
 	}
 
-	tests := []struct {
-		name string
-		mode requestMode
-		want api.TestPlanParamsTest
-	}{
-		{
-			name: "file mode preserves prefixed files",
-			mode: requestByFile,
-			want: api.TestPlanParamsTest{
-				Files: []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/third_test"}},
-			},
-		},
-		{
-			name: "selector mode preserves raw selector values",
-			mode: requestBySelector,
-			want: api.TestPlanParamsTest{
-				Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "third_test"}},
-			},
-		},
+	want := api.TestPlanParamsTest{
+		Selectors: []api.TestPlanParamsSelector{{Value: "first_test"}, {Value: "third_test"}},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			testRunner.examples[0].Path = "middle_test::example"
-			got, err := filterAndExpandTargets(context.Background(), &config.Config{}, *client, targets, testRunner, test.mode, "targets")
-			if err != nil {
-				t.Fatalf("filterAndExpandTargets() error = %v", err)
-			}
-
-			test.want.Examples = []api.TestPlanExample{
-				{
-					Format:     plan.TestCaseFormatExample,
-					Identifier: "middle_test::example",
-					Name:       "example",
-					Path:       "project/middle_test::example",
-				},
-			}
-			if diff := cmp.Diff(got, test.want); diff != "" {
-				t.Errorf("filterAndExpandTargets() diff (-got +want):\n%s", diff)
-			}
-
-			wantFilterFiles := []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/middle_test"}, {Path: "project/third_test"}}
-			if diff := cmp.Diff(gotFilterParams.Files, wantFilterFiles); diff != "" {
-				t.Errorf("filter_tests files diff (-got +want):\n%s", diff)
-			}
-			if diff := cmp.Diff(exampleFiles, []string{"middle_test"}); diff != "" {
-				t.Errorf("GetExamples() files diff (-got +want):\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestCreateRequestParams_PlaywrightFileModeAlwaysFilters(t *testing.T) {
-	filterRequestCount := 0
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		filterRequestCount++
-		fmt.Fprint(w, `{"tests":[]}`)
-	}))
-	defer svr.Close()
-
-	cfg := config.Config{
-		SuiteSlug:      "my-suite",
-		TestRunner:     "playwright",
-		SplitByExample: false,
-	}
-	client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
-
-	_, err := createRequestParam(context.Background(), &cfg, []string{"first.spec.js"}, *client, runner.NewPlaywright(runner.RunnerConfig{}))
+	got, err := filterAndExpandTargets(context.Background(), &config.Config{}, *client, targets, testRunner)
 	if err != nil {
-		t.Fatalf("createRequestParam() error = %v", err)
+		t.Fatalf("filterAndExpandTargets() error = %v", err)
 	}
-	if filterRequestCount != 1 {
-		t.Errorf("filter request count = %d, want 1", filterRequestCount)
+
+	want.Examples = []api.TestPlanExample{
+		{
+			Format:     plan.TestCaseFormatExample,
+			Identifier: "middle_test::example",
+			Name:       "example",
+			Path:       "project/middle_test::example",
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("filterAndExpandTargets() diff (-got +want):\n%s", diff)
+	}
+
+	wantFilterFiles := []api.TestPlanFile{{Path: "project/first_test"}, {Path: "project/middle_test"}, {Path: "project/third_test"}}
+	if diff := cmp.Diff(gotFilterParams.Files, wantFilterFiles); diff != "" {
+		t.Errorf("filter_tests files diff (-got +want):\n%s", diff)
+	}
+	if diff := cmp.Diff(exampleFiles, []string{"middle_test"}); diff != "" {
+		t.Errorf("GetExamples() files diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -875,13 +720,12 @@ func TestCreateRequestParams_SelectorSplittingExpandsSlowFilesForSplitByExampleR
 			defer svr.Close()
 
 			cfg := config.Config{
-				OrganizationSlug:  "my-org",
-				SuiteSlug:         "my-suite",
-				Identifier:        "identifier",
-				Parallelism:       2,
-				TestRunner:        testRunner,
-				SelectorSplitting: true,
-				SplitByExample:    true,
+				OrganizationSlug: "my-org",
+				SuiteSlug:        "my-suite",
+				Identifier:       "identifier",
+				Parallelism:      2,
+				TestRunner:       testRunner,
+				SplitByExample:   true,
 			}
 
 			client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
@@ -932,60 +776,6 @@ func TestCreateRequestParams_SelectorSplittingExpandsSlowFilesForSplitByExampleR
 	}
 }
 
-func TestCreateRequestParams_SelectorOptInIgnoredForSplitByExampleRunner(t *testing.T) {
-	filterRequestCount := 0
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		filterRequestCount++
-		fmt.Fprint(w, `{"tests": []}`)
-	}))
-	defer svr.Close()
-
-	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "rspec",
-		SelectorSplitting: true,
-	}
-
-	client := api.NewClient(api.ClientConfig{
-		ServerBaseURL: svr.URL,
-	})
-	files := []string{
-		"testdata/rspec/spec/fruits/apple_spec.rb",
-		"testdata/rspec/spec/fruits/banana_spec.rb",
-	}
-
-	testRunner := metadataTestRunner{name: "rspec"}
-	got, err := createRequestParam(context.Background(), &cfg, files, *client, testRunner)
-	if err != nil {
-		t.Errorf("createRequestParam() error = %v", err)
-	}
-
-	if filterRequestCount != 1 {
-		t.Errorf("filter request count = %d, want 1", filterRequestCount)
-	}
-
-	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 2,
-		Branch:      "main",
-		Runner:      "rspec",
-		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
-			},
-		},
-	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
-	}
-}
-
 func TestCreateRequestParams_WithSelectionAndMetadata_NonRSpec(t *testing.T) {
 	cfg := config.Config{
 		Identifier:        "identifier",
@@ -1032,9 +822,9 @@ func TestCreateRequestParams_WithSelectionAndMetadata_NonRSpec(t *testing.T) {
 			"source":   "cli",
 		},
 		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "testdata/fruits/apple.spec.js"},
-				{Path: "testdata/fruits/banana.spec.js"},
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/fruits/apple.spec.js"},
+				{Value: "testdata/fruits/banana.spec.js"},
 			},
 		},
 	}
@@ -1273,14 +1063,14 @@ func TestCreateRequestParams_NoFilteredFiles(t *testing.T) {
 		Parallelism: 7,
 		Branch:      "",
 		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/cherry_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/dragonfruit_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/elderberry_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/fig_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/grape_spec.rb"},
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/banana_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/cherry_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/dragonfruit_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/elderberry_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/fig_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/grape_spec.rb"},
 			},
 		},
 	}
@@ -1356,14 +1146,13 @@ func TestCreateRequestParams_WithTagFilters(t *testing.T) {
 // tag filter.
 func TestCreateRequestParams_SelectorSplittingWithTagFilters(t *testing.T) {
 	cfg := config.Config{
-		OrganizationSlug:  "my-org",
-		SuiteSlug:         "my-suite",
-		Identifier:        "identifier",
-		Parallelism:       2,
-		Branch:            "main",
-		TestRunner:        "pytest",
-		SelectorSplitting: true,
-		TagFilters:        "team:frontend",
+		OrganizationSlug: "my-org",
+		SuiteSlug:        "my-suite",
+		Identifier:       "identifier",
+		Parallelism:      2,
+		Branch:           "main",
+		TestRunner:       "pytest",
+		TagFilters:       "team:frontend",
 	}
 
 	client := api.NewClient(api.ClientConfig{
@@ -1459,9 +1248,9 @@ func TestCreateRequestParams_WithTagFilters_NonPytest(t *testing.T) {
 		Branch:      "main",
 		Runner:      "rspec",
 		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "testdata/rspec/spec/fruits/apple_spec.rb"},
-				{Path: "testdata/rspec/spec/fruits/banana_spec.rb"},
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/banana_spec.rb"},
 			},
 		},
 	}
@@ -1500,24 +1289,13 @@ func TestCreateRequestParams_WithLocationPrefix(t *testing.T) {
 	}
 
 	cases := []struct {
-		prefix    string
-		wantFiles []api.TestPlanFile
+		prefix string
 	}{
 		{
 			prefix: "./",
-			wantFiles: []api.TestPlanFile{
-				{Path: "./testdata/rspec/spec/fruits/apple_spec.rb"},
-				{Path: "./testdata/rspec/spec/fruits/banana_spec.rb"},
-				{Path: "./testdata/rspec/spec/fruits/cherry_spec.rb"},
-			},
 		},
 		{
 			prefix: "monorepo/project-abc",
-			wantFiles: []api.TestPlanFile{
-				{Path: "monorepo/project-abc/testdata/rspec/spec/fruits/apple_spec.rb"},
-				{Path: "monorepo/project-abc/testdata/rspec/spec/fruits/banana_spec.rb"},
-				{Path: "monorepo/project-abc/testdata/rspec/spec/fruits/cherry_spec.rb"},
-			},
 		},
 	}
 
@@ -1535,12 +1313,17 @@ func TestCreateRequestParams_WithLocationPrefix(t *testing.T) {
 			}
 
 			want := api.TestPlanParams{
-				Identifier:  "identifier",
-				Parallelism: 7,
-				Branch:      "",
-				Runner:      "rspec",
+				Identifier:     "identifier",
+				Parallelism:    7,
+				Branch:         "",
+				LocationPrefix: c.prefix,
+				Runner:         "rspec",
 				Tests: api.TestPlanParamsTest{
-					Files: c.wantFiles,
+					Selectors: []api.TestPlanParamsSelector{
+						{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+						{Value: "testdata/rspec/spec/fruits/banana_spec.rb"},
+						{Value: "testdata/rspec/spec/fruits/cherry_spec.rb"},
+					},
 				},
 			}
 
@@ -1641,15 +1424,12 @@ func TestCreateRequestParams_WithLocationPrefix_SplitByExample(t *testing.T) {
 	// filtered files: banana_spec.rb
 	// the rest: apple_spec.rb, cherry_spec.rb
 	want := api.TestPlanParams{
-		Identifier:  "identifier",
-		Parallelism: 7,
-		Branch:      "",
-		Runner:      "rspec",
+		Identifier:     "identifier",
+		Parallelism:    7,
+		Branch:         "",
+		LocationPrefix: "my/project",
+		Runner:         "rspec",
 		Tests: api.TestPlanParamsTest{
-			Files: []api.TestPlanFile{
-				{Path: "my/project/testdata/rspec/spec/fruits/apple_spec.rb"},
-				{Path: "my/project/testdata/rspec/spec/fruits/cherry_spec.rb"},
-			},
 			Examples: []api.TestPlanExample{
 				{
 					Identifier: "./testdata/rspec/spec/fruits/banana_spec.rb[1:1]",
@@ -1663,6 +1443,10 @@ func TestCreateRequestParams_WithLocationPrefix_SplitByExample(t *testing.T) {
 					Path:       "my/project/testdata/rspec/spec/fruits/banana_spec.rb[1:2:1]",
 					Scope:      "Banana when not ripe",
 				},
+			},
+			Selectors: []api.TestPlanParamsSelector{
+				{Value: "testdata/rspec/spec/fruits/apple_spec.rb"},
+				{Value: "testdata/rspec/spec/fruits/cherry_spec.rb"},
 			},
 		},
 	}

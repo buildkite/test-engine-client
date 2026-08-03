@@ -14,7 +14,7 @@ import (
 // user-provided selector list instead of discovered test files. In this mode
 // test file discovery is skipped, so TestFilePattern isn't required.
 func (c *Config) splitBySelectorList() bool {
-	return c.SelectorSplitting && c.SelectorListPath != ""
+	return c.SelectorListPath != ""
 }
 
 // Checks common to all commands
@@ -91,10 +91,6 @@ func (c *Config) validate() error {
 
 	if c.SelectionStrategy == "" && len(c.SelectionParams) > 0 {
 		c.errs.appendFieldError("selection-param", "selection strategy must be set when selection params are provided")
-	}
-
-	if c.SelectorListPath != "" && !c.SelectorSplitting {
-		c.errs.appendFieldError("selectors", "selector splitting must be enabled when a selector list is provided")
 	}
 
 	if len(c.errs) > 0 {

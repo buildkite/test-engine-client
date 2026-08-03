@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/v2/internal/api"
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/stretchr/testify/assert"
 )
 

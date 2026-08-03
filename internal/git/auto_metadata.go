@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/test-engine-client/v2/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
 )
 
 // ResolveBaseBranch determines the base branch ref to diff against.

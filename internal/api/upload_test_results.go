@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/test-engine-client/v2/internal/version"
+	"github.com/buildkite/test-engine-client/v3/internal/version"
 )
 
 var (

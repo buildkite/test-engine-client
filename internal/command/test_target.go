@@ -1,16 +1,15 @@
 package command
 
 import (
-	"github.com/buildkite/test-engine-client/v2/internal/config"
-	"github.com/buildkite/test-engine-client/v2/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 )
 
 func getTestTargets(cfg *config.Config, testRunner runner.TestRunnerWithTargetDiscovery, testFileList string) ([]string, error) {
-	if shouldUseSelectorSplitting(cfg, testRunner) {
+	if shouldUseSelectorSplitting(testRunner) {
 		if cfg.SelectorListPath != "" {
 			return getRowsFromFile(cfg.SelectorListPath)
 		}
-		return testRunner.DiscoverTestTargets()
 	}
 
 	if testFileList != "" {

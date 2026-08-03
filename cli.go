@@ -287,7 +287,7 @@ var selectorsFlag = &cli.StringFlag{
 	Name:        "selector-file",
 	Category:    "TEST RUNNER",
 	Value:       "",
-	Usage:       "Path to a file containing a list of selectors to run (one per line). Must be used alongside `selector-splitting`",
+	Usage:       "Path to a file containing a list of selectors to run (one per line)",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_FILE"),
 	Destination: &cfg.SelectorListPath,
 }
@@ -349,13 +349,15 @@ var splitByExampleFlag = &cli.BoolFlag{
 	Destination: &cfg.SplitByExample,
 }
 
-var selectorSplittingFlag = &cli.BoolFlag{
-	Name:        "selector-splitting",
-	Category:    "TEST RUNNER",
-	Usage:       "Enable experimental selector-based test splitting",
-	Value:       false,
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING"),
-	Destination: &cfg.SelectorSplitting,
+// selectorSplittingCompatibilityFlag preserves CLI and environment compatibility
+// for pipelines that explicitly enabled selector splitting before v3. Selector
+// splitting is unconditional in v3, so the parsed value is intentionally unused.
+var selectorSplittingCompatibilityFlag = &cli.BoolFlag{
+	Name:    "selector-splitting",
+	Usage:   "Deprecated; selector-based test splitting is always enabled",
+	Value:   true,
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING"),
+	Hidden:  true,
 }
 
 var failOnNoTestsFlag = &cli.BoolFlag{
@@ -589,7 +591,7 @@ var runnerEnvironmentFlags = []cli.Flag{
 	testRunnerFlag,
 	resultPathFlag,
 	splitByExampleFlag,
-	selectorSplittingFlag,
+	selectorSplittingCompatibilityFlag,
 	selectorsFlag,
 	locationPrefixFlag,
 	// Runner Retry Flags

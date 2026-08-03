@@ -63,9 +63,3 @@ Cucumber supports [selector-based test splitting](../README.md#selector-based-te
 
 > [!NOTE]
 > If you upload results with the [Ruby test collector](https://buildkite.com/docs/test-engine/test-collection/ruby-collectors), we recommend updating to `buildkite-test_collector` v2.14.0 or later so selectors are attributed directly. If you do not, nothing breaks: Test Engine [falls back to the file path](../README.md#how-selectors-are-matched) when a selector is not attributed, which keeps file-based matching working. Updating matters most if you use a location prefix (`--location-prefix` / `BUILDKITE_TEST_ENGINE_LOCATION_PREFIX`), since the fallback only handles the prefix on a best-effort basis.
-
-To enable it:
-
-```sh
-export BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING=true
-```

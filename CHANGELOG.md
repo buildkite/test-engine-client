@@ -1,4 +1,8 @@
 # Changelog
+## 3.0.0 - 2026-07-31
+- ⚠️ **BREAKING:** Selector-based splitting now replaces file-based splitting for supported runners. The deprecated `--selector-splitting` flag and `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING` environment variable are still accepted for upgrade compatibility, but their values no longer affect behavior. Existing bktec v2 releases continue to send file-based requests and remain compatible with file-based splitting; remain on v2 if file-based requests are required. See [Migrating from bktec v2 to v3](./docs/migrating-to-v3.md).
+- The Go module path is now `github.com/buildkite/test-engine-client/v3`.
+
 ## 2.11.0 - 2026-07-28
 - Enable skipped-test filtering for [pytest](./docs/pytest.md). Pytest already supported split-by-example; skip uses the same example-level path (matching RSpec and Cucumber). Playwright remains without skip until project-scoped selectors exist, because the same file:line path can run across multiple projects.
 - Default static parallelism to 1 when `BUILDKITE_PARALLEL_JOB_COUNT` is unset, matching Buildkite's serial command-step behaviour. Explicit `--parallelism` / env values are unchanged.

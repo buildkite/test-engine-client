@@ -1,4 +1,4 @@
-module github.com/buildkite/test-engine-client/v2
+module github.com/buildkite/test-engine-client/v3
 
 go 1.25.0
 

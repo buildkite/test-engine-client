@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/buildkite/test-engine-client/v2/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli/v3"
 )

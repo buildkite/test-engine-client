@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/buildkite/test-engine-client/v2/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
 func buildCommand(runner TestRunner, testCases []plan.TestCase, retry bool) (*exec.Cmd, error) {
