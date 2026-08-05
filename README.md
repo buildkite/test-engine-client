@@ -33,9 +33,8 @@ Splitting quality depends on the timing data available for the suite. First runs
 
 | Feature | RSpec | Jest | Vitest | Playwright | Cypress | pytest | gotest | Cucumber | Custom test runner |
 | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| Split tests by file[^1] | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example) | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
 | [Selector-based test splitting](https://github.com/buildkite/test-engine-client/blob/main/README.md#selector-based-test-splitting) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example) | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
 | Filter test files | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
 | Filter tests by tag | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Automatically retry failed test | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
@@ -227,9 +226,11 @@ By default, `bktec` discovers tests and requests a plan by sending runner-specif
 > bktec v3 always uses selector splitting for supported runners. Existing bktec v2 releases continue to use file-based splitting; remain on v2 if file-based requests are required.
 > The deprecated `--selector-splitting` flag and `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING` environment variable are accepted so existing pipeline configuration continues to work, but their values have no effect in v3.
 
+See [Migrating from bktec v2 to v3](./docs/migrating-to-v3.md) for collector requirements, runner-specific changes, and upgrade verification steps.
+
 This is supported for RSpec, Jest, Vitest, Cypress, Playwright, pytest, gotest, Cucumber, and the custom runner.
 
-By default, `bktec` still discovers selectors itself: the same file discovery used for file-based splitting for every runner except gotest (which uses `go list` output) and custom (which falls back to its normal file-pattern collection). You can instead provide a fixed list of selectors with `--selector-file` (or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`), a path to a newline-delimited file of selector values:
+By default, `bktec` discovers selectors itself using file discovery for every runner except gotest (which uses `go list` output) and custom (which falls back to its configured file pattern). You can instead provide a fixed list of selectors with `--selector-file` (or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`), a path to a newline-delimited file of selector values:
 
 ```sh
 export BUILDKITE_TEST_ENGINE_SELECTOR_FILE=selectors.txt
@@ -404,5 +405,3 @@ To test, run:
 ```sh
 ./bin/test
 ```
-
-[^1]: NB: For go test, test splitting is by package and not by file.

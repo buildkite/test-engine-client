@@ -87,10 +87,10 @@ bktec run
 
 ## Selector-based test splitting
 
-pytest supports [selector-based test splitting](../README.md#selector-based-test-splitting). It doesn't change how your tests are split: the selector sent to Test Engine is the same test file path that file-based splitting already discovers using `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` / `_EXCLUDE_PATTERN`, so file discovery and the `{{testExamples}}` command placeholder work the same way.
+pytest uses [selector-based test splitting](../README.md#selector-based-test-splitting) by default. Each test file path discovered with pytest's default `**/{*_test,test_*}.py` pattern becomes a selector. You can customize which files are discovered with `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` and `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN`; the `{{testExamples}}` command placeholder works as before.
 
 > [!NOTE]
-> If you upload results with [Buildkite Test Collector for pytest](https://buildkite.com/docs/test-engine/python-collectors#pytest-collector), we recommend updating to `buildkite-test-collector` v1.6.0 or later so selectors are attributed directly. If you do not, nothing breaks: Test Engine [falls back to the file path](../README.md#how-selectors-are-matched) when a selector is not attributed, which keeps file-based matching working. Updating matters most if you use a location prefix, since the fallback only handles the prefix on a best-effort basis.
+> If you upload results with [Buildkite Test Collector for pytest](https://buildkite.com/docs/test-engine/python-collectors#pytest-collector), we recommend updating to `buildkite-test-collector` v1.6.0 or later so selectors are attributed directly. Older versions can still upload results, and Test Engine [attempts to match selectors using the file path](../README.md#how-selectors-are-matched). If no history matches, Test Engine uses default duration estimates and bktec prints a warning. Updating matters most if you use a location prefix, since the fallback only handles the prefix on a best-effort basis.
 
 ## Automatically retry failed tests
 You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using either the default test command or the command specified in `BUILDKITE_TEST_ENGINE_TEST_CMD`.
