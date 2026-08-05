@@ -65,20 +65,14 @@ func main() {
 
 	printRow(
 		runners,
-		"Split tests by file[^1]",
-		func(r runner.TestRunner) bool { return r.SupportedFeatures().SplitByFile },
+		"[Selector-based test splitting](https://github.com/buildkite/test-engine-client/blob/main/README.md#selector-based-test-splitting)",
+		func(r runner.TestRunner) bool { return r.SupportedFeatures().SplitBySelector },
 	)
 
 	printRow(
 		runners,
 		"[Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)",
 		func(r runner.TestRunner) bool { return r.SupportedFeatures().SplitByExample },
-	)
-
-	printRow(
-		runners,
-		"[Selector-based test splitting](https://github.com/buildkite/test-engine-client/blob/main/README.md#selector-based-test-splitting)",
-		func(r runner.TestRunner) bool { return r.SupportedFeatures().SplitBySelector },
 	)
 
 	printRow(

@@ -26,7 +26,7 @@ If you upload results with a Buildkite test collector, update to a version that 
 - JavaScript: `buildkite-test-collector` v1.10.0 or later
 - Python: `buildkite-test-collector` v1.6.0 or later
 
-Older collector versions continue to work because Test Engine falls back to matching the execution's file path. Updating is most important when you use a location prefix, because prefix handling in the fallback is best effort.
+Older collector versions can still upload results, and Test Engine attempts to match selectors against each execution's file path. If that fallback cannot match existing history, Test Engine uses default duration estimates. Updating is most important when you use a location prefix, because prefix handling in the fallback is best effort.
 
 When no selector history can be matched, Test Engine uses default duration estimates instead of legacy file timings and bktec prints a warning. Run the suite once to record selector timings. If you expected existing history to match, check the collector version and location-prefix configuration.
 
