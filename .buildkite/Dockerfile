@@ -1,6 +1,6 @@
 FROM ruby:4.0.6-slim-bookworm AS ruby
 FROM cypress/included:14.5.3 AS cypress
-FROM python:3.15.0b3-bookworm AS python
+FROM python:3.15.0b4-bookworm AS python
 
 FROM golang:1.26.5-bookworm AS golang
 
