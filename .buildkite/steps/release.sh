@@ -32,11 +32,16 @@ if ! printf '%s\n' "${tag}" | grep -Eq "${version_pattern}"; then
 fi
 
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-  echo "Release version already exists: ${tag}"
-  exit 1
+  tag_commit=$(git rev-list -n 1 "refs/tags/${tag}")
+  head_commit=$(git rev-parse HEAD)
+  if [[ "${tag_commit}" != "${head_commit}" ]]; then
+    echo "Release version already exists on another commit: ${tag}"
+    exit 1
+  fi
+  echo "Retrying release version ${tag} on ${head_commit}"
+else
+  git tag "${tag}"
 fi
-
-git tag "${tag}"
 
 # When releasing a stable version, we want the changelog
 # in GitHub to be based on the previous stable version.

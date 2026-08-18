@@ -37,13 +37,13 @@ fi
 rm -rf "${package_dir}"
 mkdir -p "${package_dir}"
 
-binary_count=$(jq '[.[] | select(.type == "Binary")] | length' "${artifacts_file}")
+binary_count=$(jq '[.[] | select(.type == "Binary" and .extra.Format == "binary")] | length' "${artifacts_file}")
 if [ "${binary_count}" -eq 0 ]; then
   echo "No release binaries found in ${artifacts_file}" >&2
   exit 1
 fi
 
-jq -r '.[] | select(.type == "Binary") | [.path, .goos, .goarch] | @tsv' "${artifacts_file}" |
+jq -r '.[] | select(.type == "Binary" and .extra.Format == "binary") | [.path, .goos, .goarch] | @tsv' "${artifacts_file}" |
   while IFS="$(printf '\t')" read -r source_file goos goarch; do
     if [ ! -f "${source_file}" ]; then
       echo "Release binary not found: ${source_file}" >&2
