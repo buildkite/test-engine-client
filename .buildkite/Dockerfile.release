@@ -1,7 +1,7 @@
 FROM goreleaser/goreleaser:v2.17.1 AS goreleaser
 
-# Install release tooling
-RUN apk add --no-cache aws-cli jq
+# Install AWS CLI
+RUN apk add aws-cli
 RUN aws --version
 
 ENTRYPOINT []

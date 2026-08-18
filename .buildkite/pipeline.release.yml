@@ -10,6 +10,7 @@ steps:
   - wait
 
   - name: ":rocket: Release"
+    key: release
     artifact_paths: "dist/**/*"
     plugins:
       # IAM role to access SSM
@@ -47,3 +48,15 @@ steps:
             - ECR_AWS_ACCESS_KEY_ID
             - ECR_AWS_SECRET_ACCESS_KEY
             - ECR_AWS_SESSION_TOKEN
+
+  # Keep Files publication downstream of the complete release. This means a
+  # partial GitHub, package, or image release still fails closed, while this
+  # step can be retried without replaying any existing release publisher.
+  # The supported plugin owns OIDC and upload behavior; we intentionally avoid
+  # duplicating its API and retry semantics in this repository.
+  - name: ":package: Publish release files"
+    depends_on: release
+    plugins:
+      - publish-to-packages#v2.2.0:
+          artifacts: "dist/buildkite-packages/*"
+          registry: "buildkite/test-engine-client-files"
