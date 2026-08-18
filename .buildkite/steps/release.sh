@@ -69,7 +69,7 @@ echo "--- :key: :aws: Login to AWS ECR Public"
   export AWS_ACCESS_KEY_ID="${ECR_AWS_ACCESS_KEY_ID}"
   export AWS_SECRET_ACCESS_KEY="${ECR_AWS_SECRET_ACCESS_KEY}"
   export AWS_SESSION_TOKEN="${ECR_AWS_SESSION_TOKEN}"
-  aws ecr-public get-login-password --region us-east-1 | docker login public.ecr.aws/buildkite/test-engine-client --username AWS --password-stdin
+  aws ecr-public get-login-password --region us-east-1 | docker login public.ecr.aws/buildkite/test-engine-client --username AWS --password-stdin 
 )
 
 echo "+++ :rocket: Creating Release"
