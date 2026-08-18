@@ -31,6 +31,7 @@ if ! printf '%s\n' "${tag}" | grep -Eq "${version_pattern}"; then
   exit 1
 fi
 
+retrying_release=false
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
   tag_commit=$(git rev-list -n 1 "refs/tags/${tag}")
   head_commit=$(git rev-parse HEAD)
@@ -38,6 +39,7 @@ if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
     echo "Release version already exists on another commit: ${tag}"
     exit 1
   fi
+  retrying_release=true
   echo "Retrying release version ${tag} on ${head_commit}"
 else
   git tag "${tag}"
@@ -59,26 +61,31 @@ if [[ ! "${tag}" =~ "-rc" ]]; then
   export GORELEASER_IGNORE_TAG="*-rc.*"
 fi
 
-echo "--- :key: :buildkite: Login to Buildkite Packages"
- buildkite-agent oidc request-token \
-   --audience "https://packages.buildkite.com/buildkite/test-engine-client-docker" \
-   --lifetime 300 \
-   | docker login packages.buildkite.com/buildkite/test-engine-client-docker --username buildkite --password-stdin
+if [[ "${retrying_release}" == "true" ]]; then
+  echo "+++ :hammer: Rebuilding release files"
+  goreleaser release --clean --skip=publish,docker
+else
+  echo "--- :key: :buildkite: Login to Buildkite Packages"
+  buildkite-agent oidc request-token \
+    --audience "https://packages.buildkite.com/buildkite/test-engine-client-docker" \
+    --lifetime 300 \
+    | docker login packages.buildkite.com/buildkite/test-engine-client-docker --username buildkite --password-stdin
 
-echo "--- :key: :docker: Login to Docker"
-echo "${DOCKERHUB_PASSWORD}" | docker login --username "${DOCKERHUB_USER}" --password-stdin
+  echo "--- :key: :docker: Login to Docker"
+  echo "${DOCKERHUB_PASSWORD}" | docker login --username "${DOCKERHUB_USER}" --password-stdin
 
-echo "--- :key: :aws: Login to AWS ECR Public"
-(
-  # The credentials is prefixed to avoid clashing with other AWS credentials
-  export AWS_ACCESS_KEY_ID="${ECR_AWS_ACCESS_KEY_ID}"
-  export AWS_SECRET_ACCESS_KEY="${ECR_AWS_SECRET_ACCESS_KEY}"
-  export AWS_SESSION_TOKEN="${ECR_AWS_SESSION_TOKEN}"
-  aws ecr-public get-login-password --region us-east-1 | docker login public.ecr.aws/buildkite/test-engine-client --username AWS --password-stdin 
-)
+  echo "--- :key: :aws: Login to AWS ECR Public"
+  (
+    # The credentials is prefixed to avoid clashing with other AWS credentials
+    export AWS_ACCESS_KEY_ID="${ECR_AWS_ACCESS_KEY_ID}"
+    export AWS_SECRET_ACCESS_KEY="${ECR_AWS_SECRET_ACCESS_KEY}"
+    export AWS_SESSION_TOKEN="${ECR_AWS_SESSION_TOKEN}"
+    aws ecr-public get-login-password --region us-east-1 | docker login public.ecr.aws/buildkite/test-engine-client --username AWS --password-stdin
+  )
 
-echo "+++ :rocket: Creating Release"
-goreleaser release --clean
+  echo "+++ :rocket: Creating Release"
+  goreleaser release --clean
+fi
 
 echo "+++ :package: Publishing release files to Buildkite Packages"
 .buildkite/steps/upload-release-files.sh "${tag}"
