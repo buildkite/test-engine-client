@@ -23,8 +23,13 @@ mkdir -p "${package_dir}"
 case "${artifact_name}" in
   "bktec_${version}_checksums.txt")
     # Same hashes, renamed entries: the staged copies are byte-identical.
+    # GoReleaser's checksum is global, so skip entries this path does not
+    # publish (deb/rpm packages); their names pass through rename unchanged.
     while read -r hash name; do
-      printf '%s  %s\n' "${hash}" "$(rename "${name}")"
+      staged_name=$(rename "${name}")
+      if [ "${staged_name}" != "${name}" ]; then
+        printf '%s  %s\n' "${hash}" "${staged_name}"
+      fi
     done < "${artifact}" > "${package_dir}/bktec-checksums-${version}.txt"
     ;;
   *)
