@@ -18,6 +18,7 @@ audience="https://packages.buildkite.com/buildkite/${registry}"
 upload_url="https://api.buildkite.com/v2/packages/organizations/buildkite/registries/${registry}/packages"
 package_dir="${dist_dir}/buildkite-packages"
 artifacts_file="${dist_dir}/artifacts.json"
+checksums_file="${package_dir}/bktec-checksums-${version}.txt"
 
 version_number='(0|[1-9][0-9]*)'
 prerelease_identifier='(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
@@ -49,25 +50,9 @@ jq -r '.[] | select(.type == "Binary") | [.path, .goos, .goarch] | @tsv' "${arti
       exit 1
     fi
 
-    case "${goarch}" in
-      amd64|arm64) ;;
-      *)
-        echo "Unsupported release platform: ${goos}/${goarch}" >&2
-        exit 1
-        ;;
-    esac
-
-    case "${goos}" in
-      darwin|linux)
-        extension="bin"
-        ;;
-      windows)
-        extension="exe"
-        ;;
-      *)
-        echo "Unsupported release platform: ${goos}/${goarch}" >&2
-        exit 1
-        ;;
+    extension="bin"
+    case "${source_file}" in
+      *.exe) extension="exe" ;;
     esac
 
     destination="${package_dir}/bktec-${goos}-${goarch}-${version}.${extension}"
@@ -87,16 +72,53 @@ fi
 
 (
   cd "${package_dir}"
-  sha256sum ./*.bin ./*.exe > "bktec-checksums-${version}.txt"
+  sha256sum ./* > "${checksums_file##*/}"
 )
 
 echo "--- :key: :buildkite: Fetching OIDC token for ${audience}"
 token=$(buildkite-agent oidc request-token --audience "${audience}" --lifetime 300)
 
-for file in "${package_dir}"/*; do
+upload() {
+  file=$1
+  filename=${file##*/}
+  existing_file="${file}.existing"
+  download_url="https://packages.buildkite.com/buildkite/${registry}/files/${filename}"
+
+  status=$(curl -sS -L -o "${existing_file}" -w '%{http_code}' "${download_url}")
+  case "${status}" in
+    200)
+      if [ "$(sha256sum "${file}" | cut -d ' ' -f 1)" = "$(sha256sum "${existing_file}" | cut -d ' ' -f 1)" ]; then
+        echo "--- :white_check_mark: ${filename} is already published"
+        rm "${existing_file}"
+        return
+      fi
+      echo "Published file differs from ${file}" >&2
+      rm "${existing_file}"
+      exit 1
+      ;;
+    404)
+      rm "${existing_file}"
+      ;;
+    *)
+      echo "Could not check ${download_url}: HTTP ${status}" >&2
+      rm "${existing_file}"
+      exit 1
+      ;;
+  esac
+
   echo "--- :package: Uploading ${file}"
   curl -sS -X POST "${upload_url}" \
     -H "Authorization: Bearer ${token}" \
     -F "file=@${file}" \
     --fail-with-body
+}
+
+# The checksum is uploaded last so consumers can treat it as the completion
+# marker for the version.
+for file in "${package_dir}"/*; do
+  if [ "${file}" = "${checksums_file}" ]; then
+    continue
+  fi
+  upload "${file}"
 done
+upload "${checksums_file}"
