@@ -59,7 +59,7 @@ steps:
     plugins:
       - publish-to-packages#v2.2.0:
           artifacts: "dist/buildkite-packages/{{matrix.artifact}}-*"
-          registry: "buildkite/test-engine-client-files"
+          registry: "buildkite/bktec"
     matrix:
       setup:
         artifact:
