@@ -74,3 +74,6 @@ echo "--- :key: :aws: Login to AWS ECR Public"
 
 echo "+++ :rocket: Creating Release"
 goreleaser release --clean
+
+echo "+++ :package: Publishing release files to Buildkite Packages"
+.buildkite/steps/upload-release-files.sh "${tag}"
