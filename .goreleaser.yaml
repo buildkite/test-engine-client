@@ -20,10 +20,6 @@ changelog:
 archives:
   - id: binaries
     formats: [binary]
-    # Buildkite Files requires {BASENAME}-{SEMVER}.{EXT}. Naming the release
-    # artifacts here also keeps GoReleaser's checksum entries aligned with the
-    # files published to both GitHub and Buildkite Packages.
-    name_template: 'bktec-{{ .Os }}-{{ .Arch }}-{{ .Version }}{{ if ne .Os "windows" }}.bin{{ end }}'
 
 builds:
   - env:
@@ -34,7 +30,7 @@ builds:
     binary: bktec
 
 checksum:
-  name_template: "bktec-checksums-{{ .Version }}.txt"
+  name_template: "bktec_{{ .Version }}_checksums.txt"
 
 brews:
   - name: bktec
@@ -157,9 +153,11 @@ publishers:
       - BUILDKITE_AGENT_JOB_API_TOKEN={{ .Env.BUILDKITE_AGENT_JOB_API_TOKEN }}
   - name: stage-buildkite-files
     # Deliberately stage only GoReleaser's uploadable binaries and checksum.
-    # GoReleaser remains the source of truth for target selection and naming;
-    # the network publication happens in a separate, retryable pipeline step.
-    cmd: .buildkite/steps/stage-release-file.sh {{ .ArtifactPath }} {{ .ArtifactName }}
+    # GoReleaser remains the source of truth for target selection; the staging
+    # helper renames copies for Buildkite's Files registry so GitHub release
+    # asset names stay exactly as existing installers expect. The network
+    # publication happens in a separate, retryable pipeline step.
+    cmd: .buildkite/steps/stage-release-file.sh {{ .ArtifactPath }} {{ .ArtifactName }} {{ .Version }}
     ids:
       - binaries
     checksum: true
