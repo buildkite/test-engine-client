@@ -10,6 +10,7 @@ steps:
   - wait
 
   - name: ":rocket: Release"
+    key: release
     artifact_paths: "dist/**/*"
     plugins:
       # IAM role to access SSM
@@ -47,3 +48,25 @@ steps:
             - ECR_AWS_ACCESS_KEY_ID
             - ECR_AWS_SECRET_ACCESS_KEY
             - ECR_AWS_SESSION_TOKEN
+
+  # Keep Files publication downstream of the complete release so a partial
+  # existing release still fails closed. One artifact per matrix job contains
+  # partial failures and permits targeted retries. We deliberately delegate
+  # ambiguous POST recovery to the supported plugin instead of duplicating the
+  # Packages API and OIDC logic here.
+  - name: ":package: Publish {{matrix.artifact}}"
+    depends_on: release
+    plugins:
+      - publish-to-packages#v2.2.0:
+          artifacts: "dist/buildkite-packages/{{matrix.artifact}}-*"
+          registry: "buildkite/bktec"
+    matrix:
+      setup:
+        artifact:
+          - bktec-darwin-amd64
+          - bktec-darwin-arm64
+          - bktec-linux-amd64
+          - bktec-linux-arm64
+          - bktec-windows-amd64
+          - bktec-windows-arm64
+          - bktec-checksums

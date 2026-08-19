@@ -18,7 +18,8 @@ changelog:
   use: github-native
   
 archives:
-  - formats: [binary]
+  - id: binaries
+    formats: [binary]
 
 builds:
   - env:
@@ -150,3 +151,13 @@ publishers:
       - BUILDKITE_AGENT_ACCESS_TOKEN={{ .Env.BUILDKITE_AGENT_ACCESS_TOKEN }}
       - BUILDKITE_AGENT_JOB_API_SOCKET={{ .Env.BUILDKITE_AGENT_JOB_API_SOCKET }}
       - BUILDKITE_AGENT_JOB_API_TOKEN={{ .Env.BUILDKITE_AGENT_JOB_API_TOKEN }}
+  - name: stage-buildkite-files
+    # Deliberately stage only GoReleaser's uploadable binaries and checksum.
+    # GoReleaser remains the source of truth for target selection; the staging
+    # helper renames copies for Buildkite's Files registry so GitHub release
+    # asset names stay exactly as existing installers expect. The network
+    # publication happens in a separate, retryable pipeline step.
+    cmd: .buildkite/steps/stage-release-file.sh {{ .ArtifactPath }} {{ .ArtifactName }} {{ .Version }}
+    ids:
+      - binaries
+    checksum: true
