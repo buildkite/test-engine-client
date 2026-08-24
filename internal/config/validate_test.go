@@ -30,6 +30,22 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
+func TestConfigValidateForRun_OTLPRelayRequiresOIDC(t *testing.T) {
+	c := createConfig()
+	c.OTLPRelay = true
+	c.OIDC = false
+	c.UploadToken = "upload-token"
+
+	err := c.ValidateForRun()
+	var invalidConfig InvalidConfigError
+	if !errors.As(err, &invalidConfig) {
+		t.Fatalf("ValidateForRun() error = %v, want InvalidConfigError", err)
+	}
+	if _, ok := invalidConfig["BUILDKITE_TESTS_OTLP_RELAY"]; !ok {
+		t.Errorf("ValidateForRun() error = %v, want OTLP relay OIDC error", invalidConfig)
+	}
+}
+
 func TestConfigValidate_CustomRunnerFilePatternWithSelectorList(t *testing.T) {
 	t.Run("requires a file pattern for the custom runner by default", func(t *testing.T) {
 		c := createConfig()

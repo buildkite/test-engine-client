@@ -18,6 +18,7 @@ func DetectRunner(cfg *config.Config) (TestRunnerWithTargetDiscovery, error) {
 		TestFileExcludePattern: cfg.TestFileExcludePattern,
 		TestFilePattern:        cfg.TestFilePattern,
 		uploadToken:            cfg.UploadToken,
+		testProcessEnv:         cfg.TestProcessEnv,
 		SelectorListPath:       cfg.SelectorListPath,
 	}
 

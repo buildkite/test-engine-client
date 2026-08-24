@@ -188,6 +188,24 @@ var oidcLifetimeFlag = &cli.DurationFlag{
 	Destination: &cfg.OIDCLifetime,
 }
 
+var otlpRelayFlag = &cli.BoolFlag{
+	Name:        "otlp-relay",
+	Category:    "TEST ENGINE",
+	Usage:       "Relay OTLP/HTTP traces from the test process to Buildkite using OIDC authentication",
+	Sources:     cli.EnvVars("BUILDKITE_TESTS_OTLP_RELAY"),
+	Destination: &cfg.OTLPRelay,
+}
+
+var otlpRelayUpstreamEndpointFlag = &cli.StringFlag{
+	Name:        "otlp-relay-upstream-endpoint",
+	Category:    "TEST ENGINE",
+	Usage:       "Upstream OTLP/HTTP traces endpoint",
+	Sources:     cli.EnvVars("BUILDKITE_TESTS_OTLP_RELAY_UPSTREAM_ENDPOINT"),
+	Value:       "https://tests-otlp.buildkite.com/v1/traces",
+	Destination: &cfg.OTLPRelayUpstreamEndpoint,
+	Hidden:      true,
+}
+
 var suiteSlugFlag = &cli.StringFlag{
 	Name:        "suite-slug",
 	Category:    "TEST ENGINE",
@@ -669,6 +687,7 @@ func runCommandFlags() []cli.Flag {
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)
+	flags = append(flags, otlpRelayFlag, otlpRelayUpstreamEndpointFlag)
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
 	flags = append(flags, failOnNoTestsFlag)

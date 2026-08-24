@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +25,68 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestStartOTLPRelayWiresTestEnvironmentAndOIDCForwarding(t *testing.T) {
+	t.Setenv("BUILDKITE_ANALYTICS_KEY", "custom-run-key")
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=example")
+
+	received := make(chan *http.Request, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		received <- req.Clone(context.Background())
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		OTLPRelay:                 true,
+		OTLPRelayUpstreamEndpoint: upstream.URL,
+		OIDC:                      true,
+		OIDCLifetime:              time.Hour,
+		BuildkiteAgentCommand:     "../config/mock-buildkite-agent",
+		ServerBaseURL:             "https://api.buildkite.com",
+		OrganizationSlug:          "organization",
+		SuiteSlug:                 "suite",
+		BuildID:                   "build-id",
+	}
+	relay, err := startOTLPRelay(cfg)
+	if err != nil {
+		t.Fatalf("startOTLPRelay() error = %v", err)
+	}
+
+	localToken := cfg.TestProcessEnv["BUILDKITE_TESTS_OTLP_TOKEN"]
+	req, err := http.NewRequest(http.MethodPost, cfg.TestProcessEnv["BUILDKITE_ANALYTICS_OTLP_ENDPOINT"], bytes.NewReader([]byte("protobuf")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", `Token token="`+localToken+`"`)
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST local OTLP request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("local OTLP status = %d, want 200", resp.StatusCode)
+	}
+
+	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	report := relay.Drain(drainCtx)
+	if report.ForwardedRequests != 1 {
+		t.Errorf("Drain report = %+v, want one forwarded request", report)
+	}
+
+	upstreamRequest := <-received
+	if got := upstreamRequest.Header.Get("Authorization"); got != `Token token="mocktoken"` {
+		t.Errorf("upstream Authorization = %q, want refreshed OIDC token", got)
+	}
+	if got := upstreamRequest.Header.Get("Buildkite-Tests-Run-Key"); got != "custom-run-key" {
+		t.Errorf("upstream run key = %q, want custom-run-key", got)
+	}
+	if got := cfg.TestProcessEnv["OTEL_RESOURCE_ATTRIBUTES"]; !strings.Contains(got, "buildkite.otlp.endpoint=http://127.0.0.1:") {
+		t.Errorf("OTEL_RESOURCE_ATTRIBUTES = %q, want relay endpoint", got)
+	}
+}
 
 func TestRunTestsWithRetry(t *testing.T) {
 	testRunner := runner.NewRspec(runner.RunnerConfig{
