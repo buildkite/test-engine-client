@@ -100,13 +100,13 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	// execute tests
 	var timeline []api.Timeline
 	runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
-	drainRelay()
 
 	// Abort immediately and propagate the error if the process was terminated by a signal,
 	// since the test results may be unreliable and cannot be trusted.
 	if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &ProcessSignaledError) {
 		logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
 	}
+	drainRelay()
 
 	// Retries are now exhausted. If hard (non-muted) failures remain and the
 	// opt-in flag is set, declare an early failure to the Buildkite Agent API so
