@@ -101,7 +101,7 @@ func TestRelayFailsToStartWhenInitialOIDCTokenIsUnavailable(t *testing.T) {
 	}
 }
 
-func TestRelayAcknowledgesBeforeDeliveryAndReturns429WhenByteQueueIsFull(t *testing.T) {
+func TestRelayAcknowledgesBeforeDeliveryAndReturns429WhenQueueIsFull(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -115,7 +115,7 @@ func TestRelayAcknowledgesBeforeDeliveryAndReturns429WhenByteQueueIsFull(t *test
 	relay := newTestRelay(t, Config{
 		UpstreamEndpoint: upstream.URL,
 		RunKey:           "build-id",
-		QueueCapacity:    len(body),
+		QueueCapacity:    len(body) + queueRequestOverhead,
 		TokenSource:      staticToken("oidc-token"),
 	})
 
@@ -130,7 +130,7 @@ func TestRelayAcknowledgesBeforeDeliveryAndReturns429WhenByteQueueIsFull(t *test
 		t.Fatal("upstream delivery did not start")
 	}
 
-	second := postTraces(t, relay, []byte("x"), "Bearer "+relay.token, "")
+	second := postTraces(t, relay, nil, "Bearer "+relay.token, "")
 	if second.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("second POST status = %d, want 429", second.StatusCode)
 	}
@@ -455,8 +455,11 @@ func TestRelayEnvironmentUsesStandardVariablesAndPreservesResourceAttributes(t *
 	})
 	environment := relay.Environment("service.name=example")
 
-	if got := environment["OTEL_EXPORTER_OTLP_ENDPOINT"]; got != relay.endpoint {
-		t.Errorf("OTEL_EXPORTER_OTLP_ENDPOINT = %q, want %q", got, relay.endpoint)
+	if _, ok := environment["OTEL_EXPORTER_OTLP_ENDPOINT"]; ok {
+		t.Error("relay environment overrides the generic OTLP endpoint")
+	}
+	if _, ok := environment["OTEL_EXPORTER_OTLP_PROTOCOL"]; ok {
+		t.Error("relay environment overrides the generic OTLP protocol")
 	}
 	if got := environment["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"]; got != relay.endpoint+"/v1/traces" {
 		t.Errorf("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = %q", got)
@@ -473,7 +476,7 @@ func TestRelayEnvironmentUsesStandardVariablesAndPreservesResourceAttributes(t *
 	if _, ok := environment["BUILDKITE_ANALYTICS_TOKEN"]; ok {
 		t.Error("relay environment overrides the collector upload token")
 	}
-	if strings.Contains(environment["OTEL_EXPORTER_OTLP_ENDPOINT"], relay.token) {
+	if strings.Contains(environment["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"], relay.token) {
 		t.Error("advertised endpoint contains local credentials")
 	}
 

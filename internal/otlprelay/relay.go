@@ -25,6 +25,7 @@ const (
 
 	maxRequestBytes           = 900 * 1024
 	defaultQueueCapacity      = 64 * 1024 * 1024
+	queueRequestOverhead      = 1024 // Account for object and slice overhead, even with an empty body.
 	defaultRequestTimeout     = 30 * time.Second
 	defaultInitialBackoff     = 250 * time.Millisecond
 	defaultMaxBackoff         = 5 * time.Second
@@ -89,7 +90,7 @@ type Relay struct {
 
 	mu              sync.Mutex
 	queue           []*request
-	queuedBytes     int
+	queuedSize      int
 	accepting       bool
 	draining        bool
 	drainDeadline   time.Time
@@ -206,8 +207,6 @@ func (r *Relay) Environment(resourceAttributes string) map[string]string {
 	}
 
 	return map[string]string{
-		"OTEL_EXPORTER_OTLP_ENDPOINT":        r.endpoint,
-		"OTEL_EXPORTER_OTLP_PROTOCOL":        "http/protobuf",
 		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": traceEndpoint,
 		"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "http/protobuf",
 		"OTEL_EXPORTER_OTLP_TRACES_HEADERS":  headers,
@@ -282,11 +281,12 @@ func (r *Relay) enqueue(req *request) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if !r.accepting || r.queuedBytes+len(req.body) > r.config.QueueCapacity {
+	size := len(req.body) + queueRequestOverhead
+	if !r.accepting || r.queuedSize+size > r.config.QueueCapacity {
 		return false
 	}
 	r.queue = append(r.queue, req)
-	r.queuedBytes += len(req.body)
+	r.queuedSize += size
 	r.signal()
 	return true
 }
@@ -503,7 +503,7 @@ func (r *Relay) complete(req *request, forwarded bool) {
 	}
 	r.queue[0] = nil
 	r.queue = r.queue[1:]
-	r.queuedBytes -= len(req.body)
+	r.queuedSize -= len(req.body) + queueRequestOverhead
 	if forwarded {
 		r.report.ForwardedRequests++
 	} else {
@@ -517,9 +517,11 @@ func (r *Relay) dropRemainingAtDeadline() {
 	defer r.mu.Unlock()
 
 	r.report.DroppedDeadlineRequests += len(r.queue)
-	r.report.DroppedBytes += int64(r.queuedBytes)
+	for _, req := range r.queue {
+		r.report.DroppedBytes += int64(len(req.body))
+	}
 	r.queue = nil
-	r.queuedBytes = 0
+	r.queuedSize = 0
 }
 
 // Drain stops accepting requests and waits for queued requests to be delivered
