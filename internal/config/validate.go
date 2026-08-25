@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -103,6 +104,10 @@ func (c *Config) validate() error {
 // Validation for the `bktec run` command
 func (c *Config) ValidateForRun() error {
 	_ = c.validate()
+
+	if c.OTLPRelay && !c.OIDC {
+		c.errs.appendFieldError("BUILDKITE_TESTS_OTLP_RELAY", "requires OIDC authentication")
+	}
 
 	// result-path is only consumed when running tests (command construction and
 	// report parsing), so it is required here but not for `plan`. Checked as an
@@ -273,6 +278,13 @@ func (c *Config) ValidateForPlan() error {
 }
 
 func (c *Config) generateOIDCToken() (token string, err error) {
+	return c.RequestOIDCToken(context.Background())
+}
+
+// RequestOIDCToken asks the Buildkite agent for a suite-scoped OIDC token.
+// The context lets long-running users, such as the OTLP relay, stop an in-flight
+// agent invocation when their drain deadline expires.
+func (c *Config) RequestOIDCToken(ctx context.Context) (token string, err error) {
 	if !c.OIDC {
 		return "", nil
 	}
@@ -283,7 +295,7 @@ func (c *Config) generateOIDCToken() (token string, err error) {
 	lifetime := strconv.Itoa(int(c.OIDCLifetime.Seconds()))
 	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
 	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
-	cmd := exec.Command(c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime) //nolint:gosec
+	cmd := exec.CommandContext(ctx, c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime) //nolint:gosec
 	cmd.Stderr = &errorWriter
 	cmd.Stdout = &tokenWriter
 	cmd.Env = os.Environ()

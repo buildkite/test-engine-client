@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/git"
+	"github.com/buildkite/test-engine-client/v3/internal/otlprelay"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/buildkite/test-engine-client/v3/internal/version"
@@ -34,6 +35,28 @@ var newGitRunner = func() git.GitRunner { return &git.ExecGitRunner{} }
 
 func Run(ctx context.Context, cfg *config.Config, testListFilename string) error {
 	printStartUpMessage()
+
+	relay, err := startOTLPRelay(cfg)
+	if err != nil {
+		return err
+	}
+	drainRelay := func() {
+		if relay == nil {
+			return
+		}
+		drainCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		report := relay.Drain(drainCtx)
+		fmt.Printf(
+			"Buildkite Test Engine Client: OTLP relay: %d request(s) forwarded, %d dropped permanently, %d dropped at drain deadline, %d byte(s) dropped\n",
+			report.ForwardedRequests,
+			report.DroppedPermanentRequests,
+			report.DroppedDeadlineRequests,
+			report.DroppedBytes,
+		)
+		relay = nil
+	}
+	defer drainRelay()
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
@@ -83,6 +106,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	if ProcessSignaledError := new(runner.ProcessSignaledError); errors.As(runErr, &ProcessSignaledError) {
 		logSignalAndExit(testRunner.Name(), ProcessSignaledError.Signal)
 	}
+	drainRelay()
 
 	// Retries are now exhausted. If hard (non-muted) failures remain and the
 	// opt-in flag is set, declare an early failure to the Buildkite Agent API so
@@ -106,6 +130,34 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	}
 
 	return runErr
+}
+
+func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
+	if !cfg.OTLPRelay {
+		return nil, nil
+	}
+
+	runKey := os.Getenv("BUILDKITE_ANALYTICS_KEY")
+	if runKey == "" {
+		runKey = cfg.BuildID
+	}
+	relay, err := otlprelay.New(otlprelay.Config{
+		UpstreamEndpoint: cfg.OTLPRelayUpstreamEndpoint,
+		RunKey:           runKey,
+		TokenLifetime:    cfg.OIDCLifetime,
+		CollectorToken:   cfg.UploadToken,
+		TokenSource:      cfg.RequestOIDCToken,
+		Logf: func(format string, args ...any) {
+			fmt.Printf(format+"\n", args...)
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("start OTLP relay: %w", err)
+	}
+
+	cfg.TestProcessEnv = relay.Environment(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"))
+	fmt.Printf("Buildkite Test Engine Client: OTLP relay listening on %s\n", relay.Endpoint())
+	return relay, nil
 }
 
 func trimTaskLocationPrefix(task *plan.Task, locationPrefix string) error {

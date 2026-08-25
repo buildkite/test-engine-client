@@ -160,6 +160,35 @@ export BUILDKITE_TEST_ENGINE_TAGS="env=production,region=us-east-1"
 
 Test collectors are available for many languages and frameworks. Some collectors also provide richer data collection such as execution-level tagging and span tracing. See the [test collector docs](https://buildkite.com/docs/test-engine/test-collection) for details on what's available for your framework.
 
+### Relay OpenTelemetry traces
+
+For test collectors and OpenTelemetry SDKs that export OTLP/HTTP protobuf
+traces, bktec can receive those traces on loopback and relay them to Buildkite.
+Enable it on `bktec run` with:
+
+```sh
+export BUILDKITE_TESTS_OTLP_RELAY=true
+```
+
+The relay injects the standard `OTEL_EXPORTER_OTLP_TRACES_*` configuration into
+the test process, acknowledges local exports immediately, and retries delivery
+to Buildkite in the background. It obtains and refreshes the upstream credential
+through `buildkite-agent oidc request-token`; `--no-oidc` cannot be used with
+the relay. Exporters authenticate to the relay with a random, per-run local
+credential; existing collector upload credentials are left unchanged.
+
+After the final test attempt, bktec spends at most 10 seconds draining queued
+requests and prints the number of forwarded and dropped requests. Requests over
+900 KiB are rejected synchronously, and a full 64 MiB byte queue returns HTTP
+429 so the SDK can apply backpressure.
+
+The child resource also receives
+`buildkite.otlp.endpoint=<loopback URL>` through
+`OTEL_RESOURCE_ATTRIBUTES`. This is a Buildkite-specific attribute—OpenTelemetry
+does not define a semantic convention for the relay route—and lets stored spans
+show that their SDK exported through bktec without modifying the opaque OTLP
+payload in the relay.
+
 ### Plan identifier
 
 `--plan-identifier` (or `BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER`) sets the

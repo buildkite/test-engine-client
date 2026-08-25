@@ -53,6 +53,10 @@ type Config struct {
 	OIDC bool `json:"-"`
 	// Lifetime of OIDC tokens
 	OIDCLifetime time.Duration `json:"-"`
+	// OTLPRelay enables the local OTLP/HTTP trace relay for the test process.
+	OTLPRelay bool `json:"-"`
+	// OTLPRelayUpstreamEndpoint is the Buildkite OTLP/HTTP traces endpoint.
+	OTLPRelayUpstreamEndpoint string `json:"-"`
 	// OrganizationSlug is the slug of the organization.
 	OrganizationSlug string `json:"-"`
 	// Output is the local file path for the export tarball. If set, skip S3 upload.
@@ -107,6 +111,10 @@ type Config struct {
 	TestFilePattern string `json:"-"`
 	// TestRunner is the name of the runner.
 	TestRunner string `json:"-"`
+	// TestProcessEnv contains trusted environment overrides added only to test
+	// runner subprocesses. It is populated after validation when a local service
+	// such as the OTLP relay starts.
+	TestProcessEnv map[string]string `json:"-"`
 
 	// Set to true if AccessToken was unset and an OIDC token was generated instead
 	accessTokenIsOIDC bool

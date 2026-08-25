@@ -14,6 +14,7 @@ type RunnerConfig struct {
 	TestFileExcludePattern string
 	TestFilePattern        string
 	uploadToken            string
+	testProcessEnv         map[string]string
 
 	// SelectorListPath points at a file containing the selectors to run.
 	SelectorListPath string
@@ -32,6 +33,10 @@ func (rc RunnerConfig) LocationPrefix() string {
 
 func (rc RunnerConfig) UploadToken() string {
 	return rc.uploadToken
+}
+
+func (rc RunnerConfig) testProcessEnvironment() map[string]string {
+	return rc.testProcessEnv
 }
 
 // ResultFormat returns an empty string by default.

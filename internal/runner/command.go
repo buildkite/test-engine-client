@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
@@ -19,12 +20,32 @@ func buildCommand(runner TestRunner, testCases []plan.TestCase, retry bool) (*ex
 
 	cmd := exec.Command(commandName, commandArgs...)
 
-	env := os.Environ()
-	analyticsTokenEnv := fmt.Sprintf("BUILDKITE_ANALYTICS_TOKEN=%s", runner.UploadToken())
-	env = append(env, analyticsTokenEnv)
-	cmd.Env = env
+	overrides := map[string]string{
+		"BUILDKITE_ANALYTICS_TOKEN": runner.UploadToken(),
+	}
+	if provider, ok := runner.(interface{ testProcessEnvironment() map[string]string }); ok {
+		for key, value := range provider.testProcessEnvironment() {
+			overrides[key] = value
+		}
+	}
+	cmd.Env = environmentWithOverrides(os.Environ(), overrides)
 
 	return cmd, nil
+}
+
+func environmentWithOverrides(environment []string, overrides map[string]string) []string {
+	result := make([]string, 0, len(environment)+len(overrides))
+	for _, entry := range environment {
+		key, _, found := strings.Cut(entry, "=")
+		if _, overridden := overrides[key]; found && overridden {
+			continue
+		}
+		result = append(result, entry)
+	}
+	for key, value := range overrides {
+		result = append(result, fmt.Sprintf("%s=%s", key, value))
+	}
+	return result
 }
 
 // runAndForwardSignal runs the command and forwards any signals received to the command.
