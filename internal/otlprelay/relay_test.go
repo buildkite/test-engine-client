@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -88,16 +89,147 @@ func TestRelayForwardsOpaqueGzipRequestWithTrustedHeaders(t *testing.T) {
 	}
 }
 
-func TestRelayFailsToStartWhenInitialOIDCTokenIsUnavailable(t *testing.T) {
+func TestRelayFailsToStartWhenInitialCredentialFailureIsTerminal(t *testing.T) {
 	_, err := New(Config{
 		UpstreamEndpoint: "http://127.0.0.1:1/v1/traces",
 		RunKey:           "build-id",
 		TokenSource: func(context.Context) (string, error) {
-			return "", fmt.Errorf("agent unavailable")
+			return "", fmt.Errorf("%w: audience not allowed", ErrTerminalCredential)
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "agent unavailable") {
+	if err == nil || !strings.Contains(err.Error(), "audience not allowed") {
 		t.Fatalf("New() error = %v, want initial credential error", err)
+	}
+}
+
+// A transient credential failure (endpoint outage, timeout) must not fail the
+// job: the relay starts without a credential, buffers requests, and delivers
+// them once the token source recovers.
+func TestRelayStartsWithoutCredentialAndDeliversAfterRecovery(t *testing.T) {
+	received := make(chan string, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		received <- req.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	var logMu sync.Mutex
+	var logs strings.Builder
+	var tokenRequests atomic.Int32
+	relay := newTestRelay(t, Config{
+		UpstreamEndpoint: upstream.URL,
+		RunKey:           "build-id",
+		TokenSource: func(context.Context) (string, error) {
+			if tokenRequests.Add(1) < 3 {
+				return "", fmt.Errorf("504 Gateway Timeout")
+			}
+			return "oidc-token", nil
+		},
+		Logf: func(format string, args ...any) {
+			logMu.Lock()
+			defer logMu.Unlock()
+			fmt.Fprintf(&logs, format+"\n", args...)
+		},
+	})
+
+	resp := postTraces(t, relay, []byte("spans"), "Bearer "+relay.token, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /v1/traces status = %d, want 200", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	report := relay.Drain(drainCtx)
+	if report != (Report{ForwardedRequests: 1}) {
+		t.Errorf("Drain report = %+v, want one forwarded request", report)
+	}
+
+	if got := <-received; got != `Token token="oidc-token"` {
+		t.Errorf("upstream Authorization = %q, want recovered token", got)
+	}
+	logMu.Lock()
+	defer logMu.Unlock()
+	if !strings.Contains(logs.String(), "starting without an upstream credential") {
+		t.Errorf("logs = %q, want a startup warning about the missing credential", logs.String())
+	}
+}
+
+// A seeded initial token (bktec's OIDC-minted collector upload token, same
+// audience) is used as the upstream credential without calling TokenSource.
+func TestRelaySeededInitialTokenSkipsTokenSource(t *testing.T) {
+	received := make(chan string, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		received <- req.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	var tokenRequests atomic.Int32
+	relay := newTestRelay(t, Config{
+		UpstreamEndpoint: upstream.URL,
+		RunKey:           "build-id",
+		InitialToken:     "seeded-token",
+		TokenSource: func(context.Context) (string, error) {
+			tokenRequests.Add(1)
+			return "minted-token", nil
+		},
+	})
+
+	resp := postTraces(t, relay, []byte("spans"), "Bearer "+relay.token, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /v1/traces status = %d, want 200", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	report := relay.Drain(drainCtx)
+	if report != (Report{ForwardedRequests: 1}) {
+		t.Errorf("Drain report = %+v, want one forwarded request", report)
+	}
+
+	if got := <-received; got != `Token token="seeded-token"` {
+		t.Errorf("upstream Authorization = %q, want seeded token", got)
+	}
+	if got := tokenRequests.Load(); got != 0 {
+		t.Errorf("TokenSource calls = %d, want 0 (seed should be used)", got)
+	}
+}
+
+// Once a credential failure is known to be terminal, the relay stops calling
+// TokenSource and drops requests as permanent failures instead of retrying.
+func TestRelayStopsMintingAfterTerminalCredentialFailure(t *testing.T) {
+	var tokenRequests atomic.Int32
+	relay := newTestRelay(t, Config{
+		UpstreamEndpoint: "http://127.0.0.1:1/v1/traces",
+		RunKey:           "build-id",
+		// Seed with an immediately expiring token so the first delivery needs a
+		// refresh, which is terminally refused.
+		InitialToken:  "seeded-token",
+		TokenLifetime: time.Nanosecond,
+		TokenSource: func(context.Context) (string, error) {
+			tokenRequests.Add(1)
+			return "", fmt.Errorf("%w: audience not allowed", ErrTerminalCredential)
+		},
+	})
+
+	for range 2 {
+		resp := postTraces(t, relay, []byte("spans"), "Bearer "+relay.token, "")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST /v1/traces status = %d, want 200", resp.StatusCode)
+		}
+		_ = resp.Body.Close()
+	}
+
+	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	report := relay.Drain(drainCtx)
+	if report.DroppedPermanentRequests != 2 {
+		t.Errorf("Drain report = %+v, want two permanently dropped requests", report)
+	}
+	if got := tokenRequests.Load(); got != 1 {
+		t.Errorf("TokenSource calls = %d, want 1 (terminal failures must not be retried)", got)
 	}
 }
 

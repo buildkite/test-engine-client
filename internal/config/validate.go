@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,6 +11,23 @@ import (
 	"strings"
 	"time"
 )
+
+// agentOIDCRefusedExitStatus is the exit status buildkite-agent uses when the
+// Buildkite API positively refused to issue an OIDC token (a non-retryable
+// 4xx response such as 401, 403, or 422 — for example an audience disallowed
+// by organization policy), as opposed to transient failures (5xx, timeouts,
+// exhausted retries) which exit 1.
+//
+// Contract: OIDCTokenRefusedExitStatus in buildkite/agent's
+// clicommand/oidc_request_token.go (https://github.com/buildkite/agent/pull/4272).
+// Agents predating that change exit 1 for every failure, so the absence of
+// this status only means "not known to be a refusal", and callers must treat
+// other failures as possibly transient.
+const agentOIDCRefusedExitStatus = 77
+
+// ErrOIDCRefused reports that the Buildkite API positively refused to issue
+// an OIDC token. Retrying will not succeed. Check with errors.Is.
+var ErrOIDCRefused = errors.New("OIDC token request refused by the Buildkite API")
 
 // splitBySelectorList reports whether the run is splitting work using a
 // user-provided selector list instead of discovered test files. In this mode
@@ -132,6 +150,7 @@ func (c *Config) ValidateForRun() error {
 			// If OIDC was used to generate the bktec API access token then the same token
 			// can be used for collector uploads.
 			c.UploadToken = c.AccessToken
+			c.UploadTokenIsOIDC = true
 		} else {
 			// If OIDC was *not* used to generate the bktec API access token then we need
 			// to generate a token for collector uploads.
@@ -141,6 +160,7 @@ func (c *Config) ValidateForRun() error {
 				c.errs.appendFieldError("BUILDKITE_ANALYTICS_TOKEN", "%v", err)
 			}
 			c.UploadToken = token
+			c.UploadTokenIsOIDC = err == nil && token != ""
 		}
 	}
 
@@ -301,6 +321,10 @@ func (c *Config) RequestOIDCToken(ctx context.Context) (token string, err error)
 	cmd.Env = os.Environ()
 
 	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == agentOIDCRefusedExitStatus {
+			return "", fmt.Errorf("%w: %s: %v", ErrOIDCRefused, strings.TrimSpace(errorWriter.String()), err)
+		}
 		return "", fmt.Errorf("error generating token: %s: %v", errorWriter.String(), err)
 	}
 
