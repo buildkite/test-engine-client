@@ -837,6 +837,53 @@ func TestConfigValidate_OidcTokensUploadTokenAlreadySet(t *testing.T) {
 	}
 }
 
+func TestConfigValidate_OidcUploadTokenTransientFailureIsNonFatal(t *testing.T) {
+	// A transient OIDC failure (endpoint outage, timeout, or an agent
+	// predating the distinct refusal exit status) while minting the collector
+	// upload token must not fail validation: the token only carries
+	// telemetry, and the OTLP relay retries minting in the background.
+	c := createConfig()
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent-unavailable"
+	c.AccessToken = "already_set"
+	c.UploadToken = ""
+
+	err := c.ValidateForRun()
+	if err != nil {
+		t.Errorf("ValidateForRun() error = %v, want nil (transient mint failures must not fail the job)", err)
+	}
+
+	if c.UploadToken != "" {
+		t.Errorf("c.UploadToken = %q, want blank", c.UploadToken)
+	}
+	if c.UploadTokenIsOIDC {
+		t.Errorf("c.UploadTokenIsOIDC = true, want false")
+	}
+}
+
+func TestConfigValidate_OidcUploadTokenRefusalIsFatal(t *testing.T) {
+	// A positive refusal (agent exit status 77) means retrying will not
+	// succeed, so the misconfiguration should fail validation loudly.
+	c := createConfig()
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent-refused"
+	c.AccessToken = "already_set"
+	c.UploadToken = ""
+
+	err := c.ValidateForRun()
+	if err == nil {
+		t.Fatal("ValidateForRun() error = nil, want non-nil (refusals are terminal)")
+	}
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForRun() error = %v, want InvalidConfigError", err)
+	}
+	if invConfigError["BUILDKITE_ANALYTICS_TOKEN"] == nil {
+		t.Errorf("ValidateForRun() error = %v, want a BUILDKITE_ANALYTICS_TOKEN field error", err)
+	}
+}
+
 func TestConfigRequestOIDCToken_RefusedExitStatusIsErrOIDCRefused(t *testing.T) {
 	// Exit status 77 is buildkite/agent's contract for "the API positively
 	// refused to issue the token; retrying will not succeed".

@@ -156,11 +156,23 @@ func (c *Config) ValidateForRun() error {
 			// to generate a token for collector uploads.
 			token, err := c.generateOIDCToken()
 
-			if err != nil {
+			switch {
+			case err == nil:
+				c.UploadToken = token
+				c.UploadTokenIsOIDC = token != ""
+			case errors.Is(err, ErrOIDCRefused):
+				// The API positively refused to issue the token (e.g. an audience
+				// disallowed by policy); retrying will not succeed, so the
+				// misconfiguration should fail loudly.
 				c.errs.appendFieldError("BUILDKITE_ANALYTICS_TOKEN", "%v", err)
+			default:
+				// Transient failure (endpoint outage, timeout, or an agent
+				// predating the distinct refusal exit status). The upload token
+				// only carries telemetry — test result uploads are skipped with a
+				// warning when it is blank, and the OTLP relay retries minting in
+				// the background — so it must never fail the job.
+				fmt.Printf("Buildkite Test Engine Client: Warning: could not generate a collector upload token, continuing without one: %v\n", err)
 			}
-			c.UploadToken = token
-			c.UploadTokenIsOIDC = err == nil && token != ""
 		}
 	}
 
