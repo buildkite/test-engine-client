@@ -141,12 +141,30 @@ func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
 	if runKey == "" {
 		runKey = cfg.BuildID
 	}
+
+	// When the collector upload token is itself an OIDC token it was minted
+	// with the same suite audience the relay uses, so seed the relay with it
+	// instead of minting a second, identical token.
+	var initialToken string
+	if cfg.UploadTokenIsOIDC {
+		initialToken = cfg.UploadToken
+	}
+
 	relay, err := otlprelay.New(otlprelay.Config{
 		UpstreamEndpoint: cfg.OTLPRelayUpstreamEndpoint,
 		RunKey:           runKey,
 		TokenLifetime:    cfg.OIDCLifetime,
 		CollectorToken:   cfg.UploadToken,
-		TokenSource:      cfg.RequestOIDCToken,
+		InitialToken:     initialToken,
+		TokenSource: func(ctx context.Context) (string, error) {
+			token, err := cfg.RequestOIDCToken(ctx)
+			// The Buildkite API positively refused (non-retryable 4xx); mark it
+			// terminal so the relay stops retrying. Anything else is transient.
+			if err != nil && errors.Is(err, config.ErrOIDCRefused) {
+				return "", fmt.Errorf("%w: %w", otlprelay.ErrTerminalCredential, err)
+			}
+			return token, err
+		},
 		Logf: func(format string, args ...any) {
 			fmt.Printf(format+"\n", args...)
 		},

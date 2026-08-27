@@ -1,0 +1,6 @@
+#!/bin/bash
+# Mocks buildkite-agent failing transiently (exit 1): retries exhausted on
+# 5xx/timeouts, or any agent predating the distinct refusal exit status.
+
+echo "buildkite-agent: fatal: could not obtain OIDC token for audience $4: POST https://agent.buildkite.com/v3/jobs/job-123/oidc/tokens: 504 Gateway Timeout" >&2
+exit 1

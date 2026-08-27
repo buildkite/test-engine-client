@@ -173,9 +173,17 @@ export BUILDKITE_TESTS_OTLP_RELAY=true
 The relay injects the standard `OTEL_EXPORTER_OTLP_TRACES_*` configuration into
 the test process, acknowledges local exports immediately, and retries delivery
 to Buildkite in the background. It obtains and refreshes the upstream credential
-through `buildkite-agent oidc request-token`; `--no-oidc` cannot be used with
-the relay. Exporters authenticate to the relay with a random, per-run local
+through `buildkite-agent oidc request-token`, reusing bktec's own OIDC-minted
+collector upload token when one exists; `--no-oidc` cannot be used with the
+relay. Exporters authenticate to the relay with a random, per-run local
 credential; existing collector upload credentials are left unchanged.
+
+A transient credential failure (endpoint outage, timeout) never fails the job:
+the relay starts anyway, buffers traces, and keeps retrying in the background,
+reporting any traces it had to drop when the run ends. The job only fails at
+startup when the Buildkite API positively refuses to issue the token (agent
+exit status 77, e.g. a disallowed audience), since that cannot succeed by
+retrying.
 
 After the final test attempt, bktec spends at most 10 seconds draining queued
 requests and prints the number of forwarded and dropped requests. Requests over

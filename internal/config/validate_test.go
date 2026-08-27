@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -781,6 +782,9 @@ func TestConfigValidate_OidcTokens(t *testing.T) {
 	if c.UploadToken != expectedToken {
 		t.Errorf("c.UploadToken expected %v, got %v", expectedToken, c.UploadToken)
 	}
+	if !c.UploadTokenIsOIDC {
+		t.Errorf("c.UploadTokenIsOIDC = false, want true (upload token was OIDC-minted)")
+	}
 }
 
 func TestConfigValidate_OidcTokensAccessTokenAlreadySet(t *testing.T) {
@@ -803,6 +807,9 @@ func TestConfigValidate_OidcTokensAccessTokenAlreadySet(t *testing.T) {
 	if c.UploadToken != expectedToken {
 		t.Errorf("c.UploadToken expected %v, got %v", expectedToken, c.UploadToken)
 	}
+	if !c.UploadTokenIsOIDC {
+		t.Errorf("c.UploadTokenIsOIDC = false, want true (upload token was OIDC-minted)")
+	}
 }
 
 func TestConfigValidate_OidcTokensUploadTokenAlreadySet(t *testing.T) {
@@ -824,5 +831,89 @@ func TestConfigValidate_OidcTokensUploadTokenAlreadySet(t *testing.T) {
 	expectedToken = "already_set"
 	if c.UploadToken != expectedToken {
 		t.Errorf("c.UploadToken expected %v, got %v", expectedToken, c.UploadToken)
+	}
+	if c.UploadTokenIsOIDC {
+		t.Errorf("c.UploadTokenIsOIDC = true, want false (upload token came from the environment)")
+	}
+}
+
+func TestConfigValidate_OidcUploadTokenTransientFailureIsNonFatal(t *testing.T) {
+	// A transient OIDC failure (endpoint outage, timeout, or an agent
+	// predating the distinct refusal exit status) while minting the collector
+	// upload token must not fail validation: the token only carries
+	// telemetry, and the OTLP relay retries minting in the background.
+	c := createConfig()
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent-unavailable"
+	c.AccessToken = "already_set"
+	c.UploadToken = ""
+
+	err := c.ValidateForRun()
+	if err != nil {
+		t.Errorf("ValidateForRun() error = %v, want nil (transient mint failures must not fail the job)", err)
+	}
+
+	if c.UploadToken != "" {
+		t.Errorf("c.UploadToken = %q, want blank", c.UploadToken)
+	}
+	if c.UploadTokenIsOIDC {
+		t.Errorf("c.UploadTokenIsOIDC = true, want false")
+	}
+}
+
+func TestConfigValidate_OidcUploadTokenRefusalIsFatal(t *testing.T) {
+	// A positive refusal (agent exit status 77) means retrying will not
+	// succeed, so the misconfiguration should fail validation loudly.
+	c := createConfig()
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent-refused"
+	c.AccessToken = "already_set"
+	c.UploadToken = ""
+
+	err := c.ValidateForRun()
+	if err == nil {
+		t.Fatal("ValidateForRun() error = nil, want non-nil (refusals are terminal)")
+	}
+
+	var invConfigError InvalidConfigError
+	if !errors.As(err, &invConfigError) {
+		t.Fatalf("ValidateForRun() error = %v, want InvalidConfigError", err)
+	}
+	if invConfigError["BUILDKITE_ANALYTICS_TOKEN"] == nil {
+		t.Errorf("ValidateForRun() error = %v, want a BUILDKITE_ANALYTICS_TOKEN field error", err)
+	}
+}
+
+func TestConfigRequestOIDCToken_RefusedExitStatusIsErrOIDCRefused(t *testing.T) {
+	// Exit status 77 is buildkite/agent's contract for "the API positively
+	// refused to issue the token; retrying will not succeed".
+	// https://github.com/buildkite/agent/pull/4272
+	c := createConfig()
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent-refused"
+
+	_, err := c.RequestOIDCToken(context.Background())
+	if !errors.Is(err, ErrOIDCRefused) {
+		t.Errorf("RequestOIDCToken() error = %v, want errors.Is(err, ErrOIDCRefused)", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "audience not allowed") {
+		t.Errorf("RequestOIDCToken() error = %v, want to include the agent's stderr", err)
+	}
+}
+
+func TestConfigRequestOIDCToken_GenericFailureIsNotErrOIDCRefused(t *testing.T) {
+	// Exit status 1 covers transient failures (exhausted retries on
+	// 5xx/timeouts) and any agent predating the distinct refusal exit status,
+	// so it must not classify as a refusal.
+	c := createConfig()
+	c.OIDC = true
+	c.BuildkiteAgentCommand = "./mock-buildkite-agent-unavailable"
+
+	_, err := c.RequestOIDCToken(context.Background())
+	if err == nil {
+		t.Fatal("RequestOIDCToken() error = nil, want non-nil")
+	}
+	if errors.Is(err, ErrOIDCRefused) {
+		t.Errorf("RequestOIDCToken() error = %v, want not ErrOIDCRefused (exit 1 may be transient)", err)
 	}
 }

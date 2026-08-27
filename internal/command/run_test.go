@@ -88,6 +88,64 @@ func TestStartOTLPRelayWiresTestEnvironmentAndOIDCForwarding(t *testing.T) {
 	}
 }
 
+// When the collector upload token was OIDC-minted it seeds the relay's
+// upstream credential: no second mint happens (the agent command here would
+// fail if invoked), and the relay starts even though the OIDC endpoint is
+// unreachable.
+func TestStartOTLPRelaySeedsUpstreamCredentialFromOIDCUploadToken(t *testing.T) {
+	received := make(chan string, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		received <- req.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		OTLPRelay:                 true,
+		OTLPRelayUpstreamEndpoint: upstream.URL,
+		OIDC:                      true,
+		OIDCLifetime:              time.Hour,
+		BuildkiteAgentCommand:     "/nonexistent/buildkite-agent",
+		ServerBaseURL:             "https://api.buildkite.com",
+		OrganizationSlug:          "organization",
+		SuiteSlug:                 "suite",
+		BuildID:                   "build-id",
+		UploadToken:               "upload-token",
+		UploadTokenIsOIDC:         true,
+	}
+	relay, err := startOTLPRelay(cfg)
+	if err != nil {
+		t.Fatalf("startOTLPRelay() error = %v", err)
+	}
+
+	localToken := cfg.TestProcessEnv["BUILDKITE_TESTS_OTLP_TOKEN"]
+	req, err := http.NewRequest(http.MethodPost, cfg.TestProcessEnv["BUILDKITE_ANALYTICS_OTLP_ENDPOINT"], bytes.NewReader([]byte("protobuf")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", `Token token="`+localToken+`"`)
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST local OTLP request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("local OTLP status = %d, want 200", resp.StatusCode)
+	}
+
+	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	report := relay.Drain(drainCtx)
+	if report.ForwardedRequests != 1 {
+		t.Errorf("Drain report = %+v, want one forwarded request", report)
+	}
+
+	if got := <-received; got != `Token token="upload-token"` {
+		t.Errorf("upstream Authorization = %q, want seeded upload token", got)
+	}
+}
+
 func TestRunTestsWithRetry(t *testing.T) {
 	testRunner := runner.NewRspec(runner.RunnerConfig{
 		TestCommand: "rspec --format json --out {{resultPath}}",

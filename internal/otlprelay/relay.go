@@ -33,6 +33,14 @@ const (
 	defaultTokenRefreshLeeway = 5 * time.Minute
 )
 
+// ErrTerminalCredential marks a credential failure that will never succeed if
+// retried, such as the Buildkite API refusing to mint a token for a disallowed
+// audience. TokenSource implementations wrap errors with it (check with
+// errors.Is). At startup a terminal failure fails relay creation; mid-run the
+// relay stops calling TokenSource and drops requests as permanent failures.
+// All other TokenSource errors are treated as transient and retried.
+var ErrTerminalCredential = errors.New("terminal OTLP relay credential failure")
+
 // Config contains the trusted values that bktec adds when forwarding an OTLP
 // request. The test process supplies only the opaque protobuf body and its
 // content encoding.
@@ -42,9 +50,14 @@ type Config struct {
 	QueueCapacity    int
 	TokenLifetime    time.Duration
 	CollectorToken   string
-	TokenSource      func(context.Context) (string, error)
-	HTTPClient       *http.Client
-	Logf             func(string, ...any)
+	// InitialToken optionally seeds the upstream credential with a token that
+	// was already minted for the same audience (bktec's collector upload
+	// token). When set, TokenSource is only called once the seed needs
+	// refreshing, and relay startup never blocks on token minting.
+	InitialToken string
+	TokenSource  func(context.Context) (string, error)
+	HTTPClient   *http.Client
+	Logf         func(string, ...any)
 
 	initialBackoff time.Duration
 	maxBackoff     time.Duration
@@ -97,8 +110,14 @@ type Relay struct {
 	drainRetryDelay time.Duration
 	report          Report
 
-	upstreamToken  string
-	tokenRefreshAt time.Time
+	// upstreamToken, tokenRefreshAt, and credentialErr are only touched by New
+	// (before the worker goroutine starts) and by the single forward worker, so
+	// they need no locking. credentialErr, once set, records a terminal
+	// credential failure: TokenSource is never called again.
+	upstreamToken       string
+	tokenRefreshAt      time.Time
+	credentialErr       error
+	credentialErrLogged bool
 }
 
 // New starts a relay on a random 127.0.0.1 TCP port.
@@ -168,10 +187,20 @@ func New(config Config) (*Relay, error) {
 		done:         make(chan struct{}),
 		accepting:    true,
 	}
-	if _, err := relay.authorizationToken(); err != nil {
-		cancel()
-		_ = listener.Close()
-		return nil, fmt.Errorf("get initial OTLP relay credential: %w", err)
+	// A missing upstream credential must not fail the job: unless the failure
+	// is known-terminal, start anyway and let the forward worker keep retrying
+	// while requests buffer in the queue (they are dropped and reported at the
+	// drain deadline if the credential never arrives).
+	if token := strings.TrimSpace(config.InitialToken); token != "" {
+		relay.upstreamToken = token
+		relay.tokenRefreshAt = tokenRefreshTime(token, time.Now(), config.TokenLifetime)
+	} else if _, err := relay.authorizationToken(); err != nil {
+		if errors.Is(err, ErrTerminalCredential) {
+			cancel()
+			_ = listener.Close()
+			return nil, fmt.Errorf("get initial OTLP relay credential: %w", err)
+		}
+		relay.config.Logf("Buildkite Test Engine Client: OTLP relay starting without an upstream credential; requests will be buffered while it retries in the background: %v", err)
 	}
 	relay.server = &http.Server{
 		Handler:           relay,
@@ -349,6 +378,13 @@ func (r *Relay) deliver(queued *request) deliveryResult {
 	backoff := r.config.initialBackoff
 	for {
 		token, err := r.authorizationToken()
+		if err != nil && errors.Is(err, ErrTerminalCredential) {
+			if !r.credentialErrLogged {
+				r.credentialErrLogged = true
+				r.config.Logf("Buildkite Test Engine Client: OTLP relay credential was refused and will not be retried; dropping OTLP requests: %v", err)
+			}
+			return deliveryPermanentFailure
+		}
 		var status int
 		var retryAfter time.Duration
 		var hasRetryAfter bool
@@ -427,6 +463,10 @@ func (r *Relay) send(queued *request, token string) (int, time.Duration, bool, e
 }
 
 func (r *Relay) authorizationToken() (string, error) {
+	if r.credentialErr != nil {
+		return "", r.credentialErr
+	}
+
 	now := time.Now()
 	if r.upstreamToken != "" && now.Before(r.tokenRefreshAt) {
 		return r.upstreamToken, nil
@@ -434,6 +474,9 @@ func (r *Relay) authorizationToken() (string, error) {
 
 	token, err := r.config.TokenSource(r.ctx)
 	if err != nil {
+		if errors.Is(err, ErrTerminalCredential) {
+			r.credentialErr = err
+		}
 		return "", err
 	}
 	if strings.TrimSpace(token) == "" {

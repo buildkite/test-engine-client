@@ -1,0 +1,7 @@
+#!/bin/bash
+# Mocks buildkite-agent exiting with OIDCTokenRefusedExitStatus (77): the
+# Buildkite API positively refused to issue an OIDC token (non-retryable 4xx).
+# Contract: https://github.com/buildkite/agent/pull/4272
+
+echo "buildkite-agent: fatal: could not obtain OIDC token for audience $4: POST https://agent.buildkite.com/v3/jobs/job-123/oidc/tokens: 422 Unprocessable Entity: audience not allowed" >&2
+exit 77
