@@ -63,8 +63,8 @@ func TestRelayForwardsOpaqueGzipRequestWithTrustedHeaders(t *testing.T) {
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	report := relay.Drain(drainCtx)
-	if report != (Report{ForwardedRequests: 1}) {
+	report := stripLatencyStats(t, relay.Drain(drainCtx))
+	if report != (Report{ForwardedRequests: 1, ForwardedBytes: int64(len(body)), ForwardedSize: singleStat(int64(len(body)))}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 
@@ -140,8 +140,8 @@ func TestRelayStartsWithoutCredentialAndDeliversAfterRecovery(t *testing.T) {
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	report := relay.Drain(drainCtx)
-	if report != (Report{ForwardedRequests: 1}) {
+	report := stripLatencyStats(t, relay.Drain(drainCtx))
+	if report != (Report{ForwardedRequests: 1, ForwardedBytes: 5, ForwardedSize: singleStat[int64](5)}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 
@@ -184,8 +184,8 @@ func TestRelaySeededInitialTokenSkipsTokenSource(t *testing.T) {
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	report := relay.Drain(drainCtx)
-	if report != (Report{ForwardedRequests: 1}) {
+	report := stripLatencyStats(t, relay.Drain(drainCtx))
+	if report != (Report{ForwardedRequests: 1, ForwardedBytes: 5, ForwardedSize: singleStat[int64](5)}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 
@@ -302,11 +302,11 @@ func TestRelayRetriesRetryableResponses(t *testing.T) {
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	report := relay.Drain(drainCtx)
+	report := stripLatencyStats(t, relay.Drain(drainCtx))
 	if got := requests.Load(); got != 2 {
 		t.Errorf("upstream requests = %d, want 2", got)
 	}
-	if report != (Report{ForwardedRequests: 1}) {
+	if report != (Report{ForwardedRequests: 1, ForwardedBytes: 7, ForwardedSize: singleStat[int64](7)}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 }
@@ -343,8 +343,8 @@ func TestRelayRefreshesExpiredOIDCTokenWhileRetrying(t *testing.T) {
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	report := relay.Drain(drainCtx)
-	if report != (Report{ForwardedRequests: 1}) {
+	report := stripLatencyStats(t, relay.Drain(drainCtx))
+	if report != (Report{ForwardedRequests: 1, ForwardedBytes: 7, ForwardedSize: singleStat[int64](7)}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 	if got := tokenRequests.Load(); got != 2 {
@@ -646,6 +646,60 @@ func TestParseRetryAfter(t *testing.T) {
 			t.Errorf("parseRetryAfter(%q) = (%s, %t), want (%s, %t)", test.value, got, ok, test.want, test.ok)
 		}
 	}
+}
+
+func TestSummarize(t *testing.T) {
+	if got := summarize[int64](nil); got != (Stats[int64]{}) {
+		t.Errorf("summarize(nil) = %+v, want zero stats", got)
+	}
+	samples := []int64{100, 10, 20, 30, 40, 50, 60, 70, 80, 90}
+	want := Stats[int64]{P50: 50, P90: 90, Max: 100}
+	if got := summarize(samples); got != want {
+		t.Errorf("summarize = %+v, want %+v", got, want)
+	}
+	if samples[0] != 100 {
+		t.Error("summarize mutated its input")
+	}
+}
+
+func TestSamplerBoundsMemoryAndKeepsExactMax(t *testing.T) {
+	var s sampler[int64]
+	const n = 3 * maxStatSamples
+	for value := int64(1); value <= n; value++ {
+		s.observe(value)
+	}
+	if len(s.samples) != maxStatSamples {
+		t.Errorf("len(samples) = %d, want capped at %d", len(s.samples), maxStatSamples)
+	}
+	stats := s.stats()
+	if stats.Max != n {
+		t.Errorf("Max = %d, want exact %d", stats.Max, n)
+	}
+	if stats.P50 < 1 || stats.P50 > n || stats.P50 > stats.P90 || stats.P90 > stats.Max {
+		t.Errorf("stats = %+v, want ordered estimates within observed range", stats)
+	}
+}
+
+// singleStat is the expected distribution when exactly one value was observed.
+func singleStat[T ~int64](value T) Stats[T] {
+	return Stats[T]{P50: value, P90: value, Max: value}
+}
+
+// stripLatencyStats checks that latency stats are present and ordered exactly
+// when requests were forwarded, then zeroes them so callers can compare the
+// rest of the report exactly (latency values are nondeterministic).
+func stripLatencyStats(t *testing.T, report Report) Report {
+	t.Helper()
+	latency := report.ForwardedLatency
+	if report.ForwardedRequests > 0 {
+		if latency.Max <= 0 || latency.P50 > latency.P90 || latency.P90 > latency.Max {
+			t.Errorf("ForwardedLatency = %+v, want ordered positive stats", latency)
+		}
+	} else if latency != (Stats[time.Duration]{}) {
+		t.Errorf("ForwardedLatency = %+v, want zero stats without forwarded requests", latency)
+	}
+	report.ForwardedLatency = Stats[time.Duration]{}
+	return report
 }
 
 func newTestRelay(t *testing.T, config Config) *Relay {

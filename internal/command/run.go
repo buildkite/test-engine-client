@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -47,13 +49,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		drainCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		report := relay.Drain(drainCtx)
-		fmt.Printf(
-			"Buildkite Test Engine Client: OTLP relay: %d request(s) forwarded, %d dropped permanently, %d dropped at drain deadline, %d byte(s) dropped\n",
-			report.ForwardedRequests,
-			report.DroppedPermanentRequests,
-			report.DroppedDeadlineRequests,
-			report.DroppedBytes,
-		)
+		printOTLPRelayReport(os.Stdout, report)
 		relay = nil
 	}
 	defer drainRelay()
@@ -174,8 +170,55 @@ func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
 	}
 
 	cfg.TestProcessEnv = relay.Environment(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"))
-	fmt.Printf("Buildkite Test Engine Client: OTLP relay listening on %s\n", relay.Endpoint())
+	fmt.Printf("bktec OTLP relay: listening on %s\n", relay.Endpoint())
 	return relay, nil
+}
+
+func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
+	fmt.Fprintf(w,
+		"bktec OTLP relay: %d request(s) (%s) forwarded, %d dropped permanently, %d dropped at drain deadline, %s dropped\n",
+		report.ForwardedRequests,
+		formatBytes(report.ForwardedBytes),
+		report.DroppedPermanentRequests,
+		report.DroppedDeadlineRequests,
+		formatBytes(report.DroppedBytes),
+	)
+	if report.ForwardedRequests == 0 {
+		return
+	}
+	size := report.ForwardedSize
+	fmt.Fprintf(w,
+		"bktec OTLP relay: request size: p50 %s, p90 %s, max %s\n",
+		formatBytes(size.P50), formatBytes(size.P90), formatBytes(size.Max),
+	)
+	latency := report.ForwardedLatency
+	fmt.Fprintf(w,
+		"bktec OTLP relay: upstream latency: p50 %s, p90 %s, max %s\n",
+		roundLatency(latency.P50), roundLatency(latency.P90), roundLatency(latency.Max),
+	)
+}
+
+// roundLatency trims durations for display, e.g. 45.123456ms -> 45.12ms.
+func roundLatency(d time.Duration) time.Duration {
+	return d.Round(10 * time.Microsecond)
+}
+
+// formatBytes renders a byte count in the most readable binary unit,
+// e.g. 512B, 4.7KiB, 2.3MiB.
+func formatBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%dB", n)
+	}
+	value := float64(n)
+	suffixes := []string{"KiB", "MiB", "GiB", "TiB"}
+	for i, suffix := range suffixes {
+		value /= unit
+		if value < unit || i == len(suffixes)-1 {
+			return strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0") + suffix
+		}
+	}
+	panic("unreachable")
 }
 
 func trimTaskLocationPrefix(task *plan.Task, locationPrefix string) error {
