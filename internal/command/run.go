@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -175,20 +176,20 @@ func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
 
 func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
 	fmt.Fprintf(w,
-		"bktec OTLP relay: %d request(s) (%d bytes) forwarded, %d dropped permanently, %d dropped at drain deadline, %d byte(s) dropped\n",
+		"bktec OTLP relay: %d request(s) (%s) forwarded, %d dropped permanently, %d dropped at drain deadline, %s dropped\n",
 		report.ForwardedRequests,
-		report.ForwardedBytes,
+		formatBytes(report.ForwardedBytes),
 		report.DroppedPermanentRequests,
 		report.DroppedDeadlineRequests,
-		report.DroppedBytes,
+		formatBytes(report.DroppedBytes),
 	)
 	if report.ForwardedRequests == 0 {
 		return
 	}
 	size := report.ForwardedSize
 	fmt.Fprintf(w,
-		"bktec OTLP relay: request size bytes: p50 %d, p90 %d, max %d\n",
-		size.P50, size.P90, size.Max,
+		"bktec OTLP relay: request size: p50 %s, p90 %s, max %s\n",
+		formatBytes(size.P50), formatBytes(size.P90), formatBytes(size.Max),
 	)
 	latency := report.ForwardedLatency
 	fmt.Fprintf(w,
@@ -200,6 +201,24 @@ func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
 // roundLatency trims durations for display, e.g. 45.123456ms -> 45.12ms.
 func roundLatency(d time.Duration) time.Duration {
 	return d.Round(10 * time.Microsecond)
+}
+
+// formatBytes renders a byte count in the most readable decimal unit,
+// e.g. 512B, 4.8kB, 2.4MB.
+func formatBytes(n int64) string {
+	const unit = 1000
+	if n < unit {
+		return fmt.Sprintf("%dB", n)
+	}
+	value := float64(n)
+	suffixes := []string{"kB", "MB", "GB", "TB"}
+	for i, suffix := range suffixes {
+		value /= unit
+		if value < unit || i == len(suffixes)-1 {
+			return strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0") + suffix
+		}
+	}
+	panic("unreachable")
 }
 
 func trimTaskLocationPrefix(task *plan.Task, locationPrefix string) error {
