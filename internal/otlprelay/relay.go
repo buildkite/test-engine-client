@@ -112,6 +112,7 @@ func (s *sampler[T]) observe(value T) {
 		s.samples = append(s.samples, value)
 		return
 	}
+	//nolint:gosec // Reservoir sampling does not require cryptographic randomness.
 	if slot := mathrand.IntN(s.seen); slot < len(s.samples) {
 		s.samples[slot] = value
 	}
