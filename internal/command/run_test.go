@@ -19,6 +19,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/git"
+	"github.com/buildkite/test-engine-client/v3/internal/otlprelay"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/buildkite/test-engine-client/v3/internal/version"
@@ -144,6 +145,34 @@ func TestStartOTLPRelaySeedsUpstreamCredentialFromOIDCUploadToken(t *testing.T) 
 	if got := <-received; got != `Token token="upload-token"` {
 		t.Errorf("upstream Authorization = %q, want seeded upload token", got)
 	}
+}
+
+func TestPrintOTLPRelayReport(t *testing.T) {
+	var buf bytes.Buffer
+	printOTLPRelayReport(&buf, otlprelay.Report{
+		ForwardedRequests:        495,
+		ForwardedBytes:           2381932,
+		ForwardedSize:            otlprelay.Stats[int64]{P50: 4812, P90: 14206, Max: 88410},
+		ForwardedLatency:         otlprelay.Stats[time.Duration]{P50: 38123456, P90: 91400000, Max: 412871900},
+		DroppedPermanentRequests: 3,
+		DroppedDeadlineRequests:  2,
+		DroppedBytes:             10240,
+	})
+	want := "bktec OTLP relay: 495 request(s) (2381932 bytes) forwarded, 3 dropped permanently, 2 dropped at drain deadline, 10240 byte(s) dropped\n" +
+		"bktec OTLP relay: request size bytes: p50 4812, p90 14206, max 88410\n" +
+		"bktec OTLP relay: upstream latency: p50 38.12ms, p90 91.4ms, max 412.87ms\n"
+	if buf.String() != want {
+		t.Errorf("printOTLPRelayReport output = %q, want %q", buf.String(), want)
+	}
+	t.Logf("output:\n%s", buf.String())
+
+	buf.Reset()
+	printOTLPRelayReport(&buf, otlprelay.Report{})
+	want = "bktec OTLP relay: 0 request(s) (0 bytes) forwarded, 0 dropped permanently, 0 dropped at drain deadline, 0 byte(s) dropped\n"
+	if buf.String() != want {
+		t.Errorf("printOTLPRelayReport output = %q, want no distribution lines: %q", buf.String(), want)
+	}
+	t.Logf("output (nothing forwarded):\n%s", buf.String())
 }
 
 func TestRunTestsWithRetry(t *testing.T) {

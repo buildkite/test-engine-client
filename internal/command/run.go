@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -47,13 +48,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		drainCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		report := relay.Drain(drainCtx)
-		fmt.Printf(
-			"Buildkite Test Engine Client: OTLP relay: %d request(s) forwarded, %d dropped permanently, %d dropped at drain deadline, %d byte(s) dropped\n",
-			report.ForwardedRequests,
-			report.DroppedPermanentRequests,
-			report.DroppedDeadlineRequests,
-			report.DroppedBytes,
-		)
+		printOTLPRelayReport(os.Stdout, report)
 		relay = nil
 	}
 	defer drainRelay()
@@ -174,8 +169,37 @@ func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
 	}
 
 	cfg.TestProcessEnv = relay.Environment(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"))
-	fmt.Printf("Buildkite Test Engine Client: OTLP relay listening on %s\n", relay.Endpoint())
+	fmt.Printf("bktec OTLP relay: listening on %s\n", relay.Endpoint())
 	return relay, nil
+}
+
+func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
+	fmt.Fprintf(w,
+		"bktec OTLP relay: %d request(s) (%d bytes) forwarded, %d dropped permanently, %d dropped at drain deadline, %d byte(s) dropped\n",
+		report.ForwardedRequests,
+		report.ForwardedBytes,
+		report.DroppedPermanentRequests,
+		report.DroppedDeadlineRequests,
+		report.DroppedBytes,
+	)
+	if report.ForwardedRequests == 0 {
+		return
+	}
+	size := report.ForwardedSize
+	fmt.Fprintf(w,
+		"bktec OTLP relay: request size bytes: p50 %d, p90 %d, max %d\n",
+		size.P50, size.P90, size.Max,
+	)
+	latency := report.ForwardedLatency
+	fmt.Fprintf(w,
+		"bktec OTLP relay: upstream latency: p50 %s, p90 %s, max %s\n",
+		roundLatency(latency.P50), roundLatency(latency.P90), roundLatency(latency.Max),
+	)
+}
+
+// roundLatency trims durations for display, e.g. 45.123456ms -> 45.12ms.
+func roundLatency(d time.Duration) time.Duration {
+	return d.Round(10 * time.Microsecond)
 }
 
 func trimTaskLocationPrefix(task *plan.Task, locationPrefix string) error {

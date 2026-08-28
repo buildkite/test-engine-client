@@ -10,9 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	mathrand "math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,9 +65,73 @@ type Config struct {
 	maxBackoff     time.Duration
 }
 
-// Report summarizes requests delivered or dropped by a relay.
+// Stats summarizes the distribution of a per-request measurement.
+type Stats[T ~int64] struct {
+	P50 T
+	P90 T
+	Max T
+}
+
+// summarize computes distribution stats over samples without mutating them.
+// The zero Stats is returned for no samples. Percentiles use the nearest-rank
+// method.
+func summarize[T ~int64](samples []T) Stats[T] {
+	if len(samples) == 0 {
+		return Stats[T]{}
+	}
+	sorted := slices.Clone(samples)
+	slices.Sort(sorted)
+	n := len(sorted)
+	return Stats[T]{
+		P50: sorted[(n+1)/2-1],
+		P90: sorted[(9*n+9)/10-1],
+		Max: sorted[n-1],
+	}
+}
+
+// maxStatSamples bounds the memory retained for percentile estimation to
+// 2 reservoirs x 4096 samples x 8 bytes = 64KB regardless of request volume.
+const maxStatSamples = 4096
+
+// sampler observes per-request measurements with bounded memory: an exact
+// running max plus a fixed-size uniform reservoir (Algorithm R) for
+// percentiles. Results are exact until the reservoir fills; beyond that
+// percentiles are unbiased estimates.
+type sampler[T ~int64] struct {
+	samples []T
+	seen    int
+	max     T
+}
+
+func (s *sampler[T]) observe(value T) {
+	s.seen++
+	if value > s.max {
+		s.max = value
+	}
+	if len(s.samples) < maxStatSamples {
+		s.samples = append(s.samples, value)
+		return
+	}
+	if slot := mathrand.IntN(s.seen); slot < len(s.samples) {
+		s.samples[slot] = value
+	}
+}
+
+func (s *sampler[T]) stats() Stats[T] {
+	stats := summarize(s.samples)
+	stats.Max = s.max
+	return stats
+}
+
+// Report summarizes requests delivered or dropped by a relay. ForwardedSize
+// and ForwardedLatency cover forwarded requests only; latency is the duration
+// of each request's successful upstream POST, excluding failed attempts and
+// retry backoff.
 type Report struct {
 	ForwardedRequests        int
+	ForwardedBytes           int64
+	ForwardedSize            Stats[int64]
+	ForwardedLatency         Stats[time.Duration]
 	DroppedPermanentRequests int
 	DroppedDeadlineRequests  int
 	DroppedBytes             int64
@@ -109,6 +175,8 @@ type Relay struct {
 	drainDeadline   time.Time
 	drainRetryDelay time.Duration
 	report          Report
+	sizeSampler     sampler[int64]
+	latencySampler  sampler[time.Duration]
 
 	// upstreamToken, tokenRefreshAt, and credentialErr are only touched by New
 	// (before the worker goroutine starts) and by the single forward worker, so
@@ -200,7 +268,7 @@ func New(config Config) (*Relay, error) {
 			_ = listener.Close()
 			return nil, fmt.Errorf("get initial OTLP relay credential: %w", err)
 		}
-		relay.config.Logf("Buildkite Test Engine Client: OTLP relay starting without an upstream credential; requests will be buffered while it retries in the background: %v", err)
+		relay.config.Logf("bktec OTLP relay: starting without an upstream credential; requests will be buffered while it retries in the background: %v", err)
 	}
 	relay.server = &http.Server{
 		Handler:           relay,
@@ -211,7 +279,7 @@ func New(config Config) (*Relay, error) {
 
 	go func() {
 		if err := relay.server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			relay.config.Logf("Buildkite Test Engine Client: OTLP relay listener stopped: %v", err)
+			relay.config.Logf("bktec OTLP relay: listener stopped: %v", err)
 		}
 	}()
 	go relay.forward()
@@ -339,12 +407,12 @@ func (r *Relay) forward() {
 			return
 		}
 
-		result := r.deliver(req)
+		result, latency := r.deliver(req)
 		switch result {
 		case deliveryForwarded:
-			r.complete(req, true)
+			r.complete(req, true, latency)
 		case deliveryPermanentFailure:
-			r.complete(req, false)
+			r.complete(req, false, 0)
 		case deliveryDeadline:
 			r.dropRemainingAtDeadline()
 			return
@@ -374,35 +442,40 @@ func (r *Relay) nextRequest() (*request, bool) {
 	}
 }
 
-func (r *Relay) deliver(queued *request) deliveryResult {
+// deliver returns the delivery result and, for a forwarded request, the
+// duration of the successful upstream POST.
+func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 	backoff := r.config.initialBackoff
 	for {
 		token, err := r.authorizationToken()
 		if err != nil && errors.Is(err, ErrTerminalCredential) {
 			if !r.credentialErrLogged {
 				r.credentialErrLogged = true
-				r.config.Logf("Buildkite Test Engine Client: OTLP relay credential was refused and will not be retried; dropping OTLP requests: %v", err)
+				r.config.Logf("bktec OTLP relay: credential was refused and will not be retried; dropping OTLP requests: %v", err)
 			}
-			return deliveryPermanentFailure
+			return deliveryPermanentFailure, 0
 		}
 		var status int
 		var retryAfter time.Duration
 		var hasRetryAfter bool
+		var sendLatency time.Duration
 		if err == nil {
+			sendStart := time.Now()
 			status, retryAfter, hasRetryAfter, err = r.send(queued, token)
+			sendLatency = time.Since(sendStart)
 		}
 
 		if err == nil {
 			switch {
 			case status >= 200 && status < 300:
-				return deliveryForwarded
+				return deliveryForwarded, sendLatency
 			case status != http.StatusRequestTimeout && status != http.StatusTooManyRequests && status < 500:
-				r.config.Logf("Buildkite Test Engine Client: OTLP relay dropped a request after upstream returned HTTP %d", status)
-				return deliveryPermanentFailure
+				r.config.Logf("bktec OTLP relay: dropped a request after upstream returned HTTP %d", status)
+				return deliveryPermanentFailure, 0
 			}
 		}
 		if r.ctx.Err() != nil {
-			return deliveryDeadline
+			return deliveryDeadline, 0
 		}
 
 		delay := backoff
@@ -410,7 +483,7 @@ func (r *Relay) deliver(queued *request) deliveryResult {
 			delay = retryAfter
 		}
 		if !r.waitForRetry(delay) {
-			return deliveryDeadline
+			return deliveryDeadline, 0
 		}
 		backoff = min(backoff*2, r.config.maxBackoff)
 	}
@@ -537,7 +610,7 @@ func (r *Relay) clampRetryDelay(delay time.Duration) time.Duration {
 	return min(drainDelay, remaining)
 }
 
-func (r *Relay) complete(req *request, forwarded bool) {
+func (r *Relay) complete(req *request, forwarded bool, latency time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -549,6 +622,9 @@ func (r *Relay) complete(req *request, forwarded bool) {
 	r.queuedSize -= len(req.body) + queueRequestOverhead
 	if forwarded {
 		r.report.ForwardedRequests++
+		r.report.ForwardedBytes += int64(len(req.body))
+		r.sizeSampler.observe(int64(len(req.body)))
+		r.latencySampler.observe(latency)
 	} else {
 		r.report.DroppedPermanentRequests++
 		r.report.DroppedBytes += int64(len(req.body))
@@ -602,6 +678,8 @@ func (r *Relay) Drain(ctx context.Context) Report {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.report.ForwardedSize = r.sizeSampler.stats()
+	r.report.ForwardedLatency = r.latencySampler.stats()
 	return r.report
 }
 
