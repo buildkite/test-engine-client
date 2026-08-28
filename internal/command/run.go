@@ -203,15 +203,15 @@ func roundLatency(d time.Duration) time.Duration {
 	return d.Round(10 * time.Microsecond)
 }
 
-// formatBytes renders a byte count in the most readable decimal unit,
-// e.g. 512B, 4.8kB, 2.4MB.
+// formatBytes renders a byte count in the most readable binary unit,
+// e.g. 512B, 4.7KiB, 2.3MiB.
 func formatBytes(n int64) string {
-	const unit = 1000
+	const unit = 1024
 	if n < unit {
 		return fmt.Sprintf("%dB", n)
 	}
 	value := float64(n)
-	suffixes := []string{"kB", "MB", "GB", "TB"}
+	suffixes := []string{"KiB", "MiB", "GiB", "TiB"}
 	for i, suffix := range suffixes {
 		value /= unit
 		if value < unit || i == len(suffixes)-1 {

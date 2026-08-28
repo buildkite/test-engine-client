@@ -158,8 +158,8 @@ func TestPrintOTLPRelayReport(t *testing.T) {
 		DroppedDeadlineRequests:  2,
 		DroppedBytes:             10240,
 	})
-	want := "bktec OTLP relay: 495 request(s) (2.4MB) forwarded, 3 dropped permanently, 2 dropped at drain deadline, 10.2kB dropped\n" +
-		"bktec OTLP relay: request size: p50 4.8kB, p90 14.2kB, max 88.4kB\n" +
+	want := "bktec OTLP relay: 495 request(s) (2.3MiB) forwarded, 3 dropped permanently, 2 dropped at drain deadline, 10KiB dropped\n" +
+		"bktec OTLP relay: request size: p50 4.7KiB, p90 13.9KiB, max 86.3KiB\n" +
 		"bktec OTLP relay: upstream latency: p50 38.12ms, p90 91.4ms, max 412.87ms\n"
 	if buf.String() != want {
 		t.Errorf("printOTLPRelayReport output = %q, want %q", buf.String(), want)
@@ -179,15 +179,15 @@ func TestFormatBytes(t *testing.T) {
 	cases := map[int64]string{
 		0:         "0B",
 		512:       "512B",
-		999:       "999B",
-		1000:      "1kB",
-		1500:      "1.5kB",
-		10240:     "10.2kB",
-		999_949:   "999.9kB",
-		1_000_000: "1MB",
-		2_381_932: "2.4MB",
-		5e9:       "5GB",
-		7_200e9:   "7.2TB", // implausible for a relay, but must not panic
+		1023:      "1023B",
+		1024:      "1KiB",
+		1500:      "1.5KiB",
+		10240:     "10KiB",
+		999_949:   "976.5KiB",
+		1_048_576: "1MiB",
+		2_381_932: "2.3MiB",
+		5e9:       "4.7GiB",
+		7_200e9:   "6.5TiB", // implausible for a relay, but must not panic
 	}
 	for input, want := range cases {
 		if got := formatBytes(input); got != want {
