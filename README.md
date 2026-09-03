@@ -6,7 +6,7 @@ Its main responsibilities are discovering runnable tests, requesting a test plan
 
 Use `bktec` to split test work across parallel Buildkite jobs using timing data from Test Engine. It can also retry failed tests and mute or skip known failures for runners that support those features, while leaving you in control of the command your test runner executes.
 
-For runner-specific setup, see the [runner guides](#runner-guides).
+For runner-specific setup, see the [runner guides](#runner-guides). For the canonical setup guide, see [Installing and using the Test Engine Client](https://buildkite.com/docs/pipelines/configure/tests/bktec/installing-and-using-the-client).
 
 ## How bktec works
 
@@ -76,6 +76,8 @@ steps:
       BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS: "true"
 ```
 
+This setup does not require a Buildkite Test Collector. If your test suite already uses a collector, remove or turn off its reporter, plugin, or test integration before enabling built-in upload. Using both upload methods records duplicate test executions.
+
 The RSpec runner defaults to:
 
 ```sh
@@ -136,15 +138,20 @@ export BUILDKITE_TEST_ENGINE_SUITE_SLUG=my-slug
 
 ### Upload test results to Test Engine
 
-bktec needs to collect your test data to enable features like intelligent test splitting, retry, and muting. There are two ways to do this:
+Test Engine needs test result data to provide timing data for intelligent test splitting and to support features such as retry and muting. Choose one method to upload results from each test run. A Buildkite Test Collector is not required to use bktec.
+
+> [!IMPORTANT]
+> Do not activate both result upload methods for the same test run. If bktec and a Buildkite Test Collector both upload the results, Test Engine records duplicate test executions.
 
 **Option 1: Use bktec's built-in upload (requires bktec 2.7.0 or later)**
 
-Set `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS` to `true`:
+Built-in upload is off by default. If your test suite already uses a collector, remove or turn off its reporter, plugin, or test integration. Then, set `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS` to `true`:
 
 ```sh
 export BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true
 ```
+
+bktec uses `BUILDKITE_ANALYTICS_TOKEN` as the upload token when it is set. Otherwise, bktec requests an OIDC token. See [Authentication](#authentication) for details.
 
 You can attach key/value tags to each upload using `--tag` or `BUILDKITE_TEST_ENGINE_TAGS`. Tags are useful for filtering and grouping test results in Test Engine.
 
@@ -156,9 +163,17 @@ bktec run --tag env=production --tag region=us-east-1
 export BUILDKITE_TEST_ENGINE_TAGS="env=production,region=us-east-1"
 ```
 
-**Option 2: Install a [Buildkite Test Collector](https://buildkite.com/docs/test-engine/test-collection)**
+**Option 2: Let a [Buildkite Test Collector](https://buildkite.com/docs/test-engine/test-collection) upload results**
 
-Test collectors are available for many languages and frameworks. Some collectors also provide richer data collection such as execution-level tagging and span tracing. See the [test collector docs](https://buildkite.com/docs/test-engine/test-collection) for details on what's available for your framework.
+Test collectors are available for many languages and frameworks. Some collectors also provide richer data collection such as execution-level tagging and span tracing. bktec can continue to discover, split, run, and retry tests while the collector uploads the results.
+
+Leave `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS` unset, or set it to `false` if it is enabled elsewhere in your pipeline:
+
+```sh
+export BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=false
+```
+
+Some runner-specific features require an installed collector package. In those cases, let the collector upload the results and keep built-in upload off. See the [runner guides](#runner-guides) and [test collector docs](https://buildkite.com/docs/test-engine/test-collection) for details on your framework.
 
 ### Relay OpenTelemetry traces
 
@@ -391,7 +406,7 @@ For detailed usage, flags, and configuration options, see the [Commit Metadata B
 
 - Configure the runner-specific command and result output for your test framework.
 - Inspect a generated plan with `bktec plan --plan-out -` when you need to understand how work was split.
-- Configure result uploads with `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true` or a Buildkite Test Collector so future runs have timing data.
+- Choose one result upload method so future runs have timing data: enable built-in upload with `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS=true`, or let a Buildkite Test Collector upload the results and leave this environment variable unset or set to `false`.
 - Configure retries, muting, or skipping where your runner supports them.
 - Use `BUILDKITE_TEST_ENGINE_DEBUG_ENABLED=true` when troubleshooting authentication, uneven splits, or runner command issues.
 - Run `bktec --help`, `bktec run --help`, or `bktec plan --help` for the current CLI options.
