@@ -76,7 +76,7 @@ steps:
       BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS: "true"
 ```
 
-This setup does not require a Buildkite Test Collector. If your test suite already uses a collector, remove or turn off its reporter, plugin, or test integration before enabling built-in upload. Using both upload methods records duplicate test executions.
+This setup does not require a Buildkite Test Collector. If your test suite already uses a collector, set `BUILDKITE_TEST_ENGINE_UPLOAD_RESULTS: false` to avoid double uploads. See Upload test results to Test Engine section below.
 
 The RSpec runner defaults to:
 
