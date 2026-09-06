@@ -630,10 +630,11 @@ func TestFetchOrCreateTestPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
+	got, raw, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
+	assert.JSONEq(t, response, string(raw))
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
@@ -707,7 +708,7 @@ func TestFetchOrCreateTestPlan_CollectsGitMetadataWhenSelectionActive(t *testing
 	}
 	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL})
 
-	if _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner); err != nil {
+	if _, _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner); err != nil {
 		t.Fatalf("fetchOrCreateTestPlan(...) error = %v", err)
 	}
 
@@ -736,7 +737,7 @@ func TestFetchOrCreateTestPlan_NoGitMetadataWithoutSelection(t *testing.T) {
 	}
 	apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL})
 
-	if _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner); err != nil {
+	if _, _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner); err != nil {
 		t.Fatalf("fetchOrCreateTestPlan(...) error = %v", err)
 	}
 
@@ -824,10 +825,11 @@ func TestFetchOrCreateTestPlan_CachedPlan(t *testing.T) {
 		},
 	}
 
-	got, err := fetchOrCreateTestPlan(context.Background(), apiClient, &cfg, tests, testRunner)
+	got, raw, err := fetchOrCreateTestPlan(context.Background(), apiClient, &cfg, tests, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, tests, err)
 	}
+	assert.JSONEq(t, cachedPlan, string(raw))
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, tests, diff)
 	}
@@ -863,10 +865,11 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, TestRunner)
+	got, raw, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, TestRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
+	assert.Nil(t, raw)
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
@@ -906,10 +909,11 @@ func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(fetchCtx, apiClient, &cfg, files, testRunner)
+	got, raw, err := fetchOrCreateTestPlan(fetchCtx, apiClient, &cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
+	assert.Nil(t, raw)
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) diff (-got +want):\n%s", cfg, files, diff)
 	}
@@ -947,7 +951,7 @@ func TestFetchOrCreateTestPlan_SelectorOptInFallbackUsesPathTasks(t *testing.T) 
 		ServerBaseURL: cfg.ServerBaseURL,
 	})
 
-	got, err := fetchOrCreateTestPlan(fetchCtx, apiClient, &cfg, packages, testRunner)
+	got, _, err := fetchOrCreateTestPlan(fetchCtx, apiClient, &cfg, packages, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, packages, err)
 	}
@@ -994,7 +998,7 @@ func TestFetchOrCreateTestPlan_BadRequest(t *testing.T) {
 	// we want the function to return an empty test plan and an error
 	want := plan.TestPlan{}
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
+	got, _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "❌ Invalid Request:")
 	assert.Contains(t, err.Error(), "Invalid parameters: runner is required")
@@ -1032,7 +1036,7 @@ func TestFetchOrCreateTestPlan_BillingError(t *testing.T) {
 	// we want the function to return a fallback plan
 	want := plan.CreateFallbackPlan(files, cfg.Parallelism)
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
+	got, _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
 	if err != nil {
 		t.Errorf("fetchOrCreateTestPlan(ctx, %v, %v) error = %v", cfg, files, err)
 	}
@@ -1072,7 +1076,7 @@ func TestFetchOrCreateTestPlan_AuthError(t *testing.T) {
 
 	want := plan.TestPlan{}
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
+	got, _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "❌ Authentication Failed:")
 	assert.Contains(t, err.Error(), "Authentication required. Please supply a valid API Access Token")
@@ -1109,7 +1113,7 @@ func TestFetchOrCreateTestPlan_ForbiddenError(t *testing.T) {
 
 	want := plan.TestPlan{}
 
-	got, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
+	got, _, err := fetchOrCreateTestPlan(ctx, apiClient, &cfg, files, testRunner)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "❌ Access Denied:")
 	assert.Contains(t, err.Error(), "Your access token doesn't have the write_suites scope")

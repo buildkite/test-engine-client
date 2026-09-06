@@ -1,4 +1,7 @@
 # Changelog
+## Unreleased
+- Add `bktec run --plan-out <path>` (env: `BUILDKITE_TEST_ENGINE_PLAN_OUT`) to save the full cached or freshly created API plan before running tests, retaining selection and server-only fields without extra requests. Local fallback output includes the actual tasks and `fallback: true`. Parent directories are created; write failures stop the run.
+
 ## 3.0.0 - 2026-07-31
 - ⚠️ **BREAKING:** Selector-based splitting now replaces file-based splitting for supported runners. The deprecated `--selector-splitting` flag and `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING` environment variable are still accepted for upgrade compatibility, but their values no longer affect behavior. Existing bktec v2 releases continue to send file-based requests and remain compatible with file-based splitting; remain on v2 if file-based requests are required. See [Migrating from bktec v2 to v3](./docs/migrating-to-v3.md).
 - The Go module path is now `github.com/buildkite/test-engine-client/v3`.

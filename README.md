@@ -255,6 +255,50 @@ printed to stderr). Only when the server cannot be reached at all does `bktec`
 fall back to a minimal locally-generated plan; this carries the identifier and
 parallelism but no tasks (it is not a computed split), and is noted on stderr.
 
+### Saving the plan used by a run
+
+`bktec run --plan-out <path>` writes the full plan before running tests, so
+verification tools can compare results against the actual split and selection
+without fetching the plan again or managing another API token:
+
+```sh
+bktec run --plan-out tmp/test-engine/plan.json
+# Or configure the output path through the environment:
+BUILDKITE_TEST_ENGINE_PLAN_OUT=tmp/test-engine/plan.json bktec run
+```
+
+The flag takes precedence over `BUILDKITE_TEST_ENGINE_PLAN_OUT`. Parent
+directories are created and existing files are overwritten. If the file cannot
+be created, written, or closed, the run stops before executing tests (exit 16).
+Otherwise test execution and exit statuses are unchanged. Unlike `bktec plan`,
+`run --plan-out` accepts only file paths: `-` names a literal file, not stdout.
+
+For cached and freshly created plans, the file is the API's full `test_plan`
+JSON response, indented with a trailing newline. All server fields are retained,
+including `identifier`, `parallelism`, all nodes in `tasks`, test `format`,
+`path`, `identifier`, and `value`, and `selection`, `skipped_reason`, and timing
+metadata when present. It is saved before node-specific location-prefix
+adjustments or retries. Every parallel node writes the entire plan without any
+additional network requests; consumers can upload the file from node 0.
+
+When bktec falls back to local splitting (including an empty server error plan),
+the file instead records the actual local tasks with an explicit `fallback: true`:
+
+```json
+{
+  "identifier": "build-id/step-id",
+  "parallelism": 2,
+  "tasks": {
+    "0": {"node_number": 0, "tests": [{"path": "spec/apple_spec.rb"}]},
+    "1": {"node_number": 1, "tests": [{"path": "spec/banana_spec.rb"}]}
+  },
+  "fallback": true
+}
+```
+
+This is a local full-suite split, not a server selection. Verification tools
+should check `fallback` before interpreting the document as a server plan.
+
 ### Selector-based test splitting
 
 By default, `bktec` discovers tests and requests a plan by sending runner-specific **selectors**, the values Test Engine looks up when computing a split for the current job. For every runner except gotest, the selector is the same file path that bktec discovers, so selector splitting doesn't change which tests run where, only how that path is reported and matched. gotest is the exception: its selector is a Go package import path from `go list`, and selector splitting replaces the legacy even-count package split with duration-aware splitting, so Go users may see a different (and better balanced) split once historical timing data is available.

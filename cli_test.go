@@ -2,14 +2,157 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/buildkite/test-engine-client/v3/internal/command"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
 )
+
+func TestRunPlanOut(t *testing.T) {
+	serverPlan := `{
+		"identifier":"my-plan","parallelism":2,
+		"tasks":{
+			"0":{"node_number":0,"tests":[{"format":"selector","path":"app/apple","identifier":"apple-id","value":"apple"}]},
+			"1":{"node_number":1,"tests":[{"format":"file","path":"app/banana"}]}
+		},
+		"selection":{"strategy":"percent","params":{"percent":50},"applied":true,"skipped_reason":null},
+		"skipped_tests":[{"format":"example","path":"app/cherry[1:1]","skipped_reason":"selection"}],
+		"server_only":{"future_field":true}
+	}`
+	fallbackPlan := `{"identifier":"my-plan","parallelism":2,"fallback":true,"tasks":{
+		"0":{"node_number":0,"tests":[{"path":"apple"}]},
+		"1":{"node_number":1,"tests":[{"path":"banana"}]}
+	}}`
+
+	for _, tt := range []struct {
+		name       string
+		envOnly    bool
+		cacheMiss  bool
+		fallback   bool
+		billing    bool
+		node       int
+		exitCode   int
+		writeError string
+	}{
+		{name: "cached plan and flag overrides env"},
+		{name: "environment variable", envOnly: true},
+		{name: "freshly created plan", cacheMiss: true},
+		{name: "other node writes entire plan", node: 1},
+		{name: "cached error plan fallback", fallback: true},
+		{name: "created error plan fallback", cacheMiss: true, fallback: true},
+		{name: "API unavailable fallback", fallback: true, billing: true},
+		{name: "test exit status preserved", exitCode: 7},
+		{name: "cannot open destination", writeError: "opening --plan-out file"},
+		{name: "cannot create parents", writeError: "creating --plan-out parent directories"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg = config.New()
+			t.Cleanup(func() { cfg = config.New() })
+			dir := t.TempDir()
+			planPath := filepath.Join(dir, "nested", "plan.json")
+			envPath := filepath.Join(dir, "env-plan.json")
+			if tt.envOnly {
+				planPath = envPath
+			}
+			if tt.writeError == "opening --plan-out file" {
+				planPath = dir
+			} else if tt.writeError != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "nested"), nil, 0o600))
+			}
+			t.Setenv("BUILDKITE_TEST_ENGINE_PLAN_OUT", envPath)
+			targetsPath := filepath.Join(dir, "targets.txt")
+			require.NoError(t, os.WriteFile(targetsPath, []byte("apple\nbanana\n"), 0o600))
+			ranPath := filepath.Join(dir, "ran.txt")
+			// Prove the file exists before tests start, and record the node's runnable target.
+			testCommand := fmt.Sprintf(`sh -c 'test -s "$1" || exit 99; printf "%%s" "$3" > "$2"; exit %d' sh %q %q {{testExamples}}`, tt.exitCode, planPath, ranPath)
+
+			planRequests := 0
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v2/analytics/organizations/org/suites/suite/test_plan" {
+					fmt.Fprint(w, `{}`) // Existing post-run metadata request.
+					return
+				}
+				planRequests++
+				switch {
+				case tt.billing:
+					w.WriteHeader(http.StatusForbidden)
+					fmt.Fprint(w, `{"message":"Billing Error: please update your plan"}`)
+				case tt.cacheMiss && r.Method == http.MethodGet:
+					w.WriteHeader(http.StatusNotFound)
+					fmt.Fprint(w, `{"message":"not found"}`)
+				case tt.fallback:
+					fmt.Fprint(w, `{"tasks":{}}`)
+				default:
+					fmt.Fprint(w, serverPlan)
+				}
+			}))
+			defer svr.Close()
+
+			cmd := &cli.Command{
+				Name: "bktec",
+				Commands: []*cli.Command{{
+					Name: "run", Flags: runCommandFlags(),
+					Action: func(ctx context.Context, cmd *cli.Command) error {
+						return command.Run(ctx, &cfg, cmd.String("files"))
+					},
+				}},
+			}
+			args := []string{"bktec", "run", "--files", targetsPath,
+				"--test-runner", "custom", "--test-file-pattern", "*", "--test-command", testCommand,
+				"--organization-slug", "org", "--suite-slug", "suite", "--base-url", svr.URL,
+				"--plan-identifier", "my-plan", "--parallelism", "2", "--parallel-job", strconv.Itoa(tt.node),
+				"--location-prefix", "app/"}
+			if !tt.envOnly {
+				args = append(args, "--plan-out", planPath)
+			}
+			err := cmd.Run(context.Background(), args)
+			if tt.writeError != "" {
+				require.ErrorContains(t, err, tt.writeError)
+				assert.Contains(t, err.Error(), planPath)
+				assert.NoFileExists(t, ranPath)
+				return
+			}
+			if tt.exitCode != 0 {
+				var exitErr *exec.ExitError
+				require.True(t, errors.As(err, &exitErr), "error = %v", err)
+				assert.Equal(t, tt.exitCode, exitErr.ExitCode())
+			} else {
+				require.NoError(t, err)
+			}
+			contents, err := os.ReadFile(planPath)
+			require.NoError(t, err)
+			if tt.fallback {
+				assert.JSONEq(t, fallbackPlan, string(contents))
+			} else {
+				assert.JSONEq(t, serverPlan, string(contents))
+			}
+			ran, err := os.ReadFile(ranPath)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"apple", "banana"}[tt.node], string(ran))
+			if !tt.envOnly {
+				assert.NoFileExists(t, envPath)
+			}
+			wantRequests := 1
+			if tt.cacheMiss {
+				wantRequests = 2
+			}
+			assert.Equal(t, wantRequests, planRequests, "no extra plan requests")
+		})
+	}
+}
 
 func TestPreviewSelectionEnabled(t *testing.T) {
 	truthyValues := []string{"1", "true", "TRUE", "yes", "on", "t", "y"}

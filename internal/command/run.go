@@ -2,11 +2,13 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -72,9 +74,17 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		OrganizationSlug: cfg.OrganizationSlug,
 	})
 
-	testPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, testTargets, testRunner)
+	testPlan, rawPlan, err := fetchOrCreateTestPlan(ctx, apiClient, cfg, testTargets, testRunner)
 	if err != nil {
 		return err
+	}
+
+	// Save the entire plan before applying node-specific location-prefix trims
+	// or retries. The raw response retains selection and other server-only fields.
+	if cfg.PlanOut != "" {
+		if err := writeRunPlan(cfg, testPlan, rawPlan); err != nil {
+			return err
+		}
 	}
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
@@ -534,17 +544,18 @@ func logSignalAndExit(name string, signal syscall.Signal) {
 
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
-func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, testTargets []string, testRunner runner.TestRunner) (plan.TestPlan, error) {
+// The raw response is nil for a local fallback.
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, testTargets []string, testRunner runner.TestRunner) (plan.TestPlan, json.RawMessage, error) {
 	debug.Println("Fetching test plan")
 
 	// Fetch the plan from the server's cache.
-	cachedPlan, err := apiClient.FetchTestPlan(ctx, cfg.SuiteSlug, cfg.Identifier, cfg.JobRetryCount)
+	cachedPlan, raw, err := apiClient.FetchTestPlanRaw(ctx, cfg.SuiteSlug, cfg.Identifier, cfg.JobRetryCount)
 
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
-			return plan.TestPlan{}, handledErr
+			return plan.TestPlan{}, nil, handledErr
 		}
-		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
+		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil, nil
 	}
 
 	if cachedPlan != nil {
@@ -552,11 +563,11 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 		// In this case, we should create a fallback plan.
 		if len(cachedPlan.Tasks) == 0 {
 			warnErrorPlan()
-			return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
+			return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil, nil
 		}
 
 		debug.Printf("Test plan found. Identifier: %q", cfg.Identifier)
-		return *cachedPlan, nil
+		return *cachedPlan, raw, nil
 	}
 
 	debug.Println("No test plan found, creating a new plan")
@@ -570,28 +581,59 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
-			return plan.TestPlan{}, handledErr
+			return plan.TestPlan{}, nil, handledErr
 		}
-		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
+		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil, nil
 	}
 
 	debug.Println("Creating test plan")
-	testPlan, err := apiClient.CreateTestPlan(ctx, cfg.SuiteSlug, params)
+	testPlan, raw, err := apiClient.CreateTestPlanRaw(ctx, cfg.SuiteSlug, params)
 
 	if err != nil {
 		if handledErr := handleError(err); handledErr != nil {
-			return plan.TestPlan{}, handledErr
+			return plan.TestPlan{}, nil, handledErr
 		}
-		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
+		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil, nil
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
 	// In this case, we should create a fallback plan.
 	if len(testPlan.Tasks) == 0 {
 		warnErrorPlan()
-		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil
+		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil, nil
 	}
 
 	debug.Printf("Test plan created. Identifier: %q", cfg.Identifier)
-	return testPlan, nil
+	return testPlan, raw, nil
+}
+
+// writeRunPlan writes the server response, or the actual local fallback split.
+// Unlike plan --plan-out, this is file-only: stdout contains test runner output.
+func writeRunPlan(cfg *config.Config, testPlan plan.TestPlan, raw json.RawMessage) error {
+	if testPlan.Fallback {
+		var err error
+		raw, err = json.Marshal(struct {
+			Identifier  string                `json:"identifier"`
+			Parallelism int                   `json:"parallelism"`
+			Tasks       map[string]*plan.Task `json:"tasks"`
+			Fallback    bool                  `json:"fallback"`
+		}{cfg.Identifier, cfg.Parallelism, testPlan.Tasks, true})
+		if err != nil {
+			return fmt.Errorf("encoding --plan-out fallback: %w", err)
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(cfg.PlanOut), 0o755); err != nil {
+		return fmt.Errorf("creating --plan-out parent directories for %q: %w", cfg.PlanOut, err)
+	}
+	f, err := os.Create(cfg.PlanOut)
+	if err != nil {
+		return fmt.Errorf("opening --plan-out file %q: %w", cfg.PlanOut, err)
+	}
+	writeErr := writeIndentedJSON(f, raw)
+	closeErr := f.Close()
+	if err := errors.Join(writeErr, closeErr); err != nil {
+		return fmt.Errorf("writing --plan-out file %q: %w", cfg.PlanOut, err)
+	}
+	return nil
 }
