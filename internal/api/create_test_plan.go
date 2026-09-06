@@ -87,8 +87,12 @@ func (c Client) CreateTestPlanRaw(ctx context.Context, suiteSlug string, params 
 	}
 
 	var testPlan plan.TestPlan
-	if err := json.Unmarshal(raw, &testPlan); err != nil {
-		return plan.TestPlan{}, nil, fmt.Errorf("parsing test plan: %w", err)
+	// Match doJSONWithRetry: an empty successful response leaves a zero plan,
+	// allowing run to use its existing empty-plan fallback.
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &testPlan); err != nil {
+			return plan.TestPlan{}, nil, fmt.Errorf("parsing test plan: %w", err)
+		}
 	}
 
 	return testPlan, raw, nil

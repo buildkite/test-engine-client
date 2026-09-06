@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,8 +32,12 @@ func TestRunPlanOut(t *testing.T) {
 		},
 		"selection":{"strategy":"percent","params":{"percent":50},"applied":true,"skipped_reason":null},
 		"skipped_tests":[{"format":"example","path":"app/cherry[1:1]","skipped_reason":"selection"}],
-		"server_only":{"future_field":true}
+		"server_only":{"future_field":true,"decimal":1.0,"exponent":1e3,"negative_zero":-0.0,"large_integer":12345678901234567890123,"escaped":"\u00e9","nullable":null}
 	}`
+	var indentedPlan bytes.Buffer
+	require.NoError(t, json.Indent(&indentedPlan, []byte(serverPlan), "", "  "))
+	indentedPlan.WriteByte('\n')
+
 	fallbackPlan := `{"identifier":"my-plan","parallelism":2,"fallback":true,"tasks":{
 		"0":{"node_number":0,"tests":[{"path":"apple"}]},
 		"1":{"node_number":1,"tests":[{"path":"banana"}]}
@@ -40,8 +46,10 @@ func TestRunPlanOut(t *testing.T) {
 	for _, tt := range []struct {
 		name       string
 		envOnly    bool
+		noPlanOut  bool
 		cacheMiss  bool
 		fallback   bool
+		emptyBody  bool
 		billing    bool
 		node       int
 		exitCode   int
@@ -53,6 +61,10 @@ func TestRunPlanOut(t *testing.T) {
 		{name: "other node writes entire plan", node: 1},
 		{name: "cached error plan fallback", fallback: true},
 		{name: "created error plan fallback", cacheMiss: true, fallback: true},
+		{name: "empty GET fallback", emptyBody: true, fallback: true},
+		{name: "empty POST fallback", cacheMiss: true, emptyBody: true, fallback: true},
+		{name: "empty GET fallback without plan-out", emptyBody: true, fallback: true, noPlanOut: true},
+		{name: "empty POST fallback without plan-out", cacheMiss: true, emptyBody: true, fallback: true, noPlanOut: true},
 		{name: "API unavailable fallback", fallback: true, billing: true},
 		{name: "test exit status preserved", exitCode: 7},
 		{name: "cannot open destination", writeError: "opening --plan-out file"},
@@ -77,7 +89,12 @@ func TestRunPlanOut(t *testing.T) {
 			require.NoError(t, os.WriteFile(targetsPath, []byte("apple\nbanana\n"), 0o600))
 			ranPath := filepath.Join(dir, "ran.txt")
 			// Prove the file exists before tests start, and record the node's runnable target.
-			testCommand := fmt.Sprintf(`sh -c 'test -s "$1" || exit 99; printf "%%s" "$3" > "$2"; exit %d' sh %q %q {{testExamples}}`, tt.exitCode, planPath, ranPath)
+			planCheck := `test -s "$1" || exit 99;`
+			if tt.noPlanOut {
+				t.Setenv("BUILDKITE_TEST_ENGINE_PLAN_OUT", "")
+				planCheck = ""
+			}
+			testCommand := fmt.Sprintf(`sh -c '%s printf "%%s" "$3" > "$2"; exit %d' sh %q %q {{testExamples}}`, planCheck, tt.exitCode, planPath, ranPath)
 
 			planRequests := 0
 			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +110,8 @@ func TestRunPlanOut(t *testing.T) {
 				case tt.cacheMiss && r.Method == http.MethodGet:
 					w.WriteHeader(http.StatusNotFound)
 					fmt.Fprint(w, `{"message":"not found"}`)
+				case tt.emptyBody:
+					w.WriteHeader(http.StatusOK)
 				case tt.fallback:
 					fmt.Fprint(w, `{"tasks":{}}`)
 				default:
@@ -115,7 +134,7 @@ func TestRunPlanOut(t *testing.T) {
 				"--organization-slug", "org", "--suite-slug", "suite", "--base-url", svr.URL,
 				"--plan-identifier", "my-plan", "--parallelism", "2", "--parallel-job", strconv.Itoa(tt.node),
 				"--location-prefix", "app/"}
-			if !tt.envOnly {
+			if !tt.envOnly && !tt.noPlanOut {
 				args = append(args, "--plan-out", planPath)
 			}
 			err := cmd.Run(context.Background(), args)
@@ -132,12 +151,16 @@ func TestRunPlanOut(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			contents, err := os.ReadFile(planPath)
-			require.NoError(t, err)
-			if tt.fallback {
-				assert.JSONEq(t, fallbackPlan, string(contents))
+			if tt.noPlanOut {
+				assert.NoFileExists(t, planPath)
 			} else {
-				assert.JSONEq(t, serverPlan, string(contents))
+				contents, err := os.ReadFile(planPath)
+				require.NoError(t, err)
+				if tt.fallback {
+					assert.JSONEq(t, fallbackPlan, string(contents))
+				} else {
+					assert.Equal(t, indentedPlan.String(), string(contents))
+				}
 			}
 			ran, err := os.ReadFile(ranPath)
 			require.NoError(t, err)

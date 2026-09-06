@@ -82,6 +82,28 @@ func TestFetchTestPlan(t *testing.T) {
 	}
 }
 
+func TestFetchTestPlanRaw_EmptyBody(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("request method = %q, want GET", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{ServerBaseURL: svr.URL})
+	got, raw, err := c.FetchTestPlanRaw(context.Background(), "suite", "plan", 0)
+	if err != nil {
+		t.Fatalf("FetchTestPlanRaw() error = %v", err)
+	}
+	if diff := cmp.Diff(got, &plan.TestPlan{}); diff != "" {
+		t.Errorf("FetchTestPlanRaw() diff (-got +want):\n%s", diff)
+	}
+	if len(raw) != 0 {
+		t.Errorf("FetchTestPlanRaw() raw = %q, want empty", raw)
+	}
+}
+
 func TestFetchTestPlan_NotFound(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
