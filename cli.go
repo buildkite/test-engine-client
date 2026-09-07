@@ -464,6 +464,13 @@ var planIdentifierFlag = &cli.StringFlag{
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"),
 }
 
+var runPlanOutFlag = &cli.StringFlag{
+	Name:        "plan-out",
+	Usage:       "write the full test plan as JSON to file `PATH` before running tests, creating parent directories; local fallback plans include fallback: true. Write failures stop the run. Unlike 'plan --plan-out', '-' is a literal file path",
+	Destination: &cfg.PlanOut,
+	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_PLAN_OUT"),
+}
+
 // `plan` command flags
 var maxParallelismFlag = &cli.IntFlag{
 	Name:        "max-parallelism",
@@ -684,6 +691,7 @@ func runCommandFlags() []cli.Flag {
 		filesFlag,
 		tagFiltersFlag,
 		planIdentifierFlag,
+		runPlanOutFlag,
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)

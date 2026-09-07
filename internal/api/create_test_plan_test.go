@@ -147,6 +147,28 @@ func TestCreateTestPlanRaw(t *testing.T) {
 	}
 }
 
+func TestCreateTestPlanRaw_EmptyBody(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("request method = %q, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{ServerBaseURL: svr.URL})
+	got, raw, err := c.CreateTestPlanRaw(context.Background(), "suite", TestPlanParams{})
+	if err != nil {
+		t.Fatalf("CreateTestPlanRaw() error = %v", err)
+	}
+	if diff := cmp.Diff(got, plan.TestPlan{}); diff != "" {
+		t.Errorf("CreateTestPlanRaw() diff (-got +want):\n%s", diff)
+	}
+	if len(raw) != 0 {
+		t.Errorf("CreateTestPlanRaw() raw = %q, want empty", raw)
+	}
+}
+
 func TestCreateTestPlan_SplitByExample(t *testing.T) {
 	params := TestPlanParams{
 		Identifier:  "abc123",
