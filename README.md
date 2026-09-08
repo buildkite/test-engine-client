@@ -271,8 +271,11 @@ selection counts, and estimated selected/candidate cumulative compute share
 with timing coverage. That share is not the requested duration cutoff or a
 wall-clock saving. Split diagnostics explain the actual sizing method,
 independently binding caps (not merely reached caps), and the P90-packed
-longest-node test-work estimate versus the target actually used. Sparse-history
-sizing does not use the configured target. Estimates are not runtime guarantees;
+longest-node test-work estimate versus the target actually used. The required
+node count labels its returned decision basis (mean or P90); an absent or unknown
+basis is not inferred. A P90 allocation estimate above target does not establish
+that a mean-based sizing estimate missed it. Sparse-history and unusable-timing
+sizing do not use the configured target. Estimates are not runtime guarantees;
 older plans or unavailable metadata leave these details unknown rather than
 inferring them from current flags.
 

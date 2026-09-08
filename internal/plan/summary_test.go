@@ -590,6 +590,51 @@ func TestSizingMetadataOutcomes(t *testing.T) {
 	}
 }
 
+func TestSizingDecisionEstimator(t *testing.T) {
+	for _, tt := range []struct {
+		name, estimator, basis string
+	}{
+		{"mean decision", `"mean_with_fallbacks_v1"`, "mean with median/default fallbacks"},
+		{"P90 decision or fallback", `"p90_with_median_fallbacks_v1"`, "P90 with median/default fallbacks"},
+		{"missing decision basis", `null`, "unavailable"},
+		{"unknown decision basis", `"future\n+++ forged"`, "unknown"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := planningMetadataFixture(t, "reached_cap")
+			// Decode the new field independently of the allocation estimator.
+			if err := json.Unmarshal([]byte(`{"target_time_estimator":`+tt.estimator+`,"target_time_ms":7999.5}`), p.Sizing); err != nil {
+				t.Fatal(err)
+			}
+			var buf bytes.Buffer
+			PrintSplitSummary(&buf, p)
+			assertSummary(t, buf.String(), []string{
+				"estimated need 2 nodes before caps (decision basis: " + tt.basis + ")",
+				"Sizing target: 7.9995s (explicit)",
+				"Estimated longest node: 13s (P90 packing with median/default fallbacks); P90 estimate exceeds sizing target",
+			}, []string{"mean estimate exceeds", "target unmet", "forged"})
+		})
+	}
+}
+
+func TestSizingUnusableTimings(t *testing.T) {
+	var p TestPlan
+	if err := json.Unmarshal([]byte(`{"parallelism":2,"settings":{"target_time":8,"max_parallelism":2},"sizing":{"method":"unusable_timings","runnable_units":4,"max_parallelism_binding":true,"runnable_units_binding":false,"estimator":"p90_with_median_fallbacks_v1","estimated_max_task_duration_ms":0}}`), &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Sizing.TargetTimeMS != nil || p.Sizing.TargetTimeEstimator != nil || p.Sizing.EstimatedRequiredParallelism != nil || p.Sizing.TargetTimeSource != "" {
+		t.Fatalf("unused target acquired metadata: %+v", p.Sizing)
+	}
+	var buf bytes.Buffer
+	PrintSplitSummary(&buf, p)
+	assertSummary(t, buf.String(), []string{
+		"target time 8s; maximum nodes 2",
+		"Sizing: unusable timing estimates; target time not used.",
+		"Sizing runnable units: 4",
+		"Caps: maximum nodes binding; runnable units not independently binding",
+		"Estimated longest node: 0ms (P90 packing",
+	}, []string{"insufficient timing history", "Sizing target:", "decision basis", "estimated need", "within sizing target", "exceeds sizing target"})
+}
+
 func TestReturnedStrategyAvailability(t *testing.T) {
 	for _, tt := range []struct{ body, want string }{
 		{`{"selection":{"strategy":"random","applied":true}}`, "Applied strategy: random"},

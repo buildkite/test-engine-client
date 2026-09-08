@@ -194,6 +194,36 @@ func TestTestPlan_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestTestPlan_TargetTimeEstimator(t *testing.T) {
+	for _, value := range []string{`null`, `""`, `"mean_with_fallbacks_v1"`, `"p90_with_median_fallbacks_v1"`, `"future"`} {
+		var got TestPlan
+		if err := json.Unmarshal([]byte(`{"sizing":{"method":"timing","target_time_estimator":`+value+`,"target_time_ms":0.5,"estimated_required_parallelism":0}}`), &got); err != nil {
+			t.Fatal(err)
+		}
+		var want *string
+		if err := json.Unmarshal([]byte(value), &want); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(want, got.Sizing.TargetTimeEstimator); diff != "" {
+			t.Fatal(diff)
+		}
+		if got.Sizing.TargetTimeMS == nil || *got.Sizing.TargetTimeMS != 0.5 || got.Sizing.EstimatedRequiredParallelism == nil || *got.Sizing.EstimatedRequiredParallelism != 0 {
+			t.Fatalf("lost fractional/zero values: %+v", got.Sizing)
+		}
+		encoded, err := json.Marshal(got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var roundTrip TestPlan
+		if err := json.Unmarshal(encoded, &roundTrip); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(got, roundTrip); diff != "" {
+			t.Fatal(diff)
+		}
+	}
+}
+
 func TestTestPlan_OptionalPlanningMetadata(t *testing.T) {
 	zero, no, strategy := 0, false, "manual"
 	for _, tt := range []struct {

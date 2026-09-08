@@ -191,17 +191,30 @@ func printSizingSummary(w io.Writer, s *SizingMetadata) {
 		fmt.Fprintln(w, "  Sizing: single-node maximum; no timing target used.")
 	case "insufficient_history":
 		fmt.Fprintln(w, "  Sizing: insufficient timing history; target time not used.")
+	case "unusable_timings":
+		fmt.Fprintln(w, "  Sizing: unusable timing estimates; target time not used.")
 	case "timing":
 		fmt.Fprint(w, "  Sizing: timing-based")
 		if s.EstimatedRequiredParallelism != nil {
-			fmt.Fprintf(w, "; estimated need %d %s before caps", *s.EstimatedRequiredParallelism, pluralize(*s.EstimatedRequiredParallelism, "node"))
+			basis := "unavailable"
+			if s.TargetTimeEstimator != nil {
+				switch *s.TargetTimeEstimator {
+				case "p90_with_median_fallbacks_v1":
+					basis = "P90 with median/default fallbacks"
+				case "mean_with_fallbacks_v1":
+					basis = "mean with median/default fallbacks"
+				default:
+					basis = "unknown"
+				}
+			}
+			fmt.Fprintf(w, "; estimated need %d %s before caps (decision basis: %s)", *s.EstimatedRequiredParallelism, pluralize(*s.EstimatedRequiredParallelism, "node"), basis)
 		}
 		fmt.Fprintln(w, ".")
 	default:
 		fmt.Fprintln(w, "  Sizing: unavailable (unknown method).")
 		return
 	}
-	if s.Method == "timing" || s.Method == "insufficient_history" {
+	if s.Method == "timing" || s.Method == "insufficient_history" || s.Method == "unusable_timings" {
 		if s.RunnableUnits != nil {
 			fmt.Fprintf(w, "  Sizing runnable units: %d\n", *s.RunnableUnits)
 		}
@@ -229,9 +242,9 @@ func printSizingSummary(w io.Writer, s *SizingMetadata) {
 	fmt.Fprintf(w, "  Estimated longest node: %s (P90 packing with median/default fallbacks)", planningDurationMS(float64(*s.EstimatedMaxTaskDurationMS)))
 	if hasTarget {
 		if float64(*s.EstimatedMaxTaskDurationMS) > *s.TargetTimeMS {
-			fmt.Fprint(w, "; exceeds sizing target")
+			fmt.Fprint(w, "; P90 estimate exceeds sizing target")
 		} else {
-			fmt.Fprint(w, "; within sizing target")
+			fmt.Fprint(w, "; P90 estimate within sizing target")
 		}
 	}
 	fmt.Fprintln(w, ". Test-work estimate, not a runtime guarantee.")

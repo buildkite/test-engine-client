@@ -93,6 +93,8 @@ type SelectionDurationEstimates struct {
 // SizingMetadata records the actual server sizing branch, never reconstructed
 // from settings or tasks. Binding flags are independent: tied constraints are
 // both false. Target/required nodes exist only when timing-based sizing was used.
+// TargetTimeEstimator prices the sizing decision independently of the P90
+// allocation Estimator; it is absent on older plans or when no target was used.
 type SizingMetadata struct {
 	Method                       string   `json:"method,omitempty"`
 	RunnableUnits                *int     `json:"runnable_units,omitempty"`
@@ -100,6 +102,7 @@ type SizingMetadata struct {
 	RunnableUnitsBinding         *bool    `json:"runnable_units_binding,omitempty"`
 	TargetTimeSource             string   `json:"target_time_source,omitempty"`
 	TargetTimeMS                 *float64 `json:"target_time_ms,omitempty"`
+	TargetTimeEstimator          *string  `json:"target_time_estimator,omitempty"`
 	EstimatedRequiredParallelism *int     `json:"estimated_required_parallelism,omitempty"`
 	Estimator                    string   `json:"estimator,omitempty"`
 	EstimatedMaxTaskDurationMS   *int     `json:"estimated_max_task_duration_ms,omitempty"`
