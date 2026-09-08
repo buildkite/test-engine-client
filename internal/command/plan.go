@@ -16,7 +16,6 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/git"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
-	"github.com/buildkite/test-engine-client/v3/internal/version"
 )
 
 type PlanOutput int
@@ -36,7 +35,7 @@ var (
 
 // This command creates a test plan via the API
 func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFormat PlanOutput, template string) error {
-	fmt.Fprintln(os.Stderr, "+++ Buildkite Test Engine Client: bktec "+version.Version+"\n")
+	printPlanningRequest(os.Stderr, cfg)
 
 	// Auto-collect git metadata when selection is active or explicitly requested
 	if cfg.SelectionStrategy != "" || cfg.CollectGitMetadata {
@@ -80,7 +79,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
 	}
 
-	printSplitSummary(os.Stderr, testPlan)
+	printPlanningSummary(os.Stderr, testPlan, sourceCreateResponse)
 
 	switch outputFormat {
 
@@ -169,7 +168,7 @@ func planOut(ctx context.Context, cfg *config.Config, testTargets []string, apiC
 	}
 
 	debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
-	printSplitSummary(os.Stderr, testPlan)
+	printPlanningSummary(os.Stderr, testPlan, sourceCreateResponse)
 	if testPlan.Parallelism == 0 {
 		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
 	}
@@ -198,6 +197,7 @@ func planOutWriter(dest string) (io.Writer, func(), error) {
 // parallelism are emitted.
 func emitLocalFallback(out io.Writer, cfg *config.Config) error {
 	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
+	printPlanningSummary(os.Stderr, makeFallbackPlan(cfg), "local fallback")
 
 	// A fixed-shape struct of plain fields, so marshalling cannot fail.
 	encoded, _ := json.MarshalIndent(struct {

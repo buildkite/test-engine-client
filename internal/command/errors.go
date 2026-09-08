@@ -41,6 +41,17 @@ func printWarn(label, message string, hints ...string) {
 	printWarning(os.Stderr, label+": "+message, append(hints, fallbackExtra)...)
 }
 
+const sourceCreateResponse = "create endpoint response (may be cached)"
+
+func printPlanningSummary(w io.Writer, testPlan plan.TestPlan, source string) {
+	if testPlan.Fallback {
+		source = "local fallback"
+	}
+	fmt.Fprintln(w, "Plan source: "+source)
+	plan.PrintSelectionSummary(w, testPlan)
+	printSplitSummary(w, testPlan)
+}
+
 // printSplitSummary prints the plan summary and warns when a selector plan had
 // to use default durations because no selector timing history was available.
 func printSplitSummary(w io.Writer, testPlan plan.TestPlan) {

@@ -63,6 +63,27 @@ type Task struct {
 	Tests []TestCase `json:"tests"`
 }
 
+// SelectionMetadata contains public selection outcomes. Pointers distinguish
+// missing/null metadata on older plans from real zero counts and false outcomes.
+// Counts are runnable units, not necessarily paths or the cutoff's denominator.
+type SelectionMetadata struct {
+	Applied                  *bool    `json:"applied,omitempty"`
+	CandidateCount           *int     `json:"candidate_count,omitempty"`
+	SelectedCount            *int     `json:"selected_count,omitempty"`
+	ScoreCutoff              *float64 `json:"score_cutoff,omitempty"`
+	CountCutoff              *int     `json:"count_cutoff,omitempty"`
+	ProportionCutoff         *float64 `json:"proportion_cutoff,omitempty"`
+	DurationProportionCutoff *float64 `json:"duration_proportion_cutoff,omitempty"`
+	EffectiveCount           *int     `json:"effective_count,omitempty"`
+	SkippedReason            *string  `json:"skipped_reason,omitempty"`
+}
+
+// Settings describes returned split constraints, not the current invocation.
+type Settings struct {
+	MaxParallelism *int     `json:"max_parallelism,omitempty"`
+	TargetTime     *float64 `json:"target_time,omitempty"` // seconds
+}
+
 // TestPlan represents the entire test plan.
 type TestPlan struct {
 	Identifier   string           `json:"identifier"`
@@ -70,8 +91,10 @@ type TestPlan struct {
 	Experiment   string           `json:"experiment"`
 	Tasks        map[string]*Task `json:"tasks"`
 	Fallback     bool
-	MutedTests   []TestCase `json:"muted_tests,omitempty"`
-	SkippedTests []TestCase `json:"skipped_tests,omitempty"`
+	MutedTests   []TestCase         `json:"muted_tests,omitempty"`
+	SkippedTests []TestCase         `json:"skipped_tests,omitempty"`
+	Selection    *SelectionMetadata `json:"selection,omitempty"`
+	Settings     *Settings          `json:"settings,omitempty"`
 	// TimingMetadata describes the historical timing data the server used to
 	// build this plan. Nil when missing (e.g. error plans, plans cached before
 	// the server began emitting it).

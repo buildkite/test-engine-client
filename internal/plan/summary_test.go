@@ -2,6 +2,7 @@ package plan
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -32,7 +33,7 @@ func TestPrintSplitSummary_MixedHistory(t *testing.T) {
 	got := buf.String()
 
 	for _, want := range []string{
-		"+++ Buildkite Test Engine Client: 📊 Split summary\n5 files across 2 nodes",
+		"Split summary\n  5 files across 2 nodes",
 		"3 files (60%) estimated from past historical durations",
 		"2 files (40%) had no history — assumed median (4.2s)",
 	} {
@@ -59,7 +60,7 @@ func TestPrintSplitSummary_NoHistory(t *testing.T) {
 	got := buf.String()
 
 	for _, want := range []string{
-		"+++ Buildkite Test Engine Client: 📊 Split summary\n3 files across 2 nodes",
+		"Split summary\n  3 files across 2 nodes",
 		"3 files (100%) had no history and used the default duration (1.0s)",
 	} {
 		if !strings.Contains(got, want) {
@@ -97,7 +98,7 @@ func TestPrintSplitSummary_NullMedianWithUnknowns(t *testing.T) {
 	}
 }
 
-func TestPrintSplitSummary_SkipsWhenNoMetadata(t *testing.T) {
+func TestPrintSplitSummary_NoMetadata(t *testing.T) {
 	p := TestPlan{
 		Parallelism: 1,
 		Tasks: map[string]*Task{
@@ -106,8 +107,8 @@ func TestPrintSplitSummary_SkipsWhenNoMetadata(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	PrintSplitSummary(&buf, p)
-	if buf.Len() != 0 {
-		t.Errorf("expected no output, got: %s", buf.String())
+	if !strings.Contains(buf.String(), "1 file across 1 node") || !strings.Contains(buf.String(), "Timing history unavailable.") {
+		t.Errorf("expected count and unknown history, got: %s", buf.String())
 	}
 }
 
@@ -155,7 +156,7 @@ func TestPrintSplitSummary_ExampleMode(t *testing.T) {
 	got := buf.String()
 
 	for _, want := range []string{
-		"+++ Buildkite Test Engine Client: 📊 Split summary\n2 examples across 2 nodes",
+		"Split summary\n  2 examples across 2 nodes",
 		"1 example (50%) estimated from past historical durations",
 		"1 example (50%) had no history",
 		"2.0s",
@@ -189,7 +190,7 @@ func TestPrintSplitSummary_SelectorMode(t *testing.T) {
 	got := buf.String()
 
 	for _, want := range []string{
-		"+++ Buildkite Test Engine Client: 📊 Split summary\n2 selectors across 2 nodes",
+		"Split summary\n  2 selectors across 2 nodes",
 		"1 selector (50%) estimated from past historical durations",
 		"1 selector (50%) had no history — assumed median (1.8s)",
 	} {
@@ -284,7 +285,7 @@ func TestPrintSplitSummary_MixedFormats(t *testing.T) {
 	got := buf.String()
 
 	for _, want := range []string{
-		"4 tests across 2 nodes",
+		"4 runnable units across 2 nodes",
 		"  2 files\n",
 		"    1 (50%) estimated from past historical durations",
 		"    1 (50%) had no history — assumed median (4.2s)",
@@ -323,7 +324,7 @@ func TestPrintSplitSummary_MixedFormatsWithSelectors(t *testing.T) {
 	got := buf.String()
 
 	for _, want := range []string{
-		"4 tests across 2 nodes",
+		"4 runnable units across 2 nodes",
 		"  1 file\n",
 		"    1 (100%) estimated from past historical durations",
 		"  1 example\n",
@@ -341,7 +342,7 @@ func TestPrintSplitSummary_MixedFormatsWithSelectors(t *testing.T) {
 	}
 }
 
-func TestPrintSplitSummary_SkipsFallback(t *testing.T) {
+func TestPrintSplitSummary_Fallback(t *testing.T) {
 	p := TestPlan{
 		Parallelism: 1,
 		Fallback:    true,
@@ -354,8 +355,76 @@ func TestPrintSplitSummary_SkipsFallback(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	PrintSplitSummary(&buf, p)
-	if buf.Len() != 0 {
-		t.Errorf("expected no output for fallback plan, got: %s", buf.String())
+	if !strings.Contains(buf.String(), "1 runnable unit across 1 node") || !strings.Contains(buf.String(), "Local non-intelligent split") {
+		t.Errorf("expected local fallback summary, got: %s", buf.String())
+	}
+	if strings.Contains(buf.String(), "had no history") {
+		t.Errorf("unexpected server timing breakdown for fallback: %s", buf.String())
+	}
+}
+
+func TestPrintSelectionSummary(t *testing.T) {
+	for _, tt := range []struct {
+		name, body, want string
+	}{
+		{"old plan", `{}`, "Outcome unknown (selection metadata unavailable)."},
+		{"null", `{"selection":null}`, "Outcome unknown (selection metadata unavailable)."},
+		{"missing applied", `{"selection":{"applied":null,"selected_count":0}}`, "Outcome unknown (applied status unavailable).\n  Selected: 0; eligible runnable units: unknown."},
+		{"zero selected", `{"selection":{"applied":true,"candidate_count":5,"selected_count":0}}`, "Applied.\n  Selected 0 of 5 eligible runnable units (0%)."},
+		{"zero eligible", `{"selection":{"applied":true,"candidate_count":0,"selected_count":0}}`, "Selected 0 of 0 eligible runnable units (percentage unavailable: no eligible units)."},
+		{"full selection", `{"selection":{"applied":true,"candidate_count":5,"selected_count":5}}`, "Selected 5 of 5 eligible runnable units (100%)."},
+		{"mixed denominator", `{"selection":{"applied":true,"candidate_count":6,"selected_count":2},"tasks":{"0":{"tests":[{"format":"file"},{"format":"example"}]}}}`, "Selected 2 of 6 eligible runnable units (33.3%)."},
+		{"fallback reason", `{"selection":{"applied":false,"candidate_count":5,"selected_count":5,"skipped_reason":"no_model"}}`, "Not applied.\n  Reason: \"no_model\"\n  Selected 5 of 5 eligible runnable units (100%)."},
+		{"zero cutoffs", `{"selection":{"score_cutoff":0,"count_cutoff":0,"proportion_cutoff":0,"duration_proportion_cutoff":0,"effective_count":0}}`, "Returned parameters: score_cutoff=0, count_cutoff=0, proportion_cutoff=0, duration_proportion_cutoff=0, effective_count=0"},
+		{"null cutoffs", `{"selection":{"score_cutoff":null,"count_cutoff":null}}`, "Selected: unknown; eligible runnable units: unknown."},
+		{"local fallback", `{"Fallback":true}`, "Not applied: local fallback uses the full locally discovered suite."},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var p TestPlan
+			if err := json.Unmarshal([]byte(tt.body), &p); err != nil {
+				t.Fatal(err)
+			}
+			var buf bytes.Buffer
+			PrintSelectionSummary(&buf, p)
+			if !strings.Contains(buf.String(), tt.want) {
+				t.Errorf("want %q, got:\n%s", tt.want, &buf)
+			}
+			if strings.Contains(buf.String(), "+++") || strings.Contains(buf.String(), "\n\n") {
+				t.Errorf("redundant group or blank line: %q", buf.String())
+			}
+		})
+	}
+}
+
+func TestSelectionReasonBoundedAndEscaped(t *testing.T) {
+	reason := "no_model\n+++ forged\x1b" + strings.Repeat("x", 1000)
+	p := TestPlan{Selection: &SelectionMetadata{SkippedReason: &reason}}
+	var buf bytes.Buffer
+	PrintSelectionSummary(&buf, p)
+	if !strings.Contains(buf.String(), `no_model\n+++ forged\x1b`) || len(buf.String()) > 400 {
+		t.Fatalf("reason not safely bounded: %q", buf.String())
+	}
+}
+
+func TestPrintSplitSummary_ReturnedConstraints(t *testing.T) {
+	for _, tt := range []struct {
+		body, want string
+		atCap      bool
+	}{
+		{`{"parallelism":2,"settings":{"target_time":120.5,"max_parallelism":2}}`, "target time 120.5s; maximum nodes 2", true},
+		{`{"parallelism":2,"settings":{"max_parallelism":5}}`, "target time unknown; maximum nodes 5", false},
+		{`{"parallelism":0,"tasks":{},"settings":{"target_time":0,"max_parallelism":0}}`, "target time 0s; maximum nodes 0", false},
+		{`{"parallelism":1,"settings":{"target_time":null,"max_parallelism":null}}`, "target time unknown; maximum nodes unknown", false},
+	} {
+		var p TestPlan
+		if err := json.Unmarshal([]byte(tt.body), &p); err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		PrintSplitSummary(&buf, p)
+		if !strings.Contains(buf.String(), tt.want) || strings.Contains(buf.String(), "At maximum nodes") != tt.atCap {
+			t.Errorf("unexpected constraints for %s:\n%s", tt.body, &buf)
+		}
 	}
 }
 

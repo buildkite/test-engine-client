@@ -5,40 +5,127 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 )
+
+// PrintSelectionSummary uses only returned metadata. In particular, neither
+// task formats nor this invocation's flags establish the eligible denominator
+// or the strategy used by an existing plan.
+func PrintSelectionSummary(w io.Writer, p TestPlan) {
+	fmt.Fprintln(w, "Selection summary")
+	if p.Fallback {
+		fmt.Fprintln(w, "  Not applied: local fallback uses the full locally discovered suite.")
+		return
+	}
+	s := p.Selection
+	if s == nil {
+		fmt.Fprintln(w, "  Outcome unknown (selection metadata unavailable).")
+		return
+	}
+	switch {
+	case s.Applied == nil:
+		fmt.Fprintln(w, "  Outcome unknown (applied status unavailable).")
+	case *s.Applied:
+		fmt.Fprintln(w, "  Applied.")
+	default:
+		fmt.Fprintln(w, "  Not applied.")
+	}
+	if s.SkippedReason != nil {
+		reason := *s.SkippedReason
+		if len(reason) > 200 {
+			reason = reason[:200] + "…"
+		}
+		fmt.Fprintf(w, "  Reason: %q\n", reason)
+	}
+	if s.SelectedCount != nil && s.CandidateCount != nil {
+		share := "percentage unavailable: no eligible units"
+		if *s.CandidateCount > 0 {
+			share = percentOf(*s.SelectedCount, *s.CandidateCount)
+		}
+		fmt.Fprintf(w, "  Selected %d of %d eligible runnable units (%s).\n", *s.SelectedCount, *s.CandidateCount, share)
+	} else {
+		selected, eligible := "unknown", "unknown"
+		if s.SelectedCount != nil {
+			selected = strconv.Itoa(*s.SelectedCount)
+		}
+		if s.CandidateCount != nil {
+			eligible = strconv.Itoa(*s.CandidateCount)
+		}
+		fmt.Fprintf(w, "  Selected: %s; eligible runnable units: %s.\n", selected, eligible)
+	}
+	var params []string
+	if s.ScoreCutoff != nil {
+		params = append(params, fmt.Sprintf("score_cutoff=%g", *s.ScoreCutoff))
+	}
+	if s.CountCutoff != nil {
+		params = append(params, fmt.Sprintf("count_cutoff=%d", *s.CountCutoff))
+	}
+	if s.ProportionCutoff != nil {
+		params = append(params, fmt.Sprintf("proportion_cutoff=%g", *s.ProportionCutoff))
+	}
+	if s.DurationProportionCutoff != nil {
+		params = append(params, fmt.Sprintf("duration_proportion_cutoff=%g", *s.DurationProportionCutoff))
+	}
+	if s.EffectiveCount != nil {
+		params = append(params, fmt.Sprintf("effective_count=%d", *s.EffectiveCount))
+	}
+	if len(params) > 0 {
+		fmt.Fprintf(w, "  Returned parameters: %s\n", strings.Join(params, ", "))
+	}
+}
 
 // PrintSplitSummary writes a human-readable summary of the resolved test plan
 // to w (typically os.Stderr). At parallelism > 1 it uses per-format
 // TimingMetadata to break down known vs unknown cases. At parallelism == 1 the
 // server skips the per-format timing fetch and emits an empty TimingMetadata,
-// so only the header and case count are printed. Skipped for fallback plans and
-// plans without TimingMetadata at all (e.g. error or older cached plans).
+// so there is no history breakdown. Missing metadata is not evidence of no history.
 func PrintSplitSummary(w io.Writer, p TestPlan) {
-	if p.Fallback || p.TimingMetadata == nil {
-		return
-	}
-
 	fileTotal, fileKnown := countByFormat(p, TestCaseFormatFile)
 	exampleTotal, exampleKnown := countByFormat(p, TestCaseFormatExample)
 	selectorTotal, selectorKnown := countByFormat(p, TestCaseFormatSelector)
 
 	total := fileTotal + exampleTotal + selectorTotal
-	if total == 0 {
-		return
-	}
-
 	nodes := p.Parallelism
 	mixed := countNonZero(fileTotal, exampleTotal, selectorTotal) > 1
 	noun := summaryNoun(fileTotal, exampleTotal, selectorTotal)
+	if p.Fallback && p.Tasks != nil {
+		// Run's local splitter populates tasks but not Parallelism or Format.
+		nodes = len(p.Tasks)
+		noun = "runnable unit"
+	}
 
-	fmt.Fprintln(w, "\n+++ Buildkite Test Engine Client: 📊 Split summary")
-	fmt.Fprintf(w, "%d %s across %d %s\n",
-		total, pluralize(total, noun), nodes, pluralize(nodes, "node"))
+	fmt.Fprintln(w, "Split summary")
+	if p.Tasks == nil {
+		fmt.Fprintf(w, "  %d %s (runnable unit count unavailable)\n", nodes, pluralize(nodes, "node"))
+	} else {
+		fmt.Fprintf(w, "  %d %s across %d %s\n",
+			total, pluralize(total, noun), nodes, pluralize(nodes, "node"))
+	}
+	if p.Fallback {
+		fmt.Fprintln(w, "  Local non-intelligent split; timing estimates unavailable.")
+		return
+	}
+	target, cap := "unknown", "unknown"
+	if p.Settings != nil {
+		if p.Settings.TargetTime != nil {
+			target = fmt.Sprintf("%gs", *p.Settings.TargetTime)
+		}
+		if p.Settings.MaxParallelism != nil {
+			cap = strconv.Itoa(*p.Settings.MaxParallelism)
+		}
+	}
+	fmt.Fprintf(w, "  Returned constraints: target time %s; maximum nodes %s\n", target, cap)
+	if p.Settings != nil && p.Settings.MaxParallelism != nil && nodes == *p.Settings.MaxParallelism && nodes > 0 {
+		fmt.Fprintln(w, "  At maximum nodes (does not establish that the cap limited sizing).")
+	}
+	if p.TimingMetadata == nil {
+		fmt.Fprintln(w, "  Timing history unavailable.")
+		return
+	}
 
 	// At parallelism == 1 the server skips the per-format timing fetch and
 	// emits an empty TimingMetadata, so there is no breakdown to print.
 	if p.TimingMetadata.File == nil && p.TimingMetadata.Example == nil && p.TimingMetadata.Selector == nil {
-		fmt.Fprintln(w)
 		return
 	}
 
@@ -51,7 +138,6 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	if selectorTotal > 0 {
 		printFormatBreakdown(w, selectorTotal, selectorKnown, "selector", p.TimingMetadata.Selector, mixed)
 	}
-	fmt.Fprintln(w)
 }
 
 // HasNoSelectorTimingHistory reports whether a multi-node selector plan used
@@ -99,9 +185,11 @@ func countNonZero(values ...int) int {
 
 // summaryNoun returns the singular heading noun. The plan-level summary uses
 // "file"/"example"/"selector" when the plan only contains one format, or
-// "test" when multiple formats are present. Callers pluralize as needed.
+// "runnable unit" when multiple formats are present. Callers pluralize as needed.
 func summaryNoun(fileTotal, exampleTotal, selectorTotal int) string {
 	switch {
+	case fileTotal+exampleTotal+selectorTotal == 0:
+		return "runnable unit"
 	case exampleTotal == 0 && selectorTotal == 0:
 		return "file"
 	case fileTotal == 0 && selectorTotal == 0:
@@ -109,7 +197,7 @@ func summaryNoun(fileTotal, exampleTotal, selectorTotal int) string {
 	case fileTotal == 0 && exampleTotal == 0:
 		return "selector"
 	default:
-		return "test"
+		return "runnable unit"
 	}
 }
 

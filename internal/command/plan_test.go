@@ -39,9 +39,19 @@ func TestPlanJSON(t *testing.T) {
 	setPlanWriter(t, &buf)
 
 	// This is the method under test
+	getStderr := captureStderr(t)
 	err := Plan(ctx, cfg, "", PlanOutputJSON, "")
+	stderr := getStderr()
 	if err != nil {
 		t.Errorf("command.Plan(...) error = %v", err)
+	}
+	for _, want := range []string{"+++ Buildkite Test Engine Client: Planning\nbktec ", "Selection: none requested", "Plan source: create endpoint response (may be cached)", "Outcome unknown (selection metadata unavailable).", "Split summary"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr missing %q:\n%s", want, stderr)
+		}
+	}
+	if strings.Count(stderr, "+++ ") != 1 || strings.Contains(stderr, "\n\n") {
+		t.Errorf("redundant planning group/whitespace:\n%s", stderr)
 	}
 
 	want := `{"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER":"facecafe","BUILDKITE_TEST_ENGINE_PARALLELISM":"42"}
@@ -57,7 +67,7 @@ func TestPlanPlanOut(t *testing.T) {
 	// The server's exact response body, including a field the client struct
 	// does not model (server_only), to prove --plan-out passes the response
 	// through unmodified rather than re-marshalling a struct.
-	serverBody := `{"identifier":"facecafe","parallelism":42,"experiment":"","tasks":{"0":{"node_number":0,"tests":[{"path":"testdata/rspec/spec/fruits/apple_spec.rb"}]}},"server_only":"kept"}`
+	serverBody := `{"identifier":"facecafe","parallelism":42,"experiment":"","tasks":{"0":{"node_number":0,"tests":[{"path":"testdata/rspec/spec/fruits/apple_spec.rb"}]}},"selection":{"applied":true,"candidate_count":10,"selected_count":1,"count_cutoff":1,"scores":[{"prediction_score":0.7}]},"settings":{"target_time":120,"max_parallelism":42},"server_only":"kept"}`
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -89,8 +99,18 @@ func TestPlanPlanOut(t *testing.T) {
 	setPlanWriter(t, &buf)
 
 	// This is the method under test
+	getStderr := captureStderr(t)
 	if err := Plan(ctx, cfg, "", PlanOutputPlanOut, ""); err != nil {
 		t.Errorf("command.Plan(...) error = %v", err)
+	}
+	stderr := getStderr()
+	for _, want := range []string{"Selected 1 of 10 eligible runnable units (10%).", "Returned parameters: count_cutoff=1", "target time 120s; maximum nodes 42"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr missing %q:\n%s", want, stderr)
+		}
+	}
+	if strings.Contains(stderr, "prediction_score") {
+		t.Errorf("scores must not appear in normal diagnostics: %s", stderr)
 	}
 
 	// stdout is the server's exact response, only re-indented. Comparing the

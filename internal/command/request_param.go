@@ -3,6 +3,9 @@ package command
 import (
 	"context"
 	"fmt"
+	"io"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
@@ -10,11 +13,77 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/version"
 )
 
 type requestTarget struct {
 	value string
 	file  api.TestPlanFile
+}
+
+// printPlanningRequest describes this invocation, not the provenance of a
+// returned (possibly cached) plan. Share normalization with the API request.
+func printPlanningRequest(w io.Writer, cfg *config.Config) {
+	fmt.Fprintln(w, "+++ Buildkite Test Engine Client: Planning")
+	fmt.Fprintln(w, "bktec "+version.Version)
+	fmt.Fprintln(w, "Requested (this invocation; an existing plan may use different settings)")
+	selection := buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams)
+	if selection == nil {
+		fmt.Fprint(w, "  Selection: none requested")
+		if cfg.SelectionStrategy != "" {
+			fmt.Fprintf(w, " (strategy %s disables selection; omitted from API request)", boundedRequestValue(cfg.SelectionStrategy))
+		}
+		fmt.Fprintln(w)
+	} else {
+		fmt.Fprintf(w, "  Selection strategy: %s\n", boundedRequestValue(selection.Strategy))
+	}
+	keys := make([]string, 0, len(cfg.SelectionParams))
+	for key := range cfg.SelectionParams {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	for _, key := range keys {
+		value := cfg.SelectionParams[key]
+		var rendered string
+		switch key {
+		case "sample_rate", "threshold", "score_cutoff", "count_cutoff", "proportion_cutoff", "duration_proportion_cutoff", "include_scores", "percent", "top":
+			rendered = boundedRequestValue(value)
+		case "files":
+			// Manual selection accepts newline-delimited file paths. Count the
+			// supplied nonblank entries without exposing the list in CI logs.
+			count := 0
+			for line := range strings.SplitSeq(value, "\n") {
+				if strings.TrimSpace(line) != "" {
+					count++
+				}
+			}
+			rendered = fmt.Sprintf("<%d nonblank entries; %d bytes>", count, len(value))
+		default:
+			// Unknown payloads may contain model inputs, predictions or secrets.
+			rendered = fmt.Sprintf("<value omitted; %d bytes>", len(value))
+		}
+		ignored := ""
+		if selection == nil {
+			ignored = " (not sent)"
+		}
+		fmt.Fprintf(w, "    %s=%s%s\n", boundedRequestValue(key), rendered, ignored)
+	}
+	if cfg.MaxParallelism > 0 {
+		target := "automatic"
+		if cfg.TargetTime > 0 {
+			target = cfg.TargetTime.String()
+		}
+		fmt.Fprintf(w, "  Split: dynamic; target time %s; maximum nodes %d\n", target, cfg.MaxParallelism)
+	} else {
+		fmt.Fprintf(w, "  Split: fixed parallelism %d\n", cfg.Parallelism)
+	}
+}
+
+func boundedRequestValue(value string) string {
+	if len(value) > 160 {
+		return fmt.Sprintf("<value omitted; %d bytes>", len(value))
+	}
+	return strconv.Quote(value)
 }
 
 // createRequestParam generates the parameters needed for a test plan request.

@@ -649,6 +649,84 @@ func withGitRunner(t *testing.T, r git.GitRunner) {
 	t.Cleanup(func() { newGitRunner = prev })
 }
 
+func TestFetchOrCreateTestPlanPlanningSummary(t *testing.T) {
+	const body = `{"identifier":"existing","parallelism":2,"tasks":{"0":{"tests":[]},"1":{"tests":[{"format":"selector","value":"apple"}]}},"selection":{"applied":true,"candidate_count":4,"selected_count":1,"proportion_cutoff":0.25},"settings":{"target_time":60,"max_parallelism":2},"server_only":"unchanged"}`
+	for _, mode := range []string{"cached", "create", "old cached", "fetch fallback", "create fallback", "error plan"} {
+		t.Run(mode, func(t *testing.T) {
+			posts := 0
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/filter_tests") {
+					fmt.Fprint(w, `{"tests":[]}`)
+					return
+				}
+				if r.Method == http.MethodGet && (mode == "create" || mode == "create fallback") {
+					w.WriteHeader(http.StatusNotFound)
+					fmt.Fprint(w, `{"message":"Not Found"}`)
+					return
+				}
+				if r.Method == http.MethodPost {
+					posts++
+				}
+				switch mode {
+				case "fetch fallback", "create fallback":
+					w.WriteHeader(http.StatusUnprocessableEntity)
+					fmt.Fprint(w, `{"message":"API disabled"}`)
+				case "old cached":
+					fmt.Fprint(w, `{"parallelism":2,"tasks":{"0":{"tests":[]},"1":{"tests":[]}}}`)
+				case "error plan":
+					fmt.Fprint(w, `{"parallelism":0,"tasks":{}}`)
+				default:
+					fmt.Fprint(w, body)
+				}
+			}))
+			defer svr.Close()
+			cfg := &config.Config{Identifier: "invocation", Parallelism: 2, SelectionStrategy: "OFF", SelectionParams: map[string]string{"proportion_cutoff": "0.9"}}
+			client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
+			getStderr := captureStderr(t)
+			printPlanningRequest(os.Stderr, cfg)
+			p, raw, err := fetchOrCreateTestPlan(context.Background(), client, cfg, []string{"apple", "banana"}, runner.Rspec{})
+			stderr := getStderr()
+			if err != nil {
+				t.Fatal(err)
+			}
+			wants := []string{"Selection: none requested", "\"proportion_cutoff\"=\"0.9\" (not sent)"}
+			switch mode {
+			case "cached", "create":
+				wants = append(wants, "Selected 1 of 4 eligible runnable units (25%).", "Returned parameters: proportion_cutoff=0.25", "target time 60s; maximum nodes 2")
+				if string(raw) != body {
+					t.Errorf("raw plan changed: %s", raw)
+				}
+			case "old cached":
+				wants = append(wants, "Outcome unknown (selection metadata unavailable).")
+			default:
+				wants = append(wants, "Plan source: local fallback", "Not applied: local fallback", "2 runnable units across 2 nodes")
+				if !p.Fallback || raw != nil {
+					t.Errorf("expected unchanged local fallback contract: %+v, %s", p, raw)
+				}
+			}
+			if mode == "cached" || mode == "old cached" {
+				wants = append(wants, "Plan source: fetched existing plan")
+				if posts != 0 {
+					t.Errorf("cache hit created a plan")
+				}
+			} else if mode == "create" {
+				wants = append(wants, "Plan source: create endpoint response (may be cached)")
+				if posts != 1 {
+					t.Errorf("expected one creation request, got %d", posts)
+				}
+			}
+			for _, want := range wants {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("missing %q:\n%s", want, stderr)
+				}
+			}
+			if strings.Count(stderr, "+++ ") != 1 || strings.Count(stderr, "Selection summary") != 1 || strings.Contains(stderr, "\n\n") {
+				t.Errorf("redundant planning output:\n%s", stderr)
+			}
+		})
+	}
+}
+
 // captureRequestBody serves a cache-miss on GET and records the POST body used
 // to create the plan, returning the server and a getter for the captured body.
 func captureRequestBody(t *testing.T) (*httptest.Server, func() []byte) {
