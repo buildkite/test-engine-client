@@ -52,7 +52,7 @@ func TestPrintSelectionSummary_OmitsUnknownStrategy(t *testing.T) {
 
 func TestPrintSelectionSummary_ExplainsWhenSelectionWasNotApplied(t *testing.T) {
 	tests := map[string]string{
-		"no_changed_files": "no changed files were provided",
+		"no_changed_files": "no changed files",
 		"no_model":         "no active model was available",
 		"invoke_error":     "model invocation failed",
 		"future_reason":    "future_reason",

@@ -23,7 +23,7 @@ func PrintSelectionSummary(w io.Writer, p TestPlan, strategy string) {
 		reason := p.Selection.SkippedReason
 		switch reason {
 		case "no_changed_files":
-			reason = "no changed files were provided"
+			reason = "no changed files"
 		case "no_model":
 			reason = "no active model was available"
 		case "invoke_error":
