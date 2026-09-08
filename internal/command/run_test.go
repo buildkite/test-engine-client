@@ -704,12 +704,13 @@ func TestFetchOrCreateTestPlanPlanningSummary(t *testing.T) {
 					t.Errorf("expected unchanged local fallback contract: %+v, %s", p, raw)
 				}
 			}
-			if mode == "cached" || mode == "old cached" {
+			switch mode {
+			case "cached", "old cached":
 				wants = append(wants, "Plan source: fetched existing plan")
 				if posts != 0 {
 					t.Errorf("cache hit created a plan")
 				}
-			} else if mode == "create" {
+			case "create":
 				wants = append(wants, "Plan source: create endpoint response (may be cached)")
 				if posts != 1 {
 					t.Errorf("expected one creation request, got %d", posts)

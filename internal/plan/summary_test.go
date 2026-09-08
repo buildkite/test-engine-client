@@ -378,7 +378,9 @@ func TestPrintSelectionSummary(t *testing.T) {
 		{"fallback reason", `{"selection":{"applied":false,"candidate_count":5,"selected_count":5,"skipped_reason":"no_model"}}`, "Not applied.\n  Reason: \"no_model\"\n  Selected 5 of 5 eligible runnable units (100%)."},
 		{"zero cutoffs", `{"selection":{"score_cutoff":0,"count_cutoff":0,"proportion_cutoff":0,"duration_proportion_cutoff":0,"effective_count":0}}`, "Returned parameters: score_cutoff=0, count_cutoff=0, proportion_cutoff=0, duration_proportion_cutoff=0, effective_count=0"},
 		{"null cutoffs", `{"selection":{"score_cutoff":null,"count_cutoff":null}}`, "Selected: unknown; eligible runnable units: unknown."},
-		{"local fallback", `{"Fallback":true}`, "Not applied: local fallback uses the full locally discovered suite."},
+		{"local fallback", `{"Fallback":true,"tasks":{"0":{"tests":[{"path":"a"}]}}}`, "Not applied: local fallback uses the full locally discovered suite."},
+		{"taskless placeholder", `{"Fallback":true}`, "Not determined: taskless fallback placeholder."},
+		{"empty task map placeholder", `{"Fallback":true,"tasks":{}}`, "Not determined: taskless fallback placeholder."},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var p TestPlan
@@ -394,6 +396,19 @@ func TestPrintSelectionSummary(t *testing.T) {
 				t.Errorf("redundant group or blank line: %q", buf.String())
 			}
 		})
+	}
+}
+
+func TestPrintSplitSummary_Placeholder(t *testing.T) {
+	for _, tasks := range []map[string]*Task{nil, {}} {
+		p := TestPlan{Fallback: true, Parallelism: 3, Tasks: tasks}
+		var buf bytes.Buffer
+		PrintSelectionSummary(&buf, p)
+		PrintSplitSummary(&buf, p)
+		assertSummary(t, buf.String(), []string{
+			"Not determined: taskless fallback placeholder.",
+			"Placeholder only: 3 nodes; no test allocation computed.",
+		}, []string{"full locally discovered suite", "Local non-intelligent split", "0 nodes"})
 	}
 }
 

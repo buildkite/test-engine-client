@@ -506,6 +506,7 @@ func TestPlanJSON_ErrorPlanFallback(t *testing.T) {
 	planErr := Plan(ctx, cfg, "", PlanOutputJSON, "")
 
 	stderrOutput := getStderr()
+	assertTasklessFallbackSummary(t, stderrOutput)
 
 	// Verify command exits successfully
 	if planErr != nil {
@@ -554,6 +555,7 @@ func TestPlanPipelineUpload_ErrorPlanFallback(t *testing.T) {
 	planErr := Plan(ctx, cfg, "", PlanOutputPipelineUpload, "testtemplate.yml")
 
 	stderrOutput := getStderr()
+	assertTasklessFallbackSummary(t, stderrOutput)
 
 	if planErr != nil {
 		t.Errorf("command.Plan(...) error = %v", planErr)
@@ -1167,6 +1169,7 @@ func TestPlanPlanOut_FallbackWarnsOnStderr(t *testing.T) {
 	planErr := Plan(fetchCtx, cfg, "", PlanOutputPlanOut, "")
 
 	stderrOutput := getStderr()
+	assertTasklessFallbackSummary(t, stderrOutput)
 
 	if planErr != nil {
 		t.Errorf("command.Plan(...) error = %v", planErr)
@@ -1192,6 +1195,20 @@ func TestPlanPlanOut_FallbackWarnsOnStderr(t *testing.T) {
 	// The fallback caveat is written to stderr.
 	if !strings.Contains(stderrOutput, "locally-computed fallback plan") {
 		t.Errorf("expected stderr to contain the fallback caveat, got: %s", stderrOutput)
+	}
+}
+
+func assertTasklessFallbackSummary(t *testing.T, stderr string) {
+	t.Helper()
+	for _, want := range []string{"Not determined: taskless fallback placeholder.", "no test allocation computed."} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("missing %q:\n%s", want, stderr)
+		}
+	}
+	for _, unwanted := range []string{"full locally discovered suite", "  Local non-intelligent split;"} {
+		if strings.Contains(stderr, unwanted) {
+			t.Errorf("placeholder claims computed split %q:\n%s", unwanted, stderr)
+		}
 	}
 }
 

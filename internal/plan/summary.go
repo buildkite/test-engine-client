@@ -14,7 +14,11 @@ import (
 func PrintSelectionSummary(w io.Writer, p TestPlan) {
 	fmt.Fprintln(w, "Selection summary")
 	if p.Fallback {
-		fmt.Fprintln(w, "  Not applied: local fallback uses the full locally discovered suite.")
+		if len(p.Tasks) == 0 {
+			fmt.Fprintln(w, "  Not determined: taskless fallback placeholder.")
+		} else {
+			fmt.Fprintln(w, "  Not applied: local fallback uses the full locally discovered suite.")
+		}
 		return
 	}
 	s := p.Selection
@@ -115,6 +119,11 @@ func printSelectionDurationSummary(w io.Writer, s *SelectionMetadata) {
 // server skips the per-format timing fetch and emits an empty TimingMetadata,
 // so there is no history breakdown. Missing metadata is not evidence of no history.
 func PrintSplitSummary(w io.Writer, p TestPlan) {
+	if p.Fallback && len(p.Tasks) == 0 {
+		fmt.Fprintln(w, "Split summary")
+		fmt.Fprintf(w, "  Placeholder only: %d %s; no test allocation computed.\n", p.Parallelism, pluralize(p.Parallelism, "node"))
+		return
+	}
 	fileTotal, fileKnown := countByFormat(p, TestCaseFormatFile)
 	exampleTotal, exampleKnown := countByFormat(p, TestCaseFormatExample)
 	selectorTotal, selectorKnown := countByFormat(p, TestCaseFormatSelector)
