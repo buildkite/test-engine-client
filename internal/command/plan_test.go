@@ -67,7 +67,7 @@ func TestPlanPlanOut(t *testing.T) {
 	// The server's exact response body, including a field the client struct
 	// does not model (server_only), to prove --plan-out passes the response
 	// through unmodified rather than re-marshalling a struct.
-	serverBody := `{"identifier":"facecafe","parallelism":42,"experiment":"","tasks":{"0":{"node_number":0,"tests":[{"path":"testdata/rspec/spec/fruits/apple_spec.rb"}]}},"selection":{"applied":true,"candidate_count":10,"selected_count":1,"count_cutoff":1,"scores":[{"prediction_score":0.7}]},"settings":{"target_time":120,"max_parallelism":42},"server_only":"kept"}`
+	serverBody := `{"identifier":"facecafe","parallelism":1,"experiment":"","tasks":{"0":{"node_number":0,"tests":[{"path":"testdata/rspec/spec/fruits/apple_spec.rb"}]}},"selection":{"applied":true,"strategy":"manual","candidate_count":10,"selected_count":1,"count_cutoff":1,"duration_estimates":{"estimator":"mean_with_candidate_median_fallbacks_v1","candidate_total_duration_ms":14000,"selected_total_duration_ms":5000,"candidate_timing_coverage":0.5},"scores":[{"prediction_score":0.7}]},"settings":{"target_time":120,"max_parallelism":42},"sizing":{"method":"insufficient_history","runnable_units":1,"max_parallelism_binding":false,"runnable_units_binding":true},"duration_estimates":{"estimator":"mean_with_fallbacks_v1","total_duration_ms":3000,"max_task_duration_ms":3000},"server_only":"kept"}`
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -104,7 +104,7 @@ func TestPlanPlanOut(t *testing.T) {
 		t.Errorf("command.Plan(...) error = %v", err)
 	}
 	stderr := getStderr()
-	for _, want := range []string{"Selected 1 of 10 eligible runnable units (10%).", "Returned parameters: count_cutoff=1", "target time 120s; maximum nodes 42"} {
+	for _, want := range []string{"Applied strategy: manual", "Selected 1 of 10 eligible runnable units (10%).", "Returned parameters: count_cutoff=1", "target time 120s; maximum nodes 42", "Estimated duration share: 35.7%; candidate timing coverage: 50%", "insufficient timing history; target time not used", "Estimated longest node: unavailable"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr missing %q:\n%s", want, stderr)
 		}

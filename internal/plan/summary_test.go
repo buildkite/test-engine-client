@@ -3,6 +3,7 @@ package plan
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -449,5 +450,174 @@ func TestPercentOf(t *testing.T) {
 				t.Errorf("percentOf(%d, %d) = %q, want %q", tt.n, tt.total, got, tt.want)
 			}
 		})
+	}
+}
+
+// These are the exact response fragments from the verified TE-7042 backend
+// handoff. In particular, the top-level mean estimate must not replace P90.
+func planningMetadataFixture(t *testing.T, name string) TestPlan {
+	t.Helper()
+	body, err := os.ReadFile("testdata/planning_metadata.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plans map[string]TestPlan
+	if err := json.Unmarshal(body, &plans); err != nil {
+		t.Fatal(err)
+	}
+	p, ok := plans[name]
+	if !ok {
+		t.Fatalf("missing fixture %s", name)
+	}
+	return p
+}
+
+func TestPlanningMetadataBackendExamples(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		want, absent []string
+	}{
+		{"reached_cap", []string{"At maximum nodes.", "estimated need 2 nodes before caps", "Sizing runnable units: 4", "maximum nodes not independently binding; runnable units not independently binding", "Sizing target: 13s (explicit)", "Estimated longest node: 13s (P90 packing", "within sizing target", "not a runtime guarantee"}, []string{"Estimated longest node: 7s", "exceeds sizing target"}},
+		{"insufficient_history", []string{"target time 13s", "insufficient timing history; target time not used", "maximum nodes not independently binding; runnable units binding", "Estimated longest node: 1s (P90 packing"}, []string{"within sizing target", "exceeds sizing target", "Sizing target:", "estimated need"}},
+		{"selected_share", []string{"Applied strategy: manual", "Selected 1 of 4 eligible runnable units (25%)", "selected 5s of 14s eligible candidate total (mean with candidate median/default fallbacks)", "Estimated duration share: 35.7%; candidate timing coverage: 100%", "Compute, not wall time or the requested cutoff"}, []string{"Estimated duration share: 25%", "P90"}},
+		{"skipped_strategy", []string{"Attempted strategy: xgboost (skipped; not applied)", "Reason: \"no_model\"", "Selected 9 of 9", "Estimated duration share: unavailable"}, []string{"Applied strategy:"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := planningMetadataFixture(t, tt.name)
+			var buf bytes.Buffer
+			PrintSelectionSummary(&buf, p)
+			PrintSplitSummary(&buf, p)
+			assertSummary(t, buf.String(), tt.want, tt.absent)
+		})
+	}
+}
+
+func TestSelectionDurationAvailability(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		change func(*SelectionMetadata)
+		want   string
+	}{
+		{"zero selected", func(s *SelectionMetadata) { *s.DurationEstimates.SelectedTotalDurationMS = 0 }, "Estimated duration share: 0%;"},
+		{"full selection", func(s *SelectionMetadata) { *s.DurationEstimates.SelectedTotalDurationMS = 14000 }, "Estimated duration share: 100%;"},
+		{"zero denominator", func(s *SelectionMetadata) {
+			*s.DurationEstimates.CandidateTotalDurationMS = 0
+			*s.DurationEstimates.SelectedTotalDurationMS = 0
+		}, "selected 0ms of 0ms eligible candidate total"},
+		{"coverage threshold", func(s *SelectionMetadata) { *s.DurationEstimates.CandidateTimingCoverage = 0.5 }, "Estimated duration share: 35.7%; candidate timing coverage: 50%"},
+		{"coverage rounding", func(s *SelectionMetadata) { *s.DurationEstimates.CandidateTimingCoverage = 0.57 }, "Estimated duration share: 35.7%; candidate timing coverage: 57%"},
+		{"sparse coverage", func(s *SelectionMetadata) { *s.DurationEstimates.CandidateTimingCoverage = 0.49 }, "Estimated duration share: unavailable."},
+		{"missing coverage", func(s *SelectionMetadata) { s.DurationEstimates.CandidateTimingCoverage = nil }, "Estimated duration share: unavailable."},
+		{"missing selected", func(s *SelectionMetadata) { s.DurationEstimates.SelectedTotalDurationMS = nil }, "Estimated duration share: unavailable."},
+		{"missing candidate", func(s *SelectionMetadata) { s.DurationEstimates.CandidateTotalDurationMS = nil }, "Estimated duration share: unavailable."},
+		{"unknown estimator", func(s *SelectionMetadata) { s.DurationEstimates.Estimator = "future" }, "Estimated duration share: unavailable."},
+		{"selected pool estimator", func(s *SelectionMetadata) { s.DurationEstimates.Estimator = "mean_with_fallbacks_v1" }, "Estimated duration share: unavailable."},
+		{"absent estimates", func(s *SelectionMetadata) { s.DurationEstimates = nil }, "Estimated duration share: unavailable."},
+		{"skipped", func(s *SelectionMetadata) { *s.Applied = false }, "Estimated duration share: unavailable."},
+		{"unknown applied", func(s *SelectionMetadata) { s.Applied = nil }, "Estimated duration share: unavailable."},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := planningMetadataFixture(t, "selected_share")
+			tt.change(p.Selection)
+			var buf bytes.Buffer
+			PrintSelectionSummary(&buf, p)
+			absent := []string{}
+			if strings.HasSuffix(tt.want, "unavailable.") {
+				absent = append(absent, "Estimated cumulative compute:")
+			}
+			if tt.name == "zero denominator" {
+				absent = append(absent, "Estimated duration share: 0%")
+				assertSummary(t, buf.String(), []string{"Estimated duration share: unavailable (zero candidate total)"}, nil)
+			}
+			assertSummary(t, buf.String(), []string{tt.want}, absent)
+		})
+	}
+}
+
+func TestSizingMetadataOutcomes(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		change       func(*TestPlan)
+		want, absent []string
+	}{
+		{"binding cap misses target", func(p *TestPlan) {
+			*p.Sizing.MaxParallelismBinding = true
+			*p.Sizing.TargetTimeMS = 8000
+			*p.Sizing.EstimatedRequiredParallelism = 4
+		}, []string{"maximum nodes binding;", "estimated need 4 nodes before caps", "exceeds sizing target"}, []string{"within sizing target"}},
+		{"binding does not prove miss", func(p *TestPlan) { *p.Sizing.MaxParallelismBinding = true }, []string{"maximum nodes binding;", "within sizing target"}, []string{"exceeds sizing target"}},
+		{"tied caps", func(p *TestPlan) {
+			p.Parallelism = 4
+			*p.Settings.MaxParallelism = 4
+			*p.Sizing.EstimatedRequiredParallelism = 8
+		}, []string{"At maximum nodes.", "estimated need 8 nodes before caps", "maximum nodes not independently binding; runnable units not independently binding"}, nil},
+		{"uncapped miss", func(p *TestPlan) {
+			p.Parallelism = 4
+			*p.Settings.MaxParallelism = 10
+			*p.Sizing.TargetTimeMS = 7000
+			*p.Sizing.EstimatedMaxTaskDurationMS = 8000
+		}, []string{"maximum nodes not independently binding", "Estimated longest node: 8s", "exceeds sizing target"}, []string{"At maximum nodes"}},
+		{"automatic target", func(p *TestPlan) {
+			p.Settings.TargetTime = nil
+			p.Sizing.TargetTimeSource = "longest_test"
+			*p.Sizing.TargetTimeMS = 8000
+		}, []string{"Sizing target: 8s (automatic: longest test P90 estimate)"}, nil},
+		{"fractional target", func(p *TestPlan) { *p.Sizing.TargetTimeMS = 12999.5 }, []string{"Sizing target: 12.9995s", "exceeds sizing target"}, nil},
+		{"absent flags", func(p *TestPlan) { p.Sizing.MaxParallelismBinding = nil; p.Sizing.RunnableUnitsBinding = nil }, []string{"maximum nodes binding unknown; runnable units binding unknown"}, []string{"not independently binding"}},
+		{"missing target", func(p *TestPlan) { p.Sizing.TargetTimeMS = nil }, []string{"Sizing target: unavailable"}, []string{"within sizing target", "exceeds sizing target"}},
+		{"unknown target source", func(p *TestPlan) { p.Sizing.TargetTimeSource = "future" }, []string{"Sizing target: unavailable"}, []string{"within sizing target", "exceeds sizing target"}},
+		{"unknown estimator", func(p *TestPlan) { p.Sizing.Estimator = "future" }, []string{"Estimated longest node: unavailable"}, []string{"within sizing target", "exceeds sizing target", "Estimated longest node: 7s"}},
+		{"missing estimate", func(p *TestPlan) { p.Sizing.EstimatedMaxTaskDurationMS = nil }, []string{"Estimated longest node: unavailable"}, []string{"within sizing target", "Estimated longest node: 7s"}},
+		{"old plan", func(p *TestPlan) { p.Sizing = nil }, []string{"does not establish that the cap limited sizing"}, []string{"Sizing:", "Estimated longest node:", "within sizing target"}},
+		{"unknown method", func(p *TestPlan) { p.Sizing.Method = "future" }, []string{"Sizing: unavailable (unknown method)"}, []string{"timing-based", "within sizing target"}},
+		{"fixed one", func(p *TestPlan) { p.Sizing = &SizingMetadata{Method: "fixed"} }, []string{"Sizing: fixed parallelism; no timing target used", "Estimated longest node: unavailable"}, []string{"Caps:", "within sizing target"}},
+		{"single node", func(p *TestPlan) { p.Sizing = &SizingMetadata{Method: "single_node"} }, []string{"Sizing: single-node maximum; no timing target used"}, []string{"Caps:", "within sizing target"}},
+		{"empty sparse plan", func(p *TestPlan) {
+			p.Parallelism = 0
+			p.Tasks = map[string]*Task{}
+			p.Sizing.Method = "insufficient_history"
+			*p.Sizing.RunnableUnits = 0
+			*p.Sizing.EstimatedMaxTaskDurationMS = 0
+		}, []string{"0 runnable units across 0 nodes", "Sizing runnable units: 0", "Estimated longest node: 0ms"}, []string{"within sizing target", "exceeds sizing target"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := planningMetadataFixture(t, "reached_cap")
+			tt.change(&p)
+			var buf bytes.Buffer
+			PrintSplitSummary(&buf, p)
+			assertSummary(t, buf.String(), tt.want, tt.absent)
+		})
+	}
+}
+
+func TestReturnedStrategyAvailability(t *testing.T) {
+	for _, tt := range []struct{ body, want string }{
+		{`{"selection":{"strategy":"random","applied":true}}`, "Applied strategy: random"},
+		{`{"selection":{"strategy":"rspec_changed_files","applied":false}}`, "Attempted strategy: rspec_changed_files"},
+		{`{"selection":{"strategy":"austral","applied":null}}`, "Returned strategy: austral (applied status unavailable)"},
+		{`{"selection":{"strategy":"future\n+++ forged","applied":true}}`, "Returned strategy: unavailable (unsupported)"},
+		{`{"selection":{"strategy":null,"applied":true}}`, "Applied."},
+	} {
+		var p TestPlan
+		if err := json.Unmarshal([]byte(tt.body), &p); err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		PrintSelectionSummary(&buf, p)
+		assertSummary(t, buf.String(), []string{tt.want}, []string{"forged"})
+	}
+}
+
+func assertSummary(t *testing.T, got string, want, absent []string) {
+	t.Helper()
+	for _, s := range want {
+		if !strings.Contains(got, s) {
+			t.Errorf("missing %q:\n%s", s, got)
+		}
+	}
+	for _, s := range append(absent, "+++", "\n\n") {
+		if strings.Contains(got, s) {
+			t.Errorf("unexpected %q:\n%s", s, got)
+		}
 	}
 }

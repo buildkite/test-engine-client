@@ -260,9 +260,21 @@ the muted and skipped tests, and the timing metadata. It takes a destination:
 ./bktec plan --plan-out plan.json    # a file
 ```
 
-The human-readable split summary and any warnings are written to stderr, so
+The human-readable planning summary and any warnings are written to stderr, so
 stdout carries only the plan. `--json`, `--plan-out` and `--pipeline-upload`
 are mutually exclusive; choose one.
+
+Both `plan` and `run` distinguish this invocation's requested selection and
+split settings from the returned plan, which may be cached. When supplied by
+the server, the summary shows the applied or attempted/skipped strategy,
+selection counts, and estimated selected/candidate cumulative compute share
+with timing coverage. That share is not the requested duration cutoff or a
+wall-clock saving. Split diagnostics explain the actual sizing method,
+independently binding caps (not merely reached caps), and the P90-packed
+longest-node test-work estimate versus the target actually used. Sparse-history
+sizing does not use the configured target. Estimates are not runtime guarantees;
+older plans or unavailable metadata leave these details unknown rather than
+inferring them from current flags.
 
 `--plan-out` writes what the server returns, unmodified. If the server cannot
 generate a plan it returns an empty plan, which is emitted as-is (a warning is

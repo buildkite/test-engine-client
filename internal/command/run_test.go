@@ -650,7 +650,7 @@ func withGitRunner(t *testing.T, r git.GitRunner) {
 }
 
 func TestFetchOrCreateTestPlanPlanningSummary(t *testing.T) {
-	const body = `{"identifier":"existing","parallelism":2,"tasks":{"0":{"tests":[]},"1":{"tests":[{"format":"selector","value":"apple"}]}},"selection":{"applied":true,"candidate_count":4,"selected_count":1,"proportion_cutoff":0.25},"settings":{"target_time":60,"max_parallelism":2},"server_only":"unchanged"}`
+	const body = `{"identifier":"existing","parallelism":1,"tasks":{"0":{"tests":[{"format":"selector","value":"apple"}]}},"selection":{"applied":true,"strategy":"manual","candidate_count":4,"selected_count":1,"proportion_cutoff":0.25,"duration_estimates":{"estimator":"mean_with_candidate_median_fallbacks_v1","candidate_total_duration_ms":14000,"selected_total_duration_ms":5000,"candidate_timing_coverage":1.0}},"settings":{"target_time":60,"max_parallelism":2},"sizing":{"method":"timing","target_time_source":"explicit","target_time_ms":60000,"estimated_required_parallelism":1,"runnable_units":1,"max_parallelism_binding":false,"runnable_units_binding":false,"estimator":"p90_with_median_fallbacks_v1","estimated_max_task_duration_ms":8000},"server_only":"unchanged"}`
 	for _, mode := range []string{"cached", "create", "old cached", "fetch fallback", "create fallback", "error plan"} {
 		t.Run(mode, func(t *testing.T) {
 			posts := 0
@@ -692,7 +692,7 @@ func TestFetchOrCreateTestPlanPlanningSummary(t *testing.T) {
 			wants := []string{"Selection: none requested", "\"proportion_cutoff\"=\"0.9\" (not sent)"}
 			switch mode {
 			case "cached", "create":
-				wants = append(wants, "Selected 1 of 4 eligible runnable units (25%).", "Returned parameters: proportion_cutoff=0.25", "target time 60s; maximum nodes 2")
+				wants = append(wants, "Applied strategy: manual", "Selected 1 of 4 eligible runnable units (25%).", "Returned parameters: proportion_cutoff=0.25", "target time 60s; maximum nodes 2", "Estimated duration share: 35.7%", "Sizing: timing-based; estimated need 1 node before caps", "Sizing target: 60s (explicit)", "Estimated longest node: 8s (P90 packing", "within sizing target")
 				if string(raw) != body {
 					t.Errorf("raw plan changed: %s", raw)
 				}

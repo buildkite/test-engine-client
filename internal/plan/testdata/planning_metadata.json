@@ -1,0 +1,56 @@
+{
+  "reached_cap": {
+    "parallelism": 2,
+    "settings": {"target_time": 13, "max_parallelism": 2},
+    "sizing": {
+      "method": "timing",
+      "target_time_source": "explicit",
+      "target_time_ms": 13000,
+      "estimated_required_parallelism": 2,
+      "runnable_units": 4,
+      "max_parallelism_binding": false,
+      "runnable_units_binding": false,
+      "estimator": "p90_with_median_fallbacks_v1",
+      "estimated_max_task_duration_ms": 13000
+    },
+    "duration_estimates": {
+      "estimator": "mean_with_fallbacks_v1",
+      "total_duration_ms": 12000,
+      "max_task_duration_ms": 7000,
+      "source_counts": {"mean": 4, "median": 0, "default": 0}
+    }
+  },
+  "insufficient_history": {
+    "parallelism": 4,
+    "settings": {"target_time": 13, "max_parallelism": 10},
+    "sizing": {
+      "method": "insufficient_history",
+      "runnable_units": 4,
+      "max_parallelism_binding": false,
+      "runnable_units_binding": true,
+      "estimator": "p90_with_median_fallbacks_v1",
+      "estimated_max_task_duration_ms": 1000
+    },
+    "duration_estimates": {
+      "estimator": "mean_with_fallbacks_v1",
+      "total_duration_ms": 4000,
+      "max_task_duration_ms": 1000,
+      "source_counts": {"mean": 0, "median": 0, "default": 4}
+    }
+  },
+  "selected_share": {
+    "selection": {
+      "applied": true,
+      "strategy": "manual",
+      "candidate_count": 4,
+      "selected_count": 1,
+      "duration_estimates": {
+        "estimator": "mean_with_candidate_median_fallbacks_v1",
+        "candidate_total_duration_ms": 14000,
+        "selected_total_duration_ms": 5000,
+        "candidate_timing_coverage": 1.0
+      }
+    }
+  },
+  "skipped_strategy": {"selection":{"applied":false,"strategy":"xgboost","candidate_count":9,"selected_count":9,"skipped_reason":"no_model"}}
+}

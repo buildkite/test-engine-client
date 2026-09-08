@@ -193,3 +193,38 @@ func TestTestPlan_RoundTrip(t *testing.T) {
 		t.Errorf("round-trip diff (-want +got):\n%s", diff)
 	}
 }
+
+func TestTestPlan_OptionalPlanningMetadata(t *testing.T) {
+	zero, no, strategy := 0, false, "manual"
+	for _, tt := range []struct {
+		body string
+		want TestPlan
+	}{
+		{`{}`, TestPlan{}},
+		{`{"selection":null,"sizing":null}`, TestPlan{}},
+		{`{"selection":{"strategy":null,"duration_estimates":{"candidate_total_duration_ms":null,"selected_total_duration_ms":null,"candidate_timing_coverage":null}},"sizing":{"runnable_units":null,"max_parallelism_binding":null,"runnable_units_binding":null,"target_time_ms":null,"estimated_required_parallelism":null,"estimated_max_task_duration_ms":null}}`, TestPlan{Selection: &SelectionMetadata{DurationEstimates: &SelectionDurationEstimates{}}, Sizing: &SizingMetadata{}}},
+		{`{"selection":{"applied":false,"strategy":"manual","duration_estimates":{"candidate_total_duration_ms":0,"selected_total_duration_ms":0,"candidate_timing_coverage":0}},"sizing":{"runnable_units":0,"max_parallelism_binding":false,"runnable_units_binding":false,"target_time_ms":0.5,"estimated_required_parallelism":0,"estimated_max_task_duration_ms":0}}`, TestPlan{
+			Selection: &SelectionMetadata{Applied: &no, Strategy: &strategy, DurationEstimates: &SelectionDurationEstimates{CandidateTotalDurationMS: &zero, SelectedTotalDurationMS: &zero, CandidateTimingCoverage: fp(0)}},
+			Sizing:    &SizingMetadata{RunnableUnits: &zero, MaxParallelismBinding: &no, RunnableUnitsBinding: &no, TargetTimeMS: fp(0.5), EstimatedRequiredParallelism: &zero, EstimatedMaxTaskDurationMS: &zero},
+		}},
+	} {
+		var got TestPlan
+		if err := json.Unmarshal([]byte(tt.body), &got); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(tt.want, got); diff != "" {
+			t.Errorf("decode %s (-want +got):\n%s", tt.body, diff)
+		}
+		encoded, err := json.Marshal(got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var roundTrip TestPlan
+		if err := json.Unmarshal(encoded, &roundTrip); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(got, roundTrip); diff != "" {
+			t.Errorf("round trip lost presence (-want +got):\n%s", diff)
+		}
+	}
+}

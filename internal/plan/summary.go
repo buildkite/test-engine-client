@@ -30,6 +30,21 @@ func PrintSelectionSummary(w io.Writer, p TestPlan) {
 	default:
 		fmt.Fprintln(w, "  Not applied.")
 	}
+	if s.Strategy != nil {
+		switch *s.Strategy {
+		case "random", "manual", "rspec_changed_files", "xgboost", "austral":
+			switch {
+			case s.Applied == nil:
+				fmt.Fprintf(w, "  Returned strategy: %s (applied status unavailable).\n", *s.Strategy)
+			case *s.Applied:
+				fmt.Fprintf(w, "  Applied strategy: %s\n", *s.Strategy)
+			default:
+				fmt.Fprintf(w, "  Attempted strategy: %s (skipped; not applied).\n", *s.Strategy)
+			}
+		default:
+			fmt.Fprintln(w, "  Returned strategy: unavailable (unsupported).")
+		}
+	}
 	if s.SkippedReason != nil {
 		reason := *s.SkippedReason
 		if len(reason) > 200 {
@@ -72,6 +87,26 @@ func PrintSelectionSummary(w io.Writer, p TestPlan) {
 	if len(params) > 0 {
 		fmt.Fprintf(w, "  Returned parameters: %s\n", strings.Join(params, ", "))
 	}
+	printSelectionDurationSummary(w, s)
+}
+
+func printSelectionDurationSummary(w io.Writer, s *SelectionMetadata) {
+	d := s.DurationEstimates
+	if s.Applied == nil || !*s.Applied || d == nil ||
+		d.Estimator != "mean_with_candidate_median_fallbacks_v1" ||
+		d.CandidateTotalDurationMS == nil || d.SelectedTotalDurationMS == nil ||
+		d.CandidateTimingCoverage == nil || *d.CandidateTimingCoverage < 0.5 {
+		fmt.Fprintln(w, "  Estimated duration share: unavailable.")
+		return
+	}
+	fmt.Fprintf(w, "  Estimated cumulative compute: selected %s of %s eligible candidate total (mean with candidate median/default fallbacks).\n",
+		planningDurationMS(float64(*d.SelectedTotalDurationMS)), planningDurationMS(float64(*d.CandidateTotalDurationMS)))
+	share := "unavailable (zero candidate total)"
+	if *d.CandidateTotalDurationMS > 0 {
+		share = percentOf(*d.SelectedTotalDurationMS, *d.CandidateTotalDurationMS)
+	}
+	fmt.Fprintf(w, "  Estimated duration share: %s; candidate timing coverage: %.0f%%. Compute, not wall time or the requested cutoff.\n",
+		share, *d.CandidateTimingCoverage*100)
 }
 
 // PrintSplitSummary writes a human-readable summary of the resolved test plan
@@ -116,8 +151,13 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	}
 	fmt.Fprintf(w, "  Returned constraints: target time %s; maximum nodes %s\n", target, cap)
 	if p.Settings != nil && p.Settings.MaxParallelism != nil && nodes == *p.Settings.MaxParallelism && nodes > 0 {
-		fmt.Fprintln(w, "  At maximum nodes (does not establish that the cap limited sizing).")
+		if p.Sizing != nil && p.Sizing.MaxParallelismBinding != nil {
+			fmt.Fprintln(w, "  At maximum nodes.")
+		} else {
+			fmt.Fprintln(w, "  At maximum nodes (does not establish that the cap limited sizing).")
+		}
 	}
+	printSizingSummary(w, p.Sizing)
 	if p.TimingMetadata == nil {
 		fmt.Fprintln(w, "  Timing history unavailable.")
 		return
@@ -138,6 +178,82 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	if selectorTotal > 0 {
 		printFormatBreakdown(w, selectorTotal, selectorKnown, "selector", p.TimingMetadata.Selector, mixed)
 	}
+}
+
+func printSizingSummary(w io.Writer, s *SizingMetadata) {
+	if s == nil {
+		return
+	}
+	switch s.Method {
+	case "fixed":
+		fmt.Fprintln(w, "  Sizing: fixed parallelism; no timing target used.")
+	case "single_node":
+		fmt.Fprintln(w, "  Sizing: single-node maximum; no timing target used.")
+	case "insufficient_history":
+		fmt.Fprintln(w, "  Sizing: insufficient timing history; target time not used.")
+	case "timing":
+		fmt.Fprint(w, "  Sizing: timing-based")
+		if s.EstimatedRequiredParallelism != nil {
+			fmt.Fprintf(w, "; estimated need %d %s before caps", *s.EstimatedRequiredParallelism, pluralize(*s.EstimatedRequiredParallelism, "node"))
+		}
+		fmt.Fprintln(w, ".")
+	default:
+		fmt.Fprintln(w, "  Sizing: unavailable (unknown method).")
+		return
+	}
+	if s.Method == "timing" || s.Method == "insufficient_history" {
+		if s.RunnableUnits != nil {
+			fmt.Fprintf(w, "  Sizing runnable units: %d\n", *s.RunnableUnits)
+		}
+		fmt.Fprintf(w, "  Caps: maximum nodes %s; runnable units %s.\n", bindingStatus(s.MaxParallelismBinding), bindingStatus(s.RunnableUnitsBinding))
+	}
+	// Only timing-based sizing has an applicable target. In particular, a
+	// configured settings.target_time was not used by sparse-history sizing.
+	hasTarget := s.Method == "timing" && s.TargetTimeMS != nil &&
+		(s.TargetTimeSource == "explicit" || s.TargetTimeSource == "longest_test")
+	if s.Method == "timing" {
+		if hasTarget {
+			source := "explicit"
+			if s.TargetTimeSource == "longest_test" {
+				source = "automatic: longest test P90 estimate"
+			}
+			fmt.Fprintf(w, "  Sizing target: %s (%s).\n", planningDurationMS(*s.TargetTimeMS), source)
+		} else {
+			fmt.Fprintln(w, "  Sizing target: unavailable.")
+		}
+	}
+	if s.Estimator != "p90_with_median_fallbacks_v1" || s.EstimatedMaxTaskDurationMS == nil {
+		fmt.Fprintln(w, "  Estimated longest node: unavailable.")
+		return
+	}
+	fmt.Fprintf(w, "  Estimated longest node: %s (P90 packing with median/default fallbacks)", planningDurationMS(float64(*s.EstimatedMaxTaskDurationMS)))
+	if hasTarget {
+		if float64(*s.EstimatedMaxTaskDurationMS) > *s.TargetTimeMS {
+			fmt.Fprint(w, "; exceeds sizing target")
+		} else {
+			fmt.Fprint(w, "; within sizing target")
+		}
+	}
+	fmt.Fprintln(w, ". Test-work estimate, not a runtime guarantee.")
+}
+
+func bindingStatus(binding *bool) string {
+	if binding == nil {
+		return "binding unknown"
+	}
+	if *binding {
+		return "binding"
+	}
+	return "not independently binding"
+}
+
+// Keep fractional sizing targets visible so a near-boundary comparison does
+// not display equal rounded durations while reporting an exceeded target.
+func planningDurationMS(ms float64) string {
+	if ms < 1000 {
+		return strconv.FormatFloat(ms, 'f', -1, 64) + "ms"
+	}
+	return strconv.FormatFloat(ms/1000, 'f', -1, 64) + "s"
 }
 
 // HasNoSelectorTimingHistory reports whether a multi-node selector plan used

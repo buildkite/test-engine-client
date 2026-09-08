@@ -67,15 +67,42 @@ type Task struct {
 // missing/null metadata on older plans from real zero counts and false outcomes.
 // Counts are runnable units, not necessarily paths or the cutoff's denominator.
 type SelectionMetadata struct {
-	Applied                  *bool    `json:"applied,omitempty"`
-	CandidateCount           *int     `json:"candidate_count,omitempty"`
-	SelectedCount            *int     `json:"selected_count,omitempty"`
-	ScoreCutoff              *float64 `json:"score_cutoff,omitempty"`
-	CountCutoff              *int     `json:"count_cutoff,omitempty"`
-	ProportionCutoff         *float64 `json:"proportion_cutoff,omitempty"`
-	DurationProportionCutoff *float64 `json:"duration_proportion_cutoff,omitempty"`
-	EffectiveCount           *int     `json:"effective_count,omitempty"`
-	SkippedReason            *string  `json:"skipped_reason,omitempty"`
+	Applied                  *bool                       `json:"applied,omitempty"`
+	Strategy                 *string                     `json:"strategy,omitempty"`
+	CandidateCount           *int                        `json:"candidate_count,omitempty"`
+	SelectedCount            *int                        `json:"selected_count,omitempty"`
+	ScoreCutoff              *float64                    `json:"score_cutoff,omitempty"`
+	CountCutoff              *int                        `json:"count_cutoff,omitempty"`
+	ProportionCutoff         *float64                    `json:"proportion_cutoff,omitempty"`
+	DurationProportionCutoff *float64                    `json:"duration_proportion_cutoff,omitempty"`
+	EffectiveCount           *int                        `json:"effective_count,omitempty"`
+	SkippedReason            *string                     `json:"skipped_reason,omitempty"`
+	DurationEstimates        *SelectionDurationEstimates `json:"duration_estimates,omitempty"`
+}
+
+// SelectionDurationEstimates prices both pools using candidate-pool fallbacks.
+// The top-level duration_estimates uses different, selected-pool fallbacks and
+// must not supply either side of this share. Zero candidate compute has no share.
+type SelectionDurationEstimates struct {
+	Estimator                string   `json:"estimator,omitempty"`
+	CandidateTotalDurationMS *int     `json:"candidate_total_duration_ms,omitempty"`
+	SelectedTotalDurationMS  *int     `json:"selected_total_duration_ms,omitempty"`
+	CandidateTimingCoverage  *float64 `json:"candidate_timing_coverage,omitempty"`
+}
+
+// SizingMetadata records the actual server sizing branch, never reconstructed
+// from settings or tasks. Binding flags are independent: tied constraints are
+// both false. Target/required nodes exist only when timing-based sizing was used.
+type SizingMetadata struct {
+	Method                       string   `json:"method,omitempty"`
+	RunnableUnits                *int     `json:"runnable_units,omitempty"`
+	MaxParallelismBinding        *bool    `json:"max_parallelism_binding,omitempty"`
+	RunnableUnitsBinding         *bool    `json:"runnable_units_binding,omitempty"`
+	TargetTimeSource             string   `json:"target_time_source,omitempty"`
+	TargetTimeMS                 *float64 `json:"target_time_ms,omitempty"`
+	EstimatedRequiredParallelism *int     `json:"estimated_required_parallelism,omitempty"`
+	Estimator                    string   `json:"estimator,omitempty"`
+	EstimatedMaxTaskDurationMS   *int     `json:"estimated_max_task_duration_ms,omitempty"`
 }
 
 // Settings describes returned split constraints, not the current invocation.
@@ -95,6 +122,7 @@ type TestPlan struct {
 	SkippedTests []TestCase         `json:"skipped_tests,omitempty"`
 	Selection    *SelectionMetadata `json:"selection,omitempty"`
 	Settings     *Settings          `json:"settings,omitempty"`
+	Sizing       *SizingMetadata    `json:"sizing,omitempty"`
 	// TimingMetadata describes the historical timing data the server used to
 	// build this plan. Nil when missing (e.g. error plans, plans cached before
 	// the server began emitting it).
