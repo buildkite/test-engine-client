@@ -24,7 +24,8 @@ func TestTestPlan_UnmarshalWithTimingMetadata(t *testing.T) {
 			"file": {"median_duration": 1200, "default_duration": 1000},
 			"example": {"median_duration": 800, "default_duration": 1000},
 			"selector": {"median_duration": 2000, "default_duration": 1000}
-		}
+		},
+		"selection": {"applied": true, "candidate_count": 100, "selected_count": 40}
 	}`
 
 	var p TestPlan
@@ -55,6 +56,12 @@ func TestTestPlan_UnmarshalWithTimingMetadata(t *testing.T) {
 	}
 	if p.TimingMetadata.Selector.MedianDuration == nil || *p.TimingMetadata.Selector.MedianDuration != 2000 {
 		t.Errorf("Selector.MedianDuration = %v, want 2000", p.TimingMetadata.Selector.MedianDuration)
+	}
+	if p.Selection == nil {
+		t.Fatal("Selection is nil, want non-nil")
+	}
+	if diff := cmp.Diff(*p.Selection, SelectionMetadata{Applied: true, CandidateCount: 100, SelectedCount: 40}); diff != "" {
+		t.Errorf("Selection diff (-got +want):\n%s", diff)
 	}
 	gotTests := p.Tasks["0"].Tests
 	wantTests := []TestCase{

@@ -54,6 +54,15 @@ type FormatTimingMetadata struct {
 	DefaultDuration float64 `json:"default_duration"`
 }
 
+// SelectionMetadata describes the result of applying test selection before
+// the selected tests are split across nodes.
+type SelectionMetadata struct {
+	Applied        bool   `json:"applied"`
+	CandidateCount int    `json:"candidate_count"`
+	SelectedCount  int    `json:"selected_count"`
+	SkippedReason  string `json:"skipped_reason,omitempty"`
+}
+
 // Task represents the task for the given node.
 type Task struct {
 	NodeNumber int `json:"node_number"`
@@ -72,6 +81,9 @@ type TestPlan struct {
 	Fallback     bool
 	MutedTests   []TestCase `json:"muted_tests,omitempty"`
 	SkippedTests []TestCase `json:"skipped_tests,omitempty"`
+	// Selection describes how many candidate tests remained after selection.
+	// Nil when no selection strategy was requested or for older cached plans.
+	Selection *SelectionMetadata `json:"selection,omitempty"`
 	// TimingMetadata describes the historical timing data the server used to
 	// build this plan. Nil when missing (e.g. error plans, plans cached before
 	// the server began emitting it).

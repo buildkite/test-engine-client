@@ -7,6 +7,36 @@ import (
 	"strconv"
 )
 
+// PrintSelectionSummary writes a human-readable summary of test selection to
+// w (typically os.Stderr). Plans without selection metadata are skipped.
+func PrintSelectionSummary(w io.Writer, p TestPlan, strategy string) {
+	if p.Selection == nil {
+		return
+	}
+
+	fmt.Fprintln(w, "\n+++ Buildkite Test Engine Client: 🎯 Selection summary")
+	fmt.Fprintf(w, "Selected %d of %d tests\n", p.Selection.SelectedCount, p.Selection.CandidateCount)
+	if strategy != "" {
+		fmt.Fprintf(w, "Selection strategy: %s\n", strategy)
+	}
+	if !p.Selection.Applied {
+		reason := p.Selection.SkippedReason
+		switch reason {
+		case "no_changed_files":
+			reason = "no changed files were provided"
+		case "no_model":
+			reason = "no active model was available"
+		case "invoke_error":
+			reason = "model invocation failed"
+		}
+		if reason == "" {
+			fmt.Fprintln(w, "⚠️ Selection was not applied")
+		} else {
+			fmt.Fprintf(w, "⚠️ Selection was not applied: %s\n", reason)
+		}
+	}
+}
+
 // PrintSplitSummary writes a human-readable summary of the resolved test plan
 // to w (typically os.Stderr). At parallelism > 1 it uses per-format
 // TimingMetadata to break down known vs unknown cases. At parallelism == 1 the

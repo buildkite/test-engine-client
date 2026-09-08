@@ -89,6 +89,7 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
 
+	plan.PrintSelectionSummary(os.Stdout, testPlan, cfg.SelectionStrategy)
 	printSplitSummary(os.Stdout, testPlan)
 
 	// get plan for this node

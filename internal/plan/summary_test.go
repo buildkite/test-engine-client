@@ -8,6 +8,98 @@ import (
 
 func fp(v float64) *float64 { return &v }
 
+func TestPrintSelectionSummary(t *testing.T) {
+	p := TestPlan{
+		Selection: &SelectionMetadata{
+			Applied:        true,
+			CandidateCount: 100,
+			SelectedCount:  40,
+		},
+	}
+
+	var buf bytes.Buffer
+	PrintSelectionSummary(&buf, p, "manual")
+
+	want := "\n+++ Buildkite Test Engine Client: 🎯 Selection summary\n" +
+		"Selected 40 of 100 tests\n" +
+		"Selection strategy: manual\n"
+	if got := buf.String(); got != want {
+		t.Errorf("PrintSelectionSummary() = %q, want %q", got, want)
+	}
+}
+
+func TestPrintSelectionSummary_SkipsWhenNoSelectionMetadata(t *testing.T) {
+	var buf bytes.Buffer
+	PrintSelectionSummary(&buf, TestPlan{}, "manual")
+	if buf.Len() != 0 {
+		t.Errorf("expected no output, got: %s", buf.String())
+	}
+}
+
+func TestPrintSelectionSummary_OmitsUnknownStrategy(t *testing.T) {
+	p := TestPlan{Selection: &SelectionMetadata{Applied: true, CandidateCount: 10, SelectedCount: 10}}
+
+	var buf bytes.Buffer
+	PrintSelectionSummary(&buf, p, "")
+	got := buf.String()
+	if !strings.Contains(got, "Selected 10 of 10 tests") {
+		t.Errorf("output missing selection counts: %s", got)
+	}
+	if strings.Contains(got, "Selection strategy:") {
+		t.Errorf("unexpected empty selection strategy: %s", got)
+	}
+}
+
+func TestPrintSelectionSummary_ExplainsWhenSelectionWasNotApplied(t *testing.T) {
+	tests := map[string]string{
+		"no_changed_files": "no changed files were provided",
+		"no_model":         "no active model was available",
+		"invoke_error":     "model invocation failed",
+		"future_reason":    "future_reason",
+		"":                 "",
+	}
+
+	for reason, message := range tests {
+		t.Run(reason, func(t *testing.T) {
+			p := TestPlan{Selection: &SelectionMetadata{
+				CandidateCount: 10,
+				SelectedCount:  10,
+				SkippedReason:  reason,
+			}}
+
+			var buf bytes.Buffer
+			PrintSelectionSummary(&buf, p, "xgboost")
+			want := "⚠️ Selection was not applied"
+			if message != "" {
+				want += ": " + message
+			}
+			if !strings.Contains(buf.String(), want) {
+				t.Errorf("output missing %q: %s", want, buf.String())
+			}
+		})
+	}
+}
+
+func TestSelectionAndSplitSummariesHaveOneEmptyLineBetweenThem(t *testing.T) {
+	p := TestPlan{
+		Parallelism: 1,
+		Tasks: map[string]*Task{
+			"0": {NodeNumber: 0, Tests: []TestCase{{Path: "a"}}},
+		},
+		Selection:      &SelectionMetadata{Applied: true, CandidateCount: 2, SelectedCount: 1},
+		TimingMetadata: &TimingMetadata{},
+	}
+
+	var buf bytes.Buffer
+	PrintSelectionSummary(&buf, p, "manual")
+	PrintSplitSummary(&buf, p)
+
+	want := "Selection strategy: manual\n\n+++ Buildkite Test Engine Client: 📊 Split summary"
+	if !strings.Contains(buf.String(), want) {
+		t.Errorf("expected one empty line between summaries, got: %q", buf.String())
+	}
+}
+
 func TestPrintSplitSummary_MixedHistory(t *testing.T) {
 	p := TestPlan{
 		Parallelism: 2,
