@@ -654,8 +654,15 @@ func TestReturnedStrategyAvailability(t *testing.T) {
 		{`{"selection":{"strategy":"random","applied":true}}`, "Applied strategy: random"},
 		{`{"selection":{"strategy":"rspec_changed_files","applied":false}}`, "Attempted strategy: rspec_changed_files"},
 		{`{"selection":{"strategy":"austral","applied":null}}`, "Returned strategy: austral (applied status unavailable)"},
-		{`{"selection":{"strategy":"future\n+++ forged","applied":true}}`, "Applied (strategy unavailable)"},
+		{`{"selection":{"strategy":"future_strategy","applied":true}}`, "Applied strategy: future_strategy"},
+		{`{"selection":{"strategy":"future_strategy","applied":false}}`, "Attempted strategy: future_strategy (skipped)"},
+		{`{"selection":{"strategy":"future_strategy"}}`, "Returned strategy: future_strategy (applied status unavailable)"},
 		{`{"selection":{"strategy":null,"applied":true}}`, "Applied (strategy unavailable)"},
+		{`{"selection":{"strategy":null,"applied":false}}`, "Not applied (strategy unavailable)"},
+		{`{"selection":{"strategy":null}}`, "Applied status: unavailable"},
+		{`{"selection":{"strategy":"","applied":true}}`, "Applied (strategy unavailable)"},
+		{`{"selection":{"strategy":"","applied":false}}`, "Not applied (strategy unavailable)"},
+		{`{"selection":{"strategy":""}}`, "Applied status: unavailable"},
 	} {
 		var p TestPlan
 		if err := json.Unmarshal([]byte(tt.body), &p); err != nil {
@@ -663,7 +670,28 @@ func TestReturnedStrategyAvailability(t *testing.T) {
 		}
 		var buf bytes.Buffer
 		PrintSelectionSummary(&buf, p, nil)
-		assertSummary(t, buf.String(), []string{tt.want}, []string{"forged"})
+		assertSummary(t, buf.String(), []string{tt.want}, []string{"unsupported", "not recognised"})
+	}
+}
+
+func TestReturnedSelectionTextSafety(t *testing.T) {
+	for _, tt := range []struct{ name, value, want string }{
+		{"controls", "future\n+++ forged\x1b[31m\u202e", `"future\n+++ forged\x1b[31m\u202e"`},
+		{"invalid bytes", "future\xff", `"future\xff"`},
+		{"multibyte across limit", strings.Repeat("界", 100), strings.Repeat("界", 66) + "…"},
+		{"exact byte limit", strings.Repeat("界", 66) + "ab", strings.Repeat("界", 66) + "ab"},
+		{"multibyte at limit", strings.Repeat("x", 200) + "界", strings.Repeat("x", 200) + "…"},
+		{"invalid byte at limit", strings.Repeat("x", 199) + "\xffz", `"` + strings.Repeat("x", 199) + `\xff…"`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := TestPlan{Selection: &SelectionMetadata{Strategy: &tt.value, SkippedReason: &tt.value}}
+			var buf bytes.Buffer
+			PrintSelectionSummary(&buf, p, nil)
+			want := "Selection summary\n  Returned strategy: " + tt.want + " (applied status unavailable)\n  Reason: " + tt.want + "\n  Selected: unknown of unknown test selectors\n  Estimated compute: unavailable\n"
+			if got := buf.String(); got != want {
+				t.Fatalf("got %q, want %q", got, want)
+			}
+		})
 	}
 }
 

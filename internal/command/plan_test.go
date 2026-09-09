@@ -65,6 +65,25 @@ func TestPrintPlanningSummaryConcise(t *testing.T) {
 	}
 }
 
+func TestPlanningReturnedStrategyDoesNotUseInvocation(t *testing.T) {
+	for _, tt := range []struct{ body, want string }{
+		{`{"selection":{"applied":true,"strategy":"future_strategy"}}`, "Applied strategy: future_strategy"},
+		{`{"selection":{"applied":true,"strategy":""}}`, "Applied (strategy unavailable)"},
+		{`{"selection":{"applied":true}}`, "Applied (strategy unavailable)"},
+		{`{}`, "No selection metadata returned"},
+	} {
+		var p plan.TestPlan
+		if err := json.Unmarshal([]byte(tt.body), &p); err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		printPlanningSummary(&buf, p, "fetched existing plan", &config.Config{SelectionStrategy: "xgboost"})
+		if !strings.Contains(buf.String(), tt.want) || strings.Contains(buf.String(), "xgboost") {
+			t.Fatalf("returned strategy changed by invocation: %s", &buf)
+		}
+	}
+}
+
 func TestPlanJSON(t *testing.T) {
 	svr := getHttptestServer()
 	defer svr.Close()

@@ -272,6 +272,9 @@ Returned selection parameters appear only when they differ from this invocation;
 matching values do not establish that the invocation created the plan. Ordinary
 values use `key = value`; whitespace/control characters are escaped, long values
 are bounded, and unknown request payloads are omitted.
+Returned strategy names are displayed as bounded, escaped text, including names
+introduced by newer servers. Applied/skipped status comes from the returned
+metadata, not the strategy name or this invocation's settings.
 
 Selection counts use the backend's eligible denominator, labelled **test
 selectors**, even when it includes a mixture of file and example formats.

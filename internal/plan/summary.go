@@ -30,22 +30,16 @@ func PrintSelectionSummary(w io.Writer, p TestPlan, requested map[string]string)
 		return
 	}
 	strategy := ""
-	if s.Strategy != nil {
-		switch *s.Strategy {
-		case "random", "manual", "rspec_changed_files", "xgboost", "austral":
-			strategy = *s.Strategy
-		}
+	if s.Strategy != nil && *s.Strategy != "" {
+		strategy = boundedSelectionText(*s.Strategy)
 	}
 	switch {
+	case strategy == "" && s.Applied == nil:
+		fmt.Fprintln(w, "  Applied status: unavailable")
+	case strategy == "" && *s.Applied:
+		fmt.Fprintln(w, "  Applied (strategy unavailable)")
 	case strategy == "":
-		switch {
-		case s.Applied == nil:
-			fmt.Fprintln(w, "  Applied status: unavailable")
-		case *s.Applied:
-			fmt.Fprintln(w, "  Applied (strategy unavailable)")
-		default:
-			fmt.Fprintln(w, "  Not applied (strategy unavailable)")
-		}
+		fmt.Fprintln(w, "  Not applied (strategy unavailable)")
 	case s.Applied == nil:
 		fmt.Fprintf(w, "  Returned strategy: %s (applied status unavailable)\n", strategy)
 	case *s.Applied:
@@ -54,11 +48,7 @@ func PrintSelectionSummary(w io.Writer, p TestPlan, requested map[string]string)
 		fmt.Fprintf(w, "  Attempted strategy: %s (skipped)\n", strategy)
 	}
 	if s.SkippedReason != nil {
-		reason := *s.SkippedReason
-		if len(reason) > 200 {
-			reason = reason[:200] + "…"
-		}
-		fmt.Fprintf(w, "  Reason: %s\n", SummaryValue(reason))
+		fmt.Fprintf(w, "  Reason: %s\n", boundedSelectionText(*s.SkippedReason))
 	}
 	if s.SelectedCount != nil && s.CandidateCount != nil {
 		share := "percentage unavailable"
@@ -301,6 +291,22 @@ func SummaryValue(value string) string {
 		return strconv.Quote(value)
 	}
 	return value
+}
+
+// Bound returned text to 200 bytes before escaping, without splitting a UTF-8
+// sequence. Invalid input bytes remain intact so SummaryValue can escape them.
+func boundedSelectionText(value string) string {
+	if len(value) > 200 {
+		end := 0
+		for i := range value {
+			if i > 200 {
+				break
+			}
+			end = i
+		}
+		value = value[:end] + "…"
+	}
+	return SummaryValue(value)
 }
 
 // Keep fractional sizing targets visible so a near-boundary comparison does
