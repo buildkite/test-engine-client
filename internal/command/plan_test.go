@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,8 +18,71 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestPrintPlanningSummaryConcise(t *testing.T) {
+	var p plan.TestPlan
+	if err := json.Unmarshal([]byte(`{"parallelism":4,"settings":{"target_time":10,"max_parallelism":4},"selection":{"applied":true,"strategy":"xgboost","candidate_count":100,"selected_count":40,"duration_proportion_cutoff":0.5,"duration_estimates":{"estimator":"mean_with_candidate_median_fallbacks_v1","candidate_total_duration_ms":120000,"selected_total_duration_ms":60000,"candidate_timing_coverage":1}},"sizing":{"method":"timing","target_time_source":"explicit","target_time_ms":10000,"target_time_estimator":"mean_with_fallbacks_v1","estimated_required_parallelism":6,"runnable_units":40,"max_parallelism_binding":true,"runnable_units_binding":false,"estimator":"p90_with_median_fallbacks_v1","estimated_max_task_duration_ms":18000},"timing_metadata":{"selector":{"median_duration":1800,"default_duration":1000}}}`), &p); err != nil {
+		t.Fatal(err)
+	}
+	p.Tasks = make(map[string]*plan.Task)
+	for n := range 4 {
+		task := &plan.Task{NodeNumber: n}
+		for range 10 {
+			task.Tests = append(task.Tests, plan.TestCase{Format: plan.TestCaseFormatSelector, TimingSampleSize: 10})
+		}
+		p.Tasks[strconv.Itoa(n)] = task
+	}
+	cfg := &config.Config{SelectionStrategy: "xgboost", SelectionParams: map[string]string{"duration_proportion_cutoff": "0.5"}, TargetTime: 10 * time.Second, MaxParallelism: 4}
+	var buf bytes.Buffer
+	printPlanningRequest(&buf, cfg)
+	printPlanningSummary(&buf, p, sourceCreateResponse, cfg)
+	want, err := os.ReadFile("testdata/planning-summary.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(strings.Replace(string(want), "bktec dev", "bktec "+version.Version, 1), buf.String()); diff != "" {
+		t.Fatalf("approved example mismatch (-want +got):\n%s", diff)
+	}
+	// Comparison never assigns this invocation's strategy to the returned plan.
+	// A disabled request must not hide a same-valued returned cutoff either.
+	for _, strategy := range []string{"manual", "off"} {
+		cfg.SelectionStrategy = strategy
+		if strategy == "manual" {
+			cfg.SelectionParams["duration_proportion_cutoff"] = "0.9"
+		} else {
+			cfg.SelectionParams["duration_proportion_cutoff"] = "0.5"
+		}
+		buf.Reset()
+		printPlanningSummary(&buf, p, "fetched existing plan", cfg)
+		for _, want := range []string{"Using existing plan", "Applied strategy: xgboost", "Returned parameter: duration_proportion_cutoff = 0.5"} {
+			if !strings.Contains(buf.String(), want) {
+				t.Errorf("missing %q:\n%s", want, &buf)
+			}
+		}
+	}
+}
+
+func TestPlanningReturnedStrategyDoesNotUseInvocation(t *testing.T) {
+	for _, tt := range []struct{ body, want string }{
+		{`{"selection":{"applied":true,"strategy":"future_strategy"}}`, "Applied strategy: future_strategy"},
+		{`{"selection":{"applied":true,"strategy":""}}`, "Applied (strategy unavailable)"},
+		{`{"selection":{"applied":true}}`, "Applied (strategy unavailable)"},
+		{`{}`, "No selection metadata returned"},
+	} {
+		var p plan.TestPlan
+		if err := json.Unmarshal([]byte(tt.body), &p); err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		printPlanningSummary(&buf, p, "fetched existing plan", &config.Config{SelectionStrategy: "xgboost"})
+		if !strings.Contains(buf.String(), tt.want) || strings.Contains(buf.String(), "xgboost") {
+			t.Fatalf("returned strategy changed by invocation: %s", &buf)
+		}
+	}
+}
 
 func TestPlanJSON(t *testing.T) {
 	svr := getHttptestServer()
@@ -39,9 +103,19 @@ func TestPlanJSON(t *testing.T) {
 	setPlanWriter(t, &buf)
 
 	// This is the method under test
+	getStderr := captureStderr(t)
 	err := Plan(ctx, cfg, "", PlanOutputJSON, "")
+	stderr := getStderr()
 	if err != nil {
 		t.Errorf("command.Plan(...) error = %v", err)
+	}
+	for _, want := range []string{"+++ Buildkite Test Engine Client: Planning\nbktec ", "\n\nRequested\n", "Selection: none requested", "No selection metadata returned", "\n\nSplit summary"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr missing %q:\n%s", want, stderr)
+		}
+	}
+	if strings.Count(stderr, "+++ ") != 1 || strings.Contains(stderr, "\n\n\n") || strings.Contains(stderr, "Plan source:") || strings.Contains(stderr, "Using existing plan") {
+		t.Errorf("redundant planning group/whitespace:\n%s", stderr)
 	}
 
 	want := `{"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER":"facecafe","BUILDKITE_TEST_ENGINE_PARALLELISM":"42"}
@@ -57,7 +131,7 @@ func TestPlanPlanOut(t *testing.T) {
 	// The server's exact response body, including a field the client struct
 	// does not model (server_only), to prove --plan-out passes the response
 	// through unmodified rather than re-marshalling a struct.
-	serverBody := `{"identifier":"facecafe","parallelism":42,"experiment":"","tasks":{"0":{"node_number":0,"tests":[{"path":"testdata/rspec/spec/fruits/apple_spec.rb"}]}},"server_only":"kept"}`
+	serverBody := `{"identifier":"facecafe","parallelism":1,"experiment":"","tasks":{"0":{"node_number":0,"tests":[{"path":"testdata/rspec/spec/fruits/apple_spec.rb"}]}},"selection":{"applied":true,"strategy":"manual","candidate_count":10,"selected_count":1,"count_cutoff":1,"duration_estimates":{"estimator":"mean_with_candidate_median_fallbacks_v1","candidate_total_duration_ms":14000,"selected_total_duration_ms":5000,"candidate_timing_coverage":0.5},"scores":[{"prediction_score":0.7}]},"settings":{"target_time":120,"max_parallelism":42},"sizing":{"method":"insufficient_history","runnable_units":1,"max_parallelism_binding":false,"runnable_units_binding":true},"duration_estimates":{"estimator":"mean_with_fallbacks_v1","total_duration_ms":3000,"max_task_duration_ms":3000},"server_only":"kept"}`
 
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -89,8 +163,18 @@ func TestPlanPlanOut(t *testing.T) {
 	setPlanWriter(t, &buf)
 
 	// This is the method under test
+	getStderr := captureStderr(t)
 	if err := Plan(ctx, cfg, "", PlanOutputPlanOut, ""); err != nil {
 		t.Errorf("command.Plan(...) error = %v", err)
+	}
+	stderr := getStderr()
+	for _, want := range []string{"Applied strategy: manual", "Selected: 1 of 10 test selectors (10%)", "Returned parameter: count_cutoff = 1", "Node limit: 42 (not independently binding)", "Estimated compute: 5s of 14s (35.7%)\n  Candidate timing coverage: 50%", "insufficient timing history; target not used", "Estimated longest node: unavailable"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr missing %q:\n%s", want, stderr)
+		}
+	}
+	if strings.Contains(stderr, "prediction_score") {
+		t.Errorf("scores must not appear in normal diagnostics: %s", stderr)
 	}
 
 	// stdout is the server's exact response, only re-indented. Comparing the
@@ -486,6 +570,7 @@ func TestPlanJSON_ErrorPlanFallback(t *testing.T) {
 	planErr := Plan(ctx, cfg, "", PlanOutputJSON, "")
 
 	stderrOutput := getStderr()
+	assertTasklessFallbackSummary(t, stderrOutput)
 
 	// Verify command exits successfully
 	if planErr != nil {
@@ -534,6 +619,7 @@ func TestPlanPipelineUpload_ErrorPlanFallback(t *testing.T) {
 	planErr := Plan(ctx, cfg, "", PlanOutputPipelineUpload, "testtemplate.yml")
 
 	stderrOutput := getStderr()
+	assertTasklessFallbackSummary(t, stderrOutput)
 
 	if planErr != nil {
 		t.Errorf("command.Plan(...) error = %v", planErr)
@@ -1147,6 +1233,7 @@ func TestPlanPlanOut_FallbackWarnsOnStderr(t *testing.T) {
 	planErr := Plan(fetchCtx, cfg, "", PlanOutputPlanOut, "")
 
 	stderrOutput := getStderr()
+	assertTasklessFallbackSummary(t, stderrOutput)
 
 	if planErr != nil {
 		t.Errorf("command.Plan(...) error = %v", planErr)
@@ -1172,6 +1259,20 @@ func TestPlanPlanOut_FallbackWarnsOnStderr(t *testing.T) {
 	// The fallback caveat is written to stderr.
 	if !strings.Contains(stderrOutput, "locally-computed fallback plan") {
 		t.Errorf("expected stderr to contain the fallback caveat, got: %s", stderrOutput)
+	}
+}
+
+func assertTasklessFallbackSummary(t *testing.T, stderr string) {
+	t.Helper()
+	for _, want := range []string{"Not determined: taskless fallback placeholder.", "no test allocation computed."} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("missing %q:\n%s", want, stderr)
+		}
+	}
+	for _, unwanted := range []string{"full locally discovered suite", "  Local non-intelligent split;"} {
+		if strings.Contains(stderr, unwanted) {
+			t.Errorf("placeholder claims computed split %q:\n%s", unwanted, stderr)
+		}
 	}
 }
 

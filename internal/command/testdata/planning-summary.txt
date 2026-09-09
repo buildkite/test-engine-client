@@ -1,0 +1,22 @@
++++ Buildkite Test Engine Client: Planning
+bktec dev
+
+Requested
+  Selection strategy: xgboost
+    duration_proportion_cutoff = 0.5
+  Target time: 10s
+  Maximum nodes: 4
+
+Selection summary
+  Applied strategy: xgboost
+  Selected: 40 of 100 test selectors (40%)
+  Estimated compute: 60s of 120s (50%)
+  Candidate timing coverage: 100%
+
+Split summary
+  40 selectors across 4 nodes
+  Target time: 10s
+  Estimated nodes needed: 6 (mean durations)
+  Node limit: capped at 4
+  Estimated longest node: 18s (P90 durations; target exceeded)
+  Historical timings: 40 of 40 selectors (100%)

@@ -1,6 +1,7 @@
 # Changelog
 ## Unreleased
 - Add `bktec run --plan-out <path>` (env: `BUILDKITE_TEST_ENGINE_PLAN_OUT`) to save the full cached or freshly created API plan before running tests, retaining selection and server-only fields without extra requests. Local fallback output includes the actual tasks and `fallback: true`. Parent directories are created; write failures stop the run.
+- Explain requested selection and returned plans in one concise planning stderr group for `bktec plan` and `run`, including test selector counts, compute share, timing coverage, and binding node limits when metadata is available. Omit repeated selection parameters and routine create-response labels. Replace the ASCII banner with a version line and move the run split summary from stdout to stderr; JSON and raw plan output are unchanged.
 
 ## 3.0.0 - 2026-07-31
 - ⚠️ **BREAKING:** Selector-based splitting now replaces file-based splitting for supported runners. The deprecated `--selector-splitting` flag and `BUILDKITE_TEST_ENGINE_SELECTOR_SPLITTING` environment variable are still accepted for upgrade compatibility, but their values no longer affect behavior. Existing bktec v2 releases continue to send file-based requests and remain compatible with file-based splitting; remain on v2 if file-based requests are required. See [Migrating from bktec v2 to v3](./docs/migrating-to-v3.md).

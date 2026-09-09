@@ -25,20 +25,12 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-const Logo = `
-______ ______ _____
-___  /____  /___  /____________
-__  __ \_  //_/  __/  _ \  ___/
-_  /_/ /  ,<  / /_ /  __/ /__
-/_.___//_/|_| \__/ \___/\___/
-`
-
 // newGitRunner constructs the git runner used for metadata auto-collection.
 // Overridable in tests to inject a deterministic fake.
 var newGitRunner = func() git.GitRunner { return &git.ExecGitRunner{} }
 
 func Run(ctx context.Context, cfg *config.Config, testListFilename string) error {
-	printStartUpMessage()
+	printPlanningRequest(os.Stderr, cfg)
 
 	relay, err := startOTLPRelay(cfg)
 	if err != nil {
@@ -88,8 +80,6 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	}
 
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
-
-	printSplitSummary(os.Stdout, testPlan)
 
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
@@ -320,13 +310,6 @@ func makePromiseFailureCommand(ctx context.Context, cfg *config.Config, exitStat
 	return cmd
 }
 
-func printStartUpMessage() {
-	const green = "\033[32m"
-	const reset = "\033[0m"
-	fmt.Println("+++ Buildkite Test Engine Client: bktec " + version.Version + "\n")
-	fmt.Println(green + Logo + reset)
-}
-
 func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.TestCase, runnerName string) {
 	status := runResult.Status()
 	if status == runner.RunStatusUnknown {
@@ -545,7 +528,13 @@ func logSignalAndExit(name string, signal syscall.Signal) {
 // fetchOrCreateTestPlan fetches a test plan from the server, or creates a
 // fallback plan if the server is unavailable or returns an error plan.
 // The raw response is nil for a local fallback.
-func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, testTargets []string, testRunner runner.TestRunner) (plan.TestPlan, json.RawMessage, error) {
+func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *config.Config, testTargets []string, testRunner runner.TestRunner) (resolved plan.TestPlan, response json.RawMessage, resultErr error) {
+	source := "fetched existing plan"
+	defer func() {
+		if resultErr == nil {
+			printPlanningSummary(os.Stderr, resolved, source, cfg)
+		}
+	}()
 	debug.Println("Fetching test plan")
 
 	// Fetch the plan from the server's cache.
@@ -571,6 +560,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	}
 
 	debug.Println("No test plan found, creating a new plan")
+	source = sourceCreateResponse
 
 	// Auto-collect git metadata when selection is active, mirroring `bktec plan`.
 	if cfg.SelectionStrategy != "" {

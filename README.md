@@ -260,9 +260,41 @@ the muted and skipped tests, and the timing metadata. It takes a destination:
 ./bktec plan --plan-out plan.json    # a file
 ```
 
-The human-readable split summary and any warnings are written to stderr, so
+The human-readable planning summary and any warnings are written to stderr, so
 stdout carries only the plan. `--json`, `--plan-out` and `--pipeline-upload`
 are mutually exclusive; choose one.
+
+Both `plan` and `run` distinguish this invocation's requested selection and
+split settings (`Requested`) from the returned `Selection summary` and `Split
+summary`. The returned plan may be cached: `Using existing plan` identifies a
+successful fetch, while a create response makes no claim about cache status.
+Returned selection parameters appear only when they differ from this invocation;
+matching values do not establish that the invocation created the plan. Ordinary
+values use `key = value`; whitespace/control characters are escaped, long values
+are bounded, and unknown request payloads are omitted.
+Returned strategy names are displayed as bounded, escaped text, including names
+introduced by newer servers. Applied/skipped status comes from the returned
+metadata, not the strategy name or this invocation's settings.
+
+Selection counts use the backend's eligible denominator, labelled **test
+selectors**, even when it includes a mixture of file and example formats.
+`Estimated compute` compares selected and candidate cumulative mean durations
+using the same candidate-pool median/default fallbacks. It requires supported
+metadata and at least 50% candidate timing coverage. Its share is not the
+requested duration cutoff or a wall-clock saving; a zero candidate total has no
+defined share. It does not use the separate top-level duration estimates.
+
+`Estimated nodes needed` is the pre-cap count and labels the returned sizing
+basis (mean or P90 durations, including median/default fallbacks). `Node limit:
+capped at N` appears only for an independently binding cap, not merely a reached
+limit; tied constraints are not independently binding. The longest-node estimate
+uses the actual P90-packed allocation. `P90 durations; target exceeded` compares
+that estimate with the target used by sizing, not the mean decision estimate or
+whole-build runtime. Sparse-history and unusable-timing sizing do not use the
+configured target. Estimates are not runtime guarantees, and zero estimates do
+not promise instant execution. Older plans and unknown estimators leave details
+unavailable rather than inferring them from current flags. Historical timing
+counts and missing-history median/default estimates remain visible separately.
 
 `--plan-out` writes what the server returns, unmodified. If the server cannot
 generate a plan it returns an empty plan, which is emitted as-is (a warning is

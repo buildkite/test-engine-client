@@ -649,6 +649,87 @@ func withGitRunner(t *testing.T, r git.GitRunner) {
 	t.Cleanup(func() { newGitRunner = prev })
 }
 
+func TestFetchOrCreateTestPlanPlanningSummary(t *testing.T) {
+	const body = `{"identifier":"existing","parallelism":1,"tasks":{"0":{"tests":[{"format":"selector","value":"apple"}]}},"selection":{"applied":true,"strategy":"manual","candidate_count":4,"selected_count":1,"proportion_cutoff":0.25,"duration_estimates":{"estimator":"mean_with_candidate_median_fallbacks_v1","candidate_total_duration_ms":14000,"selected_total_duration_ms":5000,"candidate_timing_coverage":1.0}},"settings":{"target_time":60,"max_parallelism":2},"sizing":{"method":"timing","target_time_source":"explicit","target_time_ms":60000,"estimated_required_parallelism":1,"runnable_units":1,"max_parallelism_binding":false,"runnable_units_binding":false,"estimator":"p90_with_median_fallbacks_v1","estimated_max_task_duration_ms":8000},"server_only":"unchanged"}`
+	for _, mode := range []string{"cached", "create", "old cached", "fetch fallback", "create fallback", "error plan"} {
+		t.Run(mode, func(t *testing.T) {
+			posts := 0
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/filter_tests") {
+					fmt.Fprint(w, `{"tests":[]}`)
+					return
+				}
+				if r.Method == http.MethodGet && (mode == "create" || mode == "create fallback") {
+					w.WriteHeader(http.StatusNotFound)
+					fmt.Fprint(w, `{"message":"Not Found"}`)
+					return
+				}
+				if r.Method == http.MethodPost {
+					posts++
+				}
+				switch mode {
+				case "fetch fallback", "create fallback":
+					w.WriteHeader(http.StatusUnprocessableEntity)
+					fmt.Fprint(w, `{"message":"API disabled"}`)
+				case "old cached":
+					fmt.Fprint(w, `{"parallelism":2,"tasks":{"0":{"tests":[]},"1":{"tests":[]}}}`)
+				case "error plan":
+					fmt.Fprint(w, `{"parallelism":0,"tasks":{}}`)
+				default:
+					fmt.Fprint(w, body)
+				}
+			}))
+			defer svr.Close()
+			cfg := &config.Config{Identifier: "invocation", Parallelism: 2, SelectionStrategy: "OFF", SelectionParams: map[string]string{"proportion_cutoff": "0.9"}}
+			client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
+			getStderr := captureStderr(t)
+			printPlanningRequest(os.Stderr, cfg)
+			p, raw, err := fetchOrCreateTestPlan(context.Background(), client, cfg, []string{"apple", "banana"}, runner.Rspec{})
+			stderr := getStderr()
+			if err != nil {
+				t.Fatal(err)
+			}
+			wants := []string{"Selection: none requested", "proportion_cutoff = 0.9 (not sent)"}
+			switch mode {
+			case "cached", "create":
+				wants = append(wants, "Applied strategy: manual", "Selected: 1 of 4 test selectors (25%)", "Returned parameter: proportion_cutoff = 0.25", "Target time: 60s", "Estimated compute: 5s of 14s (35.7%)", "Estimated nodes needed: 1 (basis unavailable)", "Estimated longest node: 8s (P90 durations; within target)")
+				if string(raw) != body {
+					t.Errorf("raw plan changed: %s", raw)
+				}
+			case "old cached":
+				wants = append(wants, "No selection metadata returned")
+			default:
+				wants = append(wants, "Using local fallback", "Not applied: local fallback", "2 test selectors across 2 nodes")
+				if !p.Fallback || raw != nil {
+					t.Errorf("expected unchanged local fallback contract: %+v, %s", p, raw)
+				}
+			}
+			switch mode {
+			case "cached", "old cached":
+				wants = append(wants, "Using existing plan")
+				if posts != 0 {
+					t.Errorf("cache hit created a plan")
+				}
+			case "create":
+				if strings.Contains(stderr, "Using existing plan") || strings.Contains(stderr, "Plan source:") {
+					t.Errorf("create response must not claim cache provenance: %s", stderr)
+				}
+				if posts != 1 {
+					t.Errorf("expected one creation request, got %d", posts)
+				}
+			}
+			for _, want := range wants {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("missing %q:\n%s", want, stderr)
+				}
+			}
+			if strings.Count(stderr, "+++ ") != 1 || strings.Count(stderr, "Selection summary") != 1 || strings.Contains(stderr, "\n\n\n") {
+				t.Errorf("redundant planning output:\n%s", stderr)
+			}
+		})
+	}
+}
+
 // captureRequestBody serves a cache-miss on GET and records the POST body used
 // to create the plan, returning the server and a getter for the captured body.
 func captureRequestBody(t *testing.T) (*httptest.Server, func() []byte) {
