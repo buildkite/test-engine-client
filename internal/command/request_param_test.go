@@ -24,13 +24,13 @@ func TestPrintPlanningRequest(t *testing.T) {
 		cfg  config.Config
 		want []string
 	}{
-		{"fixed", config.Config{Parallelism: 4}, []string{"Selection: none requested", "Split: fixed parallelism 4"}},
-		{"automatic", config.Config{MaxParallelism: 20}, []string{"Split: dynamic; target time automatic; maximum nodes 20"}},
-		{"target", config.Config{TargetTime: 2 * time.Minute, MaxParallelism: 20}, []string{"target time 2m0s; maximum nodes 20"}},
-		{"selection", config.Config{SelectionStrategy: "xgboost", SelectionParams: map[string]string{"score_cutoff": "0.8", "count_cutoff": "12"}}, []string{"Selection strategy: \"xgboost\"", "\"count_cutoff\"=\"12\"\n    \"score_cutoff\"=\"0.8\""}},
-		{"manual", config.Config{SelectionStrategy: "manual", SelectionParams: map[string]string{"files": "a\n\n b\n"}}, []string{"\"files\"=<2 nonblank entries; 6 bytes>"}},
-		{"escaped", config.Config{SelectionStrategy: "random\n+++ fake", SelectionParams: map[string]string{"sample_rate": "0.1\n\x1b"}}, []string{`"random\n+++ fake"`, `"sample_rate"="0.1\n\x1b"`}},
-		{"bounded", config.Config{SelectionStrategy: "xgboost", SelectionParams: map[string]string{"score_cutoff": strings.Repeat("x", 1000), "features": "secret-features"}}, []string{"\"score_cutoff\"=<value omitted; 1000 bytes>", "\"features\"=<value omitted; 15 bytes>"}},
+		{"fixed", config.Config{Parallelism: 4}, []string{"Selection: none requested", "Parallelism: 4 (fixed)"}},
+		{"automatic", config.Config{MaxParallelism: 20}, []string{"Target time: automatic\n  Maximum nodes: 20"}},
+		{"target", config.Config{TargetTime: 2 * time.Minute, MaxParallelism: 20}, []string{"Target time: 2m0s\n  Maximum nodes: 20"}},
+		{"selection", config.Config{SelectionStrategy: "xgboost", SelectionParams: map[string]string{"score_cutoff": "0.8", "count_cutoff": "12"}}, []string{"Selection strategy: xgboost", "count_cutoff = 12\n    score_cutoff = 0.8"}},
+		{"manual", config.Config{SelectionStrategy: "manual", SelectionParams: map[string]string{"files": "a\n\n b\n"}}, []string{"files = <2 nonblank entries; 6 bytes>"}},
+		{"escaped", config.Config{SelectionStrategy: "random\n+++ fake", SelectionParams: map[string]string{"sample_rate": "0.1\n\x1b"}}, []string{`"random\n+++ fake"`, `sample_rate = "0.1\n\x1b"`}},
+		{"bounded", config.Config{SelectionStrategy: "xgboost", SelectionParams: map[string]string{"score_cutoff": strings.Repeat("x", 1000), "features": "secret-features"}}, []string{"score_cutoff = <value omitted; 1000 bytes>", "features = <value omitted; 15 bytes>"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -40,7 +40,7 @@ func TestPrintPlanningRequest(t *testing.T) {
 					t.Errorf("want %q in:\n%s", want, &buf)
 				}
 			}
-			if strings.Contains(buf.String(), "secret-features") || strings.Contains(buf.String(), "\n\n") || strings.Count(buf.String(), "\n+++ ") != 0 {
+			if strings.Contains(buf.String(), "secret-features") || strings.Contains(buf.String(), "\n\n\n") || strings.Count(buf.String(), "\n+++ ") != 0 {
 				t.Errorf("unsafe or redundant output: %q", buf.String())
 			}
 		})
@@ -51,7 +51,7 @@ func TestPrintPlanningRequestDisabledSentinels(t *testing.T) {
 	for _, strategy := range []string{"none", "off", "false", "disabled", "no", " OFF ", "NoNe", "\t\n"} {
 		var buf bytes.Buffer
 		printPlanningRequest(&buf, &config.Config{SelectionStrategy: strategy, SelectionParams: map[string]string{"count_cutoff": "0"}})
-		for _, want := range []string{"Selection: none requested", "disables selection; omitted from API request", "\"count_cutoff\"=\"0\" (not sent)"} {
+		for _, want := range []string{"Selection: none requested", "disables selection; omitted from API request", "count_cutoff = 0 (not sent)"} {
 			if !strings.Contains(buf.String(), want) {
 				t.Errorf("strategy %q: want %q in:\n%s", strategy, want, &buf)
 			}

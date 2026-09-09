@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
@@ -41,14 +42,21 @@ func printWarn(label, message string, hints ...string) {
 	printWarning(os.Stderr, label+": "+message, append(hints, fallbackExtra)...)
 }
 
-const sourceCreateResponse = "create endpoint response (may be cached)"
+const sourceCreateResponse = ""
 
-func printPlanningSummary(w io.Writer, testPlan plan.TestPlan, source string) {
+func printPlanningSummary(w io.Writer, testPlan plan.TestPlan, source string, cfg *config.Config) {
+	fmt.Fprintln(w)
 	if testPlan.Fallback {
-		source = "local fallback"
+		fmt.Fprint(w, "Using local fallback\n\n")
+	} else if source != sourceCreateResponse {
+		fmt.Fprint(w, "Using existing plan\n\n")
 	}
-	fmt.Fprintln(w, "Plan source: "+source)
-	plan.PrintSelectionSummary(w, testPlan)
+	var requested map[string]string
+	if selection := buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams); selection != nil {
+		requested = selection.Params
+	}
+	plan.PrintSelectionSummary(w, testPlan, requested)
+	fmt.Fprintln(w)
 	printSplitSummary(w, testPlan)
 }
 

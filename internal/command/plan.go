@@ -79,7 +79,7 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 		debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
 	}
 
-	printPlanningSummary(os.Stderr, testPlan, sourceCreateResponse)
+	printPlanningSummary(os.Stderr, testPlan, sourceCreateResponse, cfg)
 
 	switch outputFormat {
 
@@ -168,7 +168,7 @@ func planOut(ctx context.Context, cfg *config.Config, testTargets []string, apiC
 	}
 
 	debug.Printf("Test plan created. Identifier: %q, Parallelism: %d", testPlan.Identifier, testPlan.Parallelism)
-	printPlanningSummary(os.Stderr, testPlan, sourceCreateResponse)
+	printPlanningSummary(os.Stderr, testPlan, sourceCreateResponse, cfg)
 	if testPlan.Parallelism == 0 {
 		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
 	}
@@ -197,7 +197,7 @@ func planOutWriter(dest string) (io.Writer, func(), error) {
 // parallelism are emitted.
 func emitLocalFallback(out io.Writer, cfg *config.Config) error {
 	fmt.Fprintln(os.Stderr, "⚠️ This is a locally-computed fallback plan, not a plan from the server.")
-	printPlanningSummary(os.Stderr, makeFallbackPlan(cfg), "local fallback")
+	printPlanningSummary(os.Stderr, makeFallbackPlan(cfg), "local fallback", cfg)
 
 	// A fixed-shape struct of plain fields, so marshalling cannot fail.
 	encoded, _ := json.MarshalIndent(struct {

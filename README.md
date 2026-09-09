@@ -265,19 +265,33 @@ stdout carries only the plan. `--json`, `--plan-out` and `--pipeline-upload`
 are mutually exclusive; choose one.
 
 Both `plan` and `run` distinguish this invocation's requested selection and
-split settings from the returned plan, which may be cached. When supplied by
-the server, the summary shows the applied or attempted/skipped strategy,
-selection counts, and estimated selected/candidate cumulative compute share
-with timing coverage. That share is not the requested duration cutoff or a
-wall-clock saving. Split diagnostics explain the actual sizing method,
-independently binding caps (not merely reached caps), and the P90-packed
-longest-node test-work estimate versus the target actually used. The required
-node count labels its returned decision basis (mean or P90); an absent or unknown
-basis is not inferred. A P90 allocation estimate above target does not establish
-that a mean-based sizing estimate missed it. Sparse-history and unusable-timing
-sizing do not use the configured target. Estimates are not runtime guarantees;
-older plans or unavailable metadata leave these details unknown rather than
-inferring them from current flags.
+split settings (`Requested`) from the returned `Selection summary` and `Split
+summary`. The returned plan may be cached: `Using existing plan` identifies a
+successful fetch, while a create response makes no claim about cache status.
+Returned selection parameters appear only when they differ from this invocation;
+matching values do not establish that the invocation created the plan. Ordinary
+values use `key = value`; whitespace/control characters are escaped, long values
+are bounded, and unknown request payloads are omitted.
+
+Selection counts use the backend's eligible denominator, labelled **test
+selectors**, even when it includes a mixture of file and example formats.
+`Estimated compute` compares selected and candidate cumulative mean durations
+using the same candidate-pool median/default fallbacks. It requires supported
+metadata and at least 50% candidate timing coverage. Its share is not the
+requested duration cutoff or a wall-clock saving; a zero candidate total has no
+defined share. It does not use the separate top-level duration estimates.
+
+`Estimated nodes needed` is the pre-cap count and labels the returned sizing
+basis (mean or P90 durations, including median/default fallbacks). `Node limit:
+capped at N` appears only for an independently binding cap, not merely a reached
+limit; tied constraints are not independently binding. The longest-node estimate
+uses the actual P90-packed allocation. `P90 durations; target exceeded` compares
+that estimate with the target used by sizing, not the mean decision estimate or
+whole-build runtime. Sparse-history and unusable-timing sizing do not use the
+configured target. Estimates are not runtime guarantees, and zero estimates do
+not promise instant execution. Older plans and unknown estimators leave details
+unavailable rather than inferring them from current flags. Historical timing
+counts and missing-history median/default estimates remain visible separately.
 
 `--plan-out` writes what the server returns, unmodified. If the server cannot
 generate a plan it returns an empty plan, which is emitted as-is (a warning is

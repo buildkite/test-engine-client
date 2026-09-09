@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
@@ -26,7 +25,7 @@ type requestTarget struct {
 func printPlanningRequest(w io.Writer, cfg *config.Config) {
 	fmt.Fprintln(w, "+++ Buildkite Test Engine Client: Planning")
 	fmt.Fprintln(w, "bktec "+version.Version)
-	fmt.Fprintln(w, "Requested (this invocation; an existing plan may use different settings)")
+	fmt.Fprintln(w, "\nRequested")
 	selection := buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams)
 	if selection == nil {
 		fmt.Fprint(w, "  Selection: none requested")
@@ -66,16 +65,16 @@ func printPlanningRequest(w io.Writer, cfg *config.Config) {
 		if selection == nil {
 			ignored = " (not sent)"
 		}
-		fmt.Fprintf(w, "    %s=%s%s\n", boundedRequestValue(key), rendered, ignored)
+		fmt.Fprintf(w, "    %s = %s%s\n", boundedRequestValue(key), rendered, ignored)
 	}
 	if cfg.MaxParallelism > 0 {
 		target := "automatic"
 		if cfg.TargetTime > 0 {
 			target = cfg.TargetTime.String()
 		}
-		fmt.Fprintf(w, "  Split: dynamic; target time %s; maximum nodes %d\n", target, cfg.MaxParallelism)
+		fmt.Fprintf(w, "  Target time: %s\n  Maximum nodes: %d\n", target, cfg.MaxParallelism)
 	} else {
-		fmt.Fprintf(w, "  Split: fixed parallelism %d\n", cfg.Parallelism)
+		fmt.Fprintf(w, "  Parallelism: %d (fixed)\n", cfg.Parallelism)
 	}
 }
 
@@ -83,7 +82,7 @@ func boundedRequestValue(value string) string {
 	if len(value) > 160 {
 		return fmt.Sprintf("<value omitted; %d bytes>", len(value))
 	}
-	return strconv.Quote(value)
+	return plan.SummaryValue(value)
 }
 
 // createRequestParam generates the parameters needed for a test plan request.

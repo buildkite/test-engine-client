@@ -689,29 +689,31 @@ func TestFetchOrCreateTestPlanPlanningSummary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wants := []string{"Selection: none requested", "\"proportion_cutoff\"=\"0.9\" (not sent)"}
+			wants := []string{"Selection: none requested", "proportion_cutoff = 0.9 (not sent)"}
 			switch mode {
 			case "cached", "create":
-				wants = append(wants, "Applied strategy: manual", "Selected 1 of 4 eligible runnable units (25%).", "Returned parameters: proportion_cutoff=0.25", "target time 60s; maximum nodes 2", "Estimated duration share: 35.7%", "Sizing: timing-based; estimated need 1 node before caps", "Sizing target: 60s (explicit)", "Estimated longest node: 8s (P90 packing", "within sizing target")
+				wants = append(wants, "Applied strategy: manual", "Selected: 1 of 4 test selectors (25%)", "Returned parameter: proportion_cutoff = 0.25", "Target time: 60s", "Estimated compute: 5s of 14s (35.7%)", "Estimated nodes needed: 1 (basis unavailable)", "Estimated longest node: 8s (P90 durations; within target)")
 				if string(raw) != body {
 					t.Errorf("raw plan changed: %s", raw)
 				}
 			case "old cached":
-				wants = append(wants, "Outcome unknown (selection metadata unavailable).")
+				wants = append(wants, "No selection metadata returned")
 			default:
-				wants = append(wants, "Plan source: local fallback", "Not applied: local fallback", "2 runnable units across 2 nodes")
+				wants = append(wants, "Using local fallback", "Not applied: local fallback", "2 test selectors across 2 nodes")
 				if !p.Fallback || raw != nil {
 					t.Errorf("expected unchanged local fallback contract: %+v, %s", p, raw)
 				}
 			}
 			switch mode {
 			case "cached", "old cached":
-				wants = append(wants, "Plan source: fetched existing plan")
+				wants = append(wants, "Using existing plan")
 				if posts != 0 {
 					t.Errorf("cache hit created a plan")
 				}
 			case "create":
-				wants = append(wants, "Plan source: create endpoint response (may be cached)")
+				if strings.Contains(stderr, "Using existing plan") || strings.Contains(stderr, "Plan source:") {
+					t.Errorf("create response must not claim cache provenance: %s", stderr)
+				}
 				if posts != 1 {
 					t.Errorf("expected one creation request, got %d", posts)
 				}
@@ -721,7 +723,7 @@ func TestFetchOrCreateTestPlanPlanningSummary(t *testing.T) {
 					t.Errorf("missing %q:\n%s", want, stderr)
 				}
 			}
-			if strings.Count(stderr, "+++ ") != 1 || strings.Count(stderr, "Selection summary") != 1 || strings.Contains(stderr, "\n\n") {
+			if strings.Count(stderr, "+++ ") != 1 || strings.Count(stderr, "Selection summary") != 1 || strings.Contains(stderr, "\n\n\n") {
 				t.Errorf("redundant planning output:\n%s", stderr)
 			}
 		})

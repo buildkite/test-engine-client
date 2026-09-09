@@ -532,7 +532,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	source := "fetched existing plan"
 	defer func() {
 		if resultErr == nil {
-			printPlanningSummary(os.Stderr, resolved, source)
+			printPlanningSummary(os.Stderr, resolved, source, cfg)
 		}
 	}()
 	debug.Println("Fetching test plan")

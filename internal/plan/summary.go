@@ -6,12 +6,15 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // PrintSelectionSummary uses only returned metadata. In particular, neither
 // task formats nor this invocation's flags establish the eligible denominator
-// or the strategy used by an existing plan.
-func PrintSelectionSummary(w io.Writer, p TestPlan) {
+// or the strategy used by an existing plan. requested only suppresses matching
+// parameter lines; it never supplies missing returned metadata.
+func PrintSelectionSummary(w io.Writer, p TestPlan, requested map[string]string) {
 	fmt.Fprintln(w, "Selection summary")
 	if p.Fallback {
 		if len(p.Tasks) == 0 {
@@ -23,45 +26,46 @@ func PrintSelectionSummary(w io.Writer, p TestPlan) {
 	}
 	s := p.Selection
 	if s == nil {
-		fmt.Fprintln(w, "  Outcome unknown (selection metadata unavailable).")
+		fmt.Fprintln(w, "  No selection metadata returned")
 		return
 	}
-	switch {
-	case s.Applied == nil:
-		fmt.Fprintln(w, "  Outcome unknown (applied status unavailable).")
-	case *s.Applied:
-		fmt.Fprintln(w, "  Applied.")
-	default:
-		fmt.Fprintln(w, "  Not applied.")
-	}
+	strategy := ""
 	if s.Strategy != nil {
 		switch *s.Strategy {
 		case "random", "manual", "rspec_changed_files", "xgboost", "austral":
-			switch {
-			case s.Applied == nil:
-				fmt.Fprintf(w, "  Returned strategy: %s (applied status unavailable).\n", *s.Strategy)
-			case *s.Applied:
-				fmt.Fprintf(w, "  Applied strategy: %s\n", *s.Strategy)
-			default:
-				fmt.Fprintf(w, "  Attempted strategy: %s (skipped; not applied).\n", *s.Strategy)
-			}
-		default:
-			fmt.Fprintln(w, "  Returned strategy: unavailable (unsupported).")
+			strategy = *s.Strategy
 		}
+	}
+	switch {
+	case strategy == "":
+		switch {
+		case s.Applied == nil:
+			fmt.Fprintln(w, "  Applied status: unavailable")
+		case *s.Applied:
+			fmt.Fprintln(w, "  Applied (strategy unavailable)")
+		default:
+			fmt.Fprintln(w, "  Not applied (strategy unavailable)")
+		}
+	case s.Applied == nil:
+		fmt.Fprintf(w, "  Returned strategy: %s (applied status unavailable)\n", strategy)
+	case *s.Applied:
+		fmt.Fprintf(w, "  Applied strategy: %s\n", strategy)
+	default:
+		fmt.Fprintf(w, "  Attempted strategy: %s (skipped)\n", strategy)
 	}
 	if s.SkippedReason != nil {
 		reason := *s.SkippedReason
 		if len(reason) > 200 {
 			reason = reason[:200] + "…"
 		}
-		fmt.Fprintf(w, "  Reason: %q\n", reason)
+		fmt.Fprintf(w, "  Reason: %s\n", SummaryValue(reason))
 	}
 	if s.SelectedCount != nil && s.CandidateCount != nil {
-		share := "percentage unavailable: no eligible units"
+		share := "percentage unavailable"
 		if *s.CandidateCount > 0 {
 			share = percentOf(*s.SelectedCount, *s.CandidateCount)
 		}
-		fmt.Fprintf(w, "  Selected %d of %d eligible runnable units (%s).\n", *s.SelectedCount, *s.CandidateCount, share)
+		fmt.Fprintf(w, "  Selected: %d of %d test selectors (%s)\n", *s.SelectedCount, *s.CandidateCount, share)
 	} else {
 		selected, eligible := "unknown", "unknown"
 		if s.SelectedCount != nil {
@@ -70,26 +74,39 @@ func PrintSelectionSummary(w io.Writer, p TestPlan) {
 		if s.CandidateCount != nil {
 			eligible = strconv.Itoa(*s.CandidateCount)
 		}
-		fmt.Fprintf(w, "  Selected: %s; eligible runnable units: %s.\n", selected, eligible)
+		fmt.Fprintf(w, "  Selected: %s of %s test selectors\n", selected, eligible)
 	}
-	var params []string
-	if s.ScoreCutoff != nil {
-		params = append(params, fmt.Sprintf("score_cutoff=%g", *s.ScoreCutoff))
-	}
-	if s.CountCutoff != nil {
-		params = append(params, fmt.Sprintf("count_cutoff=%d", *s.CountCutoff))
-	}
-	if s.ProportionCutoff != nil {
-		params = append(params, fmt.Sprintf("proportion_cutoff=%g", *s.ProportionCutoff))
-	}
-	if s.DurationProportionCutoff != nil {
-		params = append(params, fmt.Sprintf("duration_proportion_cutoff=%g", *s.DurationProportionCutoff))
+	for _, param := range []struct {
+		name  string
+		value any
+	}{
+		{"score_cutoff", s.ScoreCutoff},
+		{"count_cutoff", s.CountCutoff},
+		{"proportion_cutoff", s.ProportionCutoff},
+		{"duration_proportion_cutoff", s.DurationProportionCutoff},
+	} {
+		var value string
+		matches := false
+		switch v := param.value.(type) {
+		case *float64:
+			if v != nil {
+				value = strconv.FormatFloat(*v, 'g', -1, 64)
+				invocation, err := strconv.ParseFloat(requested[param.name], 64)
+				matches = err == nil && *v == invocation
+			}
+		case *int:
+			if v != nil {
+				value = strconv.Itoa(*v)
+				invocation, err := strconv.Atoi(requested[param.name])
+				matches = err == nil && *v == invocation
+			}
+		}
+		if value != "" && !matches {
+			fmt.Fprintf(w, "  Returned parameter: %s = %s\n", param.name, value)
+		}
 	}
 	if s.EffectiveCount != nil {
-		params = append(params, fmt.Sprintf("effective_count=%d", *s.EffectiveCount))
-	}
-	if len(params) > 0 {
-		fmt.Fprintf(w, "  Returned parameters: %s\n", strings.Join(params, ", "))
+		fmt.Fprintf(w, "  Effective count: %d\n", *s.EffectiveCount)
 	}
 	printSelectionDurationSummary(w, s)
 }
@@ -100,17 +117,16 @@ func printSelectionDurationSummary(w io.Writer, s *SelectionMetadata) {
 		d.Estimator != "mean_with_candidate_median_fallbacks_v1" ||
 		d.CandidateTotalDurationMS == nil || d.SelectedTotalDurationMS == nil ||
 		d.CandidateTimingCoverage == nil || *d.CandidateTimingCoverage < 0.5 {
-		fmt.Fprintln(w, "  Estimated duration share: unavailable.")
+		fmt.Fprintln(w, "  Estimated compute: unavailable")
 		return
 	}
-	fmt.Fprintf(w, "  Estimated cumulative compute: selected %s of %s eligible candidate total (mean with candidate median/default fallbacks).\n",
-		planningDurationMS(float64(*d.SelectedTotalDurationMS)), planningDurationMS(float64(*d.CandidateTotalDurationMS)))
-	share := "unavailable (zero candidate total)"
+	share := "share unavailable"
 	if *d.CandidateTotalDurationMS > 0 {
 		share = percentOf(*d.SelectedTotalDurationMS, *d.CandidateTotalDurationMS)
 	}
-	fmt.Fprintf(w, "  Estimated duration share: %s; candidate timing coverage: %.0f%%. Compute, not wall time or the requested cutoff.\n",
-		share, *d.CandidateTimingCoverage*100)
+	fmt.Fprintf(w, "  Estimated compute: %s of %s (%s)\n",
+		planningDurationMS(float64(*d.SelectedTotalDurationMS)), planningDurationMS(float64(*d.CandidateTotalDurationMS)), share)
+	fmt.Fprintf(w, "  Candidate timing coverage: %.0f%%\n", *d.CandidateTimingCoverage*100)
 }
 
 // PrintSplitSummary writes a human-readable summary of the resolved test plan
@@ -135,12 +151,12 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	if p.Fallback && p.Tasks != nil {
 		// Run's local splitter populates tasks but not Parallelism or Format.
 		nodes = len(p.Tasks)
-		noun = "runnable unit"
+		noun = "test selector"
 	}
 
 	fmt.Fprintln(w, "Split summary")
 	if p.Tasks == nil {
-		fmt.Fprintf(w, "  %d %s (runnable unit count unavailable)\n", nodes, pluralize(nodes, "node"))
+		fmt.Fprintf(w, "  %d %s (test selector count unavailable)\n", nodes, pluralize(nodes, "node"))
 	} else {
 		fmt.Fprintf(w, "  %d %s across %d %s\n",
 			total, pluralize(total, noun), nodes, pluralize(nodes, "node"))
@@ -149,26 +165,9 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 		fmt.Fprintln(w, "  Local non-intelligent split; timing estimates unavailable.")
 		return
 	}
-	target, cap := "unknown", "unknown"
-	if p.Settings != nil {
-		if p.Settings.TargetTime != nil {
-			target = fmt.Sprintf("%gs", *p.Settings.TargetTime)
-		}
-		if p.Settings.MaxParallelism != nil {
-			cap = strconv.Itoa(*p.Settings.MaxParallelism)
-		}
-	}
-	fmt.Fprintf(w, "  Returned constraints: target time %s; maximum nodes %s\n", target, cap)
-	if p.Settings != nil && p.Settings.MaxParallelism != nil && nodes == *p.Settings.MaxParallelism && nodes > 0 {
-		if p.Sizing != nil && p.Sizing.MaxParallelismBinding != nil {
-			fmt.Fprintln(w, "  At maximum nodes.")
-		} else {
-			fmt.Fprintln(w, "  At maximum nodes (does not establish that the cap limited sizing).")
-		}
-	}
-	printSizingSummary(w, p.Sizing)
+	printSizingSummary(w, p)
 	if p.TimingMetadata == nil {
-		fmt.Fprintln(w, "  Timing history unavailable.")
+		fmt.Fprintln(w, "  Historical timings: unavailable")
 		return
 	}
 
@@ -189,84 +188,119 @@ func PrintSplitSummary(w io.Writer, p TestPlan) {
 	}
 }
 
-func printSizingSummary(w io.Writer, s *SizingMetadata) {
+func printSizingSummary(w io.Writer, p TestPlan) {
+	s := p.Sizing
 	if s == nil {
+		fmt.Fprintln(w, "  Sizing: unavailable")
+		if p.Settings != nil {
+			if p.Settings.TargetTime != nil {
+				fmt.Fprintf(w, "  Target time: %gs (usage unknown)\n", *p.Settings.TargetTime)
+			}
+			printNodeLimit(w, p.Settings.MaxParallelism, nil)
+		}
 		return
 	}
+	// Configured targets are not necessarily used by the sizing branch.
+	hasTarget := s.Method == "timing" && s.TargetTimeMS != nil &&
+		(s.TargetTimeSource == "explicit" || s.TargetTimeSource == "longest_test")
 	switch s.Method {
 	case "fixed":
-		fmt.Fprintln(w, "  Sizing: fixed parallelism; no timing target used.")
+		fmt.Fprintln(w, "  Sizing: fixed parallelism; target not used")
 	case "single_node":
-		fmt.Fprintln(w, "  Sizing: single-node maximum; no timing target used.")
+		fmt.Fprintln(w, "  Sizing: single-node maximum; target not used")
 	case "insufficient_history":
-		fmt.Fprintln(w, "  Sizing: insufficient timing history; target time not used.")
+		fmt.Fprintln(w, "  Sizing: insufficient timing history; target not used")
 	case "unusable_timings":
-		fmt.Fprintln(w, "  Sizing: unusable timing estimates; target time not used.")
+		fmt.Fprintln(w, "  Sizing: unusable timing estimates; target not used")
 	case "timing":
-		fmt.Fprint(w, "  Sizing: timing-based")
+		if hasTarget {
+			suffix := ""
+			if s.TargetTimeSource == "longest_test" {
+				suffix = " (automatic, longest P90 test)"
+			}
+			fmt.Fprintf(w, "  Target time: %s%s\n", planningDurationMS(*s.TargetTimeMS), suffix)
+		} else {
+			fmt.Fprintln(w, "  Target time: unavailable")
+		}
 		if s.EstimatedRequiredParallelism != nil {
-			basis := "unavailable"
+			basis := "basis unavailable"
 			if s.TargetTimeEstimator != nil {
 				switch *s.TargetTimeEstimator {
 				case "p90_with_median_fallbacks_v1":
-					basis = "P90 with median/default fallbacks"
+					basis = "P90 durations"
 				case "mean_with_fallbacks_v1":
-					basis = "mean with median/default fallbacks"
+					basis = "mean durations"
 				default:
-					basis = "unknown"
+					basis = "unknown basis"
 				}
 			}
-			fmt.Fprintf(w, "; estimated need %d %s before caps (decision basis: %s)", *s.EstimatedRequiredParallelism, pluralize(*s.EstimatedRequiredParallelism, "node"), basis)
+			fmt.Fprintf(w, "  Estimated nodes needed: %d (%s)\n", *s.EstimatedRequiredParallelism, basis)
+		} else {
+			fmt.Fprintln(w, "  Estimated nodes needed: unavailable")
 		}
-		fmt.Fprintln(w, ".")
 	default:
-		fmt.Fprintln(w, "  Sizing: unavailable (unknown method).")
+		fmt.Fprintln(w, "  Sizing: unavailable (unknown method)")
 		return
 	}
 	if s.Method == "timing" || s.Method == "insufficient_history" || s.Method == "unusable_timings" {
-		if s.RunnableUnits != nil {
-			fmt.Fprintf(w, "  Sizing runnable units: %d\n", *s.RunnableUnits)
+		var maximum *int
+		if p.Settings != nil {
+			maximum = p.Settings.MaxParallelism
 		}
-		fmt.Fprintf(w, "  Caps: maximum nodes %s; runnable units %s.\n", bindingStatus(s.MaxParallelismBinding), bindingStatus(s.RunnableUnitsBinding))
-	}
-	// Only timing-based sizing has an applicable target. In particular, a
-	// configured settings.target_time was not used by sparse-history sizing.
-	hasTarget := s.Method == "timing" && s.TargetTimeMS != nil &&
-		(s.TargetTimeSource == "explicit" || s.TargetTimeSource == "longest_test")
-	if s.Method == "timing" {
-		if hasTarget {
-			source := "explicit"
-			if s.TargetTimeSource == "longest_test" {
-				source = "automatic: longest test P90 estimate"
+		printNodeLimit(w, maximum, s.MaxParallelismBinding)
+		if s.RunnableUnitsBinding == nil {
+			fmt.Fprintln(w, "  Test selector limit: binding unknown")
+		} else if *s.RunnableUnitsBinding {
+			if s.RunnableUnits != nil {
+				fmt.Fprintf(w, "  Test selector limit: capped at %d\n", *s.RunnableUnits)
+			} else {
+				fmt.Fprintln(w, "  Test selector limit: binding (count unavailable)")
 			}
-			fmt.Fprintf(w, "  Sizing target: %s (%s).\n", planningDurationMS(*s.TargetTimeMS), source)
-		} else {
-			fmt.Fprintln(w, "  Sizing target: unavailable.")
 		}
 	}
 	if s.Estimator != "p90_with_median_fallbacks_v1" || s.EstimatedMaxTaskDurationMS == nil {
-		fmt.Fprintln(w, "  Estimated longest node: unavailable.")
+		fmt.Fprintln(w, "  Estimated longest node: unavailable")
 		return
 	}
-	fmt.Fprintf(w, "  Estimated longest node: %s (P90 packing with median/default fallbacks)", planningDurationMS(float64(*s.EstimatedMaxTaskDurationMS)))
+	fmt.Fprintf(w, "  Estimated longest node: %s (P90 durations", planningDurationMS(float64(*s.EstimatedMaxTaskDurationMS)))
 	if hasTarget {
 		if float64(*s.EstimatedMaxTaskDurationMS) > *s.TargetTimeMS {
-			fmt.Fprint(w, "; P90 estimate exceeds sizing target")
+			fmt.Fprint(w, "; target exceeded")
 		} else {
-			fmt.Fprint(w, "; P90 estimate within sizing target")
+			fmt.Fprint(w, "; within target")
 		}
 	}
-	fmt.Fprintln(w, ". Test-work estimate, not a runtime guarantee.")
+	fmt.Fprintln(w, ")")
 }
 
-func bindingStatus(binding *bool) string {
-	if binding == nil {
-		return "binding unknown"
+func printNodeLimit(w io.Writer, maximum *int, binding *bool) {
+	limit := "unavailable"
+	if maximum != nil {
+		limit = strconv.Itoa(*maximum)
 	}
-	if *binding {
-		return "binding"
+	switch {
+	case binding == nil:
+		fmt.Fprintf(w, "  Node limit: %s (binding unknown)\n", limit)
+	case *binding:
+		if maximum == nil {
+			fmt.Fprintln(w, "  Node limit: binding (maximum unavailable)")
+		} else {
+			fmt.Fprintf(w, "  Node limit: capped at %s\n", limit)
+		}
+	default:
+		fmt.Fprintf(w, "  Node limit: %s (not independently binding)\n", limit)
 	}
-	return "not independently binding"
+}
+
+// SummaryValue leaves ordinary values readable while escaping whitespace,
+// control characters and quotes so a value cannot forge another log line.
+func SummaryValue(value string) string {
+	if value == "" || !utf8.ValidString(value) || strings.IndexFunc(value, func(r rune) bool {
+		return unicode.IsSpace(r) || !unicode.IsPrint(r) || r == '"' || r == '\\'
+	}) >= 0 {
+		return strconv.Quote(value)
+	}
+	return value
 }
 
 // Keep fractional sizing targets visible so a near-boundary comparison does
@@ -323,11 +357,11 @@ func countNonZero(values ...int) int {
 
 // summaryNoun returns the singular heading noun. The plan-level summary uses
 // "file"/"example"/"selector" when the plan only contains one format, or
-// "runnable unit" when multiple formats are present. Callers pluralize as needed.
+// "test selector" when multiple formats are present. Callers pluralize as needed.
 func summaryNoun(fileTotal, exampleTotal, selectorTotal int) string {
 	switch {
 	case fileTotal+exampleTotal+selectorTotal == 0:
-		return "runnable unit"
+		return "test selector"
 	case exampleTotal == 0 && selectorTotal == 0:
 		return "file"
 	case fileTotal == 0 && selectorTotal == 0:
@@ -335,7 +369,7 @@ func summaryNoun(fileTotal, exampleTotal, selectorTotal int) string {
 	case fileTotal == 0 && exampleTotal == 0:
 		return "selector"
 	default:
-		return "runnable unit"
+		return "test selector"
 	}
 }
 
@@ -351,37 +385,22 @@ func pluralize(n int, singular string) string {
 // ("file" or "example"); each line is pluralized to match its own count.
 func printFormatBreakdown(w io.Writer, total, known int, noun string, meta *FormatTimingMetadata, mixed bool) {
 	indent := "  "
-	itemNounFor := func(n int) string { return " " + pluralize(n, noun) }
 	if mixed {
 		fmt.Fprintf(w, "  %d %s\n", total, pluralize(total, noun))
 		indent = "    "
-		// In nested form the "files"/"examples" header carries the noun, so
-		// each line just shows counts.
-		itemNounFor = func(int) string { return "" }
 	}
-
-	width := len(strconv.Itoa(total))
-
-	if known == 0 {
-		suffix := " and used the default duration"
-		if meta != nil {
-			suffix += fmt.Sprintf(" (%s)", formatDurationMS(meta.DefaultDuration))
-		}
-		fmt.Fprintf(w, "%s%*d%s (100%%) had no history%s\n",
-			indent, width, total, itemNounFor(total), suffix)
-		return
-	}
-
+	fmt.Fprintf(w, "%sHistorical timings: %d of %d %s (%s)\n", indent, known, total, pluralize(total, noun), percentOf(known, total))
 	unknown := total - known
-	fmt.Fprintf(w, "%s%*d%s (%s) estimated from past historical durations\n",
-		indent, width, known, itemNounFor(known), percentOf(known, total))
 	if unknown > 0 {
 		suffix := ""
-		if meta != nil && meta.MedianDuration != nil {
-			suffix = fmt.Sprintf(" — assumed median (%s)", formatDurationMS(*meta.MedianDuration))
+		if meta != nil {
+			if known == 0 {
+				suffix = fmt.Sprintf("; default duration %s", formatDurationMS(meta.DefaultDuration))
+			} else if meta.MedianDuration != nil {
+				suffix = fmt.Sprintf("; median duration %s", formatDurationMS(*meta.MedianDuration))
+			}
 		}
-		fmt.Fprintf(w, "%s%*d%s (%s) had no history%s\n",
-			indent, width, unknown, itemNounFor(unknown), percentOf(unknown, total), suffix)
+		fmt.Fprintf(w, "%sNo history: %d %s (%s)%s\n", indent, unknown, pluralize(unknown, noun), percentOf(unknown, total), suffix)
 	}
 }
 
