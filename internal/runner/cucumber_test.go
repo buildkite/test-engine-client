@@ -77,7 +77,7 @@ func TestCucumberRun(t *testing.T) {
 	err := cucumber.Run(result, testCases, false)
 
 	if err != nil {
-		t.Errorf("Cucumber.Run(%q) error = %v", testCases, err)
+		t.Errorf("Cucumber.Run(%v) error = %v", testCases, err)
 	}
 
 	if result.Status() != RunStatusPassed {
@@ -88,7 +88,7 @@ func TestCucumberRun(t *testing.T) {
 		} else {
 			t.Logf("Content of tmp/cucumber.json:\n%s", string(jsonContent))
 		}
-		t.Errorf("Cucumber.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Cucumber.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -119,11 +119,11 @@ func TestCucumberRun_TestFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Cucumber.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Cucumber.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 
 	if len(result.FailedTests()) == 0 {
-		t.Errorf("Cucumber.Run(%q) expected failed tests but got none", testCases)
+		t.Errorf("Cucumber.Run(%v) expected failed tests but got none", testCases)
 	}
 }
 
@@ -424,17 +424,17 @@ func TestCucumberCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := c.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "cucumber"
 	wantArgs := []string{"--format", "json", "--out", "cucumber.json", "features/spells/expelliarmus.feature", "features/failure.feature"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -449,17 +449,17 @@ func TestCucumberCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T)
 
 	gotName, gotArgs, err := c.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "cucumber"
 	wantArgs := []string{"--format", "json", "--out", "cucumber.json", "features/spells/expelliarmus.feature", "features/failure.feature"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 

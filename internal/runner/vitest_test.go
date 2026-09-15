@@ -83,17 +83,17 @@ func TestVitestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := vitest.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("CommandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("CommandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "vitest"
 	wantArgs := []string{"run", "src/billing.spec.ts", "src/user.spec.ts", "--reporter=json", "--outputFile", "vitest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -111,17 +111,17 @@ func TestVitestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 
 	gotName, gotArgs, err := vitest.CommandNameAndArgs(testCases, true)
 	if err != nil {
-		t.Errorf("CommandNameAndArgs(%q, %v) error = %v", testCases, true, err)
+		t.Errorf("CommandNameAndArgs(%v, %v) error = %v", testCases, true, err)
 	}
 
 	wantName := "vitest"
 	wantArgs := []string{"run", "--testNamePattern", "(this will fail|this other one will fail)", "--reporter=json", "--outputFile", "vitest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 }
 
@@ -169,13 +169,13 @@ func TestVitestRun(t *testing.T) {
 	testCases := []plan.TestCase{{Path: "./spells/expelliarmus.spec.js"}}
 	result := NewRunResult([]plan.TestCase{})
 	if err := vitest.Run(result, testCases, false); err != nil {
-		t.Errorf("Vitest.Run(%q) error = %v", testCases, err)
+		t.Errorf("Vitest.Run(%v) error = %v", testCases, err)
 	}
 	if len(result.tests) != 1 {
-		t.Errorf("Vitest.Run(%q) len(RunResult.tests) = %d, want 1", testCases, len(result.tests))
+		t.Errorf("Vitest.Run(%v) len(RunResult.tests) = %d, want 1", testCases, len(result.tests))
 	}
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Vitest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Vitest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -194,19 +194,19 @@ func TestVitestRun_TestSkipped(t *testing.T) {
 	testCases := []plan.TestCase{{Path: "./skipped.spec.js"}}
 	result := NewRunResult([]plan.TestCase{})
 	if err := vitest.Run(result, testCases, false); err != nil {
-		t.Errorf("Vitest.Run(%q) error = %v", testCases, err)
+		t.Errorf("Vitest.Run(%v) error = %v", testCases, err)
 	}
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Vitest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Vitest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
 	skipped := result.tests["this will be skipped/for sure/skipped.spec.js"]
 	if skipped.Status != TestStatusSkipped {
-		t.Errorf("Vitest.Run(%q) skipped test status = %v, want %v", testCases, skipped.Status, TestStatusSkipped)
+		t.Errorf("Vitest.Run(%v) skipped test status = %v, want %v", testCases, skipped.Status, TestStatusSkipped)
 	}
 	todo := result.tests["this will be skipped/todo yeah/skipped.spec.js"]
 	if todo.Status != TestStatusSkipped {
-		t.Errorf("Vitest.Run(%q) todo test status = %v, want %v", testCases, todo.Status, TestStatusSkipped)
+		t.Errorf("Vitest.Run(%v) todo test status = %v, want %v", testCases, todo.Status, TestStatusSkipped)
 	}
 }
 
@@ -227,10 +227,10 @@ func TestVitestRun_TestFailed(t *testing.T) {
 		{Scope: "this will fail", Name: "for sure", Path: "failure.spec.js"},
 	}
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Vitest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Vitest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 	if diff := cmp.Diff(result.FailedTests(), wantFailedTests); diff != "" {
-		t.Errorf("Vitest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+		t.Errorf("Vitest.Run(%v) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -283,32 +283,32 @@ func TestVitestRun_RetryIgnoresSkippedResultsForTestsNotRetried(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	testCases := []plan.TestCase{{Path: "multi.spec.js"}}
 	if err := vitest.Run(result, testCases, false); err != nil {
-		t.Fatalf("Vitest.Run(%q, retry=false) error = %v", testCases, err)
+		t.Fatalf("Vitest.Run(%v, retry=false) error = %v", testCases, err)
 	}
 
 	failedTests := result.FailedTests()
 	wantFailedTests := []plan.TestCase{{Scope: "multi", Name: "fails", Path: "multi.spec.js"}}
 	if diff := cmp.Diff(failedTests, wantFailedTests); diff != "" {
-		t.Fatalf("Vitest.Run(%q, retry=false) FailedTests() diff (-got +want):\n%s", testCases, diff)
+		t.Fatalf("Vitest.Run(%v, retry=false) FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 
 	if err := vitest.Run(result, failedTests, true); err != nil {
-		t.Fatalf("Vitest.Run(%q, retry=true) error = %v", failedTests, err)
+		t.Fatalf("Vitest.Run(%v, retry=true) error = %v", failedTests, err)
 	}
 
 	passedTest := result.tests[testIdentifier(plan.TestCase{Scope: "multi", Name: "passes", Path: "multi.spec.js"})]
 	if passedTest.Status != TestStatusPassed {
-		t.Errorf("Vitest.Run(%q, retry=true) passed test status = %v, want %v", failedTests, passedTest.Status, TestStatusPassed)
+		t.Errorf("Vitest.Run(%v, retry=true) passed test status = %v, want %v", failedTests, passedTest.Status, TestStatusPassed)
 	}
 	if passedTest.ExecutionCount != 1 {
-		t.Errorf("Vitest.Run(%q, retry=true) passed test execution count = %d, want 1", failedTests, passedTest.ExecutionCount)
+		t.Errorf("Vitest.Run(%v, retry=true) passed test execution count = %d, want 1", failedTests, passedTest.ExecutionCount)
 	}
 
 	failedTest := result.tests[testIdentifier(plan.TestCase{Scope: "multi", Name: "fails", Path: "multi.spec.js"})]
 	if failedTest.Status != TestStatusFailed {
-		t.Errorf("Vitest.Run(%q, retry=true) failed test status = %v, want %v", failedTests, failedTest.Status, TestStatusFailed)
+		t.Errorf("Vitest.Run(%v, retry=true) failed test status = %v, want %v", failedTests, failedTest.Status, TestStatusFailed)
 	}
 	if failedTest.ExecutionCount != 2 {
-		t.Errorf("Vitest.Run(%q, retry=true) failed test execution count = %d, want 2", failedTests, failedTest.ExecutionCount)
+		t.Errorf("Vitest.Run(%v, retry=true) failed test execution count = %d, want 2", failedTests, failedTest.ExecutionCount)
 	}
 }

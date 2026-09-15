@@ -24,11 +24,11 @@ func TestPytestRun(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, false)
 	if err != nil {
-		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
+		t.Errorf("Pytest.Run(%v) error = %v", testCases, err)
 	}
 
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Pytest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -50,7 +50,7 @@ func TestPytestRun_RetryCommand(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, true)
 	if err != nil {
-		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
+		t.Errorf("Pytest.Run(%v) error = %v", testCases, err)
 	}
 }
 
@@ -73,7 +73,7 @@ func TestPytestRun_TestFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Pytest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 
 	failedTest := result.FailedTests()
@@ -93,7 +93,7 @@ func TestPytestRun_TestFailed(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(failedTest, wantFailedTests); diff != "" {
-		t.Errorf("Pytest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+		t.Errorf("Pytest.Run(%v) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -124,17 +124,17 @@ func TestPytestRun_CollectionError(t *testing.T) {
 		return
 	}
 	if exitError.ExitCode() != 2 {
-		t.Errorf("Pytest.Run(%q) exit code = %d, want 2", testCases, exitError.ExitCode())
+		t.Errorf("Pytest.Run(%v) exit code = %d, want 2", testCases, exitError.ExitCode())
 	}
 
 	if result.Status() != RunStatusError {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+		t.Errorf("Pytest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 	if result.Error() == nil {
-		t.Fatalf("Pytest.Run(%q) RunResult.Error = nil, want error", testCases)
+		t.Fatalf("Pytest.Run(%v) RunResult.Error = nil, want error", testCases)
 	}
 	if got, want := result.Error().Error(), "pytest collection failed: test_broken_import.py"; got != want {
-		t.Errorf("Pytest.Run(%q) RunResult.Error = %q, want %q", testCases, got, want)
+		t.Errorf("Pytest.Run(%v) RunResult.Error = %q, want %q", testCases, got, want)
 	}
 
 	failedTests := result.FailedTests()
@@ -143,13 +143,13 @@ func TestPytestRun_CollectionError(t *testing.T) {
 	}
 	failedTest := failedTests[0]
 	if failedTest.Scope != "" {
-		t.Errorf("Pytest.Run(%q) failed test scope = %q, want empty", testCases, failedTest.Scope)
+		t.Errorf("Pytest.Run(%v) failed test scope = %q, want empty", testCases, failedTest.Scope)
 	}
 	if failedTest.Name != "test_broken_import.py" {
-		t.Errorf("Pytest.Run(%q) failed test name = %q, want %q", testCases, failedTest.Name, "test_broken_import.py")
+		t.Errorf("Pytest.Run(%v) failed test name = %q, want %q", testCases, failedTest.Name, "test_broken_import.py")
 	}
 	if failedTest.Path != "test_broken_import.py" {
-		t.Errorf("Pytest.Run(%q) failed test path = %q, want %q", testCases, failedTest.Path, "test_broken_import.py")
+		t.Errorf("Pytest.Run(%v) failed test path = %q, want %q", testCases, failedTest.Path, "test_broken_import.py")
 	}
 }
 
@@ -365,11 +365,11 @@ func TestPytestRun_JUnit_TestPassed(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := pytest.Run(result, testCases, false)
 	if err != nil {
-		t.Errorf("Pytest.Run(%q) error = %v", testCases, err)
+		t.Errorf("Pytest.Run(%v) error = %v", testCases, err)
 	}
 
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Pytest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
 	var passedTests []plan.TestCase
@@ -388,7 +388,7 @@ func TestPytestRun_JUnit_TestPassed(t *testing.T) {
 		},
 	}
 	if diff := cmp.Diff(passedTests, wantPassedTests); diff != "" {
-		t.Errorf("Pytest.Run(%q) passed tests diff (-got +want):\n%s", testCases, diff)
+		t.Errorf("Pytest.Run(%v) passed tests diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -410,7 +410,7 @@ func TestPytestRun_JUnit_TestFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Pytest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 
 	failedTest := result.FailedTests()
@@ -429,7 +429,7 @@ func TestPytestRun_JUnit_TestFailed(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(failedTest, wantFailedTests); diff != "" {
-		t.Errorf("Pytest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+		t.Errorf("Pytest.Run(%v) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -447,7 +447,7 @@ func TestPytestRun_TestFailedWithoutResultFile(t *testing.T) {
 	err := pytest.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Pytest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -468,7 +468,7 @@ func TestPytestRun_CommandFailed(t *testing.T) {
 	err := pytest.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Pytest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Pytest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -507,17 +507,17 @@ func TestPytestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "pytest"
 	wantArgs := []string{"failed_test.py", "test_sample.py", "--full-trace", "--json=result.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -531,17 +531,17 @@ func TestPytestCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "pytest"
 	wantArgs := []string{"--full-trace", "failed_test.py", "test_sample.py"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -586,7 +586,7 @@ func TestPytestCommandNameAndArgs_WithSpacesInTestCase(t *testing.T) {
 
 	gotName, gotArgs, err := pytest.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "pytest"
@@ -597,10 +597,10 @@ func TestPytestCommandNameAndArgs_WithSpacesInTestCase(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) name diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) name diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) args diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) args diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 

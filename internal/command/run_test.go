@@ -472,7 +472,7 @@ func TestRunTestsWithRetry_ExecError(t *testing.T) {
 
 	var execError *exec.Error
 	if !errors.As(err, &execError) {
-		t.Errorf("runTestsWithRetry(%q) error type = %T (%v), want *exec.Error", testCases, err, err)
+		t.Errorf("runTestsWithRetry(%v) error type = %T (%v), want *exec.Error", testCases, err, err)
 	}
 
 	if testResult.Status() != runner.RunStatusUnknown {
