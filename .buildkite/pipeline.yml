@@ -25,25 +25,25 @@ steps:
 
   - group: ":hammer_and_wrench: Build binaries"
     steps:
-    - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-      artifact_paths: "dist/**/*"
-      plugins:
-        docker#v5.13.0:
-          image: goreleaser/goreleaser:v2.15.1
-          mount-buildkite-agent: true
-          environment:
-            - GOOS={{matrix.os}}
-            - GOARCH={{matrix.arch}}
-          command:
-            - build
-            - --single-target
-            - --snapshot
-      matrix:
-        setup:
-          os:
-            - darwin
-            - linux
-            - windows
-          arch:
-            - amd64
-            - arm64
+      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
+        artifact_paths: "dist/**/*"
+        plugins:
+          docker#v5.13.0:
+            image: goreleaser/goreleaser:v2.15.1
+            mount-buildkite-agent: true
+            environment:
+              - GOOS={{matrix.os}}
+              - GOARCH={{matrix.arch}}
+            command:
+              - build
+              - --single-target
+              - --snapshot
+        matrix:
+          setup:
+            os:
+              - darwin
+              - linux
+              - windows
+            arch:
+              - amd64
+              - arm64
