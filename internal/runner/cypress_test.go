@@ -26,11 +26,11 @@ func TestCypressRun(t *testing.T) {
 	err := cypress.Run(result, testCases, false)
 
 	if err != nil {
-		t.Errorf("Cypress.Run(%q) error = %v", testCases, err)
+		t.Errorf("Cypress.Run(%v) error = %v", testCases, err)
 	}
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Cypress.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 }
 
@@ -49,7 +49,7 @@ func TestCypressRun_TestFailed(t *testing.T) {
 	err := cypress.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Cypress.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -66,7 +66,7 @@ func TestCypressRun_CommandFailed(t *testing.T) {
 	err := cypress.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Cypress.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -85,15 +85,15 @@ func TestCypressRun_SignaledError(t *testing.T) {
 	err := cypress.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Cypress.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Cypress.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Cypress.Run(%q) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
+		t.Errorf("Cypress.Run(%v) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
 	}
 	if signalError.Signal != syscall.SIGSEGV {
-		t.Errorf("Cypress.Run(%q) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
+		t.Errorf("Cypress.Run(%v) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
 	}
 }
 
@@ -127,17 +127,17 @@ func TestCypressCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := cy.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "cypress"
 	wantArgs := []string{"run", "--spec", "cypress/e2e/passing_spec.cy.js,cypress/e2e/flaky_spec.cy.js"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -151,17 +151,17 @@ func TestCypressCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) 
 
 	gotName, gotArgs, err := cypress.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "cypress"
 	wantArgs := []string{"run", "--spec", "cypress/e2e/passing_spec.cy.js,cypress/e2e/flaky_spec.cy.js"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 

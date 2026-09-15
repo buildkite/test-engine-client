@@ -73,15 +73,15 @@ func TestJestRun(t *testing.T) {
 	err := jest.Run(result, testCases, false)
 
 	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
+		t.Errorf("Jest.Run(%v) error = %v", testCases, err)
 	}
 
 	if len(result.tests) != 1 {
-		t.Errorf("Rspec.Run(%q) len(RunResult.tests) = %d, want 1", testCases, len(result.tests))
+		t.Errorf("Rspec.Run(%v) len(RunResult.tests) = %d, want 1", testCases, len(result.tests))
 	}
 
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -105,11 +105,11 @@ func TestJestRun_Retry(t *testing.T) {
 	err := jest.Run(result, testCases, true)
 
 	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
+		t.Errorf("Jest.Run(%v) error = %v", testCases, err)
 	}
 
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -134,11 +134,11 @@ func TestJestRun_Retry_WithTestFilePattern(t *testing.T) {
 	jest.Run(result, testCases, true)
 
 	if got := len(result.tests); got != 2 {
-		t.Errorf("Jest.Run(%q) test count = %d, want %d", testCases, got, 2)
+		t.Errorf("Jest.Run(%v) test count = %d, want %d", testCases, got, 2)
 	}
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 }
 
@@ -172,11 +172,11 @@ func TestJestRun_TestFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 
 	if diff := cmp.Diff(result.FailedTests(), wantFailedTests); diff != "" {
-		t.Errorf("Jest.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+		t.Errorf("Jest.Run(%v) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -199,21 +199,21 @@ func TestJestRun_TestSkipped(t *testing.T) {
 	err := jest.Run(result, testCases, false)
 
 	if err != nil {
-		t.Errorf("Jest.Run(%q) error = %v", testCases, err)
+		t.Errorf("Jest.Run(%v) error = %v", testCases, err)
 	}
 
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
 	test := result.tests["this will be skipped/for sure/skipped.spec.js"]
 	if test.Status != TestStatusSkipped {
-		t.Errorf("Jest.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
+		t.Errorf("Jest.Run(%v) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
 	}
 
 	todoTest := result.tests["this will be skipped/todo yeah/skipped.spec.js"]
 	if todoTest.Status != TestStatusSkipped {
-		t.Errorf("Jest.Run(%q) todoTest.Status = %v, want %v", testCases, todoTest.Status, TestStatusSkipped)
+		t.Errorf("Jest.Run(%v) todoTest.Status = %v, want %v", testCases, todoTest.Status, TestStatusSkipped)
 	}
 }
 
@@ -241,11 +241,11 @@ func TestJestRun_RuntimeError(t *testing.T) {
 
 	// Make sure that we capture other tests that are not affected by the runtime error (expelliarmus.spec.js)
 	if len(result.tests) != 1 {
-		t.Errorf("Jest.Run(%q) len(RunResult.tests) = %d, want 1", testCases, len(result.tests))
+		t.Errorf("Jest.Run(%v) len(RunResult.tests) = %d, want 1", testCases, len(result.tests))
 	}
 
 	if result.Status() != RunStatusError {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 }
 
@@ -305,7 +305,7 @@ func TestJestRun_CommandFailed(t *testing.T) {
 	err := jest.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -324,15 +324,15 @@ func TestJestRun_SignaledError(t *testing.T) {
 	err := jest.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Jest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Jest.Run(%q) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
+		t.Errorf("Jest.Run(%v) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
 	}
 	if signalError.Signal != syscall.SIGSEGV {
-		t.Errorf("Jest.Run(%q) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
+		t.Errorf("Jest.Run(%v) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
 	}
 }
 
@@ -347,17 +347,17 @@ func TestJestCommandNameAndArgs_WithInterpolationPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "jest"
 	wantArgs := []string{"spec/billing.spec.js", "spec/user.spec.js", "--outputFile", "jest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -372,17 +372,17 @@ func TestJestCommandNameAndArgs_WithoutInterpolationPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "jest"
 	wantArgs := []string{"--json", "--outputFile", "jest.json", "spec/billing.spec.js", "spec/user.spec.js"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -427,7 +427,7 @@ func TestJestCommandNameAndArgs_WithSpecialCharactersInPath(t *testing.T) {
 
 	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "jest"
@@ -440,10 +440,10 @@ func TestJestCommandNameAndArgs_WithSpecialCharactersInPath(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -469,17 +469,17 @@ func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 
 	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, true)
 	if err != nil {
-		t.Errorf("CommandNameAndArgs(%q, %v) error = %v", testCases, true, err)
+		t.Errorf("CommandNameAndArgs(%v, %v) error = %v", testCases, true, err)
 	}
 
 	wantName := "jest"
 	wantArgs := []string{"--testNamePattern", "(this will fail|this other one will fail)", "--json", "--testLocationInResults", "--outputFile", "jest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 }
 
@@ -505,17 +505,17 @@ func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
 
 	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, true)
 	if err != nil {
-		t.Errorf("CommandNameAndArgs(%q, %q) error = %v", testCases, retryTestCommand, err)
+		t.Errorf("CommandNameAndArgs(%v, %q) error = %v", testCases, retryTestCommand, err)
 	}
 
 	wantName := "jest"
 	wantArgs := []string{"--testNamePattern", `(test with special characters \.\+\*\?\(\)\|\[\]\{\}\^\$|another test)`, "--json", "--testLocationInResults", "--outputFile", "jest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 }
 
@@ -580,7 +580,7 @@ func TestJestRetryCommandNameAndArgs_WithTestExamplesPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := jest.CommandNameAndArgs(testCases, true)
 	if err != nil {
-		t.Errorf("CommandNameAndArgs(%q, %q) error = %v", testCases, retryTestCommand, err)
+		t.Errorf("CommandNameAndArgs(%v, %q) error = %v", testCases, retryTestCommand, err)
 	}
 
 	wantName := "jest"
@@ -596,10 +596,10 @@ func TestJestRetryCommandNameAndArgs_WithTestExamplesPlaceholder(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("CommandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
+		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
 	}
 }
 

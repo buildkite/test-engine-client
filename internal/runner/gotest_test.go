@@ -27,7 +27,7 @@ func TestGotestRun(t *testing.T) {
 
 	assert.NoError(t, err)
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
 	fmt.Printf("result.tests: %v\n", result.tests)
@@ -54,7 +54,7 @@ func TestGotestRun_TestFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 }
 
@@ -75,7 +75,7 @@ func TestGotestRun_BuildFailed(t *testing.T) {
 
 	// A build failure is an error outside of the tests, not a test failure.
 	if result.Status() != RunStatusError {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	// The synthetic "TestMain" testcase that gotestsum emits for a build
@@ -83,7 +83,7 @@ func TestGotestRun_BuildFailed(t *testing.T) {
 	// selected for retry but silently dropped from the retry command
 	// (its package path is empty).
 	if failed := result.FailedTests(); len(failed) != 0 {
-		t.Errorf("Gotest.Run(%q) RunResult.FailedTests() = %v, want none", testCases, failed)
+		t.Errorf("Gotest.Run(%v) RunResult.FailedTests() = %v, want none", testCases, failed)
 	}
 }
 
@@ -102,7 +102,7 @@ func TestGotestRun_GoJSONL(t *testing.T) {
 
 	assert.NoError(t, err)
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
 	testResult := result.tests["example.com/hello/TestHelloWorld/example.com/hello"]
@@ -126,7 +126,7 @@ func TestGotestRun_GotestsumGoJSONL(t *testing.T) {
 
 	assert.NoError(t, err)
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
 	testResult := result.tests["example.com/hello/TestHelloWorld/example.com/hello"]
@@ -152,12 +152,12 @@ func TestGotestRun_GoJSONLTestFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 
 	failed := result.FailedTests()
 	if len(failed) != 1 || failed[0].Path != "example.com/hello/bad" {
-		t.Errorf("Gotest.Run(%q) RunResult.FailedTests = %v, want one failed package", testCases, failed)
+		t.Errorf("Gotest.Run(%v) RunResult.FailedTests = %v, want one failed package", testCases, failed)
 	}
 }
 
@@ -178,11 +178,11 @@ func TestGotestRun_GoJSONLBuildFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusError {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 
 	if failed := result.FailedTests(); len(failed) != 0 {
-		t.Errorf("Gotest.Run(%q) RunResult.FailedTests() = %v, want none", testCases, failed)
+		t.Errorf("Gotest.Run(%v) RunResult.FailedTests() = %v, want none", testCases, failed)
 	}
 }
 
@@ -202,12 +202,12 @@ func TestGotestRun_GoJSONLPackageLevelFailure(t *testing.T) {
 	exitError := new(exec.ExitError)
 	assert.ErrorAs(t, err, &exitError)
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 
 	failed := result.FailedTests()
 	if len(failed) != 1 || failed[0].Path != "example.com/hello/testmain" || failed[0].Name != "TestMain" {
-		t.Errorf("Gotest.Run(%q) RunResult.FailedTests = %v, want package-level failure", testCases, failed)
+		t.Errorf("Gotest.Run(%v) RunResult.FailedTests = %v, want package-level failure", testCases, failed)
 	}
 }
 
@@ -272,7 +272,7 @@ func TestGotestRun_CommandFailed(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Gotest.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Gotest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 }
 

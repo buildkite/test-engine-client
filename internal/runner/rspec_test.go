@@ -86,15 +86,15 @@ func TestRspecRun(t *testing.T) {
 	err := rspec.Run(result, testCases, false)
 
 	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
+		t.Errorf("Rspec.Run(%v) error = %v", testCases, err)
 	}
 
 	if len(result.tests) != 2 {
-		t.Errorf("Rspec.Run(%q) len(RunResult.tests) = %d, want 2", testCases, len(result.tests))
+		t.Errorf("Rspec.Run(%v) len(RunResult.tests) = %d, want 2", testCases, len(result.tests))
 	}
 
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -112,11 +112,11 @@ func TestRspecRun_RetryCommand(t *testing.T) {
 	err := rspec.Run(result, testCases, true)
 
 	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
+		t.Errorf("Rspec.Run(%v) error = %v", testCases, err)
 	}
 
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 }
 
@@ -149,11 +149,11 @@ func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusFailed {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusFailed)
 	}
 
 	if diff := cmp.Diff(result.FailedTests(), wantFailedTests); diff != "" {
-		t.Errorf("Rspec.Run(%q) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
+		t.Errorf("Rspec.Run(%v) RunResult.FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 }
 
@@ -173,7 +173,7 @@ func TestRspecRun_TestFailedWithoutResultFile(t *testing.T) {
 	err := rspec.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -197,16 +197,16 @@ func TestRspecRun_TestSkipped(t *testing.T) {
 	err := rspec.Run(result, testCases, false)
 
 	if err != nil {
-		t.Errorf("Rspec.Run(%q) error = %v", testCases, err)
+		t.Errorf("Rspec.Run(%v) error = %v", testCases, err)
 	}
 
 	if result.Status() != RunStatusPassed {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
 	test := result.tests["skipped/is skipped/./testdata/rspec/spec/skipped_spec.rb[1:1]"]
 	if test.Status != TestStatusSkipped {
-		t.Errorf("Rspec.Run(%q) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
+		t.Errorf("Rspec.Run(%v) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
 	}
 }
 
@@ -230,7 +230,7 @@ func TestRspecRun_TestExit(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 }
 
@@ -254,7 +254,7 @@ func TestRspecRun_ErrorOutsideOfExamples(t *testing.T) {
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusError {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
 }
 
@@ -267,7 +267,7 @@ func TestRspecRun_CommandFailed(t *testing.T) {
 	err := rspec.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	exitError := new(exec.ExitError)
@@ -286,15 +286,15 @@ func TestRspecRun_SignaledError(t *testing.T) {
 	err := rspec.Run(result, testCases, false)
 
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Rspec.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 
 	signalError := new(ProcessSignaledError)
 	if !errors.As(err, &signalError) {
-		t.Errorf("Rspec.Run(%q) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
+		t.Errorf("Rspec.Run(%v) error type = %T (%v), want *ErrProcessSignaled", testCases, err, err)
 	}
 	if signalError.Signal != syscall.SIGSEGV {
-		t.Errorf("Rspec.Run(%q) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
+		t.Errorf("Rspec.Run(%v) signal = %d, want %d", testCases, syscall.SIGSEGV, signalError.Signal)
 	}
 }
 
@@ -309,17 +309,17 @@ func TestRspecCommandNameAndArgs_WithPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := rspec.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "bin/rspec"
 	wantArgs := []string{"--options", "spec/models/user_spec.rb", "spec/models/billing_spec.rb", "--out", rspec.ResultPath}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 
@@ -333,17 +333,17 @@ func TestRspecCommandNameAndArgs_WithoutTestExamplesPlaceholder(t *testing.T) {
 
 	gotName, gotArgs, err := rspec.CommandNameAndArgs(testCases, false)
 	if err != nil {
-		t.Errorf("commandNameAndArgs(%q, %q) error = %v", testCases, testCommand, err)
+		t.Errorf("commandNameAndArgs(%v, %q) error = %v", testCases, testCommand, err)
 	}
 
 	wantName := "bin/rspec"
 	wantArgs := []string{"--options", "--format", "spec/models/user_spec.rb", "spec/models/billing_spec.rb"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 	if diff := cmp.Diff(gotArgs, wantArgs); diff != "" {
-		t.Errorf("commandNameAndArgs(%q, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
+		t.Errorf("commandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, testCommand, diff)
 	}
 }
 

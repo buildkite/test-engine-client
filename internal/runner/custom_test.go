@@ -172,10 +172,10 @@ func TestCustom_Run(t *testing.T) {
 	err = custom.Run(result, testCases, false)
 
 	if err != nil {
-		t.Errorf("Custom.Run(%q) error = %v", testCases, err)
+		t.Errorf("Custom.Run(%v) error = %v", testCases, err)
 	}
 	if result.Status() != RunStatusUnknown {
-		t.Errorf("Custom.Run(%q) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
+		t.Errorf("Custom.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusUnknown)
 	}
 }
 

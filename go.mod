@@ -1,6 +1,6 @@
 module github.com/buildkite/test-engine-client/v3
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/buildkite/roko v1.4.0
@@ -13,7 +13,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/stretchr/testify v1.12.1
 	github.com/urfave/cli/v3 v3.11.0
-	golang.org/x/mod v0.40.0
+	golang.org/x/mod v0.41.0
 )
 
 require (
