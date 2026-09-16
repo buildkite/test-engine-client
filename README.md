@@ -29,11 +29,54 @@ flowchart TD
     class plan remote
 ```
 
-Each parallel job runs its own `bktec` process and selects its assignment from the plan. Test Engine owns the server-side split. On recoverable planning failures or an empty server plan, the client falls back to a local alphabetical round-robin split, which is not timing-aware. Plan timing and statistics are reported to Test Engine unless using fallback.
+<details>
+<summary>Detailed flow: planning, fallback, retries, and reporting</summary>
 
-Retries and built-in result uploads are off by default. When enabled, uploads happen after each attempt, and retries run only eligible failed tests. Retry eligibility depends on the runner, remaining retry budget, and muted-test retry settings; non-test runner errors stop retries.
+```mermaid
+flowchart TD
+    subgraph job["Buildkite parallel job · bktec"]
+        start(["bktec run"]) --> config["Load configuration<br/>and select runner"]
+        config --> discover["Discover test targets<br/>Selector file, file list, or runner discovery"]
+        discover --> request["Request a test plan"]
+        fallback["Local fallback<br/>Alphabetical round-robin split"]
+        slice["Take this job's assigned tests<br/>BUILDKITE_PARALLEL_JOB"]
+        slice --> run["Run the test framework<br/>Stream output and parse results"]
+        run --> upload["Upload raw results after each attempt<br/>Only when configured"]
+        upload --> retry{"Retry eligible failures?"}
+        retry -->|"Enabled, supported, budget remaining"| failed["Select only failed tests"]
+        failed --> run
+        retry -->|"No"| report["Print final report"]
+        report --> done(["Exit with final status"])
+        fallback --> slice
+    end
 
-The diagram shows the normal execution path, not every error exit or optional integration. A job with no assigned tests skips the runner and succeeds unless `--fail-on-no-tests` is set.
+    subgraph engine["Buildkite Test Engine"]
+        plan["Return cached plan<br/>or create a new split"]
+        results["Collect test results<br/>for future timing data"]
+        metadata["Receive plan timing<br/>and statistics"]
+    end
+
+    request --> plan
+    plan -->|"Plan available"| slice
+    plan -.->|"Recoverable failure or empty plan"| fallback
+    upload -.->|"Upload enabled"| results
+    report -.->|"Unless using fallback"| metadata
+
+    classDef boundary fill:#0f172a,color:#fff,stroke:#334155
+    classDef local fill:#eff6ff,color:#172554,stroke:#3b82f6
+    classDef remote fill:#ecfdf5,color:#064e3b,stroke:#10b981
+    classDef optional fill:#fffbeb,color:#78350f,stroke:#d97706
+    class start,done boundary
+    class config,discover,request,slice,run,report local
+    class plan,results,metadata remote
+    class fallback,upload,retry,failed optional
+```
+
+The local fallback is not timing-aware. Retries and built-in result uploads are off by default. Retry eligibility depends on the runner, remaining retry budget, and muted-test retry settings; non-test runner errors stop retries.
+
+This shows the general flow, not every error exit or optional integration. A job with no assigned tests skips the runner and succeeds unless `--fail-on-no-tests` is set.
+
+</details>
 
 `bktec` discovers tests using the configured runner, requests a cached plan or sends the discovered work and parallel job details to Test Engine to create one, and selects the current job's task. It then runs only the assigned tests by expanding runner-specific placeholders such as `{{testExamples}}` and `{{resultPath}}` in the test command.
 
