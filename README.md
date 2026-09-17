@@ -13,7 +13,7 @@ For runner-specific setup, see the [runner guides](#runner-guides). For the cano
 In a Buildkite parallel step, `bktec run` follows this general flow:
 
 ```mermaid
-flowchart TD
+flowchart LR
     discover["Discover test targets"] --> plan["Request or reuse a Test Engine plan"]
     plan --> slice["Select this parallel job's tests"]
     slice --> run["Run the test framework"]
