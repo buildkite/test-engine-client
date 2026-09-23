@@ -52,7 +52,7 @@ func Run(ctx context.Context, cmd *exec.Cmd, source Source, opts Options) error 
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
 	// Remove remaining descendants even when the group leader exits first.
-	defer syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	defer func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }()
 	startup := time.NewTimer(h.opts.StartupTimeout)
 	defer startup.Stop()
 	ready, done := h.ready, h.done

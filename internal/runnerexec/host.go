@@ -334,8 +334,9 @@ func (h *host) result(w http.ResponseWriter, id string, body []byte) {
 	}
 	var result Result
 	var report map[string]json.RawMessage
-	if !object(body, &result) || result.ReportFormat == "" ||
-		!(result.Status == "completed" && result.Error == nil && object(result.Report, &report) || result.Status == "errored" && len(result.Report) == 0 && result.Error != nil && result.Error.Kind != "" && result.Error.Message != "") {
+	valid := object(body, &result) && result.ReportFormat != "" &&
+		(result.Status == "completed" && result.Error == nil && object(result.Report, &report) || result.Status == "errored" && len(result.Report) == 0 && result.Error != nil && result.Error.Kind != "" && result.Error.Message != "")
+	if !valid {
 		reject(w, 400, "invalid result envelope")
 		return
 	}
