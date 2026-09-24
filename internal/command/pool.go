@@ -60,14 +60,9 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 		},
 	}
 	if cfg.PoolLeaseDurationMS != 0 || cfg.PoolLeaseMaxAttempts != 0 {
-		durationMS := cfg.PoolLeaseDurationMS
-		if durationMS == 0 {
-			// Supplied lease settings without costs default to custom costs on the server.
-			// Keep max-attempts-only overrides on the planned entries' duration dimension.
-			durationMS = 100_000
-		}
-		request.Lease = &api.PoolPlanLease{
-			Costs: api.PoolPlanLeaseCosts{DurationP90MS: durationMS}, MaxAttempts: cfg.PoolLeaseMaxAttempts,
+		request.Lease = &api.PoolPlanLease{MaxAttempts: cfg.PoolLeaseMaxAttempts}
+		if cfg.PoolLeaseDurationMS != 0 {
+			request.Lease.Costs = &api.PoolPlanLeaseCosts{DurationP90MS: cfg.PoolLeaseDurationMS}
 		}
 	}
 	return client.PlanPool(ctx, request)

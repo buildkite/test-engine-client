@@ -96,7 +96,7 @@ func TestResolvePoolLeaseOptions(t *testing.T) {
 	}{
 		{name: "server defaults"},
 		{name: "duration only", durationMS: 60_000, lease: `{"costs":{"duration_p90_ms":60000}}`},
-		{name: "max attempts only retains duration costs", maxAttempts: 25, lease: `{"costs":{"duration_p90_ms":100000},"max_attempts":25}`},
+		{name: "max attempts only uses server cost default", maxAttempts: 25, lease: `{"max_attempts":25}`},
 		{name: "both", durationMS: 45_000, maxAttempts: 12, lease: `{"costs":{"duration_p90_ms":45000},"max_attempts":12}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

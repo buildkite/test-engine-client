@@ -36,8 +36,8 @@ type PoolPlanParams struct {
 }
 
 type PoolPlanLease struct {
-	Costs       PoolPlanLeaseCosts `json:"costs"`
-	MaxAttempts int                `json:"max_attempts,omitempty"`
+	Costs       *PoolPlanLeaseCosts `json:"costs,omitempty"`
+	MaxAttempts int                 `json:"max_attempts,omitempty"`
 }
 
 type PoolPlanLeaseCosts struct {
