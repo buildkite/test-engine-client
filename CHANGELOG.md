@@ -1,5 +1,7 @@
 # Changelog
-## Unreleased
+## 3.1.0 - 2026-09-24
+- Add opt-in [OTLP/HTTP trace relay](./README.md#relay-opentelemetry-traces) for `bktec run` via `--otlp-relay` (env: `BUILDKITE_TESTS_OTLP_RELAY`). Configure the test process to export traces to a local endpoint and forward them to Buildkite with OIDC authentication, background retries, and a bounded shutdown drain. Report forwarded and dropped requests and bytes, plus request-size and upstream-latency distributions.
+- Keep tests running when minting a collector upload token fails transiently: warn and skip result uploads without a token, while the OTLP relay retries credentials in the background. Explicit OIDC refusals still fail validation; failures obtaining the Test Engine API access token are unchanged.
 - Add `bktec run --plan-out <path>` (env: `BUILDKITE_TEST_ENGINE_PLAN_OUT`) to save the full cached or freshly created API plan before running tests, retaining selection and server-only fields without extra requests. Local fallback output includes the actual tasks and `fallback: true`. Parent directories are created; write failures stop the run.
 - Explain requested selection and returned plans in one concise planning stderr group for `bktec plan` and `run`, including test selector counts, compute share, timing coverage, and binding node limits when metadata is available. Omit repeated selection parameters and routine create-response labels. Replace the ASCII banner with a version line and move the run split summary from stdout to stderr; JSON and raw plan output are unchanged.
 
