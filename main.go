@@ -61,6 +61,25 @@ func plan(ctx context.Context, cmd *cli.Command) error {
 	}
 }
 
+func poolPlan(ctx context.Context, cmd *cli.Command) error {
+	debug.SetDebug(cmd.Root().Bool("debug"))
+	debug.SetOutput(os.Stderr)
+	if err := applyPlanRequestContext(cmd); err != nil {
+		return err
+	}
+	if cfg.PoolID != "" {
+		return fmt.Errorf("bktec pool plan: --pool-id / BUILDKITE_TEST_ENGINE_POOL_ID is for pool exec; omit it to plan a pool")
+	}
+	if err := cfg.ValidateForPoolPlan(); err != nil {
+		return fmt.Errorf("bktec pool plan: invalid configuration:\n%w", err)
+	}
+	output := command.PlanOutputJSON
+	if cmd.IsSet("pipeline-upload") {
+		output = command.PlanOutputPipelineUpload
+	}
+	return command.PoolPlan(ctx, &cfg, cmd.String("files"), output, cmd.String("pipeline-upload"))
+}
+
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {
 	debug.SetDebug(cmd.Root().Bool("debug"))
 	debug.SetOutput(os.Stderr)

@@ -55,36 +55,7 @@ func (c *Config) validate() error {
 		}
 	}
 
-	if c.ServerBaseURL == "" {
-		c.ServerBaseURL = "https://api.buildkite.com"
-	} else {
-		if _, err := url.ParseRequestURI(c.ServerBaseURL); err != nil {
-			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
-		}
-	}
-
-	if c.AccessToken == "" {
-		token, err := c.generateOIDCToken()
-
-		if err != nil {
-			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "%v", err)
-		} else {
-			c.AccessToken = token
-			c.accessTokenIsOIDC = true
-		}
-	}
-
-	if c.AccessToken == "" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "must not be blank")
-	}
-
-	if c.OrganizationSlug == "" {
-		c.errs.appendFieldError("BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
-	}
-
-	if c.SuiteSlug == "" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
-	}
+	c.validateAPI("")
 
 	if c.TestRunner == "" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "must not be blank")
@@ -117,6 +88,35 @@ func (c *Config) validate() error {
 	}
 
 	return nil
+}
+
+func (c *Config) validateAPI(claims string) {
+	if c.ServerBaseURL == "" {
+		c.ServerBaseURL = "https://api.buildkite.com"
+	} else {
+		if _, err := url.ParseRequestURI(c.ServerBaseURL); err != nil {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_BASE_URL", "must be a valid URL")
+		}
+	}
+
+	if c.AccessToken == "" {
+		token, err := c.requestOIDCToken(context.Background(), claims)
+		if err != nil {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "%v", err)
+		} else {
+			c.AccessToken = token
+			c.accessTokenIsOIDC = true
+		}
+	}
+	if c.AccessToken == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "must not be blank")
+	}
+	if c.OrganizationSlug == "" {
+		c.errs.appendFieldError("BUILDKITE_ORGANIZATION_SLUG", "must not be blank")
+	}
+	if c.SuiteSlug == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "must not be blank")
+	}
 }
 
 // Validation for the `bktec run` command
@@ -317,6 +317,10 @@ func (c *Config) generateOIDCToken() (token string, err error) {
 // The context lets long-running users, such as the OTLP relay, stop an in-flight
 // agent invocation when their drain deadline expires.
 func (c *Config) RequestOIDCToken(ctx context.Context) (token string, err error) {
+	return c.requestOIDCToken(ctx, "")
+}
+
+func (c *Config) requestOIDCToken(ctx context.Context, claims string) (token string, err error) {
 	if !c.OIDC {
 		return "", nil
 	}
@@ -325,9 +329,13 @@ func (c *Config) RequestOIDCToken(ctx context.Context) (token string, err error)
 	var tokenWriter strings.Builder
 	var errorWriter strings.Builder
 	lifetime := strconv.Itoa(int(c.OIDCLifetime.Seconds()))
+	args := []string{"oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime}
+	if claims != "" {
+		args = append(args, "--claim", claims)
+	}
 	// Skipping a security linter check here. The issue is "G204: Subprocess launched with a potential tainted input or cmd arguments"
 	// Given that running tainted input commands is bktec's raison d'etre this is acceptable.
-	cmd := exec.CommandContext(ctx, c.BuildkiteAgentCommand, "oidc", "request-token", "--audience", suiteURL, "--lifetime", lifetime) //nolint:gosec
+	cmd := exec.CommandContext(ctx, c.BuildkiteAgentCommand, args...) //nolint:gosec
 	cmd.Stderr = &errorWriter
 	cmd.Stdout = &tokenWriter
 	cmd.Env = os.Environ()
