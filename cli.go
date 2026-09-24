@@ -735,7 +735,7 @@ var poolLeaseMaxAttemptsFlag = &cli.IntFlag{
 
 func poolPlanCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
-		filesFlag, tagFiltersFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
+		filesFlag, tagFiltersFlag, accessTokenFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
 		&cli.StringFlag{
 			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec; pool plan rejects it)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,

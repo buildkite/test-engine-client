@@ -1,6 +1,9 @@
 package config
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 const schedulerOIDCClaims = "organization_id,pipeline_id,build_id,job_id"
 
@@ -13,13 +16,16 @@ func (c *Config) RequestSchedulerOIDCToken(ctx context.Context) (string, error) 
 // ValidateForPoolPlan does not require static-plan identifiers, lane sizing,
 // execution output paths, or discovery inputs when an existing pool is supplied.
 func (c *Config) ValidateForPoolPlan() error {
-	if !c.OIDC {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_OIDC", "Test Scheduler pools require OIDC authentication")
-		return c.errs
-	}
 	// The Scheduler requires a suite-scoped job OIDC token, not an ordinary API
-	// access token that may have been supplied to another command or in the env.
-	c.AccessToken = ""
+	// token that may be set in the environment. JWT shape distinguishes obvious
+	// API tokens; the Scheduler validates the supplied token's signature and claims.
+	if c.AccessToken != "" && strings.Count(c.AccessToken, ".") != 2 {
+		if !c.OIDC {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "Test Scheduler pools require a suite-scoped OIDC token, not an ordinary API token")
+			return c.errs
+		}
+		c.AccessToken = ""
+	}
 	c.validateAPI(schedulerOIDCClaims)
 	if c.PoolID == "" {
 		if c.PoolLeaseDurationMS < 0 {

@@ -93,5 +93,14 @@ func TestPoolOIDCClaims(t *testing.T) {
 func TestPoolRejectsDisabledOIDCWithAPIToken(t *testing.T) {
 	c := New()
 	c.AccessToken = "ordinary-api-token"
-	require.ErrorContains(t, c.ValidateForPoolPlan(), "Test Scheduler pools require OIDC authentication")
+	require.ErrorContains(t, c.ValidateForPoolPlan(), "Test Scheduler pools require a suite-scoped OIDC token")
+}
+
+func TestPoolAcceptsSuppliedOIDCTokenWithoutAgent(t *testing.T) {
+	c := New()
+	c.PoolID, c.OrganizationSlug, c.SuiteSlug = "pool-1", "acme", "suite"
+	c.AccessToken = "header.payload.signature"
+	c.OIDC = false
+	require.NoError(t, c.ValidateForPoolPlan())
+	require.Equal(t, "header.payload.signature", c.AccessToken)
 }
