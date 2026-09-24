@@ -2,6 +2,11 @@ package main
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v3/internal/config"
@@ -15,6 +20,7 @@ func TestPoolPlanCLIRejectsExistingID(t *testing.T) {
 			cfg = config.New()
 			t.Cleanup(func() { cfg = config.New() })
 			t.Setenv("BUILDKITE_TEST_ENGINE_POOL_ID", "env-pool")
+			t.Setenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "ordinary-api-token")
 			wantID := "env-pool"
 			if override {
 				wantID = "flag-pool"
@@ -30,7 +36,7 @@ func TestPoolPlanCLIRejectsExistingID(t *testing.T) {
 			}
 			require.ErrorContains(t, cmd.Run(context.Background(), args), "pool exec; omit it to plan a pool")
 			require.Equal(t, wantID, cfg.PoolID)
-			require.Empty(t, cfg.AccessToken, "reject before authentication or discovery")
+			require.Empty(t, cfg.AccessToken, "the ordinary API token env var is not accepted by pool commands")
 		})
 	}
 }
@@ -48,4 +54,46 @@ func TestPoolPlanCLILeaseOptions(t *testing.T) {
 	require.Error(t, err, "missing authentication/build context stops before planning")
 	require.Equal(t, 50_000, cfg.PoolLeaseDurationMS, "environment supplies the duration budget")
 	require.Equal(t, 25, cfg.PoolLeaseMaxAttempts, "the flag overrides the environment")
+}
+
+func TestPoolPlanCLIUsesOIDCDespiteAPITokenEnvironment(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+	requests := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/organizations/acme/test-scheduler/pools/plan" {
+			requests <- r.Header.Get("Authorization")
+			w.WriteHeader(http.StatusAccepted)
+			io.WriteString(w, `{"id":"pool-1","state":"planning"}`)
+			return
+		}
+		if r.URL.Path == "/v2/analytics/organizations/acme/suites/suite/test_plan/filter_tests" {
+			io.WriteString(w, `{"tests":[]}`)
+			return
+		}
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+	list := filepath.Join(t.TempDir(), "files")
+	require.NoError(t, os.WriteFile(list, []byte("spec/a_spec.rb\n"), 0600))
+	agent := filepath.Join(t.TempDir(), "agent")
+	require.NoError(t, os.WriteFile(agent, []byte("#!/bin/sh\nprintf 'claimed-oidc-token'\n"), 0700))
+	t.Setenv("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "ordinary-api-token")
+	t.Setenv("BUILDKITE_TEST_ENGINE_BASE_URL", server.URL)
+	t.Setenv("BUILDKITE_ORGANIZATION_SLUG", "acme")
+	t.Setenv("BUILDKITE_TEST_ENGINE_SUITE_SLUG", "suite")
+	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "rspec")
+	t.Setenv("BUILDKITE_BUILD_ID", "build-1")
+	t.Setenv("BUILDKITE_PIPELINE_SLUG", "pipeline")
+	t.Setenv("BUILDKITE_TEST_ENGINE_POOL_KEY", "shared")
+	t.Setenv("BUILDKITE_TEST_ENGINE_POOL_ID", "")
+	planCmd := *poolCommand.Commands[0]
+	planCmd.Flags = poolPlanCommandFlags()
+	planCmd.MutuallyExclusiveFlags = []cli.MutuallyExclusiveFlags{{Required: true, Flags: [][]cli.Flag{{freshFlag(jsonFlag)}, {freshFlag(pipelineUploadFlag)}}}}
+	cmd := &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&planCmd}}}}
+	require.NoError(t, cmd.Run(context.Background(), []string{
+		"bktec", "pool", "plan", "--json", "--files", list, "--buildkite-agent-command", agent,
+	}))
+	require.Equal(t, "Bearer claimed-oidc-token", <-requests)
 }

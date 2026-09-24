@@ -13,6 +13,13 @@ func (c *Config) RequestSchedulerOIDCToken(ctx context.Context) (string, error) 
 // ValidateForPoolPlan does not require static-plan identifiers, lane sizing,
 // execution output paths, or discovery inputs when an existing pool is supplied.
 func (c *Config) ValidateForPoolPlan() error {
+	if !c.OIDC {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_OIDC", "Test Scheduler pools require OIDC authentication")
+		return c.errs
+	}
+	// The Scheduler requires a suite-scoped job OIDC token, not an ordinary API
+	// access token that may have been supplied to another command or in the env.
+	c.AccessToken = ""
 	c.validateAPI(schedulerOIDCClaims)
 	if c.PoolID == "" {
 		if c.PoolLeaseDurationMS < 0 {

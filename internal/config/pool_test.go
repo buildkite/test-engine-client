@@ -21,6 +21,7 @@ func TestValidatePoolPlanIdentity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
 			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "token", "acme", "suite"
+			c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, "./mock-buildkite-agent"
 			c.PoolID, c.PoolKey, c.StepID, c.TestRunner = tc.id, tc.key, tc.step, tc.runner
 			if tc.id == "" {
 				c.BuildID, c.PipelineSlug = "build", "pipeline"
@@ -55,6 +56,7 @@ func TestValidatePoolLeaseOptions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
 			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "token", "acme", "suite"
+			c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, "./mock-buildkite-agent"
 			c.PoolID, c.PoolKey, c.TestRunner = tc.poolID, "shared", "rspec"
 			c.BuildID, c.PipelineSlug = "build", "pipeline"
 			c.PoolLeaseDurationMS, c.PoolLeaseMaxAttempts = tc.durationMS, tc.maxAttempts
@@ -75,6 +77,7 @@ func TestPoolOIDCClaims(t *testing.T) {
 	require.NoError(t, os.WriteFile(agent, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0700))
 	c := New()
 	c.PoolID, c.OrganizationSlug, c.SuiteSlug = "pool-1", "acme", "suite"
+	c.AccessToken = "ordinary-api-token"
 	c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, agent
 	require.NoError(t, c.ValidateForPoolPlan())
 	want := "oidc\nrequest-token\n--audience\nhttps://api.buildkite.com/v2/analytics/organizations/acme/suites/suite\n--lifetime\n1200"
@@ -85,4 +88,10 @@ func TestPoolOIDCClaims(t *testing.T) {
 	ordinary, err := c.RequestOIDCToken(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, want, ordinary, "existing plan/run OIDC contract must not change")
+}
+
+func TestPoolRejectsDisabledOIDCWithAPIToken(t *testing.T) {
+	c := New()
+	c.AccessToken = "ordinary-api-token"
+	require.ErrorContains(t, c.ValidateForPoolPlan(), "Test Scheduler pools require OIDC authentication")
 }

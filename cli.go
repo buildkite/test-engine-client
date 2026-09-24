@@ -750,7 +750,7 @@ func poolPlanCommandFlags() []cli.Flag {
 		},
 	}
 	flags = append(flags, buildEnvironmentFlags...)
-	flags = append(flags, accessTokenFlag, suiteSlugFlag, baseURLFlag, oidcFlag, oidcLifetimeFlag)
+	flags = append(flags, suiteSlugFlag, baseURLFlag, oidcFlag, oidcLifetimeFlag)
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, previewSelectionFlags()...)
 	return freshFlags(flags)
