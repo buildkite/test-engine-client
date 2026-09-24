@@ -723,9 +723,19 @@ func planCommandFlags() []cli.Flag {
 	return freshFlags(flags)
 }
 
+var poolLeaseDurationFlag = &cli.IntFlag{
+	Name: "pool-lease-duration-ms", Usage: "Duration budget per lease in milliseconds (0 uses the server default)",
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_LEASE_DURATION_MS"), Destination: &cfg.PoolLeaseDurationMS,
+}
+
+var poolLeaseMaxAttemptsFlag = &cli.IntFlag{
+	Name: "pool-lease-max-attempts", Usage: "Maximum test attempts per lease (0 uses the server default; not local retries)",
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_LEASE_MAX_ATTEMPTS"), Destination: &cfg.PoolLeaseMaxAttempts,
+}
+
 func poolPlanCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
-		filesFlag, tagFiltersFlag,
+		filesFlag, tagFiltersFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
 		&cli.StringFlag{
 			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec; pool plan rejects it)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,

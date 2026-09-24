@@ -52,13 +52,25 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 			cmp.Compare(a.Scope, b.Scope), cmp.Compare(a.Name, b.Name), cmp.Compare(a.Format, b.Format),
 		)
 	})
-	return client.PlanPool(ctx, api.PoolPlanParams{
+	request := api.PoolPlanParams{
 		Suite: cfg.SuiteSlug, Pipeline: cfg.PipelineSlug, BuildID: cfg.BuildID, Key: cfg.PoolKey,
 		Plan: api.PoolPlan{
 			Runner: params.Runner, Branch: params.Branch, Tests: params.Tests,
 			Selection: params.Selection, LocationPrefix: params.LocationPrefix, Metadata: params.Metadata,
 		},
-	})
+	}
+	if cfg.PoolLeaseDurationMS != 0 || cfg.PoolLeaseMaxAttempts != 0 {
+		durationMS := cfg.PoolLeaseDurationMS
+		if durationMS == 0 {
+			// Supplied lease settings without costs default to custom costs on the server.
+			// Keep max-attempts-only overrides on the planned entries' duration dimension.
+			durationMS = 100_000
+		}
+		request.Lease = &api.PoolPlanLease{
+			Costs: api.PoolPlanLeaseCosts{DurationP90MS: durationMS}, MaxAttempts: cfg.PoolLeaseMaxAttempts,
+		}
+	}
+	return client.PlanPool(ctx, request)
 }
 
 func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, output PlanOutput, template string) error {

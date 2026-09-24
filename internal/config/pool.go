@@ -15,6 +15,12 @@ func (c *Config) RequestSchedulerOIDCToken(ctx context.Context) (string, error) 
 func (c *Config) ValidateForPoolPlan() error {
 	c.validateAPI(schedulerOIDCClaims)
 	if c.PoolID == "" {
+		if c.PoolLeaseDurationMS < 0 {
+			c.errs.appendFieldError("pool-lease-duration-ms", "must be 0 (server default) or a positive millisecond budget")
+		}
+		if c.PoolLeaseMaxAttempts < 0 {
+			c.errs.appendFieldError("pool-lease-max-attempts", "must be 0 (server default) or a positive attempt limit")
+		}
 		if c.PoolKey == "" {
 			c.PoolKey = c.StepID
 		}

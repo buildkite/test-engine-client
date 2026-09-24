@@ -89,6 +89,46 @@ func TestResolvePoolConcurrentWorkers(t *testing.T) {
 	}`, string(accepted))
 }
 
+func TestResolvePoolLeaseOptions(t *testing.T) {
+	for _, tc := range []struct {
+		name, lease             string
+		durationMS, maxAttempts int
+	}{
+		{name: "server defaults"},
+		{name: "duration only", durationMS: 60_000, lease: `{"costs":{"duration_p90_ms":60000}}`},
+		{name: "max attempts only retains duration costs", maxAttempts: 25, lease: `{"costs":{"duration_p90_ms":100000},"max_attempts":25}`},
+		{name: "both", durationMS: 45_000, maxAttempts: 12, lease: `{"costs":{"duration_p90_ms":45000},"max_attempts":12}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var received map[string]json.RawMessage
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/filter_tests") {
+					io.WriteString(w, `{"tests":[]}`)
+					return
+				}
+				require.Equal(t, "/v2/organizations/buildkite/test-scheduler/pools/plan", r.URL.Path)
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+				w.WriteHeader(http.StatusAccepted)
+				io.WriteString(w, `{"id":"pool-1","state":"planning"}`)
+			}))
+			defer server.Close()
+			cfg := getConfig()
+			cfg.ServerBaseURL, cfg.PipelineSlug, cfg.PoolKey = server.URL, "pipeline", "rspec"
+			cfg.PoolLeaseDurationMS, cfg.PoolLeaseMaxAttempts = tc.durationMS, tc.maxAttempts
+			cfg.MaxRetries = 8
+			client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: cfg.OrganizationSlug})
+			_, err := ResolvePool(context.Background(), cfg, "", client)
+			require.NoError(t, err)
+			if tc.lease == "" {
+				require.NotContains(t, received, "lease")
+			} else {
+				require.JSONEq(t, tc.lease, string(received["lease"]))
+			}
+			require.NotContains(t, received, "attempt_policy", "local retries must not become Scheduler attempt policy")
+		})
+	}
+}
+
 func TestPoolPlanOutputsWithoutWaiting(t *testing.T) {
 	for _, output := range []PlanOutput{PlanOutputJSON, PlanOutputPipelineUpload} {
 		t.Run(fmt.Sprintf("output=%v", output), func(t *testing.T) {
@@ -136,7 +176,9 @@ func TestResolvePrecreatedPoolSnapshot(t *testing.T) {
 	}))
 	defer server.Close()
 	client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "acme"})
-	pool, err := ResolvePool(context.Background(), &config.Config{PoolID: "ready"}, "does-not-exist", client)
+	pool, err := ResolvePool(context.Background(), &config.Config{
+		PoolID: "ready", PoolLeaseDurationMS: 60_000, PoolLeaseMaxAttempts: 25,
+	}, "does-not-exist", client)
 	require.NoError(t, err)
 	ready, err := client.WaitForPool(context.Background(), pool.ID)
 	require.NoError(t, err)

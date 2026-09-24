@@ -40,6 +40,34 @@ func TestValidatePoolPlanIdentity(t *testing.T) {
 	}
 }
 
+func TestValidatePoolLeaseOptions(t *testing.T) {
+	for _, tc := range []struct {
+		name, poolID, wantError string
+		durationMS, maxAttempts int
+	}{
+		{name: "defaults"},
+		{name: "duration override", durationMS: 60_000},
+		{name: "max attempts override", maxAttempts: 25},
+		{name: "negative duration", durationMS: -1, wantError: "pool-lease-duration-ms"},
+		{name: "negative attempts", maxAttempts: -1, wantError: "pool-lease-max-attempts"},
+		{name: "existing pool ignores planning options", poolID: "pool-1", durationMS: 60_000, maxAttempts: 25},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := New()
+			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "token", "acme", "suite"
+			c.PoolID, c.PoolKey, c.TestRunner = tc.poolID, "shared", "rspec"
+			c.BuildID, c.PipelineSlug = "build", "pipeline"
+			c.PoolLeaseDurationMS, c.PoolLeaseMaxAttempts = tc.durationMS, tc.maxAttempts
+			err := c.ValidateForPoolPlan()
+			if tc.wantError != "" {
+				require.ErrorContains(t, err, tc.wantError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestPoolOIDCClaims(t *testing.T) {
 	// The fake agent returns its arguments instead of a token so we can inspect
 	// both the pool-plan initial mint and the worker refresh contract.

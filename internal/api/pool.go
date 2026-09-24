@@ -27,11 +27,21 @@ type Pool struct {
 }
 
 type PoolPlanParams struct {
-	Suite    string   `json:"suite"`
-	Pipeline string   `json:"pipeline"`
-	BuildID  string   `json:"build_id"`
-	Key      string   `json:"key"`
-	Plan     PoolPlan `json:"plan"`
+	Suite    string         `json:"suite"`
+	Pipeline string         `json:"pipeline"`
+	BuildID  string         `json:"build_id"`
+	Key      string         `json:"key"`
+	Plan     PoolPlan       `json:"plan"`
+	Lease    *PoolPlanLease `json:"lease,omitempty"`
+}
+
+type PoolPlanLease struct {
+	Costs       PoolPlanLeaseCosts `json:"costs"`
+	MaxAttempts int                `json:"max_attempts,omitempty"`
+}
+
+type PoolPlanLeaseCosts struct {
+	DurationP90MS int `json:"duration_p90_ms"`
 }
 
 // PoolPlan deliberately excludes Test Plan identifiers and lane-sizing fields.
