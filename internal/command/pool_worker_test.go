@@ -20,7 +20,6 @@ type fakePoolScheduler struct {
 	heartbeat func(context.Context) (time.Time, error)
 	complete  func(context.Context, []api.AttemptResult) error
 	release   func() error
-	get       func() (api.Pool, error)
 }
 
 func (f *fakePoolScheduler) AcquireLease(ctx context.Context, _ string) (api.LeaseResponse, error) {
@@ -36,12 +35,6 @@ func (f *fakePoolScheduler) CompleteLease(ctx context.Context, _, _ string, r []
 	return f.complete(ctx, r)
 }
 func (f *fakePoolScheduler) ReleaseLease(context.Context, string, string) error { return f.release() }
-func (f *fakePoolScheduler) GetPool(context.Context, string) (api.Pool, error) {
-	if f.get != nil {
-		return f.get()
-	}
-	return api.Pool{ID: "pool", State: "consuming", MutedTests: []plan.TestCase{}}, nil
-}
 
 func testLease() api.Lease {
 	return api.Lease{ID: "lease", ExpiresAt: time.Now().Add(time.Minute), Attempts: []api.LeaseAttempt{{ID: "original", SelectorType: "test_plan_test_case_v1", Selector: plan.TestCase{Format: "file", Path: "a"}}}}
@@ -214,11 +207,12 @@ func TestPoolWorkerReleaseVersusConservativeCompletion(t *testing.T) {
 				}
 				return nil
 			}}
+			state := "consuming"
 			if mode == "pool errored" {
-				f.get = func() (api.Pool, error) { return api.Pool{State: "errored"}, nil }
+				state = "errored"
 			}
 			done := make(chan error, 1)
-			go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+			go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, state) }()
 			if mode == "undispatched" || mode == "dispatched" {
 				batch := waitPoolBatch(t, s)
 				if mode == "dispatched" {

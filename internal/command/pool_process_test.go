@@ -307,6 +307,11 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == base:
 			gets++
+			if gets > 1 {
+				t.Error("worker fetched pool again before dispatch")
+				http.Error(w, "unexpected pool GET", http.StatusNotFound)
+				return
+			}
 			_, _ = io.WriteString(w, `{"id":"existing","state":"populating"}`)
 		case r.Method == http.MethodPost && r.URL.Path == base+"/leases":
 			acquisitions++
@@ -346,7 +351,7 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 	if err := PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
 		t.Fatal(err)
 	}
-	if gets != 2 || acquisitions != 3 || completions != 1 {
+	if gets != 1 || acquisitions != 3 || completions != 1 {
 		t.Fatalf("gets=%d acquisitions=%d completions=%d", gets, acquisitions, completions)
 	}
 	if strings.Count(logs.String(), "existing") != 1 || !strings.Contains(logs.String(), "Fetching supplied pool with ID existing") || !strings.Contains(logs.String(), "Pool resolved (state=populating)") || !strings.Contains(logs.String(), "Received batch b_1 result") {

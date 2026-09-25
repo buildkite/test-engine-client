@@ -19,7 +19,6 @@ type poolScheduler interface {
 	HeartbeatLease(context.Context, string, string) (time.Time, error)
 	CompleteLease(context.Context, string, string, []api.AttemptResult) error
 	ReleaseLease(context.Context, string, string) error
-	GetPool(context.Context, string) (api.Pool, error)
 }
 
 // All protocol callbacks are nonblocking; network and report work runs outside
@@ -246,17 +245,6 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		owners[i] = i
 	}
 	for round := 0; len(tests) > 0; round++ {
-		// Catch a pool error transition before every initial/retry dispatch.
-		current, e := client.GetPool(ctx, pool.ID)
-		if e != nil || current.State == "errored" || current.State == "consumed" {
-			if e == nil {
-				e = fmt.Errorf("pool became %s with active work", current.State)
-			}
-			for _, i := range owners {
-				results.broken[i] = true
-			}
-			return e
-		}
 		s.mu.Lock()
 		s.sequence++
 		s.retryRound = round
