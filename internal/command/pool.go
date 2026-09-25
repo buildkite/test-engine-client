@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/git"
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 )
@@ -65,6 +66,7 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 			request.Lease.Costs = &api.PoolPlanLeaseCosts{DurationP90MS: cfg.PoolLeaseDurationMS}
 		}
 	}
+	debug.Printf("Creating or reusing pool with key %s", cfg.PoolKey)
 	return client.PlanPool(ctx, request)
 }
 
@@ -79,6 +81,7 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 	if err != nil {
 		return err
 	}
+	debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
 	switch output {
 	case PlanOutputJSON:
 		return json.NewEncoder(planWriter).Encode(map[string]string{"BUILDKITE_TEST_ENGINE_POOL_ID": pool.ID})

@@ -756,6 +756,16 @@ func poolPlanCommandFlags() []cli.Flag {
 	return freshFlags(flags)
 }
 
+func poolExecCommandFlags() []cli.Flag {
+	flags := poolPlanCommandFlags()
+	return append(flags,
+		&cli.IntFlag{Name: "local-retry-count", Usage: "Additional local example executions before completing the original Scheduler attempt", Sources: cli.EnvVars("BUILDKITE_TEST_SCHEDULER_LOCAL_RETRY_COUNT")},
+		&cli.DurationFlag{Name: "runner-startup-timeout", Value: 5 * time.Minute, Usage: "Persistent runner handshake timeout (Go duration, e.g. 5m)"},
+		&cli.DurationFlag{Name: "runner-batch-timeout", Value: 10 * time.Minute, Usage: "Persistent runner batch timeout including report submission"},
+		&cli.DurationFlag{Name: "runner-shutdown-timeout", Value: 90 * time.Second, Usage: "Runner exit and collector flush grace period"},
+	)
+}
+
 var poolCommand = &cli.Command{
 	Name:  "pool",
 	Usage: "Run tests using shared Test Scheduler pools",
@@ -773,6 +783,13 @@ var poolCommand = &cli.Command{
 				}},
 			},
 		}},
+	}, {
+		Name:                      "exec",
+		Usage:                     "Execute Scheduler leases in one persistent runner",
+		ArgsUsage:                 "-- <persistent-runner> [arguments...]",
+		Action:                    poolExec,
+		DisableSliceFlagSeparator: true,
+		Flags:                     poolExecCommandFlags(),
 	}},
 }
 

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
@@ -251,6 +252,7 @@ func (h *host) handshake(w http.ResponseWriter, body []byte) {
 		default:
 			close(h.ready)
 		}
+		debug.Printf("Persistent runner connected")
 	}
 	response := SessionResponse{SessionID: h.session}
 	response.Poll.MaxWaitMS = 30000
@@ -300,6 +302,16 @@ func (h *host) pull(w http.ResponseWriter) {
 			if !h.formats[test.Format] {
 				h.fail(errors.New("batch selector not supported by runner"))
 				reject(w, 400, "unsupported selector format")
+				return
+			}
+		}
+		// Next only offers work. A rejected selector was never dispatched and
+		// must be released, not completed; this final handoff also lets the
+		// source fence delivery if it released the lease while we validated.
+		if source, ok := h.source.(DispatchSource); ok {
+			if err := source.Dispatched(copy); err != nil {
+				h.fail(err)
+				reply(w, 200, PullResponse{Type: "done", Reason: "error"})
 				return
 			}
 		}
