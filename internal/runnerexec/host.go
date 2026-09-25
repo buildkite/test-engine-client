@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
@@ -251,6 +252,7 @@ func (h *host) handshake(w http.ResponseWriter, body []byte) {
 		default:
 			close(h.ready)
 		}
+		debug.Printf("Persistent runner connected")
 	}
 	response := SessionResponse{SessionID: h.session}
 	response.Poll.MaxWaitMS = 30000
