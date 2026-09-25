@@ -132,6 +132,8 @@ func TestResolvePoolLeaseOptions(t *testing.T) {
 func TestPoolPlanOutputsWithoutWaiting(t *testing.T) {
 	for _, output := range []PlanOutput{PlanOutputJSON, PlanOutputPipelineUpload} {
 		t.Run(fmt.Sprintf("output=%v", output), func(t *testing.T) {
+			var logs bytes.Buffer
+			setDebugEnabled(t, &logs)
 			requests := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasSuffix(r.URL.Path, "/filter_tests") {
@@ -154,6 +156,12 @@ func TestPoolPlanOutputsWithoutWaiting(t *testing.T) {
 			setPipelineUploadCommand(t, "sh", "-c", `printf '%s:%s' "$BUILDKITE_TEST_ENGINE_POOL_ID" "$0"`)
 			require.NoError(t, PoolPlan(context.Background(), cfg, "", output, "pipeline.yml"))
 			require.Equal(t, 1, requests)
+			filtered := strings.Index(logs.String(), "No filtered selector-backed files found")
+			creating := strings.Index(logs.String(), "Creating or reusing pool with key rspec")
+			resolved := strings.Index(logs.String(), "Pool existing resolved (state=planning)")
+			require.GreaterOrEqual(t, filtered, 0, logs.String())
+			require.Greater(t, creating, filtered, logs.String())
+			require.Greater(t, resolved, creating, logs.String())
 			if output == PlanOutputJSON {
 				require.JSONEq(t, `{"BUILDKITE_TEST_ENGINE_POOL_ID":"existing"}`, buf.String())
 			} else {

@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/git"
+	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
 	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/urfave/cli/v3"
 )
@@ -78,6 +79,28 @@ func poolPlan(ctx context.Context, cmd *cli.Command) error {
 		output = command.PlanOutputPipelineUpload
 	}
 	return command.PoolPlan(ctx, &cfg, cmd.String("files"), output, cmd.String("pipeline-upload"))
+}
+
+func poolExec(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() == 0 {
+		return fmt.Errorf("pool exec requires -- <persistent-runner> [arguments...]")
+	}
+	if cmd.Int("local-retry-count") < 0 {
+		return fmt.Errorf("local-retry-count must not be negative")
+	}
+	opts := runnerexec.Options{StartupTimeout: cmd.Duration("runner-startup-timeout"), BatchTimeout: cmd.Duration("runner-batch-timeout"), ShutdownTimeout: cmd.Duration("runner-shutdown-timeout")}
+	if opts.StartupTimeout <= 0 || opts.BatchTimeout <= 0 || opts.ShutdownTimeout <= 0 {
+		return fmt.Errorf("runner timeouts must be positive")
+	}
+	debug.SetDebug(cmd.Root().Bool("debug"))
+	debug.SetOutput(os.Stderr)
+	if err := applyPlanRequestContext(cmd); err != nil {
+		return err
+	}
+	if err := cfg.ValidateForPoolPlan(); err != nil {
+		return fmt.Errorf("bktec pool exec: invalid configuration: %w", err)
+	}
+	return command.PoolExec(ctx, &cfg, cmd.String("files"), cmd.Args().Slice(), cmd.Int("local-retry-count"), opts)
 }
 
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {

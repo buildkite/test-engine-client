@@ -98,6 +98,7 @@ func TestWaitForPool(t *testing.T) {
 		wantMutedNil bool
 	}{
 		{"planning then snapshot", []string{`{"id":"p","state":"planning"}`, `{"id":"p","state":"consuming","muted_tests":[{"scope":"User","name":"works","path":"user_spec.rb:42"}]}`}, "", "consuming", 1, false},
+		{"planning then populating", []string{`{"id":"p","state":"planning"}`, `{"id":"p","state":"populating"}`}, "", "populating", 0, true},
 		{"empty selected plan", []string{`{"id":"p","state":"consumed","muted_tests":[]}`}, "", "consumed", 0, false},
 		{"missing muted tests on ready pool", []string{`{"id":"p","state":"consuming"}`}, "", "consuming", 0, true},
 		{"null muted tests on consumed pool", []string{`{"id":"p","state":"consumed","muted_tests":null}`}, "", "consumed", 0, true},
