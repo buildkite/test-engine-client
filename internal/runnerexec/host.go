@@ -303,6 +303,16 @@ func (h *host) pull(w http.ResponseWriter) {
 				return
 			}
 		}
+		// Next only offers work. A rejected selector was never dispatched and
+		// must be released, not completed; this final handoff also lets the
+		// source fence delivery if it released the lease while we validated.
+		if source, ok := h.source.(DispatchSource); ok {
+			if err := source.Dispatched(copy); err != nil {
+				h.fail(err)
+				reply(w, 200, PullResponse{Type: "done", Reason: "error"})
+				return
+			}
+		}
 		h.outstanding = &copy
 		h.issued[copy.ID] = true
 		h.deadline = time.Now().Add(time.Duration(copy.TimeoutMS) * time.Millisecond)
