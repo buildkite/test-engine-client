@@ -89,6 +89,7 @@ func (c *Client) CompleteLease(ctx context.Context, poolID, leaseID string, resu
 		return errors.New("invalid completion response")
 	}
 	for i, got := range response.Leases[0].Attempts {
+		// #nosec G602 -- the response and request lengths were checked above.
 		if got.ID != results[i].AttemptID || got.Result != results[i].Result || (got.Status != "completed" && got.Status != "already_completed") {
 			return errors.New("invalid completion acknowledgement")
 		}
@@ -173,7 +174,7 @@ func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, bod
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return fmt.Errorf("Scheduler retry: %w", ctx.Err())
+			return fmt.Errorf("scheduler retry: %w", ctx.Err())
 		case <-timer.C:
 		}
 		if delay < 4*time.Second {

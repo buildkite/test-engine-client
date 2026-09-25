@@ -30,7 +30,7 @@ type Client struct {
 
 // ClientConfig is the configuration for the test plan API client.
 type ClientConfig struct {
-	AccessToken      string
+	AccessToken string
 	// TokenProvider supplies a bearer token per request so long-running pool
 	// workers can refresh suite-scoped OIDC tokens before they expire. When nil,
 	// existing callers continue using AccessToken unchanged.

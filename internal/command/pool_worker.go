@@ -100,6 +100,7 @@ func (s *poolSource) work(ctx context.Context, client poolScheduler, pool api.Po
 	for ctx.Err() == nil {
 		// Spread simultaneous workers' lease starts (and thus similarly sized
 		// batches' finishes) without holding a completed lease for a random delay.
+		// #nosec G404 -- lease jitter is not used for security.
 		timer := time.NewTimer(time.Duration(rand.IntN(250)) * time.Millisecond)
 		select {
 		case <-ctx.Done():

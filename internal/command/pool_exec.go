@@ -66,6 +66,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	source := newPoolSource(cancel)
 	done := make(chan struct{})
 	go func() { defer close(done); source.work(ctx, client, pool, retries) }()
+	// #nosec G204 G702 -- the runner executable and arguments are explicitly supplied by the CLI user after --.
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
