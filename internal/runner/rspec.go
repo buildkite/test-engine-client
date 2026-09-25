@@ -107,19 +107,7 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 	}
 
 	for _, example := range report.Examples {
-		var status TestStatus
-		switch example.Status {
-		case "failed":
-			status = TestStatusFailed
-		case "passed":
-			status = TestStatusPassed
-		case "pending":
-			status = TestStatusSkipped
-		default:
-			status = TestStatusUnknown
-		}
-
-		result.RecordTestResult(mapExampleToTestCase(example), status)
+		result.RecordTestResult(mapExampleToTestCase(example), rspecExampleStatus(example.Status))
 	}
 
 	if report.Summary.ErrorsOutsideOfExamplesCount > 0 {
@@ -141,6 +129,22 @@ type RspecExample struct {
 	RunTime         float64 `json:"run_time"`
 }
 
+// PrimarySelector is the spec file RSpec ran, which can differ from file_path
+// when an example is defined in a shared-examples file. RSpec IDs end in a
+// numeric example-group location such as [1:2:1].
+func (e RspecExample) PrimarySelector() string {
+	start := strings.LastIndexByte(e.ID, '[')
+	if start > 0 && strings.HasSuffix(e.ID, "]") && start+1 < len(e.ID)-1 {
+		for _, c := range e.ID[start+1 : len(e.ID)-1] {
+			if c != ':' && (c < '0' || c > '9') {
+				return e.FilePath
+			}
+		}
+		return e.ID[:start]
+	}
+	return e.FilePath
+}
+
 // RspecReport is the structure for Rspec JSON report.
 type RspecReport struct {
 	Version  string         `json:"version"`
@@ -155,17 +159,77 @@ type RspecReport struct {
 }
 
 func (r Rspec) ParseReport(path string) (RspecReport, error) {
-	var report RspecReport
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return RspecReport{}, fmt.Errorf("failed to read rspec output: %v", err)
 	}
+	return ParseRspecReport(data)
+}
 
+// ParseRspecReport only decodes RSpec JSON. Run reads it from a file and records
+// its examples in a RunResult; the persistent batch path decodes inline bytes
+// and maps them to per-test results for pool accounting instead.
+func ParseRspecReport(data []byte) (RspecReport, error) {
+	var report RspecReport
 	if err := json.Unmarshal(data, &report); err != nil {
 		return RspecReport{}, fmt.Errorf("failed to parse rspec output: %s", err)
 	}
 
 	return report, nil
+}
+
+func rspecExampleStatus(status string) TestStatus {
+	switch status {
+	case "passed":
+		return TestStatusPassed
+	case "failed":
+		return TestStatusFailed
+	case "pending":
+		return TestStatusSkipped
+	default:
+		return TestStatusUnknown
+	}
+}
+
+// parseRSpecBatchReport handles a persistent runner's inline report. Unlike
+// Rspec.Run, it does not execute RSpec or update a RunResult: it validates the
+// report and maps examples to canonical selectors for lease matching/retries.
+func parseRSpecBatchReport(data []byte) (ParsedReport, error) {
+	report, err := ParseRspecReport(data)
+	if err != nil {
+		return ParsedReport{}, err
+	}
+	var shape struct {
+		Examples *json.RawMessage `json:"examples"`
+		Summary  *struct {
+			ExampleCount *int `json:"example_count"`
+		} `json:"summary"`
+	}
+	if json.Unmarshal(data, &shape) != nil || shape.Examples == nil || shape.Summary == nil || shape.Summary.ExampleCount == nil || report.Summary.ExampleCount != len(report.Examples) {
+		return ParsedReport{}, fmt.Errorf("incomplete RSpec report or mismatched example count")
+	}
+	parsed := ParsedReport{ErrorsOutsideTests: report.Summary.ErrorsOutsideOfExamplesCount != 0}
+	for _, example := range report.Examples {
+		status := rspecExampleStatus(example.Status)
+		if status == TestStatusUnknown {
+			return ParsedReport{}, fmt.Errorf("unknown RSpec example status %q", example.Status)
+		}
+		caseResult := mapExampleToTestCase(example)
+		caseResult.Identifier = strings.TrimPrefix(caseResult.Identifier, "./")
+		caseResult.Path = strings.TrimPrefix(caseResult.Path, "./")
+		location := ""
+		if example.FilePath != "" && example.LineNumber > 0 {
+			location = fmt.Sprintf("%s:%d", strings.TrimPrefix(example.FilePath, "./"), example.LineNumber)
+		}
+		if caseResult.Path == "" {
+			caseResult.Path = location
+		}
+		if caseResult.Path == "" {
+			return ParsedReport{}, fmt.Errorf("RSpec example has no runnable ID or file:line")
+		}
+		parsed.Tests = append(parsed.Tests, ReportedTest{TestCase: caseResult, Status: status, Selector: strings.TrimPrefix(example.PrimarySelector(), "./"), Location: location})
+	}
+	return parsed, nil
 }
 
 // CommandNameAndArgs replaces the "{{testExamples}}" placeholder in the test command with the test cases.
