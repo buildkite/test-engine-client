@@ -59,6 +59,12 @@ type Config struct {
 	OTLPRelayUpstreamEndpoint string `json:"-"`
 	// OrganizationSlug is the slug of the organization.
 	OrganizationSlug string `json:"-"`
+	// Pool identity is shared across workers and independent of local retries.
+	PipelineSlug         string `json:"-"`
+	PoolID               string `json:"-"`
+	PoolKey              string `json:"-"`
+	PoolLeaseDurationMS  int    `json:"-"`
+	PoolLeaseMaxAttempts int    `json:"-"`
 	// Output is the local file path for the export tarball. If set, skip S3 upload.
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.

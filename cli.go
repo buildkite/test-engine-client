@@ -723,11 +723,65 @@ func planCommandFlags() []cli.Flag {
 	return freshFlags(flags)
 }
 
+var poolLeaseDurationFlag = &cli.IntFlag{
+	Name: "pool-lease-duration-ms", Usage: "Duration budget per lease in milliseconds (0 uses the server default)",
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_LEASE_DURATION_MS"), Destination: &cfg.PoolLeaseDurationMS,
+}
+
+var poolLeaseMaxAttemptsFlag = &cli.IntFlag{
+	Name: "pool-lease-max-attempts", Usage: "Maximum test attempts per lease (0 uses the server default; not local retries)",
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_LEASE_MAX_ATTEMPTS"), Destination: &cfg.PoolLeaseMaxAttempts,
+}
+
+func poolPlanCommandFlags() []cli.Flag {
+	flags := []cli.Flag{
+		filesFlag, tagFiltersFlag, accessTokenFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
+		&cli.StringFlag{
+			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec; pool plan rejects it)",
+			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,
+		},
+		&cli.StringFlag{
+			Name: "pool-key", Usage: "Shared pool key within this build (defaults to BUILDKITE_STEP_ID)",
+			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_KEY"), Destination: &cfg.PoolKey,
+		},
+		&cli.StringFlag{
+			Name: "pipeline-slug", Usage: "Buildkite pipeline slug",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_SLUG"), Destination: &cfg.PipelineSlug,
+		},
+	}
+	flags = append(flags, buildEnvironmentFlags...)
+	flags = append(flags, suiteSlugFlag, baseURLFlag, oidcFlag, oidcLifetimeFlag)
+	flags = append(flags, runnerEnvironmentFlags...)
+	flags = append(flags, previewSelectionFlags()...)
+	return freshFlags(flags)
+}
+
+var poolCommand = &cli.Command{
+	Name:  "pool",
+	Usage: "Run tests using shared Test Scheduler pools",
+	Commands: []*cli.Command{{
+		Name: "plan", Usage: "Fetch or create a shared pool without waiting for planning to finish",
+		Action: poolPlan, DisableSliceFlagSeparator: true,
+		Flags: poolPlanCommandFlags(),
+		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{{
+			Required: true, Category: "PLAN OUTPUT",
+			Flags: [][]cli.Flag{
+				{freshFlag(jsonFlag)},
+				{&cli.StringFlag{
+					Name:  "pipeline-upload",
+					Usage: "Upload `template.yml` with BUILDKITE_TEST_ENGINE_POOL_ID available to the template",
+				}},
+			},
+		}},
+	}},
+}
+
 var cliCommand = &cli.Command{
 	Name:  "bktec",
 	Usage: "Buildkite Test Engine Client",
 	Flags: []cli.Flag{versionFlag, debugFlag},
 	Commands: []*cli.Command{
+		poolCommand,
 		{
 			Name:                      "run",
 			Usage:                     "Run tests",
