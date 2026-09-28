@@ -2,12 +2,29 @@ package main
 
 import (
 	"context"
+	"errors"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli/v3"
 )
+
+func TestLogErrorAndExitPreservesCLIExitCode(t *testing.T) {
+	if os.Getenv("BKTEC_TEST_LOG_ERROR_AND_EXIT") == "1" {
+		logErrorAndExit(cli.Exit("test failure", 1))
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestLogErrorAndExitPreservesCLIExitCode$")
+	cmd.Env = append(os.Environ(), "BKTEC_TEST_LOG_ERROR_AND_EXIT=1")
+	err := cmd.Run()
+	var exitError *exec.ExitError
+	if !errors.As(err, &exitError) || exitError.ExitCode() != 1 {
+		t.Fatalf("logErrorAndExit(cli.Exit(..., 1)) error = %v, want process exit 1", err)
+	}
+}
 
 func TestRunInvalidConfigurationError(t *testing.T) {
 	cfg = config.New()

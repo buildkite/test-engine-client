@@ -30,7 +30,11 @@ type Client struct {
 
 // ClientConfig is the configuration for the test plan API client.
 type ClientConfig struct {
-	AccessToken      string
+	AccessToken string
+	// TokenProvider supplies a bearer token per request so long-running pool
+	// workers can refresh suite-scoped OIDC tokens before they expire. When nil,
+	// existing callers continue using AccessToken unchanged.
+	TokenProvider    func(context.Context) (string, error)
 	UploadBaseURL    string
 	OrganizationSlug string
 	ServerBaseURL    string
@@ -38,7 +42,8 @@ type ClientConfig struct {
 
 // authTransport is a middleware for the HTTP client.
 type authTransport struct {
-	accessToken string
+	accessToken   string
+	tokenProvider func(context.Context) (string, error)
 }
 
 // RoundTrip adds the Authorization and User-Agent headers to all requests made
@@ -46,7 +51,15 @@ type authTransport struct {
 // unchanged, allowing callers to supply a different auth scheme (e.g. Token).
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Header.Get("Authorization") == "" {
-		req.Header.Set("Authorization", "Bearer "+t.accessToken)
+		token := t.accessToken
+		if t.tokenProvider != nil {
+			var err error
+			token, err = t.tokenProvider(req.Context())
+			if err != nil {
+				return nil, err
+			}
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	req.Header.Set("User-Agent", fmt.Sprintf(
 		"Buildkite Test Engine Client/%s (%s/%s)",
@@ -60,7 +73,8 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func NewClient(cfg ClientConfig) *Client {
 	httpClient := &http.Client{
 		Transport: &authTransport{
-			accessToken: cfg.AccessToken,
+			accessToken:   cfg.AccessToken,
+			tokenProvider: cfg.TokenProvider,
 		},
 	}
 

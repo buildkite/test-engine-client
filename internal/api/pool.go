@@ -14,8 +14,8 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
-// Pool is the full Scheduler representation, not a lease response. Pool state,
-// rather than the presence of MutedTests, indicates planning readiness.
+// Pool is the full Scheduler representation, not a lease response. A nil
+// MutedTests means the immutable snapshot is absent; an empty snapshot is [].
 type Pool struct {
 	ID         string          `json:"id"`
 	State      string          `json:"state"`
@@ -142,8 +142,9 @@ func poolFailure(pool Pool) error {
 	return fmt.Errorf("test pool %s is errored: %s", pool.ID, message)
 }
 
-// WaitForPool always fetches the full representation, even for a pre-created
-// pool. Callers must retain its muted tests for dispatch; leases don't contain them.
+// WaitForPool polls while planning and returns the full representation once
+// leasing may begin. Incrementally populated pools can lease before population
+// finishes; server-planned pools publish entries and muted tests atomically.
 // A consumed pool is terminal and needs no lease, including an empty plan.
 func (c *Client) WaitForPool(ctx context.Context, id string) (Pool, error) {
 	delay := time.Second
@@ -153,8 +154,8 @@ func (c *Client) WaitForPool(ctx context.Context, id string) (Pool, error) {
 			return Pool{}, err
 		}
 		switch pool.State {
-		case "planning", "populating":
-		case "consuming", "consumed":
+		case "planning":
+		case "populating", "consuming", "consumed":
 			return pool, nil
 		default:
 			return Pool{}, fmt.Errorf("test pool %s has unsupported state %q", id, pool.State)

@@ -491,3 +491,41 @@ func TestRspecGetExamples_WithSharedExamples(t *testing.T) {
 		t.Errorf("Rspec.GetExamples(%q) diff (-got +want):\n%s", files, diff)
 	}
 }
+
+func TestParseNativeRSpecReport(t *testing.T) {
+	got, err := ParseNativeReport("rspec-json", []byte(`{"examples":[
+		{"id":"./spec/owning_spec.rb[1:1]","file_path":"./spec/shared.rb","line_number":12,"description":"works","full_description":"Shared works","status":"pending"},
+		{"file_path":"./spec/fallback_spec.rb","line_number":7,"description":"fails","full_description":"Fallback fails","status":"failed"}
+	],"summary":{"example_count":2,"errors_outside_of_examples_count":1}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ParsedReport{ErrorsOutsideTests: true, Tests: []ReportedTest{
+		{TestCase: plan.TestCase{Identifier: "spec/owning_spec.rb[1:1]", Path: "spec/owning_spec.rb[1:1]", Name: "works", Scope: "Shared"}, Status: TestStatusSkipped, Selector: "spec/owning_spec.rb", Location: "spec/shared.rb:12"},
+		{TestCase: plan.TestCase{Path: "spec/fallback_spec.rb:7", Name: "fails", Scope: "Fallback"}, Status: TestStatusFailed, Selector: "spec/fallback_spec.rb", Location: "spec/fallback_spec.rb:7"},
+	}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("parsed report (-want +got):\n%s", diff)
+	}
+	if _, err := ParseNativeReport("not-rspec-json", []byte(`{"examples":[],"summary":{"example_count":0}}`)); err == nil {
+		t.Fatal("unsupported report format accepted")
+	}
+}
+
+func TestRspecExamplePrimarySelector(t *testing.T) {
+	for _, tc := range []struct {
+		name, id, filePath, want string
+	}{
+		{"shared example", "./spec/specs_with_shared_examples_spec.rb[1:1:1]", "./spec/shared_examples.rb", "./spec/specs_with_shared_examples_spec.rb"},
+		{"ordinary example", "./spec/a_spec.rb[1:2]", "./spec/a_spec.rb", "./spec/a_spec.rb"},
+		{"bracket in filename", "./spec/a[variant]_spec.rb[1:2]", "./spec/a[variant]_spec.rb", "./spec/a[variant]_spec.rb"},
+		{"missing id", "", "./spec/a_spec.rb", "./spec/a_spec.rb"},
+		{"invalid id", "./spec/a_spec.rb[not-a-location]", "./spec/a_spec.rb", "./spec/a_spec.rb"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := (RspecExample{ID: tc.id, FilePath: tc.filePath}).PrimarySelector(); got != tc.want {
+				t.Fatalf("primary selector=%q, want %q", got, tc.want)
+			}
+		})
+	}
+}

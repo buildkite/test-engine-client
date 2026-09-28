@@ -70,6 +70,12 @@ type Source interface {
 	Unresolved(Batch, error)
 }
 
+// DispatchSource optionally observes the dispatch boundary after host validation
+// but before a batch can reach the runner. Returning an error fences dispatch.
+type DispatchSource interface {
+	Dispatched(Batch) error
+}
+
 // Options durations are Go durations; wire durations are integer milliseconds.
 // Zero selects provisional defaults; negative durations are invalid.
 type Options struct {
