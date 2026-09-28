@@ -101,14 +101,14 @@ func (s *poolSource) outcome() error {
 }
 
 func reportedTestKey(test runner.ReportedTest) string {
-	if test.TestCase.Scope != "" || test.TestCase.Name != "" {
-		return strings.Join([]string{test.Selector, test.TestCase.Scope, test.TestCase.Name}, "\x00")
-	}
 	if test.TestCase.Identifier != "" {
 		return test.TestCase.Identifier
 	}
 	if test.TestCase.Path != "" {
 		return test.TestCase.Path
+	}
+	if test.TestCase.Scope != "" || test.TestCase.Name != "" {
+		return strings.Join([]string{test.Selector, test.TestCase.Scope, test.TestCase.Name}, "\x00")
 	}
 	return test.Location
 }

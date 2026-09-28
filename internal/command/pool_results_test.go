@@ -203,6 +203,31 @@ func TestPoolSummaryReportsOnlyFinalFailuresAndErroredAttempts(t *testing.T) {
 	}
 }
 
+func TestPoolSummaryKeepsSameNamedExamplesWithDifferentRunnableIDs(t *testing.T) {
+	tests := []runner.ReportedTest{
+		{TestCase: plan.TestCase{Identifier: "spec/a_spec.rb[1:1]", Path: "spec/a_spec.rb[1:1]", Scope: "Suite", Name: "same name"}, Selector: "spec/a_spec.rb"},
+		{TestCase: plan.TestCase{Identifier: "spec/a_spec.rb[1:2]", Path: "spec/a_spec.rb[1:2]", Scope: "Suite", Name: "same name"}, Selector: "spec/a_spec.rb"},
+	}
+	if reportedTestKey(tests[0]) == reportedTestKey(tests[1]) {
+		t.Fatal("distinct runnable examples share a summary key")
+	}
+}
+
+func TestPoolSummaryUsesOwningIdentifierForSharedExample(t *testing.T) {
+	shared := runner.ReportedTest{
+		TestCase: plan.TestCase{Identifier: "spec/owning_spec.rb[1:1]", Path: "spec/owning_spec.rb[1:1]", Scope: "Shared", Name: "works"},
+		Selector: "spec/owning_spec.rb",
+		Location: "spec/shared_examples.rb:12",
+	}
+	if got, want := reportedTestDescription(shared), "Shared works (spec/owning_spec.rb[1:1])"; got != want {
+		t.Fatalf("description=%q, want %q", got, want)
+	}
+	shared.Location = ""
+	if got, want := reportedTestDescription(shared), "Shared works (spec/owning_spec.rb[1:1])"; got != want {
+		t.Fatalf("description without location=%q, want %q", got, want)
+	}
+}
+
 func TestPoolTokenRefresh(t *testing.T) {
 	calls := 0
 	provider := refreshingPoolToken("", func(context.Context) (string, error) {

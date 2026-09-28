@@ -143,16 +143,33 @@ func printPoolSummary(w io.Writer, source *poolSource) {
 
 func reportedTestDescription(test runner.ReportedTest) string {
 	name := strings.TrimSpace(test.TestCase.Scope + " " + test.TestCase.Name)
+	reference := reportedTestReference(test)
 	if name == "" {
-		if test.Location != "" {
-			return test.Location
-		}
-		return test.TestCase.Path
+		return reference
 	}
-	if test.Location == "" {
+	if reference == "" {
 		return name
 	}
-	return fmt.Sprintf("%s (%s)", name, test.Location)
+	return fmt.Sprintf("%s (%s)", name, reference)
+}
+
+func reportedTestReference(test runner.ReportedTest) string {
+	if test.Location != "" {
+		locationFile := test.Location
+		if colon := strings.LastIndexByte(locationFile, ':'); colon >= 0 {
+			locationFile = locationFile[:colon]
+		}
+		if strings.TrimPrefix(locationFile, "./") == strings.TrimPrefix(test.Selector, "./") {
+			return test.Location
+		}
+	}
+	if test.TestCase.Identifier != "" {
+		return test.TestCase.Identifier
+	}
+	if test.TestCase.Path != "" {
+		return test.TestCase.Path
+	}
+	return test.Location
 }
 
 func attemptSelector(test plan.TestCase) string {
