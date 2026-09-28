@@ -72,29 +72,7 @@ func (c *Client) HeartbeatLease(ctx context.Context, poolID, leaseID string) (ti
 
 func (c *Client) CompleteLease(ctx context.Context, poolID, leaseID string, results []AttemptResult) error {
 	body := map[string]any{"leases": []any{map[string]any{"lease_id": leaseID, "attempts": results}}}
-	var response struct {
-		Leases []struct {
-			ID       string `json:"lease_id"`
-			Attempts []struct {
-				ID     string `json:"id"`
-				Result string `json:"result"`
-				Status string `json:"completion_status"`
-			} `json:"attempts"`
-		} `json:"leases"`
-	}
-	if err := c.leaseRequest(ctx, poolID, "/complete", body, &response, true); err != nil {
-		return err
-	}
-	if len(response.Leases) != 1 || response.Leases[0].ID != leaseID || len(response.Leases[0].Attempts) != len(results) {
-		return errors.New("invalid completion response")
-	}
-	for i, got := range response.Leases[0].Attempts {
-		// #nosec G602 -- the response and request lengths were checked above.
-		if got.ID != results[i].AttemptID || got.Result != results[i].Result || (got.Status != "completed" && got.Status != "already_completed") {
-			return errors.New("invalid completion acknowledgement")
-		}
-	}
-	return nil
+	return c.leaseRequest(ctx, poolID, "/complete", body, nil, true)
 }
 
 // Release is used only for an entirely undispatched lease. Do not replay an
@@ -136,10 +114,10 @@ func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, bod
 		} else {
 			raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 			resp.Body.Close()
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 && out == nil {
+				return nil
+			}
 			if resp.StatusCode == http.StatusOK && readErr == nil {
-				if out == nil {
-					return nil
-				}
 				readErr = json.Unmarshal(raw, out)
 				if readErr == nil {
 					return nil

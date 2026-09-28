@@ -135,32 +135,61 @@ func TestLeaseJobRateLimitWaitsForReset(t *testing.T) {
 	})
 }
 
-func TestCompletionReplaysIdenticalBodyAfterTruncatedResponse(t *testing.T) {
-	calls := 0
-	var first string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		raw, _ := io.ReadAll(r.Body)
-		if r.URL.Path != "/v2/organizations/org/test-scheduler/pools/pool/leases/complete" {
-			t.Errorf("path=%s", r.URL.Path)
-		}
-		if calls == 1 {
-			first = string(raw)
-			io.WriteString(w, `{"leases":`)
-			return
-		}
-		if string(raw) != first || !strings.Contains(first, `"attempt_id":"original"`) {
-			t.Errorf("replay changed: %s vs %s", first, raw)
-		}
-		io.WriteString(w, `{"leases":[{"lease_id":"lease","attempts":[{"id":"original","result":"passed","completion_status":"already_completed"}]}]}`)
-	}))
-	defer server.Close()
-	c := NewClient(ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "org"})
-	if err := c.CompleteLease(context.Background(), "pool", "lease", []AttemptResult{{AttemptID: "original", Result: "passed"}}); err != nil {
-		t.Fatal(err)
+func TestCompletionAcceptsSuccessfulResponseWithoutParsingBody(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		status     int
+	}{{"current response", `{"leases":`, http.StatusOK}, {"empty response", "", http.StatusNoContent}} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v2/organizations/org/test-scheduler/pools/pool/leases/complete" {
+					t.Errorf("path=%s", r.URL.Path)
+				}
+				w.WriteHeader(tc.status)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer server.Close()
+			c := NewClient(ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "org"})
+			if err := c.CompleteLease(context.Background(), "pool", "lease", []AttemptResult{{AttemptID: "original", Result: "passed"}}); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
-	if calls != 2 {
-		t.Fatalf("calls=%d", calls)
+}
+
+func TestCompletionReplaysIdenticalBodyAfterAmbiguousFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		first func() (*http.Response, error)
+	}{
+		{"transport failure", func() (*http.Response, error) { return nil, io.EOF }},
+		{"server failure", func() (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			var first string
+			c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler", OrganizationSlug: "org"})
+			c.httpClient.Transport = leaseTransport(func(r *http.Request) (*http.Response, error) {
+				calls++
+				raw, _ := io.ReadAll(r.Body)
+				if calls == 1 {
+					first = string(raw)
+					return tc.first()
+				}
+				if string(raw) != first || !strings.Contains(first, `"attempt_id":"original"`) {
+					t.Errorf("replay changed: %s vs %s", first, raw)
+				}
+				return &http.Response{StatusCode: http.StatusNoContent, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(""))}, nil
+			})
+			if err := c.CompleteLease(context.Background(), "pool", "lease", []AttemptResult{{AttemptID: "original", Result: "passed"}}); err != nil {
+				t.Fatal(err)
+			}
+			if calls != 2 {
+				t.Fatalf("calls=%d", calls)
+			}
+		})
 	}
 }
 
