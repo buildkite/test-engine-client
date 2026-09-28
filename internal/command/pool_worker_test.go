@@ -189,6 +189,54 @@ func TestPoolWorkerOutcomeDistinguishesFailedAndErroredAttempts(t *testing.T) {
 	}
 }
 
+func TestPoolWorkerRejectsOverlappingFileAndExampleAttempts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s := newPoolSource(cancel)
+	lease := api.Lease{
+		ID:        "lease",
+		ExpiresAt: time.Now().Add(time.Minute),
+		Attempts: []api.LeaseAttempt{
+			{
+				ID: "file", SelectorType: "test_plan_test_case_v1",
+				Selector: plan.TestCase{Format: "file", Path: "spec/file_spec.rb"},
+			},
+			{
+				ID: "example", SelectorType: "test_plan_test_case_v1",
+				Selector: plan.TestCase{Format: "example", Identifier: "./spec/file_spec.rb[1:1]", Path: "./spec/file_spec.rb[1:1]", Scope: "File", Name: "passes"},
+			},
+		},
+	}
+	completed := false
+	f := &fakePoolScheduler{
+		complete: func(_ context.Context, results []api.AttemptResult) error {
+			want := []api.AttemptResult{{AttemptID: "file", Result: "errored"}, {AttemptID: "example", Result: "errored"}}
+			if len(results) != len(want) || results[0] != want[0] || results[1] != want[1] {
+				t.Errorf("results=%v, want %v", results, want)
+			}
+			completed = true
+			return nil
+		},
+		release: func() error { t.Error("dispatched lease released"); return nil },
+	}
+	done := make(chan error, 1)
+	go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+	batch := waitPoolBatch(t, s)
+	if len(batch.Tests) != 2 || batch.Tests[0].Format != "file" || batch.Tests[1].Format != "example" {
+		t.Fatalf("batch tests=%v", batch.Tests)
+	}
+	if err := s.Dispatched(*batch); err != nil {
+		t.Fatal(err)
+	}
+	s.Accepted(*batch, poolReport(`[
+{"id":"./spec/file_spec.rb[1:1]","file_path":"./spec/file_spec.rb","status":"passed","description":"passes","full_description":"File passes"},
+{"id":"./spec/file_spec.rb[1:2]","file_path":"./spec/file_spec.rb","status":"failed","description":"fails","full_description":"File fails"}
+]`, 2, 0))
+	if err := <-done; err != nil || !completed {
+		t.Fatalf("accounting error=%v completed=%v", err, completed)
+	}
+}
+
 func TestPoolWorkerReleaseVersusConservativeCompletion(t *testing.T) {
 	for _, mode := range []string{"undispatched", "dispatched", "malformed", "pool errored"} {
 		t.Run(mode, func(t *testing.T) {
