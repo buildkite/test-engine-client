@@ -131,8 +131,11 @@ func logErrorAndExit(err error) {
 	if errors.As(err, &exitError) {
 		// If error wraps an exitError exit with the specified code ...
 		os.Exit(exitError.ExitCode())
-	} else {
-		// otherwise exit code 16
-		os.Exit(16)
 	}
+	var exitCoder cli.ExitCoder
+	if errors.As(err, &exitCoder) {
+		os.Exit(exitCoder.ExitCode())
+	}
+	// Otherwise exit code 16.
+	os.Exit(16)
 }

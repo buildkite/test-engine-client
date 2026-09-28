@@ -2,6 +2,7 @@ package command
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
@@ -37,6 +38,7 @@ func matchesReportedTest(dispatched plan.TestCase, reported runner.ReportedTest)
 	if dispatched.Format == plan.TestCaseFormatSelector {
 		target = dispatched.Value
 	}
+	target = strings.TrimPrefix(target, "./")
 	if dispatched.Format != plan.TestCaseFormatExample {
 		if target != "" && target == reported.Selector {
 			return true

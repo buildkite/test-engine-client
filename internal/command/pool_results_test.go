@@ -59,6 +59,19 @@ func TestPoolResultsSharedExampleBelongsToOwningSpec(t *testing.T) {
 	}
 }
 
+func TestPoolResultsMatchCanonicalFileSelectors(t *testing.T) {
+	for _, test := range []plan.TestCase{
+		{Format: "file", Path: "./spec/a_spec.rb"},
+		{Format: "selector", Value: "./spec/a_spec.rb"},
+	} {
+		r := newPoolResults([]api.LeaseAttempt{{ID: "attempt", Selector: test}}, nil)
+		r.absorb([]plan.TestCase{test}, []int{0}, poolReport(`[{"id":"./spec/a_spec.rb[1:1]","file_path":"./spec/a_spec.rb","status":"passed"}]`, 1, 0))
+		if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "attempt", Result: "passed"}}) {
+			t.Fatalf("%s target with ./ prefix did not match canonical report selector: %v", test.Format, got)
+		}
+	}
+}
+
 func TestPoolResultMatchesExampleByLocationWithID(t *testing.T) {
 	test := plan.TestCase{Format: "example", Path: "spec/a_spec.rb:7"}
 	r := newPoolResults([]api.LeaseAttempt{{ID: "attempt", Selector: test}}, nil)
