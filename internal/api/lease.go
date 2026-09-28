@@ -129,10 +129,16 @@ func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, bod
 			}
 			retry = resp.StatusCode == 429 || (replaySafe && (readErr != nil || resp.StatusCode >= 500))
 			if resp.StatusCode == 429 {
-				seconds, _ := strconv.Atoi(resp.Header.Get("RateLimit-Reset"))
+				seconds := 0
+				for _, prefix := range []string{"RateLimit-Job", "RateLimit", "RateLimit-Pool"} {
+					reset, resetErr := strconv.Atoi(resp.Header.Get(prefix + "-Reset"))
+					remaining, remainingErr := strconv.Atoi(resp.Header.Get(prefix + "-Remaining"))
+					if resetErr == nil && reset > 0 && (remainingErr != nil || remaining <= 0) && reset > seconds {
+						seconds = reset
+					}
+				}
 				if seconds <= 0 {
-					// The Scheduler's job quota sends reset in the 429 body, not
-					// Retry-After or RateLimit-Reset.
+					// Older Scheduler responses may only include reset in the body.
 					var limit struct {
 						Reset int `json:"reset"`
 					}

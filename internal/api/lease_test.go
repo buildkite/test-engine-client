@@ -114,25 +114,78 @@ func TestLeaseRetryPolicy(t *testing.T) {
 	}
 }
 
-func TestLeaseJobRateLimitWaitsForReset(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		calls := 0
-		c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})
-		c.httpClient.Transport = leaseTransport(func(*http.Request) (*http.Response, error) {
-			calls++
-			if calls == 1 {
-				return &http.Response{StatusCode: 429, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"scope":"test_scheduler_empty_lease_job","reset":8}`))}, nil
-			}
-			return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"lease":null,"pool":{"state":"consumed"}}`))}, nil
+func TestLeaseRateLimitWaitsForMostSpecificReset(t *testing.T) {
+	headers := func(pairs ...string) http.Header {
+		h := http.Header{}
+		for i := 0; i < len(pairs); i += 2 {
+			h.Set(pairs[i], pairs[i+1])
+		}
+		return h
+	}
+	for _, tc := range []struct {
+		name    string
+		headers http.Header
+		body    int
+		want    time.Duration
+	}{
+		{
+			name: "job header",
+			headers: headers(
+				"RateLimit-Job-Remaining", "0",
+				"RateLimit-Job-Reset", "8",
+				"RateLimit-Remaining", "10",
+				"RateLimit-Reset", "2",
+				"RateLimit-Pool-Remaining", "10",
+				"RateLimit-Pool-Reset", "3",
+			),
+			body: 1,
+			want: 8 * time.Second,
+		},
+		{
+			name: "pool header",
+			headers: headers(
+				"RateLimit-Remaining", "10",
+				"RateLimit-Reset", "2",
+				"RateLimit-Pool-Remaining", "0",
+				"RateLimit-Pool-Reset", "6",
+			),
+			body: 1,
+			want: 6 * time.Second,
+		},
+		{
+			name: "multiple exhausted limits",
+			headers: headers(
+				"RateLimit-Remaining", "0",
+				"RateLimit-Reset", "4",
+				"RateLimit-Pool-Remaining", "0",
+				"RateLimit-Pool-Reset", "7",
+			),
+			body: 1,
+			want: 7 * time.Second,
+		},
+		{name: "body fallback", headers: http.Header{}, body: 4, want: 4 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				calls := 0
+				c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})
+				c.httpClient.Transport = leaseTransport(func(*http.Request) (*http.Response, error) {
+					calls++
+					if calls == 1 {
+						return &http.Response{StatusCode: 429, Header: tc.headers, Body: io.NopCloser(strings.NewReader(fmt.Sprintf(`{"reset":%d}`, tc.body)))}, nil
+					}
+					return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"lease":null,"pool":{"state":"consumed"}}`))}, nil
+				})
+				start := time.Now()
+				if _, err := c.AcquireLease(context.Background(), "pool"); err != nil {
+					t.Fatal(err)
+				}
+				if calls != 2 || time.Since(start) != tc.want {
+					t.Fatalf("calls=%d wait=%s, want two calls %s apart", calls, time.Since(start), tc.want)
+				}
+			})
 		})
-		start := time.Now()
-		if _, err := c.AcquireLease(context.Background(), "pool"); err != nil {
-			t.Fatal(err)
-		}
-		if calls != 2 || time.Since(start) != 8*time.Second {
-			t.Fatalf("calls=%d wait=%s, want two calls eight seconds apart", calls, time.Since(start))
-		}
-	})
+	}
 }
 
 func TestCompletionAcceptsSuccessfulResponseWithoutParsingBody(t *testing.T) {
