@@ -60,6 +60,12 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		debug.Printf("Pool already consumed; skipping persistent runner")
 		return nil
 	}
+	// Server-planned pools publish entries, the muted-tests snapshot, and their
+	// ready state atomically. An externally visible ready pool without a snapshot
+	// is therefore a manual pool, which pool exec cannot account for safely.
+	if pool.MutedTests == nil {
+		return fmt.Errorf("test pool %s is missing its muted tests snapshot", pool.ID)
+	}
 	debug.Printf("Pool ready (state=%s); starting persistent runner", pool.State)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

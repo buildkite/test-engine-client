@@ -36,7 +36,7 @@ func TestPoolResultsRetryMappingAndMuting(t *testing.T) {
 	if len(retry) != 1 || retry[0].Format != "example" || retry[0].Identifier != "spec/a.rb[1:2]" || !reflect.DeepEqual(owners, []int{0}) {
 		t.Fatalf("retry=%+v owners=%v", retry, owners)
 	}
-	r.absorb(retry, owners, poolReport(`[{"id":"spec/a.rb[1:2]","file_path":"spec/a.rb","status":"passed"}]`, 1, 0))
+	r.absorb(retry, owners, poolReport(`[{"id":"spec/a.rb[1:2]","file_path":"spec/a.rb","status":"passed","description":"retry","full_description":"A retry"}]`, 1, 0))
 	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "a", Result: "passed"}, {AttemptID: "b", Result: "passed"}}) {
 		t.Fatal(got)
 	}
@@ -65,6 +65,15 @@ func TestPoolResultMatchesExampleByLocationWithID(t *testing.T) {
 	r.absorb([]plan.TestCase{test}, []int{0}, poolReport(`[{"id":"./spec/a_spec.rb[1:2]","file_path":"./spec/a_spec.rb","line_number":7,"status":"failed"}]`, 1, 0))
 	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "attempt", Result: "failed"}}) {
 		t.Fatalf("file:line selector did not match reported example: %v", got)
+	}
+}
+
+func TestPoolResultMatchesExampleByTestEngineIdentity(t *testing.T) {
+	test := plan.TestCase{Format: "example", Identifier: "./spec/a_spec.rb[1:2]", Path: "./spec/a_spec.rb[1:2]", Scope: "A", Name: "works"}
+	r := newPoolResults([]api.LeaseAttempt{{ID: "attempt", Selector: test}}, nil)
+	r.absorb([]plan.TestCase{test}, []int{0}, poolReport(`[{"id":"spec/a_spec.rb[2:3]","file_path":"spec/a_spec.rb","status":"failed","description":"works","full_description":"A works"}]`, 1, 0))
+	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "attempt", Result: "failed"}}) {
+		t.Fatalf("canonical scope and name did not match example with a different runner identifier: %v", got)
 	}
 }
 

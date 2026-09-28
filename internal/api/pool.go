@@ -14,8 +14,8 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
-// Pool is the full Scheduler representation, not a lease response. Pool state,
-// rather than the presence of MutedTests, indicates planning readiness.
+// Pool is the full Scheduler representation, not a lease response. A nil
+// MutedTests means the immutable snapshot is absent; an empty snapshot is [].
 type Pool struct {
 	ID         string          `json:"id"`
 	State      string          `json:"state"`

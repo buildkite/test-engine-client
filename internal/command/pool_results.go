@@ -27,6 +27,9 @@ func newPoolResults(attempts []api.LeaseAttempt, muted []plan.TestCase) *poolRes
 }
 
 func matchesReportedTest(dispatched plan.TestCase, reported runner.ReportedTest) bool {
+	if dispatched.Format == plan.TestCaseFormatExample && (dispatched.Scope != "" || dispatched.Name != "") {
+		return dispatched.Scope == reported.TestCase.Scope && dispatched.Name == reported.TestCase.Name
+	}
 	target := dispatched.Path
 	if dispatched.Format == plan.TestCaseFormatExample && dispatched.Identifier != "" {
 		target = dispatched.Identifier

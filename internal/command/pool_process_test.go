@@ -312,7 +312,7 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 				http.Error(w, "unexpected pool GET", http.StatusNotFound)
 				return
 			}
-			_, _ = io.WriteString(w, `{"id":"existing","state":"populating"}`)
+			_, _ = io.WriteString(w, `{"id":"existing","state":"populating","muted_tests":[]}`)
 		case r.Method == http.MethodPost && r.URL.Path == base+"/leases":
 			acquisitions++
 			switch acquisitions {
@@ -362,6 +362,33 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 	dispatched := strings.Index(logs.String(), "Dispatched pool batch b_1")
 	if start < 0 || connected <= start || dispatched <= connected || strings.Count(logs.String(), "Persistent runner connected") != 1 {
 		t.Fatalf("expected one handshake log after startup and before dispatch: %s", logs.String())
+	}
+}
+
+func TestPoolExecDoesNotDispatchWithoutMutedTestsSnapshot(t *testing.T) {
+	leaseRequests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing":
+			_, _ = io.WriteString(w, `{"id":"existing","state":"populating"}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/leases":
+			leaseRequests++
+			http.Error(w, "unexpected lease request", http.StatusBadRequest)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+	cfg := config.New()
+	cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug = "existing", "org", "suite"
+	cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
+	err := PoolExec(context.Background(), &cfg, "", []string{filepath.Join(t.TempDir(), "nonexistent-runner")}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
+	if err == nil || !strings.Contains(err.Error(), "test pool existing is missing its muted tests snapshot") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if leaseRequests != 0 {
+		t.Fatalf("lease requests=%d, want 0", leaseRequests)
 	}
 }
 

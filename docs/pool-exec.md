@@ -42,8 +42,10 @@ flowchart TD
 With no pool ID, planning uses the build, pipeline, suite, and shared pool key
 (default: `BUILDKITE_STEP_ID`); a separate `pool plan` call is optional. A
 supplied `--pool-id` / `BUILDKITE_TEST_ENGINE_POOL_ID` skips discovery and
-planning. Leasing starts in `populating` or `consuming`, without waiting for all
-entries to be inserted. An already-consumed pool does not start the runner.
+planning. Leasing starts in `populating` or `consuming` once the full pool
+representation includes its immutable `muted_tests` snapshot; an absent snapshot
+is rejected before starting the runner. An already-consumed pool does not start
+the runner.
 
 ## Lease timing
 
