@@ -1,147 +1,87 @@
-# Persistent pool execution
+# `bktec pool exec`
 
-`bktec pool exec` resolves a shared Scheduler pool and runs its leases in one
-persistent runner process. It does not change `bktec run`.
+`bktec pool exec` runs tests from a Test Scheduler pool using one persistent
+runner process.
 
-Example using the currently supported RSpec runner:
+RSpec support requires Test Collector Ruby, which provides the
+[`buildkite-rspec`](https://github.com/bktest/test-collector-ruby) persistent
+runner. Linux and macOS are supported.
+
+## Run a pool worker
+
+Create or reuse a pool automatically:
 
 ```shell
 bktec pool exec \
-  --suite-slug my-suite --test-runner rspec --local-retry-count 2 \
+  --suite-slug my-suite \
+  --test-runner rspec \
   -- bundle exec buildkite-rspec
 ```
 
-The arguments after `--` go directly to the persistent runner, not a shell or
-ordinary one-shot test command. Runner stdout and stderr flow through bktec.
+Everything after `--` is passed directly to the persistent runner, not
+interpreted as a shell command.
 
-## Flow
+By default, workers in the same step use `BUILDKITE_STEP_ID` as the pool key.
+Set `--pool-key` when different groups of workers in the same step need separate
+pools.
 
-```mermaid
-flowchart TD
-    start["pool exec"] --> supplied{"Pool ID supplied?"}
-    supplied -->|Yes| get["GET pool"]
-    supplied -->|No| discover["Discover and filter test targets"]
-    discover --> plan["POST plan: create or reuse by key"]
-    get --> state{"Pool state?"}
-    plan --> state
-    state -->|planning| wait["Poll until state changes"] --> state
-    state -->|consumed| skip["Stop; do not start runner"]
-    state -->|errored| error["Return error"]
-    state -->|populating or consuming| runner["Start protocol host and persistent runner"]
-    runner --> acquire["Request lease"]
-    acquire --> lease{"Lease response?"}
-    lease -->|empty while not consumed| backoff["Wait 7 seconds"] --> acquire
-    lease -->|entries| batch["Dispatch initial batch"] --> report["Receive report from runner"]
-    report --> retry{"Failed examples to retry?"}
-    retry -->|Yes| retryBatch["Dispatch local retry batch"] --> report
-    retry -->|No| complete["Complete lease with final attempt results"] --> acquire
-    lease -->|empty and consumed| drain["Stop runner; wait for upload flush and exit"]
-    lease -->|errored| error
+To use a pool created with `bktec pool plan`, provide its ID:
+
+```shell
+bktec pool exec \
+  --pool-id "$BUILDKITE_TEST_ENGINE_POOL_ID" \
+  --suite-slug my-suite \
+  --test-runner rspec \
+  -- bundle exec buildkite-rspec
 ```
 
-With no pool ID, planning uses the build, pipeline, suite, and shared pool key
-(default: `BUILDKITE_STEP_ID`); a separate `pool plan` call is optional. A
-supplied `--pool-id` / `BUILDKITE_TEST_ENGINE_POOL_ID` skips discovery and
-planning. Leasing starts in `populating` or `consuming` once the full pool
-representation includes its immutable `muted_tests` snapshot; an absent snapshot
-is rejected before starting the runner. An already-consumed pool does not start
-the runner.
+When creating a pool, `pool exec` supports these test discovery options:
 
-## Lease timing
+- `--files` and `--selector-file`;
+- `--test-file-pattern` and `--test-file-exclude-pattern`;
+- `--location-prefix`.
 
-| Event | Timing |
-| --- | --- |
-| Acquire lease | Up to 249 ms of jitter **before each request**, spreading workers' acquisitions and batch finishes; completion is not delayed. |
-| Ownership TTL | 600 seconds on acquire and heartbeat; fixed, not a planning flag. |
-| Heartbeat | About every 60 seconds while holding a lease, including retries and final accounting; sooner if less than 180 seconds remain on the current lease. |
-| Empty lease | Wait 7 seconds, then apply acquisition jitter and retry while the pool is not consumed. One idle worker stays below 10 empty requests/minute. |
-| HTTP 429 | Wait for the Scheduler's reset time. Empty-lease quota is shared by workers with the same job ID. |
+## Options
 
-For newly planned pools, `--pool-lease-duration-ms` (duration budget) and
-`--pool-lease-max-attempts` (attempt limit) each default to `0`: the override is
-omitted and the Scheduler chooses the value. These planning settings do not
-change the 600-second ownership TTL; a supplied pool ID retains its settings.
+| Option | Default | Description |
+| --- | --- | --- |
+| `--pool-id` | unset | Consume an existing pool instead of creating or reusing one. |
+| `--pool-key` | `BUILDKITE_STEP_ID` | Identify the pool for workers in this build. |
+| `--pool-lease-duration-ms` | `0` | Requested duration budget for each lease; `0` uses the Scheduler default. |
+| `--pool-lease-max-attempts` | `0` | Requested maximum attempts per lease; `0` uses the Scheduler default. |
+| `--local-retry-count` | `0` | Retry failed, unmuted examples locally before reporting the Scheduler attempt. |
+| `--runner-startup-timeout` | `5m` | Wait for the persistent runner to become ready. |
+| `--runner-batch-timeout` | `10m` | Allow a batch to run and submit its report. |
+| `--runner-shutdown-timeout` | `1m30s` | Allow the runner to exit and flush the test collector. |
 
-One worker holds one lease at a time; there is no prefetch. Only undispatched
-work is released. Acquisitions do not retry ambiguous read failures; completions
-can retry the same results. Lost ownership stops dispatch rather than claiming
-success.
+## Authentication
 
-## Authentication and token refresh
+OIDC authentication through `buildkite-agent` is enabled by default. To provide
+a token instead, set `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN` or use
+`--access-token`. The token must include the job identity claims required by
+Test Scheduler. With `--no-oidc`, it must remain valid for the entire command.
 
-Pool requests require a suite-audience OIDC JWT with
-`organization_id,pipeline_id,build_id,job_id` claims and `write_test_pool`.
-Supply one via `--access-token` / `BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN`, or
-let bktec mint one using the existing OIDC settings (`--oidc`,
-`--oidc-lifetime`, and `--buildkite-agent-command`; lifetime defaults to 2 hours).
-The Scheduler verifies the token's signature and claims.
+## Retries and results
 
-- A supplied JWT with a valid `exp` is used first. With OIDC enabled, bktec
-  tries to mint a replacement on the first request after half its remaining
-  lifetime. If renewal fails, it reuses the supplied token until expiry, then
-  fails the request. An already-expired token triggers minting immediately.
-  If `exp` is unreadable, bktec uses it once, then tries to mint on the next
-  request; the Scheduler decides whether that token is valid.
-- Without a supplied token, bktec mints one initially. For that token it uses
-  half the remaining `exp` lifetime; for subsequent minted tokens it uses half
-  the requested lifetime (or sooner if `exp` is earlier). Refresh happens on
-  the **next request**, not on a background timer; an expired token is not
-  reused if minting fails.
-- With `--no-oidc`, supply a JWT: bktec cannot renew it and rejects a token
-  with a known expired `exp`. A token with unreadable expiry may instead be
-  rejected by the Scheduler when it expires.
+`--local-retry-count` retries failed examples in the same worker. These retries
+do not create additional Scheduler attempts. Muted failures are not retried.
 
-## Runner
+Each Scheduler attempt is reported as passed, failed, or errored. A failed test
+run exits with status 1. Runner process failures retain the runner's exit status
+when available. Protocol, reporting, or accounting errors exit with status 16.
 
-- The runner uses the [Unix-socket protocol](../internal/runnerexec/README.md)
-  to send batch reports; Windows process supervision is unsupported. The
-  current RSpec adapter produces `rspec-json`. Native bktec uploads are not
-  invoked; configure uploads in the runner (test-collector-ruby for RSpec).
+Test result uploads are the runner's responsibility. Configure them through
+Test Collector Ruby; `bktec pool exec` does not perform the normal bktec result
+upload.
 
-Runner timeouts: `--runner-startup-timeout=5m`, `--runner-batch-timeout=10m`
-(includes report submission), and `--runner-shutdown-timeout=1m30s` (includes
-collector flush). Measure these against your application before rollout.
+## Troubleshooting
 
-## Result parsing and consolidation
+Use `bktec --debug pool exec ...` to show pool state, lease activity, local
+retry rounds, and final attempt counts in the job log.
 
-```mermaid
-flowchart TD
-    lease["Lease: attempt IDs + selectors"] --> dispatch["bktec dispatches initial or retry batch"]
-    dispatch --> runner["Persistent runner executes batch"]
-    runner --> result["Protocol result: status + format + native JSON"]
-    result --> select["bktec ParseNativeReport selects parser"]
-    select --> decode["Existing ParseRspecReport decodes RSpec JSON"]
-    decode --> normalize["RSpec batch adapter maps examples to canonical tests"]
-    normalize --> match["Pool matches tests to dispatched selectors"]
-    lease --> match
-    match --> group["Pool groups tests by original attempt ID"]
-    group --> retry{"Failed unmuted examples to retry?"}
-    retry -->|Yes| dispatch
-    retry -->|No| final["Final passed / failed / errored per attempt"]
-    final --> complete["Complete lease with attempt IDs and results"]
-```
+If the runner does not start, check that:
 
-`completed` means the runner supplied a report, not that its tests passed.
-The parser normalizes runner-specific identities; pool execution groups the
-reported tests by their original lease attempt, including results from retry
-batches, then completes the lease with passed, failed, or errored attempts.
-
-Each reported test must match exactly one dispatched batch item: a file or
-selector by its primary selector, or an example by ID or file:line. Multiple
-examples can belong to one attempt; disjoint file and example selectors can
-share a lease. An overlapping file selector and example from that file are
-ambiguous and mark the batch's attempts errored rather than guessing.
-
-- `--local-retry-count` (env: `BUILDKITE_TEST_SCHEDULER_LOCAL_RETRY_COUNT`,
-  default `0`) adds example retry batches without creating new Scheduler
-  attempts or changing the server's default one-attempt policy. Muted failures
-  do not retry; pending examples pass. Retry selectors use example IDs or
-  file/line paths. File-load errors are not retried and remain errors even if
-  example retries pass; missing or unmappable reports also error.
-- `bktec --debug pool exec ...` shows retry rounds, provisional batch counts,
-  and final passed/failed/errored counts per completed lease. Failed attempts
-  without other errors exit 1; unresolved reports with a clean runner exit
-  exit 16; a runner process error retains its exit code when available.
-
-TE-7031 terminal accounting review and TE-7034 integration validation are
-still required before dogfood rollout.
+- the suite and pool belong to the current Buildkite organization and build;
+- OIDC is available, or a valid Scheduler OIDC token was supplied;
+- the existing pool was created through Test Scheduler planning;
+- `buildkite-rspec` is installed and the command after `--` starts it directly.

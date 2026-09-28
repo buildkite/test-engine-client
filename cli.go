@@ -741,7 +741,7 @@ func poolPlanCommandFlags() []cli.Flag {
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,
 		},
 		&cli.StringFlag{
-			Name: "pool-key", Usage: "Shared pool key within this build (defaults to BUILDKITE_STEP_ID)",
+			Name: "pool-key", Usage: "Pool key within this build (defaults to BUILDKITE_STEP_ID)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_KEY"), Destination: &cfg.PoolKey,
 		},
 		&cli.StringFlag{
@@ -768,9 +768,9 @@ func poolExecCommandFlags() []cli.Flag {
 
 var poolCommand = &cli.Command{
 	Name:  "pool",
-	Usage: "Run tests using shared Test Scheduler pools",
+	Usage: "Run tests using Test Scheduler pools",
 	Commands: []*cli.Command{{
-		Name: "plan", Usage: "Fetch or create a shared pool without waiting for planning to finish",
+		Name: "plan", Usage: "Fetch or create a pool without waiting for planning to finish",
 		Action: poolPlan, DisableSliceFlagSeparator: true,
 		Flags: poolPlanCommandFlags(),
 		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{{

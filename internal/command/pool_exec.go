@@ -26,7 +26,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		return errors.New("pool exec requires a runner executable and a nonnegative local retry count")
 	}
 	if cfg.AccessToken == "" && !cfg.OIDC {
-		return errors.New("pool exec requires a supplied suite-audience OIDC token or agent OIDC authentication")
+		return errors.New("pool exec requires a supplied Scheduler OIDC token or agent OIDC authentication")
 	}
 	var mint func(context.Context) (string, error)
 	if cfg.OIDC {

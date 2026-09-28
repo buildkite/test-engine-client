@@ -16,12 +16,13 @@ func (c *Config) RequestSchedulerOIDCToken(ctx context.Context) (string, error) 
 // ValidateForPoolPlan does not require static-plan identifiers, lane sizing,
 // execution output paths, or discovery inputs when an existing pool is supplied.
 func (c *Config) ValidateForPoolPlan() error {
-	// The Scheduler requires a suite-scoped job OIDC token, not an ordinary API
-	// token that may be set in the environment. JWT shape distinguishes obvious
-	// API tokens; the Scheduler validates the supplied token's signature and claims.
+	// The Scheduler requires an OIDC token with job identity claims, not an
+	// ordinary API token that may be set in the environment. JWT shape
+	// distinguishes obvious API tokens; the Scheduler validates the supplied
+	// token's signature and claims.
 	if c.AccessToken != "" && strings.Count(c.AccessToken, ".") != 2 {
 		if !c.OIDC {
-			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "Test Scheduler pools require a suite-scoped OIDC token, not an ordinary API token")
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN", "Test Scheduler pools require an OIDC token with job identity claims, not an ordinary API token")
 			return c.errs
 		}
 		c.AccessToken = ""
