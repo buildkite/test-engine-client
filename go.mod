@@ -1,14 +1,11 @@
 module github.com/buildkite/test-engine-client/v3
 
-go 1.26.0
-
-require (
-	github.com/buildkite/roko v1.4.0
-	github.com/google/go-cmp v0.7.0
-)
+go 1.27.1
 
 require (
 	drjosh.dev/zzglob v0.4.3
+	github.com/buildkite/roko v1.4.0
+	github.com/google/go-cmp v0.7.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/stretchr/testify v1.12.1

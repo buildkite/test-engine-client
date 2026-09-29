@@ -30,6 +30,7 @@ GEM
     cucumber-messages (22.0.0)
     cucumber-tag-expressions (6.1.2)
     diff-lcs (1.6.2)
+    ffi (1.17.2)
     ffi (1.17.2-arm64-darwin)
     ffi (1.17.2-x86_64-linux-gnu)
     mini_mime (1.1.5)
