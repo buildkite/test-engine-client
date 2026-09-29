@@ -1,6 +1,6 @@
 //go:build !windows && integration
 
-package runnerexec
+package integration
 
 import (
 	"context"
@@ -14,25 +14,38 @@ import (
 	"time"
 
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
 )
 
 type rspecSource struct {
-	testSource
-	reports    []Result
+	batches    []runnerexec.Batch
+	done       string
+	reports    []runnerexec.Result
 	times      []time.Time
 	dispatches []time.Time
+	unresolved []string
 }
 
-func (s *rspecSource) Next() (*Batch, string, error) {
+func (s *rspecSource) Next() (*runnerexec.Batch, string, error) {
 	s.dispatches = append(s.dispatches, time.Now())
-	return s.testSource.Next()
+	if len(s.batches) == 0 {
+		return nil, s.done, nil
+	}
+	b := s.batches[0]
+	s.batches = s.batches[1:]
+	return &b, "", nil
 }
-func (s *rspecSource) Accepted(b Batch, r Result) {
-	s.testSource.Accepted(b, r)
-	s.reports = append(s.reports, r)
+
+func (s *rspecSource) Accepted(_ runnerexec.Batch, result runnerexec.Result) {
+	s.reports = append(s.reports, result)
 	s.times = append(s.times, time.Now())
 }
-func TestRSpecIntegration(t *testing.T) {
+
+func (s *rspecSource) Unresolved(batch runnerexec.Batch, _ error) {
+	s.unresolved = append(s.unresolved, batch.ID)
+}
+
+func TestRunnerRSpec(t *testing.T) {
 	root := os.Getenv("BKTEC_RSPEC_RUNNER_ROOT")
 	if root == "" {
 		t.Fatal("set BKTEC_RSPEC_RUNNER_ROOT to the test-collector-ruby package containing buildkite-rspec")
@@ -61,41 +74,47 @@ func TestRSpecIntegration(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "spec/rails_helper.rb"), []byte(helper), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, ".rspec"), []byte("--require rails_helper\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "spec/sample_spec.rb"), []byte(spec), 0600); err != nil {
 		t.Fatal(err)
 	}
-	s := &rspecSource{testSource: testSource{batches: []Batch{
-		{ID: "initial", Tests: []plan.TestCase{{Format: "file", Path: "spec/sample_spec.rb"}}},
-		{ID: "retry", Tests: []plan.TestCase{{Format: "example", Identifier: "./spec/sample_spec.rb[1:1]", Path: "ignored"}}},
-		{ID: "later", Tests: []plan.TestCase{{Format: "selector", Value: "spec/sample_spec.rb"}}},
-	}, done: "plan_completed"}}
+	s := &rspecSource{
+		batches: []runnerexec.Batch{
+			{ID: "initial", Tests: []plan.TestCase{{Format: "file", Path: "spec/sample_spec.rb"}}},
+			{ID: "retry", Tests: []plan.TestCase{{Format: "example", Identifier: "./spec/sample_spec.rb[1:1]", Path: "ignored"}}},
+			{ID: "later", Tests: []plan.TestCase{{Format: "selector", Value: "spec/sample_spec.rb"}}},
+		},
+		done: "plan_completed",
+	}
 	cmd := exec.Command("ruby", "-I", filepath.Join(root, "lib"), filepath.Join(root, "exe/buildkite-rspec"))
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir}
 	start := time.Now()
-	err := Run(context.Background(), cmd, s, Options{StartupTimeout: 10 * time.Second, BatchTimeout: 10 * time.Second, ShutdownTimeout: 10 * time.Second})
+	err := runnerexec.Run(context.Background(), cmd, s, runnerexec.Options{StartupTimeout: 10 * time.Second, BatchTimeout: 10 * time.Second, ShutdownTimeout: 10 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(s.reports) != 3 {
 		t.Fatalf("reports %d", len(s.reports))
 	}
-	for i, r := range s.reports {
-		var v struct {
+	for i, report := range s.reports {
+		var value struct {
 			Summary struct {
 				ExampleCount int `json:"example_count"`
 				FailureCount int `json:"failure_count"`
 			} `json:"summary"`
 		}
-		if err := json.Unmarshal(r.Report, &v); err != nil {
+		if err := json.Unmarshal(report.Report, &value); err != nil {
 			t.Fatal(err)
 		}
 		want := []int{2, 1, 2}[i]
 		failures := []int{1, 0, 0}[i]
-		if v.Summary.ExampleCount != want || v.Summary.FailureCount != failures {
-			t.Fatalf("batch %d report %s", i, r.Report)
+		if value.Summary.ExampleCount != want || value.Summary.FailureCount != failures {
+			t.Fatalf("batch %d report %s", i, report.Report)
 		}
 	}
 	read := func(name string) []byte {
