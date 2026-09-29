@@ -295,11 +295,6 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 			debug.Printf("Released lease %s (dispatched=%t; terminating=%t; error=%v)", lease.ID, dispatched, terminating, err)
 			return
 		}
-		if undispatchable {
-			for i := range results.broken {
-				results.broken[i] = true
-			}
-		}
 		final := results.final()
 		if e := client.CompleteLease(accounting, pool.ID, lease.ID, final); e != nil {
 			err = errors.Join(err, e)
@@ -325,6 +320,9 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		debug.Printf("Completed lease %s (scheduler attempts=%d; final: passed=%d failed=%d errored=%d)", lease.ID, len(final), passed, failed, errored)
 	}()
 	if err = validateLease(lease); err != nil {
+		for i := range results.broken {
+			results.broken[i] = true
+		}
 		s.mu.Lock()
 		s.undispatchable = true
 		s.mu.Unlock()
