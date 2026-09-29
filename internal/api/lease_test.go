@@ -210,6 +210,33 @@ func TestCompletionAcceptsSuccessfulResponseWithoutParsingBody(t *testing.T) {
 	}
 }
 
+func TestReleaseLeaseReturnsAllActiveAttemptsToPool(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/organizations/org/test-scheduler/pools/pool/leases/release" {
+			t.Errorf("path=%s", r.URL.Path)
+		}
+		var body struct {
+			Leases []struct {
+				ID         string   `json:"id"`
+				AttemptIDs []string `json:"attempt_ids"`
+				Reason     string   `json:"reason"`
+			} `json:"leases"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Leases) != 1 || body.Leases[0].ID != "lease" || body.Leases[0].AttemptIDs != nil || body.Leases[0].Reason != "Worker shutdown" {
+			t.Errorf("release body=%+v", body)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	c := NewClient(ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "org"})
+	if err := c.ReleaseLease(context.Background(), "pool", "lease"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCompletionReplaysIdenticalBodyAfterAmbiguousFailure(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

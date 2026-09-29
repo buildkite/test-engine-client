@@ -238,7 +238,7 @@ func TestPoolWorkerRejectsOverlappingFileAndExampleAttempts(t *testing.T) {
 }
 
 func TestPoolWorkerReleaseVersusConservativeCompletion(t *testing.T) {
-	for _, mode := range []string{"undispatched", "dispatched", "malformed", "pool errored"} {
+	for _, mode := range []string{"undispatched", "dispatched", "terminating", "malformed", "pool errored"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -261,14 +261,18 @@ func TestPoolWorkerReleaseVersusConservativeCompletion(t *testing.T) {
 			}
 			done := make(chan error, 1)
 			go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, state) }()
-			if mode == "undispatched" || mode == "dispatched" {
+			if mode == "undispatched" || mode == "dispatched" || mode == "terminating" {
 				batch := waitPoolBatch(t, s)
-				if mode == "dispatched" {
+				if mode == "dispatched" || mode == "terminating" {
 					if err := s.Dispatched(*batch); err != nil {
 						t.Fatal(err)
 					}
 				}
-				cancel()
+				if mode == "terminating" {
+					s.Terminating()
+				} else {
+					cancel()
+				}
 			}
 			select {
 			case err := <-done:

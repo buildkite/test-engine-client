@@ -108,7 +108,10 @@ func Run(ctx context.Context, cmd *exec.Cmd, source Source, opts Options) error 
 			ctxDone = nil
 			stop(ctx.Err(), syscall.SIGTERM)
 		case sig := <-signals:
-			stop(fmt.Errorf("runner interrupted by %s", sig), sig.(syscall.Signal))
+			if source, ok := source.(TerminationSource); ok {
+				source.Terminating()
+			}
+			stop(fmt.Errorf("%w by %s", ErrInterrupted, sig), sig.(syscall.Signal))
 		case <-shutdownC:
 			if cause == nil {
 				cause = errors.New("runner shutdown timeout waiting for collector flush")

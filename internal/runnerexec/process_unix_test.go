@@ -5,6 +5,7 @@ package runnerexec
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -126,6 +127,12 @@ func TestLifecycle(t *testing.T) {
 				}
 			} else if err == nil || !strings.Contains(err.Error(), tc.wantError) {
 				t.Fatalf("error %v, want %q", err, tc.wantError)
+			}
+			if source.terminating != (tc.mode == "interrupt" || tc.mode == "terminate") {
+				t.Fatalf("termination notification=%t", source.terminating)
+			}
+			if (tc.mode == "interrupt" || tc.mode == "terminate") && !errors.Is(err, ErrInterrupted) {
+				t.Fatalf("error %v does not wrap ErrInterrupted", err)
 			}
 			if tc.mode == "normal" {
 				if data, err := os.ReadFile(flush); err != nil || string(data) != "flushed" {
