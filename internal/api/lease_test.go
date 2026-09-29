@@ -290,6 +290,32 @@ func TestHeartbeatRetriesTransientFailureButNotOwnershipLoss(t *testing.T) {
 	}
 }
 
+func TestHeartbeatExposesStructuredUnprocessableEntityCode(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, wantCode string
+	}{
+		{"maximum lifetime", `{"code":"MAXIMUM_LIFETIME","message":"wording may change"}`, LeaseErrorCodeMaximumLifetime},
+		{"unrelated validation", `{"code":"INVALID_LEASE_TTL","message":"invalid TTL"}`, "INVALID_LEASE_TTL"},
+		{"invalid response", `<html>upstream error</html>`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})
+			c.httpClient.Transport = leaseTransport(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusUnprocessableEntity,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(tc.body)),
+				}, nil
+			})
+			_, err := c.HeartbeatLease(context.Background(), "pool", "lease")
+			var leaseError *LeaseHTTPError
+			if !errors.As(err, &leaseError) || leaseError.Status != http.StatusUnprocessableEntity || leaseError.Code != tc.wantCode {
+				t.Fatalf("error=%v, want HTTP 422 code %q", err, tc.wantCode)
+			}
+		})
+	}
+}
+
 func TestTokenProviderUsedForEveryRequest(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

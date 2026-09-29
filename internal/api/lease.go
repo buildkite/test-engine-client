@@ -42,8 +42,13 @@ type AttemptResult struct {
 	Result    string `json:"result"`
 }
 
-// LeaseHTTPError retains status for ownership-loss decisions without leaking credentials.
-type LeaseHTTPError struct{ Status int }
+const LeaseErrorCodeMaximumLifetime = "MAXIMUM_LIFETIME"
+
+// LeaseHTTPError retains structured response details for ownership-loss decisions.
+type LeaseHTTPError struct {
+	Status int
+	Code   string
+}
 
 func (e *LeaseHTTPError) Error() string { return fmt.Sprintf("Scheduler returned HTTP %d", e.Status) }
 
@@ -123,7 +128,14 @@ func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, bod
 					return nil
 				}
 			}
-			err = &LeaseHTTPError{Status: resp.StatusCode}
+			var responseError struct {
+				Code string `json:"code"`
+			}
+			code := ""
+			if unmarshalErr := json.Unmarshal(raw, &responseError); unmarshalErr == nil {
+				code = responseError.Code
+			}
+			err = &LeaseHTTPError{Status: resp.StatusCode, Code: code}
 			if readErr != nil {
 				err = readErr
 			}
