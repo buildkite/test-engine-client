@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -140,6 +141,90 @@ func TestPoolLoadErrorStillRetriesFailureWithPathFallback(t *testing.T) {
 	r.absorb(retry, owners, poolReport(`[{"file_path":"a","line_number":12,"status":"passed"}]`, 1, 0))
 	if r.final()[0].Result != "errored" {
 		t.Fatal("load error was hidden by passing retry")
+	}
+}
+
+func TestPoolSummaryReportsOnlyFinalFailuresAndErroredAttempts(t *testing.T) {
+	tests := []plan.TestCase{
+		{Format: "file", Path: "spec/a_spec.rb"},
+		{Format: "file", Path: "spec/b_spec.rb"},
+		{Format: "example", Identifier: "spec/missing_spec.rb[1:1]", Path: "spec/missing_spec.rb[1:1]", Scope: "Missing", Name: "example"},
+		{Format: "example", Identifier: "spec/example_spec.rb[1:1]", Path: "spec/example_spec.rb[1:1]", Scope: "Example", Name: "fails"},
+	}
+	r := newPoolResults([]api.LeaseAttempt{
+		{ID: "file-attempt", Selector: tests[0]},
+		{ID: "another-file-attempt", Selector: tests[1]},
+		{ID: "missing-attempt", Selector: tests[2]},
+		{ID: "example-attempt", Selector: tests[3]},
+	}, []plan.TestCase{{Scope: "Suite", Name: "muted"}})
+	r.absorb(tests, []int{0, 1, 2, 3}, poolReport(`[
+{"id":"spec/a_spec.rb[1:1]","file_path":"spec/a_spec.rb","line_number":10,"status":"failed","description":"passes on retry","full_description":"Suite passes on retry"},
+{"id":"spec/a_spec.rb[1:2]","file_path":"spec/a_spec.rb","line_number":20,"status":"failed","description":"still fails","full_description":"Suite still fails"},
+{"id":"spec/a_spec.rb[1:3]","file_path":"spec/a_spec.rb","line_number":30,"status":"failed","description":"muted","full_description":"Suite muted"},
+{"id":"spec/b_spec.rb[1:1]","file_path":"spec/b_spec.rb","line_number":35,"status":"failed","description":"another failure","full_description":"Suite another failure"},
+{"id":"spec/example_spec.rb[1:1]","file_path":"spec/example_spec.rb","line_number":40,"status":"failed","description":"fails","full_description":"Example fails"}]`, 5, 0))
+	retries, owners := r.retries()
+	if len(retries) != 4 {
+		t.Fatalf("retries=%v, want four unmuted examples", retries)
+	}
+	r.absorb(retries, owners, poolReport(`[
+{"id":"spec/a_spec.rb[1:1]","file_path":"spec/a_spec.rb","line_number":10,"status":"passed","description":"passes on retry","full_description":"Suite passes on retry"},
+{"id":"spec/a_spec.rb[1:2]","file_path":"spec/a_spec.rb","line_number":20,"status":"failed","description":"still fails","full_description":"Suite still fails"},
+{"id":"spec/b_spec.rb[1:1]","file_path":"spec/b_spec.rb","line_number":35,"status":"failed","description":"another failure","full_description":"Suite another failure"},
+{"id":"spec/example_spec.rb[1:1]","file_path":"spec/example_spec.rb","line_number":40,"status":"failed","description":"fails","full_description":"Example fails"}]`, 4, 0))
+
+	source := newPoolSource(func() {})
+	source.recordSettled(r)
+	source.recordSettled(r) // replayed/repeated batches must not duplicate output
+	var output bytes.Buffer
+	printPoolSummary(&output, source)
+	got := output.String()
+	for _, want := range []string{
+		"+++ ========== Buildkite Test Engine Pool Summary ==========",
+		"❌ Failed Entries:",
+		"- spec/a_spec.rb:",
+		"  - Suite still fails (spec/a_spec.rb:20)",
+		"\n\n- spec/b_spec.rb:\n  - Suite another failure (spec/b_spec.rb:35)",
+		"\n\n- Example fails (spec/example_spec.rb:40)\n",
+		"🚨 Errored Attempts:",
+		"- spec/missing_spec.rb[1:1] (attempt missing-attempt)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("summary missing %q:\n%s", want, got)
+		}
+	}
+	for _, unwanted := range []string{"passes on retry", "Suite muted"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("summary contains final non-failure %q:\n%s", unwanted, got)
+		}
+	}
+	if strings.Count(got, "Suite still fails") != 1 {
+		t.Errorf("summary duplicated repeated failure:\n%s", got)
+	}
+}
+
+func TestPoolSummaryKeepsSameNamedExamplesWithDifferentRunnableIDs(t *testing.T) {
+	tests := []runner.ReportedTest{
+		{TestCase: plan.TestCase{Identifier: "spec/a_spec.rb[1:1]", Path: "spec/a_spec.rb[1:1]", Scope: "Suite", Name: "same name"}, Selector: "spec/a_spec.rb"},
+		{TestCase: plan.TestCase{Identifier: "spec/a_spec.rb[1:2]", Path: "spec/a_spec.rb[1:2]", Scope: "Suite", Name: "same name"}, Selector: "spec/a_spec.rb"},
+	}
+	if reportedTestKey(tests[0]) == reportedTestKey(tests[1]) {
+		t.Fatal("distinct runnable examples share a summary key")
+	}
+}
+
+func TestPoolSummaryUsesOwningIdentifierForSharedExample(t *testing.T) {
+	shared := runner.ReportedTest{
+		TestCase: plan.TestCase{Identifier: "spec/owning_spec.rb[1:1]", Path: "spec/owning_spec.rb[1:1]", Scope: "Shared", Name: "works"},
+		Selector: "spec/owning_spec.rb",
+		Location: "spec/shared_examples.rb:12",
+	}
+	if got, want := reportedTestDescription(shared), "Shared works (spec/owning_spec.rb[1:1])"; got != want {
+		t.Fatalf("description=%q, want %q", got, want)
+	}
+	shared.Location = ""
+	if got, want := reportedTestDescription(shared), "Shared works (spec/owning_spec.rb[1:1])"; got != want {
+		t.Fatalf("description without location=%q, want %q", got, want)
 	}
 }
 
