@@ -77,6 +77,10 @@ func (s *poolSource) Accepted(_ runnerexec.Batch, result runnerexec.Result) { s.
 func (s *poolSource) Unresolved(_ runnerexec.Batch, err error)              { s.stop(err) }
 func (s *poolSource) Terminating() {
 	s.mu.Lock()
+	if s.err != nil {
+		s.mu.Unlock()
+		return
+	}
 	s.terminating = true
 	s.dispatchable = false
 	s.pending = nil
