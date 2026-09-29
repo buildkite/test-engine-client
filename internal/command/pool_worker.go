@@ -28,6 +28,7 @@ type poolSource struct {
 	pending         *runnerexec.Batch
 	dispatched      bool
 	dispatchable    bool
+	terminating     bool
 	expires         time.Time
 	owned           bool
 	reason          string
@@ -60,7 +61,7 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 	if s.err != nil {
 		return s.err
 	}
-	if !s.dispatchable || !s.owned || !time.Now().Before(s.expires) {
+	if !s.dispatchable || s.terminating || !s.owned || !time.Now().Before(s.expires) {
 		return errors.New("lease no longer owned at dispatch")
 	}
 	s.dispatchable = false
@@ -74,6 +75,18 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 }
 func (s *poolSource) Accepted(_ runnerexec.Batch, result runnerexec.Result) { s.results <- result }
 func (s *poolSource) Unresolved(_ runnerexec.Batch, err error)              { s.stop(err) }
+func (s *poolSource) Terminating() {
+	s.mu.Lock()
+	if s.err != nil {
+		s.mu.Unlock()
+		return
+	}
+	s.terminating = true
+	s.dispatchable = false
+	s.pending = nil
+	s.mu.Unlock()
+	s.cancel()
+}
 func (s *poolSource) stop(err error) {
 	s.mu.Lock()
 	s.err = errors.Join(s.err, err)
@@ -194,6 +207,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		s.mu.Lock()
 		owned := s.owned && time.Now().Before(s.expires)
 		dispatched := s.dispatched
+		terminating := s.terminating
 		s.dispatchable = false
 		s.pending = nil
 		s.mu.Unlock()
@@ -205,9 +219,9 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		// accounting decision while we own the lease. This deadline bounds it.
 		accounting, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
-		if !dispatched {
+		if terminating || !dispatched {
 			err = errors.Join(err, client.ReleaseLease(accounting, pool.ID, lease.ID))
-			debug.Printf("Released undispatched lease %s (error=%v)", lease.ID, err)
+			debug.Printf("Released lease %s (dispatched=%t; terminating=%t; error=%v)", lease.ID, dispatched, terminating, err)
 			return
 		}
 		final := results.final()

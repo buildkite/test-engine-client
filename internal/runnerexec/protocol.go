@@ -4,12 +4,15 @@ package runnerexec
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
 const SocketEnv = "BUILDKITE_TEST_ENGINE_RUNNER_SOCKET"
+
+var ErrInterrupted = errors.New("runner interrupted")
 
 type SessionRequest struct {
 	InstanceID string `json:"instance_id"`
@@ -74,6 +77,12 @@ type Source interface {
 // but before a batch can reach the runner. Returning an error fences dispatch.
 type DispatchSource interface {
 	Dispatched(Batch) error
+}
+
+// TerminationSource optionally observes SIGINT or SIGTERM before runner
+// shutdown begins, including when no batch is currently outstanding.
+type TerminationSource interface {
+	Terminating()
 }
 
 // Options durations are Go durations; wire durations are integer milliseconds.

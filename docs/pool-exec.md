@@ -69,6 +69,8 @@ do not create additional Scheduler attempts. Muted failures are not retried.
 Each Scheduler attempt is reported as passed, failed, or errored. A failed test
 run exits with status 1. Runner process failures retain the runner's exit status
 when available. Protocol, reporting, or accounting errors exit with status 16.
+When `bktec` receives SIGINT or SIGTERM, it releases its active lease so another
+worker can acquire those attempts without waiting for the lease to expire.
 
 Test result uploads are the runner's responsibility. Configure them through
 Test Collector Ruby; `bktec pool exec` does not perform the normal bktec result

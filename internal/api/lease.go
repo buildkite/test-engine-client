@@ -75,10 +75,10 @@ func (c *Client) CompleteLease(ctx context.Context, poolID, leaseID string, resu
 	return c.leaseRequest(ctx, poolID, "/complete", body, nil, true)
 }
 
-// Release is used only for an entirely undispatched lease. Do not replay an
-// ambiguous release: unlike completion the server does not promise idempotency.
+// Do not replay an ambiguous release: unlike completion the server does not
+// promise idempotency.
 func (c *Client) ReleaseLease(ctx context.Context, poolID, leaseID string) error {
-	return c.leaseRequest(ctx, poolID, "/release", map[string]any{"leases": []any{map[string]string{"id": leaseID, "reason": "worker stopped before dispatch"}}}, nil, false)
+	return c.leaseRequest(ctx, poolID, "/release", map[string]any{"leases": []any{map[string]string{"id": leaseID, "reason": "Worker shutdown"}}}, nil, false)
 }
 
 // The shared doWithRetry retries ambiguous network failures and every 409.
