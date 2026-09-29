@@ -140,6 +140,9 @@ func TestPoolPersistentProcess(t *testing.T) {
 					if mode == "crash" || mode == "delete" || mode == "timeout" {
 						want = "errored"
 					}
+					if mode == "unsupported" {
+						want = "errored"
+					}
 					if results[0].Result != want {
 						t.Errorf("result=%v want %s", results, want)
 					}
@@ -182,8 +185,11 @@ func TestPoolPersistentProcess(t *testing.T) {
 					t.Fatal("missing lifecycle error")
 				}
 				if mode == "unsupported" {
-					if released != 1 || completed != 0 {
+					if completed != 1 || released != 0 {
 						t.Fatal("undispatched accounting", released, completed)
+					}
+					if acquisitions != 1 {
+						t.Fatalf("unsupported lease acquisitions=%d, want 1", acquisitions)
 					}
 				} else if completed != 1 || released != 0 {
 					t.Fatal("dispatched accounting", released, completed)
