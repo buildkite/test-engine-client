@@ -193,6 +193,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 	defer func() {
 		s.mu.Lock()
 		owned := s.owned && time.Now().Before(s.expires)
+		expires := s.expires
 		dispatched := s.dispatched
 		s.dispatchable = false
 		s.pending = nil
@@ -202,8 +203,12 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 			return
 		}
 		// Do not inherit runner cancellation: Scheduler still needs a final
-		// accounting decision while we own the lease. This deadline bounds it.
-		accounting, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		// accounting decision while we own the lease. Never account after expiry.
+		accountingDeadline := time.Now().Add(90 * time.Second)
+		if expires.Before(accountingDeadline) {
+			accountingDeadline = expires
+		}
+		accounting, cancel := context.WithDeadline(context.Background(), accountingDeadline)
 		defer cancel()
 		if !dispatched {
 			err = errors.Join(err, client.ReleaseLease(accounting, pool.ID, lease.ID))
@@ -325,6 +330,22 @@ func (s *poolSource) heartbeat(ctx context.Context, client poolScheduler, poolID
 			return
 		}
 		if err != nil {
+			var leaseError *api.LeaseHTTPError
+			if errors.As(err, &leaseError) && leaseError.Status == 422 && leaseError.Code == api.LeaseErrorCodeMaximumLifetime {
+				debug.Printf("Lease %s reached its maximum lifetime; retaining ownership until %s", leaseID, expires.Format(time.RFC3339))
+				timer := time.NewTimer(time.Until(expires))
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+				s.mu.Lock()
+				s.owned = false
+				s.mu.Unlock()
+				s.stop(errors.New("lease expired"))
+				return
+			}
 			s.mu.Lock()
 			s.owned = false
 			s.mu.Unlock()

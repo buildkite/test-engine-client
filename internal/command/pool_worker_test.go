@@ -3,7 +3,6 @@ package command
 import (
 	"bytes"
 	"context"
-	"errors"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -321,6 +320,104 @@ func TestPoolHeartbeatInterval(t *testing.T) {
 	})
 }
 
+func TestPoolMaximumLifetimeHeartbeatAllowsTerminalAccountingBeforeExpiry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		lease := testLease()
+		lease.ExpiresAt = time.Now().Add(2 * time.Minute)
+		var heartbeats, completes atomic.Int32
+		f := &fakePoolScheduler{
+			heartbeat: func(context.Context) (time.Time, error) {
+				heartbeats.Add(1)
+				return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
+			},
+			complete: func(ctx context.Context, results []api.AttemptResult) error {
+				completes.Add(1)
+				deadline, ok := ctx.Deadline()
+				if !ok || !deadline.Equal(lease.ExpiresAt) {
+					t.Errorf("accounting deadline=%s, want lease expiry %s", deadline, lease.ExpiresAt)
+				}
+				if len(results) != 1 || results[0] != (api.AttemptResult{AttemptID: "original", Result: "passed"}) {
+					t.Errorf("results=%v", results)
+				}
+				return nil
+			},
+			release: func() error { t.Error("dispatched lease released"); return nil },
+		}
+		done := make(chan error, 1)
+		go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+		synctest.Wait()
+		batch, _, err := s.Next()
+		if err != nil || batch == nil {
+			t.Fatalf("batch=%v err=%v", batch, err)
+		}
+		if err := s.Dispatched(*batch); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(40 * time.Second)
+		synctest.Wait()
+		if heartbeats.Load() != 1 {
+			t.Fatalf("heartbeats=%d, want 1", heartbeats.Load())
+		}
+		s.Accepted(*batch, poolReport(`[{"id":"a[1]","file_path":"a","status":"passed"}]`, 1, 0))
+		synctest.Wait()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		if completes.Load() != 1 || heartbeats.Load() != 1 {
+			t.Fatalf("completes=%d heartbeats=%d", completes.Load(), heartbeats.Load())
+		}
+	})
+}
+
+func TestPoolMaximumLifetimeHeartbeatCancelsRunningWorkAtExpiry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		lease := testLease()
+		lease.ExpiresAt = time.Now().Add(2 * time.Minute)
+		var heartbeats, accounted atomic.Int32
+		f := &fakePoolScheduler{
+			heartbeat: func(context.Context) (time.Time, error) {
+				heartbeats.Add(1)
+				return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
+			},
+			complete: func(context.Context, []api.AttemptResult) error { accounted.Add(1); return nil },
+			release:  func() error { accounted.Add(1); return nil },
+		}
+		done := make(chan error, 1)
+		go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+		synctest.Wait()
+		batch, _, err := s.Next()
+		if err != nil || batch == nil {
+			t.Fatalf("batch=%v err=%v", batch, err)
+		}
+		if err := s.Dispatched(*batch); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(40 * time.Second)
+		synctest.Wait()
+		if heartbeats.Load() != 1 {
+			t.Fatalf("heartbeats=%d, want 1", heartbeats.Load())
+		}
+		time.Sleep(80 * time.Second)
+		synctest.Wait()
+		err = <-done
+		if err == nil || !strings.Contains(err.Error(), "context canceled") || !strings.Contains(err.Error(), "lease ownership lost before accounting") {
+			t.Fatalf("error=%v", err)
+		}
+		if outcome := s.outcome(); outcome == nil || !strings.Contains(outcome.Error(), "lease expired") {
+			t.Fatalf("outcome=%v", outcome)
+		}
+		if accounted.Load() != 0 || heartbeats.Load() != 1 {
+			t.Fatalf("accounted=%d heartbeats=%d", accounted.Load(), heartbeats.Load())
+		}
+	})
+}
+
 func TestPoolHeartbeatLossStopsDispatchAndAccounting(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -328,7 +425,9 @@ func TestPoolHeartbeatLossStopsDispatchAndAccounting(t *testing.T) {
 	lease := testLease()
 	lease.ExpiresAt = time.Now().Add(60 * time.Millisecond)
 	var accounted atomic.Int32
-	f := &fakePoolScheduler{heartbeat: func(context.Context) (time.Time, error) { return time.Time{}, errors.New("ownership lost") }, complete: func(context.Context, []api.AttemptResult) error { accounted.Add(1); return nil }, release: func() error { accounted.Add(1); return nil }}
+	f := &fakePoolScheduler{heartbeat: func(context.Context) (time.Time, error) {
+		return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: "INVALID_LEASE_TTL"}
+	}, complete: func(context.Context, []api.AttemptResult) error { accounted.Add(1); return nil }, release: func() error { accounted.Add(1); return nil }}
 	done := make(chan error, 1)
 	go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
 	batch := waitPoolBatch(t, s)
