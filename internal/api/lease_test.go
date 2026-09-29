@@ -269,6 +269,7 @@ func TestHeartbeatExposesStructuredUnprocessableEntityCode(t *testing.T) {
 	}{
 		{"maximum lifetime", `{"code":"MAXIMUM_LIFETIME","message":"wording may change"}`, LeaseErrorCodeMaximumLifetime},
 		{"unrelated validation", `{"code":"INVALID_LEASE_TTL","message":"invalid TTL"}`, "INVALID_LEASE_TTL"},
+		{"invalid response", `<html>upstream error</html>`, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})

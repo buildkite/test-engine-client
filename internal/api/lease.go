@@ -131,8 +131,11 @@ func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, bod
 			var responseError struct {
 				Code string `json:"code"`
 			}
-			_ = json.Unmarshal(raw, &responseError)
-			err = &LeaseHTTPError{Status: resp.StatusCode, Code: responseError.Code}
+			code := ""
+			if unmarshalErr := json.Unmarshal(raw, &responseError); unmarshalErr == nil {
+				code = responseError.Code
+			}
+			err = &LeaseHTTPError{Status: resp.StatusCode, Code: code}
 			if readErr != nil {
 				err = readErr
 			}
