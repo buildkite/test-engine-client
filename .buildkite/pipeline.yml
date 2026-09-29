@@ -21,6 +21,16 @@ steps:
           propagate-environment: true
           mount-buildkite-agent: true
 
+  - name: ":test_tube: Integration tests"
+    command: ".buildkite/steps/integration.sh"
+    plugins:
+      - docker-compose#v5.12.1:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: ci
+          propagate-environment: true
+          mount-buildkite-agent: true
+
   - wait
 
   - group: ":hammer_and_wrench: Build binaries"
