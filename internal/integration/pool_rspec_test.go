@@ -30,7 +30,19 @@ func TestPoolRSpec(t *testing.T) {
 	}
 	// The outer Go test is uploaded by bktec. The nested fixture examples must
 	// remain local or Test Engine would record unrelated RSpec executions.
-	t.Setenv("BUILDKITE_ANALYTICS_TOKEN", "")
+	uploadToken, hadUploadToken := os.LookupEnv("BUILDKITE_ANALYTICS_TOKEN")
+	if err := os.Unsetenv("BUILDKITE_ANALYTICS_TOKEN"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if hadUploadToken {
+			if err := os.Setenv("BUILDKITE_ANALYTICS_TOKEN", uploadToken); err != nil {
+				t.Error(err)
+			}
+		} else if err := os.Unsetenv("BUILDKITE_ANALYTICS_TOKEN"); err != nil {
+			t.Error(err)
+		}
+	})
 	previousDebug := debug.Enabled
 	debug.SetDebug(true)
 	t.Cleanup(func() { debug.SetDebug(previousDebug) })
