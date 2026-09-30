@@ -179,11 +179,11 @@ func TestRunPlanOut(t *testing.T) {
 }
 
 // TestSelectionFlagsVisibility checks that every planning command registers the
-// selection flags, showing only the strategy and its params in help.
+// selection flags, hiding only --metadata and --remote from help.
 func TestSelectionFlagsVisibility(t *testing.T) {
 	visible := map[string]bool{
-		"selection-strategy": true, "selection-param": true,
-		"metadata": false, "collect-git-metadata": false, "remote": false,
+		"selection-strategy": true, "selection-param": true, "collect-git-metadata": true,
+		"metadata": false, "remote": false,
 	}
 	commands := map[string]func() []cli.Flag{
 		"run": runCommandFlags, "plan": planCommandFlags,

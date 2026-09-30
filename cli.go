@@ -241,11 +241,9 @@ func (e nonEmptyEnvVar) GoString() string { return fmt.Sprintf("nonEmptyEnvVar(%
 var collectGitMetadataFlag = &cli.BoolFlag{
 	Name:     "collect-git-metadata",
 	Category: "TEST SELECTION",
-	Usage: "Collect git metadata (commit, branch, full diff against the base branch, Buildkite context) and send it with the plan request. " +
-		"Defaults to on when --selection-strategy is set. Set to true to collect without a strategy, or false to never collect. " +
-		"--metadata values are always sent",
+	Usage: "Send git metadata with the plan request: commit details, branch, Buildkite context and the full git diff against the base branch. " +
+		"On by default when --selection-strategy is set. Set to false to opt out",
 	Sources: cli.NewValueSourceChain(nonEmptyEnvVar("BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA")),
-	Hidden:  true,
 }
 
 var baseURLFlag = &cli.StringFlag{
@@ -633,8 +631,8 @@ var runnerEnvironmentFlags = []cli.Flag{
 	buildkiteAgentCommandFlag,
 }
 
-// selectionFlags are shared by every planning command. Only the strategy and
-// its params appear in help; the metadata flags are hidden but usable.
+// selectionFlags are shared by every planning command. --metadata and --remote
+// are hidden from help but usable.
 func selectionFlags() []cli.Flag {
 	return []cli.Flag{
 		selectionStrategyFlag,

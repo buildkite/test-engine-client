@@ -470,7 +470,7 @@ includes:
 - context fields (branch name, base branch, pipeline slug, build UUID)
 
 To opt out, for example because of large diffs, request size, or not wanting
-to send source diffs, set:
+to send source diffs, pass `--collect-git-metadata=false` or set:
 
 ```sh
 export BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA=false
