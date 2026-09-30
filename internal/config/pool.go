@@ -29,6 +29,7 @@ func (c *Config) ValidateForPoolPlan() error {
 	}
 	c.validateAPI(schedulerOIDCClaims)
 	if c.PoolID == "" {
+		c.validateDynamicParallelism()
 		if c.PoolLeaseDurationMS < 0 {
 			c.errs.appendFieldError("pool-lease-duration-ms", "must be 0 (server default) or a positive millisecond budget")
 		}

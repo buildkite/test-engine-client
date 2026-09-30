@@ -14,13 +14,16 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
-// Pool is the full Scheduler representation, not a lease response. A nil
-// MutedTests means the immutable snapshot is absent; an empty snapshot is [].
+// Pool is the full Scheduler representation, not a lease response. Nil
+// Parallelism means sizing has not completed or was not requested; a pointer to
+// zero is a completed empty plan. A nil MutedTests means the immutable snapshot
+// is absent; an empty snapshot is [].
 type Pool struct {
-	ID         string          `json:"id"`
-	State      string          `json:"state"`
-	MutedTests []plan.TestCase `json:"muted_tests"`
-	Error      *struct {
+	ID          string          `json:"id"`
+	State       string          `json:"state"`
+	Parallelism *int            `json:"parallelism,omitempty"`
+	MutedTests  []plan.TestCase `json:"muted_tests"`
+	Error       *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
 	Location string `json:"-"`
@@ -44,11 +47,14 @@ type PoolPlanLeaseCosts struct {
 	DurationP90MS int `json:"duration_p90_ms"`
 }
 
-// PoolPlan deliberately excludes Test Plan identifiers and lane-sizing fields.
+// PoolPlan excludes Test Plan identifiers and static lane tasks. Dynamic sizing
+// produces a worker-count recommendation on the completed pool representation.
 type PoolPlan struct {
 	Runner         string             `json:"runner"`
 	Branch         string             `json:"branch"`
 	Tests          TestPlanParamsTest `json:"tests"`
+	MaxParallelism int                `json:"max_parallelism,omitempty"`
+	TargetTime     float64            `json:"target_time,omitempty"`
 	Selection      *SelectionParams   `json:"selection,omitempty"`
 	LocationPrefix string             `json:"location_prefix,omitempty"`
 	Metadata       map[string]string  `json:"metadata,omitempty"`

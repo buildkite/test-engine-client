@@ -35,6 +35,40 @@ bktec pool exec \
   -- bundle exec buildkite-rspec
 ```
 
+### Size workers with `bktec pool plan`
+
+Pass `--max-parallelism` (env: `BUILDKITE_TEST_ENGINE_MAX_PARALLELISM`), and
+optionally `--target-time` (env: `BUILDKITE_TEST_ENGINE_TARGET_TIME`), to have
+`bktec pool plan` request recommended parallelism. `--target-time` requires
+`--max-parallelism`.
+
+```shell
+bktec pool plan \
+  --suite-slug my-suite \
+  --test-runner rspec \
+  --target-time 2m \
+  --max-parallelism 120 \
+  --pipeline-upload pool-workers.yml
+```
+
+With these options, `pool plan` waits for Test Scheduler to finish planning. It
+then exports `BUILDKITE_TEST_ENGINE_PARALLELISM` alongside
+`BUILDKITE_TEST_ENGINE_POOL_ID`, either in `--json` output or in the
+environment of `--pipeline-upload`. A completed empty plan exports `0`.
+
+If planning fails, `pool plan` exits with an error. If a ready pool does not
+include recommended parallelism, `pool plan` prints a warning and exports the
+`--max-parallelism` value instead, like the local fallback used by `bktec plan`.
+Workers lease from the shared pool as they start, so the fallback can spread
+tests across up to `--max-parallelism` jobs and use more agents than
+recommended parallelism would. Workers that start after the pool is consumed
+exit without running tests.
+
+Without `--max-parallelism`, `pool plan` returns as soon as the pool is created
+and exports only `BUILDKITE_TEST_ENGINE_POOL_ID`. `pool exec` accepts the same
+sizing options when it creates a pool, but it does not change the number of
+running jobs.
+
 When creating a pool, `pool exec` supports these test discovery options:
 
 - `--files` and `--selector-file`;
