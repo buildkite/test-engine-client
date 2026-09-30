@@ -10,28 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const (
-	previewSelectionEnvVar = "BKTEC_PREVIEW_SELECTION"
-)
-
-func previewSelectionEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(previewSelectionEnvVar))) {
-	case "1", "t", "true", "y", "yes", "on":
-		return true
-	default:
-		return false
-	}
-}
-
 func applyPlanRequestContext(cmd *cli.Command) error {
-	if !previewSelectionEnabled() {
-		cfg.SelectionStrategy = ""
-		cfg.SelectionParams = nil
-		cfg.Metadata = nil
-		cfg.CollectGitMetadata = nil
-		return nil
-	}
-
 	// An explicit false (flag or env var) opts out of auto-collection, so an
 	// unset flag must stay distinct from false.
 	cfg.CollectGitMetadata = nil
@@ -224,22 +203,23 @@ var suiteSlugFlag = &cli.StringFlag{
 
 var selectionStrategyFlag = &cli.StringFlag{
 	Name:        "selection-strategy",
-	Category:    "PREVIEW: TEST SELECTION",
-	Usage:       "Selection strategy sent to the test plan API",
+	Category:    "TEST SELECTION",
+	Usage:       "Test selection strategy. Set to manual to run only the tests passed with --selection-param files=...",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"),
 	Destination: &cfg.SelectionStrategy,
 }
 
 var selectionParamFlag = &cli.StringSliceFlag{
 	Name:     "selection-param",
-	Category: "PREVIEW: TEST SELECTION",
-	Usage:    "Additional selection strategy parameter key=value sent to the test plan API. Repeat for multiple entries.",
+	Category: "TEST SELECTION",
+	Usage:    "Selection strategy parameter as key=value. For manual selection, pass files= followed by newline-separated test paths. Repeat for multiple entries.",
 }
 
 var metadataFlag = &cli.StringSliceFlag{
 	Name:     "metadata",
-	Category: "PREVIEW: TEST SELECTION",
+	Category: "TEST SELECTION",
 	Usage:    "Additional metadata key=value sent to the test plan API. Repeat for multiple entries.",
+	Hidden:   true,
 }
 
 // nonEmptyEnvVar is an environment variable source that treats an empty value
@@ -260,11 +240,12 @@ func (e nonEmptyEnvVar) GoString() string { return fmt.Sprintf("nonEmptyEnvVar(%
 // tell an explicit false apart from unset, so it has no Destination.
 var collectGitMetadataFlag = &cli.BoolFlag{
 	Name:     "collect-git-metadata",
-	Category: "PREVIEW: TEST SELECTION",
+	Category: "TEST SELECTION",
 	Usage: "Collect git metadata (commit, branch, full diff against the base branch, Buildkite context) and send it with the plan request. " +
 		"Defaults to on when --selection-strategy is set. Set to true to collect without a strategy, or false to never collect. " +
 		"--metadata values are always sent",
 	Sources: cli.NewValueSourceChain(nonEmptyEnvVar("BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA")),
+	Hidden:  true,
 }
 
 var baseURLFlag = &cli.StringFlag{
@@ -570,11 +551,12 @@ var remoteFlag = &cli.StringFlag{
 // env var unexpectedly affecting plan behaviour.
 var planRemoteFlag = &cli.StringFlag{
 	Name:        "remote",
-	Category:    "PREVIEW: TEST SELECTION",
+	Category:    "TEST SELECTION",
 	Usage:       "Git remote name for metadata auto-collection",
 	Value:       "origin",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_REMOTE"),
 	Destination: &cfg.Remote,
+	Hidden:      true,
 }
 
 var concurrencyFlag = &cli.IntFlag{
@@ -651,10 +633,9 @@ var runnerEnvironmentFlags = []cli.Flag{
 	buildkiteAgentCommandFlag,
 }
 
-func previewSelectionFlags() []cli.Flag {
-	if !previewSelectionEnabled() {
-		return []cli.Flag{}
-	}
+// selectionFlags are shared by every planning command. Only the strategy and
+// its params appear in help; the metadata flags are hidden but usable.
+func selectionFlags() []cli.Flag {
 	return []cli.Flag{
 		selectionStrategyFlag,
 		selectionParamFlag,
@@ -725,7 +706,7 @@ func runCommandFlags() []cli.Flag {
 	flags = append(flags, parallelismFlag)
 	flags = append(flags, failOnNoTestsFlag)
 	flags = append(flags, promiseFailureFlag)
-	flags = append(flags, previewSelectionFlags()...)
+	flags = append(flags, selectionFlags()...)
 	return freshFlags(flags)
 }
 
@@ -744,7 +725,7 @@ func planCommandFlags() []cli.Flag {
 	flags = append(flags, testEngineFlags...)
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
-	flags = append(flags, previewSelectionFlags()...)
+	flags = append(flags, selectionFlags()...)
 	return freshFlags(flags)
 }
 
@@ -777,7 +758,7 @@ func poolPlanCommandFlags() []cli.Flag {
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, suiteSlugFlag, baseURLFlag, oidcFlag, oidcLifetimeFlag)
 	flags = append(flags, runnerEnvironmentFlags...)
-	flags = append(flags, previewSelectionFlags()...)
+	flags = append(flags, selectionFlags()...)
 	return freshFlags(flags)
 }
 
@@ -852,7 +833,7 @@ var cliCommand = &cli.Command{
 		{
 			Name:   "tools",
 			Usage:  "Utility tools",
-			Hidden: !previewSelectionEnabled(),
+			Hidden: true,
 			Commands: []*cli.Command{
 				{
 					Name:   "backfill-commit-metadata",

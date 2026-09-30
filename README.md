@@ -431,136 +431,54 @@ The custom runner is the main case that needs attention, since its selector migh
 
 See the [runner guides](#runner-guides) for runner-specific selector details and collector requirements.
 
-### Preview: Test Selection
+### Test selection
 
-You can pass test selection strategy configuration and additional change context to the test plan API request.
-This preview is enabled only when `BKTEC_PREVIEW_SELECTION` is truthy (`1`, `true`, `yes`, or `on`).
-This functionality is under development, and these flags currently have undefined behavior.
-
-Environment variables:
+Manual test selection runs only the tests you list, instead of the full suite.
+Set the selection strategy to `manual` and pass the tests as a newline-separated
+`files` selection parameter:
 
 ```sh
-export BKTEC_PREVIEW_SELECTION=true
-export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=percent
+bktec run --selection-strategy manual \
+  --selection-param "files=$(cat tests-to-run.txt)"
 ```
 
-Command-line flags:
+The strategy can also be set with an environment variable. `--selection-param`
+is only supported as a repeatable CLI flag.
 
 ```sh
-BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
-  --selection-param percent=40
+export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=manual
 ```
 
-#### Automatic git metadata collection
+Each line must exactly match a test path or selector that bktec sends in the
+test plan request, including any location prefix (`--location-prefix`).
+Surrounding whitespace and blank lines are ignored. If no tests match, bktec
+warns and runs nothing rather than falling back to the full suite.
 
-When `--selection-strategy` is set, `plan`, `run` and
-`pool` automatically collect git metadata from the current repository and send
-it with the plan request. This includes:
+`bktec plan` accepts the same flags. The plan is cached under its plan
+identifier, so the plan step and every run node that shares the identifier
+must pass the same strategy and file list.
+
+#### Git metadata
+
+When a selection strategy is set, `plan`, `run` and `pool` also collect git
+metadata from the current repository and send it with the plan request. This
+includes:
 
 - commit information (SHA, author, committer, message)
 - diff data against the merge base with the base branch: files changed,
   numstat, and the **full `git diff`**, which contains your source changes
 - context fields (branch name, base branch, pipeline slug, build UUID)
 
-`--collect-git-metadata` (or `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA`)
-overrides the default:
-
-| Value | Behavior |
-| --- | --- |
-| Not set (or empty) | Collect when a selection strategy is set |
-| `true` | Always collect, even without a selection strategy |
-| `false` | Never collect, even with a selection strategy set |
-
-To collect metadata without configuring selection:
-
-```sh
-BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --collect-git-metadata
-```
-
 To opt out, for example because of large diffs, request size, or not wanting
-to send source diffs:
+to send source diffs, set:
 
 ```sh
 export BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA=false
 ```
 
-When you opt out, values passed with `--metadata` are still sent; only
-automatic collection is skipped. Some strategies depend on this metadata:
-
-- `rspec_changed_files` requires `files_changed`, so the API rejects the plan
-  request (HTTP 422) unless you pass it with `--metadata files_changed=...`.
-- `xgboost` falls back to running the full suite.
-
 Set the opt-out for the whole build (for example as a pipeline-level `env`),
 not on individual steps. The pool request, including its metadata, identifies
 the pool, so nodes that disagree on the opt-out get a pool conflict error.
-
-The base branch for diff computation is resolved using a fallback chain:
-
-1. Explicit override via `--metadata base_branch=<branch>`
-2. `BUILDKITE_PULL_REQUEST_BASE_BRANCH` (auto-set by Buildkite on PR builds)
-3. Auto-detection via `<remote>/HEAD`, then `<remote>/main`, then `<remote>/master`
-
-Most users don't need to configure anything. Override `base_branch` only if
-your repository uses a non-standard default branch (for example, `develop` or `trunk`)
-and `<remote>/HEAD` isn't configured.
-
-The `--remote` flag (default `origin`) controls which git remote is used for
-base branch detection. You can also set `BUILDKITE_TEST_ENGINE_REMOTE`.
-
-Auto-collected values are merged with any explicit `--metadata` flags you
-provide. Your explicit values always take precedence.
-
-#### Manual metadata overrides
-
-Use `--metadata key=value` to pass additional metadata or override
-auto-collected values. Use `--selection-param key=value` to pass strategy
-parameters. Both flags are repeatable. Values can be large and multiline.
-
-```sh
-BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
-  --selection-param percent=40 \
-  --metadata base_branch=develop
-```
-
-`--selection-param` and `--metadata` are only supported as repeatable CLI flags.
-
-### Preview: Commit Metadata Backfill
-
-bktec can collect historical git commit metadata from your repository and upload it to Buildkite for training test selection models. This is useful for bootstrapping models with historical changeset data so that test selection can identify which tests are relevant to your code changes.
-
-The `tools` subcommands are hidden from `bktec --help` by default. Setting `BKTEC_PREVIEW_SELECTION` to a truthy value (`1`, `true`, `yes`, or `on`) makes them visible in help output. The commands can always be invoked directly regardless of this setting.
-
-Two commands are available under `bktec tools`:
-
-**Collect and upload commit metadata:**
-
-```sh
-bktec tools backfill-commit-metadata \
-  --access-token "bkua_..." \
-  --organization-slug "my-org" \
-  --suite-slug "my-suite"
-```
-
-**Generate the tarball locally for inspection before uploading:**
-
-```sh
-bktec tools backfill-commit-metadata --output commit-metadata.tar.gz
-
-# Inspect the contents
-tar tzf commit-metadata.tar.gz
-# commit-metadata.jsonl
-# metadata.json
-
-# Upload when ready
-bktec tools backfill-commit-metadata \
-  --upload commit-metadata.tar.gz \
-  --suite-slug "my-suite"
-```
-
-The API access token requires `read_suites` and `write_suites` scopes.
-
-For detailed usage, flags, and configuration options, see the [Commit Metadata Backfill](./docs/commit-metadata-backfill.md) guide.
 
 ### Where to go next
 

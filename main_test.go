@@ -29,7 +29,6 @@ func TestLogErrorAndExitPreservesCLIExitCode(t *testing.T) {
 func TestRunInvalidConfigurationError(t *testing.T) {
 	cfg = config.New()
 	t.Cleanup(func() { cfg = config.New() })
-	t.Setenv(previewSelectionEnvVar, "")
 
 	cfg.Identifier = "build/step"
 	cfg.OrganizationSlug = "my-org"
