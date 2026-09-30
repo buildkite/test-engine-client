@@ -1446,8 +1446,50 @@ func TestPlan_ZeroMatchSelection(t *testing.T) {
 					t.Errorf("stderr contains %q: %s", unwanted, stderr)
 				}
 			}
-			if !strings.Contains(stderr, "Parallelism is 0, there is nothing to run.") {
-				t.Errorf("stderr missing zero-parallelism notice: %s", stderr)
+			for _, wanted := range []string{
+				"Parallelism is 0, there is nothing to run.",
+				"Selection matched none of the 4 candidate test selectors, so there are no tests to run.",
+				"Check that the files passed with --selection-param match",
+			} {
+				if !strings.Contains(stderr, wanted) {
+					t.Errorf("stderr missing %q: %s", wanted, stderr)
+				}
+			}
+		})
+	}
+}
+
+func TestPrintSelectedNothingWarning(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		selection string
+		want      string
+	}{
+		{"zero match", `{"applied":true,"strategy":"xgboost","candidate_count":4,"selected_count":0}`, "Selection matched none of the 4 candidate test selectors"},
+		{"missing candidate count", `{"applied":true,"selected_count":0}`, "Selection matched no tests, so there are no tests to run."},
+		{"not applied", `{"applied":false,"candidate_count":4,"selected_count":0}`, ""},
+		{"some selected", `{"applied":true,"candidate_count":4,"selected_count":1}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := plan.TestPlan{Tasks: map[string]*plan.Task{}}
+			if err := json.Unmarshal([]byte(tc.selection), &p.Selection); err != nil {
+				t.Fatal(err)
+			}
+			var buf bytes.Buffer
+			printPlanningSummary(&buf, p, sourceCreateResponse, &config.Config{})
+			got := buf.String()
+			if tc.want == "" {
+				if strings.Contains(got, "Selection matched") {
+					t.Errorf("unexpected zero-match warning: %s", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("missing %q: %s", tc.want, got)
+			}
+			// The path hint only applies to manual selection.
+			if strings.Contains(got, "--selection-param") {
+				t.Errorf("unexpected manual hint: %s", got)
 			}
 		})
 	}

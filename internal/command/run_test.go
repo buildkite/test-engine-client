@@ -1009,7 +1009,9 @@ func TestRun_ZeroMatchSelectionRunsNothing(t *testing.T) {
 	if err := Run(context.Background(), cfg, ""); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	assert.NotContains(t, getStderr(), "Falling back to non-intelligent splitting")
+	stderr := getStderr()
+	assert.NotContains(t, stderr, "Falling back to non-intelligent splitting")
+	assert.Contains(t, stderr, "Selection matched none of the 4 candidate test selectors, so there are no tests to run.")
 }
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
