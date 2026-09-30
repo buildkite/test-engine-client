@@ -58,6 +58,23 @@ func printPlanningSummary(w io.Writer, testPlan plan.TestPlan, source string, cf
 	plan.PrintSelectionSummary(w, testPlan, requested)
 	fmt.Fprintln(w)
 	printSplitSummary(w, testPlan)
+	if testPlan.SelectedNothing() {
+		printSelectedNothingWarning(w, testPlan.Selection)
+	}
+}
+
+// printSelectedNothingWarning explains an applied selection that matched no
+// tests, which would otherwise read like a quiet success.
+func printSelectedNothingWarning(w io.Writer, s *plan.SelectionMetadata) {
+	message := "Selection matched no tests, so there are no tests to run."
+	if s.CandidateCount != nil {
+		message = fmt.Sprintf("Selection matched none of the %d candidate test selectors, so there are no tests to run.", *s.CandidateCount)
+	}
+	var hints []string
+	if s.Strategy != nil && *s.Strategy == "manual" {
+		hints = append(hints, "Check that the files passed with --selection-param match the test paths Test Engine records.")
+	}
+	printWarning(w, message, hints...)
 }
 
 // printSplitSummary prints the plan summary and warns when a selector plan had

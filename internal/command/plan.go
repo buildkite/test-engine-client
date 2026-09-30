@@ -163,7 +163,7 @@ func planOut(ctx context.Context, cfg *config.Config, testTargets []string, apiC
 	// server's actual response. We warn on stderr, but not via warnErrorPlan:
 	// that appends a "falling back to non-intelligent splitting" notice, which
 	// is untrue here since we emit the server's plan rather than a fallback.
-	if len(testPlan.Tasks) == 0 {
+	if len(testPlan.Tasks) == 0 && !testPlan.SelectedNothing() {
 		fmt.Fprintln(os.Stderr, "⚠️ The Test Engine API returned an empty plan.")
 	}
 
@@ -277,8 +277,9 @@ func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []strin
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
-	// In this case, we should create a fallback plan.
-	if len(testPlan.Tasks) == 0 {
+	// In this case, we should create a fallback plan. A selection that matched
+	// no tests is not an error: the server's plan has nothing to run.
+	if len(testPlan.Tasks) == 0 && !testPlan.SelectedNothing() {
 		warnErrorPlan()
 		return makeFallbackPlan(cfg), nil
 	}

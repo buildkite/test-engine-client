@@ -19,13 +19,14 @@ import (
 )
 
 type testSource struct {
-	batches    []Batch
-	accepted   []string
-	results    []Result
-	unresolved []string
-	reasons    []error
-	done       string
-	onNext     func()
+	batches     []Batch
+	accepted    []string
+	results     []Result
+	unresolved  []string
+	reasons     []error
+	done        string
+	onNext      func()
+	terminating bool
 }
 
 func (s *testSource) Next() (*Batch, string, error) {
@@ -47,6 +48,7 @@ func (s *testSource) Unresolved(b Batch, err error) {
 	s.unresolved = append(s.unresolved, b.ID)
 	s.reasons = append(s.reasons, err)
 }
+func (s *testSource) Terminating() { s.terminating = true }
 
 func socketClient(socket string) *http.Client {
 	return &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {

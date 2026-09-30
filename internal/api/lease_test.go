@@ -210,6 +210,33 @@ func TestCompletionAcceptsSuccessfulResponseWithoutParsingBody(t *testing.T) {
 	}
 }
 
+func TestReleaseLeaseReturnsAllActiveAttemptsToPool(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/organizations/org/test-scheduler/pools/pool/leases/release" {
+			t.Errorf("path=%s", r.URL.Path)
+		}
+		var body struct {
+			Leases []struct {
+				ID         string   `json:"id"`
+				AttemptIDs []string `json:"attempt_ids"`
+				Reason     string   `json:"reason"`
+			} `json:"leases"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Leases) != 1 || body.Leases[0].ID != "lease" || body.Leases[0].AttemptIDs != nil || body.Leases[0].Reason != "Worker shutdown" {
+			t.Errorf("release body=%+v", body)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	c := NewClient(ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "org"})
+	if err := c.ReleaseLease(context.Background(), "pool", "lease"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCompletionReplaysIdenticalBodyAfterAmbiguousFailure(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -260,6 +287,32 @@ func TestHeartbeatRetriesTransientFailureButNotOwnershipLoss(t *testing.T) {
 	var status *LeaseHTTPError
 	if calls != 2 || !errors.As(err, &status) || status.Status != 404 {
 		t.Fatalf("calls=%d error=%v", calls, err)
+	}
+}
+
+func TestHeartbeatExposesStructuredUnprocessableEntityCode(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, wantCode string
+	}{
+		{"maximum lifetime", `{"code":"MAXIMUM_LIFETIME","message":"wording may change"}`, LeaseErrorCodeMaximumLifetime},
+		{"unrelated validation", `{"code":"INVALID_LEASE_TTL","message":"invalid TTL"}`, "INVALID_LEASE_TTL"},
+		{"invalid response", `<html>upstream error</html>`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})
+			c.httpClient.Transport = leaseTransport(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusUnprocessableEntity,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(tc.body)),
+				}, nil
+			})
+			_, err := c.HeartbeatLease(context.Background(), "pool", "lease")
+			var leaseError *LeaseHTTPError
+			if !errors.As(err, &leaseError) || leaseError.Status != http.StatusUnprocessableEntity || leaseError.Code != tc.wantCode {
+				t.Fatalf("error=%v, want HTTP 422 code %q", err, tc.wantCode)
+			}
+		})
 	}
 }
 

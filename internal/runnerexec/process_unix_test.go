@@ -5,6 +5,7 @@ package runnerexec
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,6 +15,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
 // This is a real subprocess using the same socket/environment contract as Ruby.
@@ -31,10 +34,31 @@ func TestRunnerProcess(t *testing.T) {
 	}
 	client := socketClient(os.Getenv(SocketEnv))
 	defer client.CloseIdleConnections()
-	session := handshake(t, client, "child")
+	session := ""
+	if mode == "unsupported-retry-terminate" {
+		data := request(t, client, "POST", "/v1/sessions", "", `{"instance_id":"child","capabilities":{"selector_formats":["file"]}}`, 201)
+		var registration SessionResponse
+		if err := json.Unmarshal(data, &registration); err != nil {
+			t.Fatal(err)
+		}
+		session = registration.SessionID
+	} else {
+		session = handshake(t, client, "child")
+	}
+	accepted := false
 	for {
 		var response PullResponse
-		data := request(t, client, "POST", "/v1/batches", session, `{}`, 200)
+		status := 200
+		if mode == "unsupported-retry-terminate" && accepted {
+			status = 400
+		}
+		data := request(t, client, "POST", "/v1/batches", session, `{}`, status)
+		if status == 400 {
+			_ = syscall.Kill(os.Getppid(), syscall.SIGTERM)
+			<-signals
+			time.Sleep(100 * time.Millisecond)
+			return
+		}
 		if err := json.Unmarshal(data, &response); err != nil {
 			t.Fatal(err)
 		}
@@ -65,12 +89,13 @@ func TestRunnerProcess(t *testing.T) {
 			return
 		}
 		request(t, client, "POST", "/v1/batches/"+response.Batch.ID+"/results", session, completed, 200)
+		accepted = true
 	}
 }
 
 func TestLifecycle(t *testing.T) {
 	for _, tc := range []struct{ mode, wantError string }{
-		{"normal", ""}, {"startup", "startup timeout"}, {"watchdog", "batch timeout"}, {"crash", "runner exit"}, {"delete", "runner departed"}, {"cancel", "context canceled"}, {"interrupt", "interrupted"}, {"terminate", "interrupted"}, {"flush-hang", "shutdown timeout"},
+		{"normal", ""}, {"startup", "startup timeout"}, {"watchdog", "batch timeout"}, {"crash", "runner exit"}, {"delete", "runner departed"}, {"cancel", "context canceled"}, {"interrupt", "interrupted"}, {"terminate", "interrupted"}, {"unsupported-retry-terminate", "batch selector not supported"}, {"flush-hang", "shutdown timeout"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -80,6 +105,10 @@ func TestLifecycle(t *testing.T) {
 			cmd.Env = append(os.Environ(), "BKTEC_TEST_CHILD="+tc.mode, "BKTEC_TEST_FLUSH="+flush, SocketEnv+"=/wrong/socket")
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			source := &testSource{batches: []Batch{{ID: "first"}, {ID: "retry"}}, done: "plan_completed"}
+			if tc.mode == "unsupported-retry-terminate" {
+				source.batches[0].Tests = []plan.TestCase{{Format: plan.TestCaseFormatFile, Path: "a"}}
+				source.batches[1].Tests = []plan.TestCase{{Format: plan.TestCaseFormatExample, Path: "a", Identifier: "a[1]"}}
+			}
 			called := make(chan struct{}, 1)
 			source.onNext = func() {
 				select {
@@ -127,6 +156,12 @@ func TestLifecycle(t *testing.T) {
 			} else if err == nil || !strings.Contains(err.Error(), tc.wantError) {
 				t.Fatalf("error %v, want %q", err, tc.wantError)
 			}
+			if source.terminating != (tc.mode == "interrupt" || tc.mode == "terminate") {
+				t.Fatalf("termination notification=%t", source.terminating)
+			}
+			if (tc.mode == "interrupt" || tc.mode == "terminate") && !errors.Is(err, ErrInterrupted) {
+				t.Fatalf("error %v does not wrap ErrInterrupted", err)
+			}
 			if tc.mode == "normal" {
 				if data, err := os.ReadFile(flush); err != nil || string(data) != "flushed" {
 					t.Fatalf("returned before flush: %q %v", data, err)
@@ -136,7 +171,7 @@ func TestLifecycle(t *testing.T) {
 				}
 			}
 			wantUnresolved := "[first]"
-			if tc.mode == "normal" || tc.mode == "startup" || tc.mode == "flush-hang" {
+			if tc.mode == "normal" || tc.mode == "startup" || tc.mode == "unsupported-retry-terminate" || tc.mode == "flush-hang" {
 				wantUnresolved = "[]"
 			}
 			if fmt.Sprint(source.unresolved) != wantUnresolved {

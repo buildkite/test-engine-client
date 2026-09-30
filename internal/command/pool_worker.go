@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
 )
 
@@ -28,6 +31,7 @@ type poolSource struct {
 	pending         *runnerexec.Batch
 	dispatched      bool
 	dispatchable    bool
+	terminating     bool
 	expires         time.Time
 	owned           bool
 	reason          string
@@ -35,6 +39,8 @@ type poolSource struct {
 	passedAttempts  int
 	failedAttempts  int
 	erroredAttempts int
+	reportedTests   map[string]poolReportedTest
+	erroredWork     map[string]api.LeaseAttempt
 	sequence        int
 	retryRound      int
 	results         chan runnerexec.Result
@@ -42,7 +48,12 @@ type poolSource struct {
 }
 
 func newPoolSource(cancel context.CancelFunc) *poolSource {
-	return &poolSource{results: make(chan runnerexec.Result, 1), cancel: cancel}
+	return &poolSource{
+		results:       make(chan runnerexec.Result, 1),
+		cancel:        cancel,
+		reportedTests: make(map[string]poolReportedTest),
+		erroredWork:   make(map[string]api.LeaseAttempt),
+	}
 }
 func (s *poolSource) Next() (*runnerexec.Batch, string, error) {
 	s.mu.Lock()
@@ -60,7 +71,7 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 	if s.err != nil {
 		return s.err
 	}
-	if !s.dispatchable || !s.owned || !time.Now().Before(s.expires) {
+	if !s.dispatchable || s.terminating || !s.owned || !time.Now().Before(s.expires) {
 		return errors.New("lease no longer owned at dispatch")
 	}
 	s.dispatchable = false
@@ -74,6 +85,18 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 }
 func (s *poolSource) Accepted(_ runnerexec.Batch, result runnerexec.Result) { s.results <- result }
 func (s *poolSource) Unresolved(_ runnerexec.Batch, err error)              { s.stop(err) }
+func (s *poolSource) Terminating() {
+	s.mu.Lock()
+	if s.err != nil {
+		s.mu.Unlock()
+		return
+	}
+	s.terminating = true
+	s.dispatchable = false
+	s.pending = nil
+	s.mu.Unlock()
+	s.cancel()
+}
 func (s *poolSource) stop(err error) {
 	s.mu.Lock()
 	s.err = errors.Join(s.err, err)
@@ -88,6 +111,58 @@ func (s *poolSource) outcome() error {
 		return errors.Join(s.err, fmt.Errorf("pool execution: passed attempts: %d; failed attempts: %d; errored attempts: %d", s.passedAttempts, s.failedAttempts, s.erroredAttempts))
 	}
 	return s.err
+}
+
+func reportedTestKey(test runner.ReportedTest) string {
+	if test.TestCase.Identifier != "" {
+		return test.TestCase.Identifier
+	}
+	if test.TestCase.Path != "" {
+		return test.TestCase.Path
+	}
+	if test.TestCase.Scope != "" || test.TestCase.Name != "" {
+		return strings.Join([]string{test.Selector, test.TestCase.Scope, test.TestCase.Name}, "\x00")
+	}
+	return test.Location
+}
+
+func (s *poolSource) recordSettled(results *poolResults) {
+	tests, errored := results.settled()
+	for _, test := range tests {
+		s.reportedTests[reportedTestKey(test.test)] = test
+	}
+	for _, attempt := range errored {
+		s.erroredWork[attempt.ID] = attempt
+	}
+}
+
+func (s *poolSource) summary() ([]poolReportedTest, []api.LeaseAttempt) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	failed := make([]poolReportedTest, 0, len(s.reportedTests))
+	for _, test := range s.reportedTests {
+		if test.test.Status == runner.TestStatusFailed {
+			failed = append(failed, test)
+		}
+	}
+	errored := make([]api.LeaseAttempt, 0, len(s.erroredWork))
+	for _, attempt := range s.erroredWork {
+		errored = append(errored, attempt)
+	}
+	slices.SortFunc(failed, func(a, b poolReportedTest) int {
+		if aExample, bExample := a.entry.Format == plan.TestCaseFormatExample, b.entry.Format == plan.TestCaseFormatExample; aExample != bExample {
+			if aExample {
+				return 1
+			}
+			return -1
+		}
+		if order := strings.Compare(attemptSelector(a.entry), attemptSelector(b.entry)); order != 0 {
+			return order
+		}
+		return strings.Compare(reportedTestKey(a.test), reportedTestKey(b.test))
+	})
+	slices.SortFunc(errored, func(a, b api.LeaseAttempt) int { return strings.Compare(a.ID, b.ID) })
+	return failed, errored
 }
 
 func (s *poolSource) work(ctx context.Context, client poolScheduler, pool api.Pool, retries int) {
@@ -193,7 +268,9 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 	defer func() {
 		s.mu.Lock()
 		owned := s.owned && time.Now().Before(s.expires)
+		expires := s.expires
 		dispatched := s.dispatched
+		terminating := s.terminating
 		s.dispatchable = false
 		s.pending = nil
 		s.mu.Unlock()
@@ -202,12 +279,16 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 			return
 		}
 		// Do not inherit runner cancellation: Scheduler still needs a final
-		// accounting decision while we own the lease. This deadline bounds it.
-		accounting, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		// accounting decision while we own the lease. Never account after expiry.
+		accountingDeadline := time.Now().Add(90 * time.Second)
+		if expires.Before(accountingDeadline) {
+			accountingDeadline = expires
+		}
+		accounting, cancel := context.WithDeadline(context.Background(), accountingDeadline)
 		defer cancel()
-		if !dispatched {
+		if terminating || !dispatched {
 			err = errors.Join(err, client.ReleaseLease(accounting, pool.ID, lease.ID))
-			debug.Printf("Released undispatched lease %s (error=%v)", lease.ID, err)
+			debug.Printf("Released lease %s (dispatched=%t; terminating=%t; error=%v)", lease.ID, dispatched, terminating, err)
 			return
 		}
 		final := results.final()
@@ -230,6 +311,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		s.passedAttempts += passed
 		s.failedAttempts += failed
 		s.erroredAttempts += errored
+		s.recordSettled(results)
 		s.mu.Unlock()
 		debug.Printf("Completed lease %s (scheduler attempts=%d; final: passed=%d failed=%d errored=%d)", lease.ID, len(final), passed, failed, errored)
 	}()
@@ -325,6 +407,22 @@ func (s *poolSource) heartbeat(ctx context.Context, client poolScheduler, poolID
 			return
 		}
 		if err != nil {
+			var leaseError *api.LeaseHTTPError
+			if errors.As(err, &leaseError) && leaseError.Status == 422 && leaseError.Code == api.LeaseErrorCodeMaximumLifetime {
+				debug.Printf("Lease %s reached its maximum lifetime; retaining ownership until %s", leaseID, expires.Format(time.RFC3339))
+				timer := time.NewTimer(time.Until(expires))
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+				s.mu.Lock()
+				s.owned = false
+				s.mu.Unlock()
+				s.stop(errors.New("lease expired"))
+				return
+			}
 			s.mu.Lock()
 			s.owned = false
 			s.mu.Unlock()

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -15,6 +16,8 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
 	"github.com/urfave/cli/v3"
 )
@@ -81,6 +84,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	cancel()
 	<-done
 	outcome := source.outcome()
+	printPoolSummary(os.Stdout, source)
 	debug.Printf("Pool runner stopped (runner error=%v, worker error=%v)", err, outcome)
 	if err == nil && outcome == nil {
 		fmt.Fprintf(os.Stdout, "pool execution: passed attempts: %d; failed attempts: 0; errored attempts: 0\n", source.passedAttempts)
@@ -89,6 +93,95 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		return cli.Exit(outcome, 1)
 	}
 	return errors.Join(err, outcome)
+}
+
+func printPoolSummary(w io.Writer, source *poolSource) {
+	failed, errored := source.summary()
+	if len(failed) == 0 && len(errored) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "+++ ========== Buildkite Test Engine Pool Summary ==========")
+	if len(failed) > 0 {
+		fmt.Fprintln(w, "❌ Failed Entries:")
+		entry := ""
+		examplesStarted := false
+		for _, test := range failed {
+			if test.entry.Format == plan.TestCaseFormatExample {
+				if !examplesStarted {
+					fmt.Fprintln(w)
+					examplesStarted = true
+				}
+				fmt.Fprintf(w, "- %s\n", reportedTestDescription(test.test))
+				continue
+			}
+			if next := attemptSelector(test.entry); next != entry {
+				if entry != "" {
+					fmt.Fprintln(w)
+				}
+				entry = next
+				fmt.Fprintf(w, "- %s:\n", entry)
+			}
+			fmt.Fprintf(w, "  - %s\n", reportedTestDescription(test.test))
+		}
+	}
+	if len(errored) > 0 {
+		if len(failed) > 0 {
+			fmt.Fprintln(w)
+		}
+		fmt.Fprintln(w, "🚨 Errored Attempts:")
+		for _, attempt := range errored {
+			selector := attemptSelector(attempt.Selector)
+			if selector == "" {
+				fmt.Fprintf(w, "- attempt %s\n", attempt.ID)
+			} else {
+				fmt.Fprintf(w, "- %s (attempt %s)\n", selector, attempt.ID)
+			}
+		}
+	}
+	fmt.Fprintln(w, "==========================================================")
+}
+
+func reportedTestDescription(test runner.ReportedTest) string {
+	name := strings.TrimSpace(test.TestCase.Scope + " " + test.TestCase.Name)
+	reference := reportedTestReference(test)
+	if name == "" {
+		return reference
+	}
+	if reference == "" {
+		return name
+	}
+	return fmt.Sprintf("%s (%s)", name, reference)
+}
+
+func reportedTestReference(test runner.ReportedTest) string {
+	if test.Location != "" {
+		locationFile := test.Location
+		if colon := strings.LastIndexByte(locationFile, ':'); colon >= 0 {
+			locationFile = locationFile[:colon]
+		}
+		if strings.TrimPrefix(locationFile, "./") == strings.TrimPrefix(test.Selector, "./") {
+			return test.Location
+		}
+	}
+	if test.TestCase.Identifier != "" {
+		return test.TestCase.Identifier
+	}
+	if test.TestCase.Path != "" {
+		return test.TestCase.Path
+	}
+	return test.Location
+}
+
+func attemptSelector(test plan.TestCase) string {
+	switch test.Format {
+	case plan.TestCaseFormatSelector:
+		return test.Value
+	case plan.TestCaseFormatExample:
+		if test.Identifier != "" {
+			return test.Identifier
+		}
+	}
+	return test.Path
 }
 
 // jwtExpiration is only for scheduling refresh, not for authenticating a token;

@@ -19,6 +19,11 @@ type poolResults struct {
 	muted        []plan.TestCase
 }
 
+type poolReportedTest struct {
+	test  runner.ReportedTest
+	entry plan.TestCase
+}
+
 func newPoolResults(attempts []api.LeaseAttempt, muted []plan.TestCase) *poolResults {
 	r := &poolResults{attempts: attempts, muted: muted, reported: make([]map[string]runner.ReportedTest, len(attempts)), broken: make([]bool, len(attempts)), reportErrors: make([]bool, len(attempts))}
 	for i := range attempts {
@@ -152,4 +157,24 @@ func (r *poolResults) final() []api.AttemptResult {
 		results[i] = api.AttemptResult{AttemptID: a.ID, Result: status}
 	}
 	return results
+}
+
+// settled returns the native example states and errored Scheduler attempts
+// after local retries and muting have been applied. Callers can use the native
+// states for job-level reporting without conflating examples with attempts.
+func (r *poolResults) settled() ([]poolReportedTest, []api.LeaseAttempt) {
+	var tests []poolReportedTest
+	var errored []api.LeaseAttempt
+	final := r.final()
+	for i, result := range final {
+		for _, test := range r.reported[i] {
+			if !r.isMuted(test.TestCase) {
+				tests = append(tests, poolReportedTest{test: test, entry: r.attempts[i].Selector})
+			}
+		}
+		if result.Result == "errored" {
+			errored = append(errored, r.attempts[i])
+		}
+	}
+	return tests, errored
 }

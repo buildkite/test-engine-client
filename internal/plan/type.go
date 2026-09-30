@@ -136,3 +136,11 @@ type TestPlan struct {
 	// TimingMetadata. Currently unread; retained for wire compatibility.
 	KnownTimingsRatio *float64 `json:"known_timings_ratio,omitempty"`
 }
+
+// SelectedNothing reports whether the server applied selection and it matched
+// no tests. Such plans can have empty tasks, like an error plan, but error
+// plans never carry selection metadata, so this is not an error plan.
+func (p TestPlan) SelectedNothing() bool {
+	s := p.Selection
+	return s != nil && s.Applied != nil && *s.Applied && s.SelectedCount != nil && *s.SelectedCount == 0
+}

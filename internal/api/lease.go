@@ -42,8 +42,13 @@ type AttemptResult struct {
 	Result    string `json:"result"`
 }
 
-// LeaseHTTPError retains status for ownership-loss decisions without leaking credentials.
-type LeaseHTTPError struct{ Status int }
+const LeaseErrorCodeMaximumLifetime = "MAXIMUM_LIFETIME"
+
+// LeaseHTTPError retains structured response details for ownership-loss decisions.
+type LeaseHTTPError struct {
+	Status int
+	Code   string
+}
 
 func (e *LeaseHTTPError) Error() string { return fmt.Sprintf("Scheduler returned HTTP %d", e.Status) }
 
@@ -75,10 +80,10 @@ func (c *Client) CompleteLease(ctx context.Context, poolID, leaseID string, resu
 	return c.leaseRequest(ctx, poolID, "/complete", body, nil, true)
 }
 
-// Release is used only for an entirely undispatched lease. Do not replay an
-// ambiguous release: unlike completion the server does not promise idempotency.
+// Do not replay an ambiguous release: unlike completion the server does not
+// promise idempotency.
 func (c *Client) ReleaseLease(ctx context.Context, poolID, leaseID string) error {
-	return c.leaseRequest(ctx, poolID, "/release", map[string]any{"leases": []any{map[string]string{"id": leaseID, "reason": "worker stopped before dispatch"}}}, nil, false)
+	return c.leaseRequest(ctx, poolID, "/release", map[string]any{"leases": []any{map[string]string{"id": leaseID, "reason": "Worker shutdown"}}}, nil, false)
 }
 
 // The shared doWithRetry retries ambiguous network failures and every 409.
@@ -123,7 +128,14 @@ func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, bod
 					return nil
 				}
 			}
-			err = &LeaseHTTPError{Status: resp.StatusCode}
+			var responseError struct {
+				Code string `json:"code"`
+			}
+			code := ""
+			if unmarshalErr := json.Unmarshal(raw, &responseError); unmarshalErr == nil {
+				code = responseError.Code
+			}
+			err = &LeaseHTTPError{Status: resp.StatusCode, Code: code}
 			if readErr != nil {
 				err = readErr
 			}
