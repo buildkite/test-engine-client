@@ -449,10 +449,19 @@ is only supported as a repeatable CLI flag.
 export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=manual
 ```
 
-Each line must exactly match a test path or selector that bktec sends in the
-test plan request, including any location prefix (`--location-prefix`).
-Surrounding whitespace and blank lines are ignored. If no tests match, bktec
-warns and runs nothing rather than falling back to the full suite.
+Each line must exactly match a test file as bktec discovers it (or a selector
+from `--selector-file`): relative to the directory bktec runs in, and without
+any location prefix. Surrounding whitespace and blank lines are ignored. If no
+tests match, bktec warns and runs nothing rather than falling back to the full
+suite.
+
+> [!NOTE]
+> For RSpec and pytest, bktec splits some files into individual examples
+> before planning: files that contain skipped tests, and slow files when
+> `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true`. Manual selection doesn't match
+> those examples yet, so a listed file that bktec splits doesn't run. The same
+> applies to split Cucumber and Playwright files when a location prefix is set.
+> bktec only warns when nothing matched at all.
 
 `bktec plan` accepts the same flags. The plan is cached under its plan
 identifier, so the plan step and every run node that shares the identifier
