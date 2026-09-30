@@ -72,7 +72,7 @@ func printSelectedNothingWarning(w io.Writer, s *plan.SelectionMetadata) {
 	}
 	var hints []string
 	if s.Strategy != nil && *s.Strategy == "manual" {
-		hints = append(hints, "Check that the files passed with --selection-param match the test paths Test Engine records, including any location prefix.")
+		hints = append(hints, "Check that the files passed with --selection-param match the test paths Test Engine records.")
 	}
 	printWarning(w, message, hints...)
 }
