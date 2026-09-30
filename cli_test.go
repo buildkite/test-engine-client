@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -353,7 +354,7 @@ func TestPlanCommandIncludesPlanOutOutputFlag(t *testing.T) {
 func TestApplyPlanRequestContext_ClearsCollectGitMetadataWhenPreviewDisabled(t *testing.T) {
 	t.Setenv(previewSelectionEnvVar, "")
 
-	cfg.CollectGitMetadata = true
+	cfg.CollectGitMetadata = new(true)
 	cfg.SelectionStrategy = "percent"
 	cfg.Metadata = map[string]string{"key": "val"}
 
@@ -364,14 +365,151 @@ func TestApplyPlanRequestContext_ClearsCollectGitMetadataWhenPreviewDisabled(t *
 		t.Fatalf("applyPlanRequestContext() error = %v", err)
 	}
 
-	if cfg.CollectGitMetadata {
-		t.Errorf("cfg.CollectGitMetadata = true, want false when preview is disabled")
+	if cfg.CollectGitMetadata != nil {
+		t.Errorf("cfg.CollectGitMetadata = %v, want nil when preview is disabled", *cfg.CollectGitMetadata)
 	}
 	if cfg.SelectionStrategy != "" {
 		t.Errorf("cfg.SelectionStrategy = %q, want empty when preview is disabled", cfg.SelectionStrategy)
 	}
 	if cfg.Metadata != nil {
 		t.Errorf("cfg.Metadata = %v, want nil when preview is disabled", cfg.Metadata)
+	}
+}
+
+// TestCollectGitMetadataResolution checks that an explicit false, from either
+// the flag or the env var, stays distinct from unset on every planning command.
+func TestCollectGitMetadataResolution(t *testing.T) {
+	t.Setenv(previewSelectionEnvVar, "true")
+	commands := map[string]func() []cli.Flag{
+		"run": runCommandFlags, "plan": planCommandFlags,
+		"pool plan": poolPlanCommandFlags, "pool exec": poolExecCommandFlags,
+	}
+	for _, tc := range []struct {
+		name, env string
+		args      []string
+		want      *bool
+	}{
+		{name: "unset"},
+		{name: "flag true", args: []string{"--collect-git-metadata"}, want: new(true)},
+		{name: "flag false", args: []string{"--collect-git-metadata=false"}, want: new(false)},
+		{name: "env true", env: "true", want: new(true)},
+		{name: "env false", env: "false", want: new(false)},
+		{name: "flag overrides env", env: "true", args: []string{"--collect-git-metadata=false"}, want: new(false)},
+	} {
+		for name, flags := range commands {
+			t.Run(name+"/"+tc.name, func(t *testing.T) {
+				cfg = config.New()
+				t.Cleanup(func() { cfg = config.New() })
+				t.Setenv("BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA", tc.env)
+				cmd := &cli.Command{Name: "bktec", Commands: []*cli.Command{{
+					Name: "sub", Flags: flags(),
+					Action: func(_ context.Context, cmd *cli.Command) error { return applyPlanRequestContext(cmd) },
+				}}}
+				require.NoError(t, cmd.Run(context.Background(), append([]string{"bktec", "sub"}, tc.args...)))
+				assert.Equal(t, tc.want, cfg.CollectGitMetadata)
+			})
+		}
+	}
+}
+
+// TestCollectGitMetadataOptOutRequestBody checks the wire request when a
+// strategy is set but collection is opted out: only --metadata is sent, for
+// run, plan followed by a cached run, and pool plan.
+func TestCollectGitMetadataOptOutRequestBody(t *testing.T) {
+	for _, optOut := range []string{"flag", "env"} {
+		for _, flow := range []string{"run", "plan then cached run", "pool plan"} {
+			t.Run(optOut+"/"+flow, func(t *testing.T) {
+				t.Setenv(previewSelectionEnvVar, "true")
+				t.Setenv("BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY", "manual")
+				t.Setenv("BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA", "")
+				t.Setenv("BUILDKITE_TEST_ENGINE_POOL_ID", "")
+				optOutArgs := []string{"--collect-git-metadata=false"}
+				if optOut == "env" {
+					t.Setenv("BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA", "false")
+					optOutArgs = nil
+				}
+
+				var posts []json.RawMessage
+				var cached string
+				svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch {
+					case strings.HasSuffix(r.URL.Path, "/filter_tests"):
+						fmt.Fprint(w, `{"tests":[]}`)
+					case r.URL.Path == "/v2/organizations/org/test-scheduler/pools/plan":
+						var req struct {
+							Plan struct {
+								Metadata json.RawMessage `json:"metadata"`
+							} `json:"plan"`
+						}
+						require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+						posts = append(posts, req.Plan.Metadata)
+						w.WriteHeader(http.StatusAccepted)
+						fmt.Fprint(w, `{"id":"pool-1","state":"planning"}`)
+					case r.URL.Path == "/v2/analytics/organizations/org/suites/suite/test_plan" && r.Method == http.MethodGet:
+						if cached == "" {
+							w.WriteHeader(http.StatusNotFound)
+							fmt.Fprint(w, `{"message":"not found"}`)
+							return
+						}
+						fmt.Fprint(w, cached)
+					case r.URL.Path == "/v2/analytics/organizations/org/suites/suite/test_plan":
+						var req struct {
+							Metadata json.RawMessage `json:"metadata"`
+						}
+						require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+						posts = append(posts, req.Metadata)
+						cached = `{"identifier":"my-plan","parallelism":1,"tasks":{"0":{"node_number":0,"tests":[{"format":"file","path":"spec/a_spec.rb"}]}}}`
+						fmt.Fprint(w, cached)
+					default:
+						fmt.Fprint(w, `{}`) // Post-run metadata request.
+					}
+				}))
+				defer svr.Close()
+
+				files := filepath.Join(t.TempDir(), "files")
+				require.NoError(t, os.WriteFile(files, []byte("spec/a_spec.rb\n"), 0o600))
+				common := []string{"--files", files, "--organization-slug", "org", "--suite-slug", "suite",
+					"--base-url", svr.URL, "--access-token", "token", "--metadata", "foo=bar"}
+
+				invoke := func(name string, flags []cli.Flag, action func(context.Context) error, args ...string) {
+					t.Helper()
+					cfg = config.New()
+					t.Cleanup(func() { cfg = config.New() })
+					cmd := &cli.Command{Name: "bktec", Commands: []*cli.Command{{
+						Name: name, Flags: flags, DisableSliceFlagSeparator: true,
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+							if err := applyPlanRequestContext(cmd); err != nil {
+								return err
+							}
+							return action(ctx)
+						},
+					}}}
+					args = append(append([]string{"bktec", name}, common...), args...)
+					require.NoError(t, cmd.Run(context.Background(), append(args, optOutArgs...)))
+				}
+				runArgs := []string{"--plan-identifier", "my-plan", "--parallelism", "1",
+					"--test-runner", "custom", "--test-file-pattern", "*", "--test-command", "true {{testExamples}}"}
+				runTests := func(ctx context.Context) error { return command.Run(ctx, &cfg, files) }
+
+				switch flow {
+				case "run":
+					invoke("run", runCommandFlags(), runTests, runArgs...)
+				case "plan then cached run":
+					invoke("plan", planCommandFlags(), func(ctx context.Context) error {
+						return command.Plan(ctx, &cfg, files, command.PlanOutputJSON, "")
+					}, runArgs...)
+					require.NotEmpty(t, cached)
+					invoke("run", runCommandFlags(), runTests, runArgs...)
+				case "pool plan":
+					invoke("plan", poolPlanCommandFlags(), func(ctx context.Context) error {
+						return command.PoolPlan(ctx, &cfg, files, command.PlanOutputJSON, "")
+					}, "--test-runner", "rspec", "--build-id", "build-1", "--pipeline-slug", "pipeline", "--pool-key", "rspec")
+				}
+
+				require.Len(t, posts, 1, "a cached run must not create another plan")
+				assert.JSONEq(t, `{"foo":"bar"}`, string(posts[0]))
+			})
+		}
 	}
 }
 

@@ -22,8 +22,12 @@ type Config struct {
 	Branch                string `json:"-"`
 	BuildID               string `json:"-"`
 	BuildkiteAgentCommand string `json:"-"`
-	// CollectGitMetadata enables git metadata auto-collection on plan without requiring --selection-strategy to be set.
-	CollectGitMetadata bool `json:"-"`
+	// CollectGitMetadata controls git metadata auto-collection:
+	//   - nil (flag unset): collect if SelectionStrategy is set
+	//   - true: always collect, with or without a strategy
+	//   - false: never collect, even with a strategy
+	// See ShouldCollectGitMetadata.
+	CollectGitMetadata *bool `json:"-"`
 	// Concurrency is the number of concurrent git operations for diff collection (default 10).
 	Concurrency int `json:"-"`
 	// Days is the lookback window in days for the commit list API (1-90, default 90).
@@ -134,4 +138,14 @@ type Config struct {
 
 func New() Config {
 	return Config{errs: InvalidConfigError{}}
+}
+
+// ShouldCollectGitMetadata reports whether git metadata should be
+// auto-collected for a plan request. An explicit CollectGitMetadata wins;
+// otherwise collection follows whether a selection strategy is set.
+func (c *Config) ShouldCollectGitMetadata() bool {
+	if c.CollectGitMetadata != nil {
+		return *c.CollectGitMetadata
+	}
+	return c.SelectionStrategy != ""
 }

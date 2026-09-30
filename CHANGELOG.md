@@ -1,6 +1,7 @@
 # Changelog
 ## Unreleased
 - Treat a plan whose applied selection matched no tests (`selection.applied: true`, `selected_count: 0`) as nothing to run instead of an error plan. `bktec run` no longer falls back to running the full suite, and `bktec plan` emits the server's plan (parallelism 0) instead of a local fallback. Error plans, which carry no selection metadata, still fall back. Both commands warn that the selection matched no tests; for manual selection they also suggest checking the requested paths.
+- Allow opting out of automatic git metadata collection with `--collect-git-metadata=false` (env: `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA=false`). Collection stays on by default whenever a selection strategy is set, including `manual`; `true` still collects without a strategy. `--metadata` values are still sent when opted out. `bktec run` now honours the flag too (previously it ignored it), so `plan`, `run` and `pool` all follow the same rule. An empty env var is treated as unset. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 
 ## 3.1.0 - 2026-09-24
 - Add opt-in [OTLP/HTTP trace relay](./README.md#relay-opentelemetry-traces) for `bktec run` via `--otlp-relay` (env: `BUILDKITE_TESTS_OTLP_RELAY`). Configure the test process to export traces to a local endpoint and forward them to Buildkite with OIDC authentication, background retries, and a bounded shutdown drain. Report forwarded and dropped requests and bytes, plus request-size and upstream-latency distributions.
