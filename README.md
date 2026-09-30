@@ -462,9 +462,6 @@ it with the plan request. This includes:
   numstat, and the **full `git diff`**, which contains your source changes
 - context fields (branch name, base branch, pipeline slug, build UUID)
 
-Test Engine uses this metadata to select tests and to train selection models,
-which is why it's collected by default even for `manual` selection.
-
 `--collect-git-metadata` (or `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA`)
 overrides the default:
 
