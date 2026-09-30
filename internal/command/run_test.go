@@ -959,6 +959,59 @@ func TestFetchOrCreateTestPlan_PlanError(t *testing.T) {
 	assert.Contains(t, stderr, "Test Engine API failed to generate a plan")
 }
 
+// A selection that matched no tests also has empty tasks, but its selection
+// metadata distinguishes it from an error plan, so there is nothing to run
+// rather than a full-suite fallback.
+func TestFetchOrCreateTestPlan_ZeroMatchSelection(t *testing.T) {
+	const response = `{"identifier":"identifier","parallelism":0,"tasks":{},"selection":{"applied":true,"strategy":"manual","candidate_count":4,"selected_count":0}}`
+	for _, cached := range []bool{true, false} {
+		t.Run(fmt.Sprintf("cached=%v", cached), func(t *testing.T) {
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && !cached {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusNotFound)
+					fmt.Fprint(w, `{"message": "Not Found"}`)
+					return
+				}
+				fmt.Fprint(w, response)
+			}))
+			defer svr.Close()
+
+			getStderr := captureStderr(t)
+			cfg := config.Config{Parallelism: 2, Identifier: "identifier", ServerBaseURL: svr.URL}
+			apiClient := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL})
+
+			got, raw, err := fetchOrCreateTestPlan(context.Background(), apiClient, &cfg, []string{"apple", "banana"}, runner.Rspec{})
+			if err != nil {
+				t.Fatalf("fetchOrCreateTestPlan() error = %v", err)
+			}
+			assert.JSONEq(t, response, string(raw))
+			assert.False(t, got.Fallback)
+			assert.Empty(t, got.Tasks)
+			assert.NotContains(t, getStderr(), "failed to generate a plan")
+		})
+	}
+}
+
+func TestRun_ZeroMatchSelectionRunsNothing(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"identifier":"identifier","parallelism":0,"tasks":{},"selection":{"applied":true,"strategy":"manual","candidate_count":4,"selected_count":0}}`)
+	}))
+	defer svr.Close()
+
+	cfg := getConfig()
+	cfg.ServerBaseURL = svr.URL
+	cfg.Identifier = "identifier"
+	// Running the suite would fail: bktec must not invoke the test runner.
+	cfg.TestCommand = "false"
+
+	getStderr := captureStderr(t)
+	if err := Run(context.Background(), cfg, ""); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	assert.NotContains(t, getStderr(), "Falling back to non-intelligent splitting")
+}
+
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {
 	files := []string{"red", "orange", "yellow", "green", "blue", "indigo", "violet"}
 	testRunner := runner.Rspec{}

@@ -3,6 +3,7 @@ package command
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"sync/atomic"
 	"testing"

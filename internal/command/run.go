@@ -83,6 +83,10 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	// get plan for this node
 	thisNodeTask := testPlan.Tasks[strconv.Itoa(cfg.NodeIndex)]
+	if thisNodeTask == nil {
+		// A selection that matched no tests can return no task for any node.
+		thisNodeTask = &plan.Task{NodeNumber: cfg.NodeIndex}
+	}
 
 	// File paths sent to the API for test plan creation include the location prefix to match Test Engine records.
 	// However, the test runner expects file paths without the prefix, so we need to remove it before running the tests.
@@ -549,8 +553,9 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 
 	if cachedPlan != nil {
 		// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
-		// In this case, we should create a fallback plan.
-		if len(cachedPlan.Tasks) == 0 {
+		// In this case, we should create a fallback plan. A selection that
+		// matched no tests is not an error: there is nothing to run.
+		if len(cachedPlan.Tasks) == 0 && !cachedPlan.SelectedNothing() {
 			warnErrorPlan()
 			return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil, nil
 		}
@@ -587,8 +592,9 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	}
 
 	// The server can return an "error" plan indicated by an empty task list (i.e. `{"tasks": {}}`).
-	// In this case, we should create a fallback plan.
-	if len(testPlan.Tasks) == 0 {
+	// In this case, we should create a fallback plan. A selection that
+	// matched no tests is not an error: there is nothing to run.
+	if len(testPlan.Tasks) == 0 && !testPlan.SelectedNothing() {
 		warnErrorPlan()
 		return plan.CreateFallbackPlan(testTargets, cfg.Parallelism), nil, nil
 	}

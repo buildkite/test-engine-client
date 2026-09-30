@@ -1389,6 +1389,70 @@ func TestPlanPlanOut_ServerErrorPlanPassedThrough(t *testing.T) {
 	}
 }
 
+// A selection that matched no tests returns empty tasks like an error plan, but
+// its selection metadata marks it as a real result: plan emits the server's
+// zero parallelism instead of a local fallback.
+func TestPlan_ZeroMatchSelection(t *testing.T) {
+	const response = `{"identifier":"facecafe","parallelism":0,"tasks":{},"selection":{"applied":true,"strategy":"manual","candidate_count":4,"selected_count":0}}`
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/filter_tests") {
+			json.NewEncoder(w).Encode(api.FilteredTestResponse{})
+			return
+		}
+		w.Write([]byte(response))
+	}))
+	defer svr.Close()
+
+	for _, tc := range []struct {
+		name   string
+		format PlanOutput
+		want   string
+	}{
+		{"json", PlanOutputJSON, `{"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER":"facecafe","BUILDKITE_TEST_ENGINE_PARALLELISM":"0"}` + "\n"},
+		{"plan-out", PlanOutputPlanOut, response},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := getConfig()
+			cfg.ServerBaseURL = svr.URL
+			cfg.Identifier = "local-id"
+			cfg.MaxParallelism = 7
+			if tc.format == PlanOutputPlanOut {
+				cfg.PlanOut = "-"
+			}
+			if err := cfg.ValidateForPlan(); err != nil {
+				t.Fatalf("Invalid config: %v", err)
+			}
+
+			var buf bytes.Buffer
+			setPlanWriter(t, &buf)
+			getStderr := captureStderr(t)
+
+			if err := Plan(context.Background(), cfg, "", tc.format, ""); err != nil {
+				t.Fatalf("command.Plan(...) error = %v", err)
+			}
+			stderr := getStderr()
+
+			got := buf.String()
+			if tc.format == PlanOutputPlanOut {
+				var indented bytes.Buffer
+				json.Indent(&indented, []byte(tc.want), "", "  ")
+				tc.want = indented.String() + "\n"
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("command.Plan(...) output diff = %s", diff)
+			}
+			for _, unwanted := range []string{"Falling back to non-intelligent splitting", "returned an empty plan"} {
+				if strings.Contains(stderr, unwanted) {
+					t.Errorf("stderr contains %q: %s", unwanted, stderr)
+				}
+			}
+			if !strings.Contains(stderr, "Parallelism is 0, there is nothing to run.") {
+				t.Errorf("stderr missing zero-parallelism notice: %s", stderr)
+			}
+		})
+	}
+}
+
 // A fatal API error (here, 401 Unauthorized) is returned rather than swallowed:
 // --plan-out exits with an error and emits nothing on stdout, instead of
 // falling back to a local plan.
