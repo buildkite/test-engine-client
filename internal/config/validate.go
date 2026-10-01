@@ -272,7 +272,25 @@ func (c *Config) ValidateForBackfillCommitMetadata() error {
 // Validation for the `bktec plan` command
 func (c *Config) ValidateForPlan() error {
 	_ = c.validate()
+	c.validateDynamicParallelism()
 
+	// The server enforces parallelism > 0 only when reachable. With both
+	// --max-parallelism and BUILDKITE_PARALLEL_JOB_COUNT at 0, parallelism
+	// resolves to 0; if the server is also unreachable the request is never
+	// validated and bktec falls back to a parallelism-0 plan (nothing runs).
+	// Enforce it client-side to fail fast, before any network call.
+	if c.MaxParallelism == 0 && c.Parallelism <= 0 {
+		c.errs.appendFieldError("parallelism", "parallelism must be greater than 0; set --max-parallelism or BUILDKITE_PARALLEL_JOB_COUNT")
+	}
+
+	if len(c.errs) > 0 {
+		return c.errs
+	}
+
+	return nil
+}
+
+func (c *Config) validateDynamicParallelism() {
 	if c.TargetTime != 0 {
 		if c.TargetTime <= 0 {
 			c.errs.appendFieldError("target-time", "was %s, must be greater than 0", c.TargetTime.String())
@@ -292,21 +310,6 @@ func (c *Config) ValidateForPlan() error {
 			c.errs.appendFieldError("max-parallelism", "was %d, must be between 0 and 1000", c.MaxParallelism)
 		}
 	}
-
-	// The server enforces parallelism > 0 only when reachable. With both
-	// --max-parallelism and BUILDKITE_PARALLEL_JOB_COUNT at 0, parallelism
-	// resolves to 0; if the server is also unreachable the request is never
-	// validated and bktec falls back to a parallelism-0 plan (nothing runs).
-	// Enforce it client-side to fail fast, before any network call.
-	if c.MaxParallelism == 0 && c.Parallelism <= 0 {
-		c.errs.appendFieldError("parallelism", "parallelism must be greater than 0; set --max-parallelism or BUILDKITE_PARALLEL_JOB_COUNT")
-	}
-
-	if len(c.errs) > 0 {
-		return c.errs
-	}
-
-	return nil
 }
 
 func (c *Config) generateOIDCToken() (token string, err error) {

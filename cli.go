@@ -735,7 +735,7 @@ var poolLeaseMaxAttemptsFlag = &cli.IntFlag{
 
 func poolPlanCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
-		filesFlag, tagFiltersFlag, accessTokenFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
+		filesFlag, tagFiltersFlag, accessTokenFlag, maxParallelismFlag, targetTimeFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
 		&cli.StringFlag{
 			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec; pool plan rejects it)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,
@@ -770,7 +770,7 @@ var poolCommand = &cli.Command{
 	Name:  "pool",
 	Usage: "Run tests using Test Scheduler pools",
 	Commands: []*cli.Command{{
-		Name: "plan", Usage: "Fetch or create a pool without waiting for planning to finish",
+		Name: "plan", Usage: "Fetch or create a pool, waiting for recommended parallelism when dynamic sizing is requested",
 		Action: poolPlan, DisableSliceFlagSeparator: true,
 		Flags: poolPlanCommandFlags(),
 		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{{
@@ -779,7 +779,7 @@ var poolCommand = &cli.Command{
 				{freshFlag(jsonFlag)},
 				{&cli.StringFlag{
 					Name:  "pipeline-upload",
-					Usage: "Upload `template.yml` with BUILDKITE_TEST_ENGINE_POOL_ID available to the template",
+					Usage: "Upload `template.yml` with BUILDKITE_TEST_ENGINE_POOL_ID and, when dynamically sized, BUILDKITE_TEST_ENGINE_PARALLELISM available to the template",
 				}},
 			},
 		}},

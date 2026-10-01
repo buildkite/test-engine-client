@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
@@ -129,7 +130,7 @@ func TestResolvePoolLeaseOptions(t *testing.T) {
 	}
 }
 
-func TestPoolPlanOutputsWithoutWaiting(t *testing.T) {
+func TestPoolPlanOutputsWithoutSizingDoNotWait(t *testing.T) {
 	for _, output := range []PlanOutput{PlanOutputJSON, PlanOutputPipelineUpload} {
 		t.Run(fmt.Sprintf("output=%v", output), func(t *testing.T) {
 			var logs bytes.Buffer
@@ -167,6 +168,116 @@ func TestPoolPlanOutputsWithoutWaiting(t *testing.T) {
 			} else {
 				require.Equal(t, "existing:pipeline.yml", buf.String())
 			}
+		})
+	}
+}
+
+func TestPoolPlanDynamicSizingWaitsAndExportsParallelism(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		output PlanOutput
+		count  int
+		want   string
+	}{
+		{name: "json", output: PlanOutputJSON, count: 42, want: `{"BUILDKITE_TEST_ENGINE_POOL_ID":"dynamic","BUILDKITE_TEST_ENGINE_PARALLELISM":"42"}`},
+		{name: "json empty selection", output: PlanOutputJSON, count: 0, want: `{"BUILDKITE_TEST_ENGINE_POOL_ID":"dynamic","BUILDKITE_TEST_ENGINE_PARALLELISM":"0"}`},
+		{name: "pipeline upload", output: PlanOutputPipelineUpload, count: 42, want: "dynamic:42:pipeline.yml"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var filter api.FilterTestsParams
+			post, get := 0, 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/filter_tests"):
+					require.NoError(t, json.NewDecoder(r.Body).Decode(&filter))
+					io.WriteString(w, `{"tests":[]}`)
+				case r.Method == http.MethodPost:
+					post++
+					var request api.PoolPlanParams
+					require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+					require.Equal(t, 120, request.Plan.MaxParallelism)
+					require.Equal(t, 90.0, request.Plan.TargetTime)
+					w.WriteHeader(http.StatusAccepted)
+					io.WriteString(w, `{"id":"dynamic","state":"planning"}`)
+				case r.Method == http.MethodGet:
+					get++
+					fmt.Fprintf(w, `{"id":"dynamic","state":"consumed","parallelism":%d,"muted_tests":[]}`, tc.count)
+				default:
+					t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+			}))
+			defer server.Close()
+			cfg := getConfig()
+			cfg.ServerBaseURL, cfg.PipelineSlug, cfg.PoolKey = server.URL, "pipeline", "rspec"
+			cfg.MaxParallelism, cfg.TargetTime = 120, 90*time.Second
+			var buf bytes.Buffer
+			setPlanWriter(t, &buf)
+			setPipelineUploadCommand(t, "sh", "-c", `printf '%s:%s:%s' "$BUILDKITE_TEST_ENGINE_POOL_ID" "$BUILDKITE_TEST_ENGINE_PARALLELISM" "$0"`)
+			require.NoError(t, PoolPlan(context.Background(), cfg, "", tc.output, "pipeline.yml"))
+			require.Equal(t, 120, filter.MaxParallelism)
+			require.Equal(t, 90.0, filter.TargetTime)
+			require.Equal(t, 1, post)
+			require.Equal(t, 1, get)
+			if tc.output == PlanOutputJSON {
+				require.JSONEq(t, tc.want, buf.String())
+			} else {
+				require.Equal(t, tc.want, buf.String())
+			}
+		})
+	}
+}
+
+func TestPoolPlanDynamicSizingFallsBackToMaxParallelism(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/filter_tests") {
+			io.WriteString(w, `{"tests":[]}`)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		io.WriteString(w, `{"id":"dynamic","state":"consuming","muted_tests":[]}`)
+	}))
+	defer server.Close()
+	cfg := getConfig()
+	cfg.ServerBaseURL, cfg.PipelineSlug, cfg.PoolKey, cfg.MaxParallelism = server.URL, "pipeline", "rspec", 12
+	var buf bytes.Buffer
+	setPlanWriter(t, &buf)
+	stderr := captureStderr(t)
+	require.NoError(t, PoolPlan(context.Background(), cfg, "", PlanOutputJSON, ""))
+	require.JSONEq(t, `{"BUILDKITE_TEST_ENGINE_POOL_ID":"dynamic","BUILDKITE_TEST_ENGINE_PARALLELISM":"12"}`, buf.String())
+	require.Contains(t, stderr(), "falling back to --max-parallelism (12)")
+}
+
+func TestPoolPlanDynamicSizingSurfacesPlanningFailureAndCancellation(t *testing.T) {
+	for _, tc := range []struct {
+		name, ready, want string
+		cancel            bool
+	}{
+		{name: "planning failure", ready: `{"id":"dynamic","state":"errored","error":{"message":"timing calculation failed"}}`, want: "timing calculation failed"},
+		{name: "cancellation", ready: `{"id":"dynamic","state":"planning"}`, want: "context deadline exceeded", cancel: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/filter_tests") {
+					io.WriteString(w, `{"tests":[]}`)
+					return
+				}
+				if r.Method == http.MethodPost {
+					w.WriteHeader(http.StatusAccepted)
+					io.WriteString(w, `{"id":"dynamic","state":"planning"}`)
+					return
+				}
+				io.WriteString(w, tc.ready)
+			}))
+			defer server.Close()
+			cfg := getConfig()
+			cfg.ServerBaseURL, cfg.PipelineSlug, cfg.PoolKey, cfg.MaxParallelism = server.URL, "pipeline", "rspec", 10
+			ctx := context.Background()
+			if tc.cancel {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 20*time.Millisecond)
+				defer cancel()
+			}
+			require.ErrorContains(t, PoolPlan(ctx, cfg, "", PlanOutputJSON, ""), tc.want)
 		})
 	}
 }

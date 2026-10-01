@@ -1,6 +1,7 @@
 # Changelog
 ## Unreleased
 - Treat a plan whose applied selection matched no tests (`selection.applied: true`, `selected_count: 0`) as nothing to run instead of an error plan. `bktec run` no longer falls back to running the full suite, and `bktec plan` emits the server's plan (parallelism 0) instead of a local fallback. Error plans, which carry no selection metadata, still fall back. Both commands warn that the selection matched no tests; for manual selection they also suggest checking the requested paths.
+- Support dynamic worker sizing in `bktec pool plan` with `--max-parallelism` and optional `--target-time`. `pool plan` waits for planning and exports `BUILDKITE_TEST_ENGINE_PARALLELISM` alongside `BUILDKITE_TEST_ENGINE_POOL_ID` for `--json` and `--pipeline-upload`. If a ready pool omits the recommended parallelism, `pool plan` warns and falls back to `--max-parallelism`. Requires the matching Test Scheduler server change.
 
 ## 3.1.0 - 2026-09-24
 - Add opt-in [OTLP/HTTP trace relay](./README.md#relay-opentelemetry-traces) for `bktec run` via `--otlp-relay` (env: `BUILDKITE_TESTS_OTLP_RELAY`). Configure the test process to export traces to a local endpoint and forward them to Buildkite with OIDC authentication, background retries, and a bounded shutdown drain. Report forwarded and dropped requests and bytes, plus request-size and upstream-latency distributions.

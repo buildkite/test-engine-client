@@ -62,7 +62,7 @@ func TestPlanPoolContract(t *testing.T) {
 			client := NewClient(ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "acme", AccessToken: "token"})
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			pool, err := client.PlanPool(ctx, PoolPlanParams{Suite: "suite", Pipeline: "pipeline", BuildID: "build", Key: "key", Plan: PoolPlan{Runner: "rspec", Tests: TestPlanParamsTest{Selectors: []TestPlanParamsSelector{{Value: "spec/a_spec.rb"}}}}})
+			pool, err := client.PlanPool(ctx, PoolPlanParams{Suite: "suite", Pipeline: "pipeline", BuildID: "build", Key: "key", Plan: PoolPlan{Runner: "rspec", Tests: TestPlanParamsTest{Selectors: []TestPlanParamsSelector{{Value: "spec/a_spec.rb"}}}, MaxParallelism: 120, TargetTime: 90.5}})
 			if tc.wantError != "" {
 				require.ErrorContains(t, err, tc.wantError)
 			} else {
@@ -77,7 +77,7 @@ func TestPlanPoolContract(t *testing.T) {
 				wantRequests = 2
 			}
 			require.Equal(t, wantRequests, requests)
-			require.JSONEq(t, `{"suite":"suite","pipeline":"pipeline","build_id":"build","key":"key","plan":{"runner":"rspec","branch":"","tests":{"selectors":[{"value":"spec/a_spec.rb"}]}}}`, firstBody)
+			require.JSONEq(t, `{"suite":"suite","pipeline":"pipeline","build_id":"build","key":"key","plan":{"runner":"rspec","branch":"","tests":{"selectors":[{"value":"spec/a_spec.rb"}]},"max_parallelism":120,"target_time":90.5}}`, firstBody)
 		})
 	}
 }
@@ -97,7 +97,7 @@ func TestWaitForPool(t *testing.T) {
 		wantMuted    int
 		wantMutedNil bool
 	}{
-		{"planning then snapshot", []string{`{"id":"p","state":"planning"}`, `{"id":"p","state":"consuming","muted_tests":[{"scope":"User","name":"works","path":"user_spec.rb:42"}]}`}, "", "consuming", 1, false},
+		{"planning then snapshot", []string{`{"id":"p","state":"planning"}`, `{"id":"p","state":"consuming","parallelism":17,"muted_tests":[{"scope":"User","name":"works","path":"user_spec.rb:42"}]}`}, "", "consuming", 1, false},
 		{"planning then populating", []string{`{"id":"p","state":"planning"}`, `{"id":"p","state":"populating"}`}, "", "populating", 0, true},
 		{"empty selected plan", []string{`{"id":"p","state":"consumed","muted_tests":[]}`}, "", "consumed", 0, false},
 		{"missing muted tests on ready pool", []string{`{"id":"p","state":"consuming"}`}, "", "consuming", 0, true},
@@ -129,6 +129,9 @@ func TestWaitForPool(t *testing.T) {
 						require.NotNil(t, pool.MutedTests)
 					}
 					require.Len(t, pool.MutedTests, tc.wantMuted)
+					if tc.name == "planning then snapshot" {
+						require.Equal(t, 17, *pool.Parallelism)
+					}
 					if tc.wantMuted > 0 {
 						require.Equal(t, "User", pool.MutedTests[0].Scope)
 						require.Equal(t, "works", pool.MutedTests[0].Name)
