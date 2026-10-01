@@ -794,8 +794,8 @@ func TestPoolWorkerPrefetchesNextLeaseAtLearnedPace(t *testing.T) {
 			t.Fatalf("acquires=%v", got)
 		}
 
-		// Lease one ran at half its estimate: prefetch two minimum leads before
-		// half of lease two's estimate.
+		// Lease one ran at half its estimate, so prefetch two at half its
+		// estimate minus the minimum lease request allowance (30s - 2s).
 		time.Sleep(28*time.Second - time.Millisecond)
 		synctest.Wait()
 		if got := len(acquires(f)); got != 2 {

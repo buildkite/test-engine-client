@@ -92,8 +92,8 @@ func TestPoolRSpec(t *testing.T) {
 		},
 	}
 
-	// Costs far below the prefetch lead make each lease prefetch the next one
-	// as soon as its batch is dispatched.
+	// Costs far below the minimum lease request allowance make each lease
+	// prefetch the next one as soon as its batch is dispatched.
 	for _, fixture := range leases {
 		for i := range fixture.attempts {
 			fixture.attempts[i].Costs.DurationP90MS = 1
