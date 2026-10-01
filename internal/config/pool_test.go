@@ -70,6 +70,37 @@ func TestValidatePoolLeaseOptions(t *testing.T) {
 	}
 }
 
+func TestValidatePoolDynamicParallelism(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		poolID         string
+		targetTime     time.Duration
+		maxParallelism int
+		wantError      string
+	}{
+		{name: "omitted"},
+		{name: "maximum only", maxParallelism: 120},
+		{name: "target and maximum", targetTime: 2 * time.Minute, maxParallelism: 120},
+		{name: "target requires maximum", targetTime: 2 * time.Minute, wantError: "max-parallelism must be set when target-time is set"},
+		{name: "maximum is bounded", maxParallelism: 1001, wantError: "must be between 0 and 1000"},
+		{name: "existing pool ignores planning sizing", poolID: "pool-1", targetTime: 2 * time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := New()
+			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "header.payload.signature", "acme", "suite"
+			c.PoolID, c.PoolKey, c.TestRunner = tc.poolID, "shared", "rspec"
+			c.BuildID, c.PipelineSlug = "build", "pipeline"
+			c.TargetTime, c.MaxParallelism = tc.targetTime, tc.maxParallelism
+			err := c.ValidateForPoolPlan()
+			if tc.wantError != "" {
+				require.ErrorContains(t, err, tc.wantError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestPoolOIDCClaims(t *testing.T) {
 	// The fake agent returns its arguments instead of a token so we can inspect
 	// both the pool-plan initial mint and the worker refresh contract.

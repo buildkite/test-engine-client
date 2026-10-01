@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
@@ -54,6 +55,7 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 		Suite: cfg.SuiteSlug, Pipeline: cfg.PipelineSlug, BuildID: cfg.BuildID, Key: cfg.PoolKey,
 		Plan: api.PoolPlan{
 			Runner: params.Runner, Branch: params.Branch, Tests: params.Tests,
+			MaxParallelism: params.MaxParallelism, TargetTime: params.TargetTime,
 			Selection: params.Selection, LocationPrefix: params.LocationPrefix, Metadata: params.Metadata,
 		},
 	}
@@ -79,12 +81,36 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 		return err
 	}
 	debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
+	env := map[string]string{"BUILDKITE_TEST_ENGINE_POOL_ID": pool.ID}
+	if cfg.MaxParallelism > 0 {
+		if pool.State == "planning" {
+			pool, err = client.WaitForPool(ctx, pool.ID)
+			if err != nil {
+				return err
+			}
+			debug.Printf("Pool %s planned (state=%s)", pool.ID, pool.State)
+		}
+		parallelism := cfg.MaxParallelism
+		if pool.Parallelism == nil {
+			// Like bktec plan's local fallback, keep the build running at the
+			// requested ceiling. Workers lease from the shared pool as they start,
+			// so work spreads across up to this many jobs rather than being capped
+			// at what the server would have recommended.
+			fmt.Fprintf(os.Stderr, "⚠️ Test pool %s did not return recommended parallelism; falling back to --max-parallelism (%d).\n", pool.ID, parallelism)
+		} else {
+			parallelism = *pool.Parallelism
+		}
+		env["BUILDKITE_TEST_ENGINE_PARALLELISM"] = strconv.Itoa(parallelism)
+	}
 	switch output {
 	case PlanOutputJSON:
-		return json.NewEncoder(planWriter).Encode(map[string]string{"BUILDKITE_TEST_ENGINE_POOL_ID": pool.ID})
+		return json.NewEncoder(planWriter).Encode(env)
 	case PlanOutputPipelineUpload:
 		cmd := makePipelineUploadCommand(template)
-		cmd.Env = append(os.Environ(), "BUILDKITE_TEST_ENGINE_POOL_ID="+pool.ID)
+		cmd.Env = os.Environ()
+		for name, value := range env {
+			cmd.Env = append(cmd.Env, name+"="+value)
+		}
 		return cmd.Run()
 	default:
 		return fmt.Errorf("unknown pool plan output format %v", output)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/stretchr/testify/require"
@@ -54,6 +55,31 @@ func TestPoolPlanCLILeaseOptions(t *testing.T) {
 	require.Error(t, err, "missing authentication/build context stops before planning")
 	require.Equal(t, 50_000, cfg.PoolLeaseDurationMS, "environment supplies the duration budget")
 	require.Equal(t, 25, cfg.PoolLeaseMaxAttempts, "the flag overrides the environment")
+}
+
+func TestPoolCommandsBindDynamicParallelism(t *testing.T) {
+	for _, definition := range poolCommand.Commands {
+		t.Run(definition.Name, func(t *testing.T) {
+			cfg = config.New()
+			t.Cleanup(func() { cfg = config.New() })
+			t.Setenv("BUILDKITE_TEST_ENGINE_TARGET_TIME", "2m")
+			t.Setenv("BUILDKITE_TEST_ENGINE_MAX_PARALLELISM", "120")
+			command := *definition
+			if definition.Name == "plan" {
+				command.Flags = poolPlanCommandFlags()
+			} else {
+				command.Flags = poolExecCommandFlags()
+			}
+			command.MutuallyExclusiveFlags = nil
+			command.Action = func(_ context.Context, _ *cli.Command) error {
+				require.Equal(t, 90*time.Second, cfg.TargetTime)
+				require.Equal(t, 80, cfg.MaxParallelism)
+				return nil
+			}
+			root := &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&command}}}}
+			require.NoError(t, root.Run(context.Background(), []string{"bktec", "pool", definition.Name, "--target-time", "90s", "--max-parallelism", "80"}))
+		})
+	}
 }
 
 func TestPoolPlanCLIAuthentication(t *testing.T) {

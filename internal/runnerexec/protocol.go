@@ -75,8 +75,10 @@ type Source interface {
 
 // DispatchSource optionally observes the dispatch boundary after host validation
 // but before a batch can reach the runner. Returning an error fences dispatch.
+// Undispatchable reports a deterministic capability mismatch before dispatch.
 type DispatchSource interface {
 	Dispatched(Batch) error
+	Undispatchable(Batch, error)
 }
 
 // TerminationSource optionally observes SIGINT or SIGTERM before runner

@@ -32,6 +32,7 @@ type poolSource struct {
 	dispatched      bool
 	dispatchable    bool
 	terminating     bool
+	undispatchable  bool
 	expires         time.Time
 	owned           bool
 	reason          string
@@ -82,6 +83,12 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 		debug.Printf("Dispatched pool batch %s to persistent runner", batch.ID)
 	}
 	return nil
+}
+func (s *poolSource) Undispatchable(_ runnerexec.Batch, err error) {
+	s.mu.Lock()
+	s.undispatchable = true
+	s.mu.Unlock()
+	s.stop(err)
 }
 func (s *poolSource) Accepted(_ runnerexec.Batch, result runnerexec.Result) { s.results <- result }
 func (s *poolSource) Unresolved(_ runnerexec.Batch, err error)              { s.stop(err) }
@@ -255,6 +262,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 	s.owned = true
 	s.expires = lease.ExpiresAt
 	s.dispatched = false
+	s.undispatchable = false
 	s.mu.Unlock()
 	// Runner cancellation stops dispatch, not ownership. Keep heartbeating until
 	// final accounting returns so a timed-out or exited runner still has time to
@@ -271,6 +279,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		expires := s.expires
 		dispatched := s.dispatched
 		terminating := s.terminating
+		undispatchable := s.undispatchable
 		s.dispatchable = false
 		s.pending = nil
 		s.mu.Unlock()
@@ -286,7 +295,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		}
 		accounting, cancel := context.WithDeadline(context.Background(), accountingDeadline)
 		defer cancel()
-		if terminating || !dispatched {
+		if terminating || (!dispatched && !undispatchable) {
 			err = errors.Join(err, client.ReleaseLease(accounting, pool.ID, lease.ID))
 			debug.Printf("Released lease %s (dispatched=%t; terminating=%t; error=%v)", lease.ID, dispatched, terminating, err)
 			return
@@ -316,6 +325,12 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		debug.Printf("Completed lease %s (scheduler attempts=%d; final: passed=%d failed=%d errored=%d)", lease.ID, len(final), passed, failed, errored)
 	}()
 	if err = validateLease(lease); err != nil {
+		for i := range results.broken {
+			results.broken[i] = true
+		}
+		s.mu.Lock()
+		s.undispatchable = true
+		s.mu.Unlock()
 		return err
 	}
 	if state != "consuming" && state != "populating" {
@@ -408,7 +423,13 @@ func (s *poolSource) heartbeat(ctx context.Context, client poolScheduler, poolID
 		}
 		if err != nil {
 			var leaseError *api.LeaseHTTPError
-			if errors.As(err, &leaseError) && leaseError.Status == 422 && leaseError.Code == api.LeaseErrorCodeMaximumLifetime {
+			// Only a Scheduler 4xx confirms ownership loss. After the client's
+			// retry budget, keep the lease until its last known expiry.
+			if !errors.As(err, &leaseError) || leaseError.Status >= 500 || leaseError.Status == 429 {
+				debug.Printf("Lease %s heartbeat failed; retaining ownership until %s: %v", leaseID, expires.Format(time.RFC3339), err)
+				continue
+			}
+			if leaseError.Status == 422 && leaseError.Code == api.LeaseErrorCodeMaximumLifetime {
 				debug.Printf("Lease %s reached its maximum lifetime; retaining ownership until %s", leaseID, expires.Format(time.RFC3339))
 				timer := time.NewTimer(time.Until(expires))
 				select {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
 	"github.com/urfave/cli/v3"
 )
@@ -55,8 +56,11 @@ func TestPoolPersistentChild(t *testing.T) {
 		return raw
 	}
 	formats := `["file","example"]`
-	if mode == "unsupported" {
+	switch mode {
+	case "unsupported":
 		formats = `["selector"]`
+	case "unsupported retry":
+		formats = `["file"]`
 	}
 	raw := request("POST", "/v1/sessions", []byte(`{"instance_id":"once","capabilities":{"selector_formats":`+formats+`}}`))
 	var registration runnerexec.SessionResponse
@@ -111,7 +115,7 @@ func TestPoolPersistentChild(t *testing.T) {
 }
 
 func TestPoolPersistentProcess(t *testing.T) {
-	for _, mode := range []string{"success", "failure", "crash", "delete", "timeout", "unsupported"} {
+	for _, mode := range []string{"success", "failure", "crash", "delete", "timeout", "unsupported", "unsupported retry"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -125,6 +129,12 @@ func TestPoolPersistentProcess(t *testing.T) {
 					if acquisitions <= 2 {
 						lease := testLease()
 						lease.Attempts[0].ID = "scheduler-secret"
+						if mode == "unsupported retry" {
+							lease.Attempts = append(lease.Attempts, api.LeaseAttempt{
+								ID: "scheduler-passed", SelectorType: "test_plan_test_case_v1",
+								Selector: plan.TestCase{Format: "file", Path: "b"},
+							})
+						}
 						r.Lease = &lease
 						r.Pool.State = "consuming"
 					}
@@ -133,11 +143,21 @@ func TestPoolPersistentProcess(t *testing.T) {
 				release: func() error { released++; return nil },
 				complete: func(_ context.Context, results []api.AttemptResult) error {
 					completed++
+					if mode == "unsupported retry" {
+						want := []api.AttemptResult{{AttemptID: "scheduler-secret", Result: "errored"}, {AttemptID: "scheduler-passed", Result: "passed"}}
+						if len(results) != len(want) || results[0] != want[0] || results[1] != want[1] {
+							t.Errorf("results=%v want %v", results, want)
+						}
+						return nil
+					}
 					want := "passed"
 					if mode == "failure" {
 						want = "failed"
 					}
 					if mode == "crash" || mode == "delete" || mode == "timeout" {
+						want = "errored"
+					}
+					if mode == "unsupported" {
 						want = "errored"
 					}
 					if results[0].Result != want {
@@ -181,9 +201,12 @@ func TestPoolPersistentProcess(t *testing.T) {
 				if err == nil {
 					t.Fatal("missing lifecycle error")
 				}
-				if mode == "unsupported" {
-					if released != 1 || completed != 0 {
+				if mode == "unsupported" || mode == "unsupported retry" {
+					if completed != 1 || released != 0 {
 						t.Fatal("undispatched accounting", released, completed)
+					}
+					if acquisitions != 1 {
+						t.Fatalf("unsupported lease acquisitions=%d, want 1", acquisitions)
 					}
 				} else if completed != 1 || released != 0 {
 					t.Fatal("dispatched accounting", released, completed)
