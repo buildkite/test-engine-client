@@ -318,10 +318,17 @@ const (
 	// minLeaseRequestAllowance is the least time set aside for the next lease
 	// request in leasePrefetch.schedule.
 	minLeaseRequestAllowance = 2 * time.Second
+	// prefetchHeadroomRatio is the share of predictedRuntime to prefetch early,
+	// because about half of leases finish before their predicted runtime.
+	prefetchHeadroomRatio = 0.2
 	// prefetchMaxIdle bounds how long a prefetched lease can wait behind an
 	// overrunning current lease, so idle workers can take its attempts and the
 	// wait does not consume much of its maximum lifetime.
 	prefetchMaxIdle = 30 * time.Second
+	// maxPrefetchHeadroom keeps the expected wait (headroom plus lease request
+	// allowance) below prefetchMaxIdle, so the idle limit only releases
+	// prefetched leases when the current lease genuinely overruns.
+	maxPrefetchHeadroom = prefetchMaxIdle / 2
 )
 
 // leaseEstimate sums attempt p90 costs; zero means no duration estimate.
@@ -359,8 +366,9 @@ func timerC(t *time.Timer) <-chan time.Time {
 // schedule starts the prefetch timer when round 0 of the current lease is
 // dispatched. The timer fires after:
 //
-//	delay                 = predictedRuntime - leaseRequestAllowance
+//	delay                 = predictedRuntime - headroom - leaseRequestAllowance
 //	predictedRuntime      = p90Total × pace
+//	headroom              = min(prefetchHeadroomRatio × predictedRuntime, maxPrefetchHeadroom)
 //	leaseRequestAllowance = max(minLeaseRequestAllowance, 2 × last lease request duration)
 //
 // where:
@@ -368,6 +376,8 @@ func timerC(t *time.Timer) <-chan time.Time {
 //     a typical lease.
 //   - pace corrects that: the ratio of actual runtime to p90Total on this
 //     worker's earlier leases, or 1 before any are observed.
+//   - headroom prefetches earlier to cover leases that finish faster than
+//     predicted, capped so long leases do not hold the next lease for minutes.
 //   - leaseRequestAllowance is the time set aside for the next lease request:
 //     a padded estimate of how long it takes, so the next lease arrives just
 //     before the current lease finishes.
@@ -384,12 +394,13 @@ func (p *leasePrefetch) schedule(s *poolSource, lease *poolLease, started time.T
 		pace = 1
 	}
 	predictedRuntime := time.Duration(float64(p90Total) * pace)
+	headroom := min(time.Duration(prefetchHeadroomRatio*float64(predictedRuntime)), maxPrefetchHeadroom)
 	leaseRequestAllowance := max(minLeaseRequestAllowance, 2*s.lastAcquireDuration)
 	// started is the dispatch time; this runs slightly after it.
-	delay := max(predictedRuntime-leaseRequestAllowance-time.Since(started), 0)
+	delay := max(predictedRuntime-headroom-leaseRequestAllowance-time.Since(started), 0)
 	p.due = time.NewTimer(delay)
-	debug.Printf("Scheduled next lease prefetch in %s (p90 total=%s; pace=%.2f; predicted runtime=%s; lease request allowance=%s)",
-		delay.Round(time.Millisecond), p90Total, pace, predictedRuntime.Round(time.Millisecond), leaseRequestAllowance.Round(time.Millisecond))
+	debug.Printf("Scheduled next lease prefetch in %s (p90 total=%s; pace=%.2f; predicted runtime=%s; headroom=%s; lease request allowance=%s)",
+		delay.Round(time.Millisecond), p90Total, pace, predictedRuntime.Round(time.Millisecond), headroom.Round(time.Millisecond), leaseRequestAllowance.Round(time.Millisecond))
 }
 
 func (p *leasePrefetch) start(ctx context.Context, s *poolSource, client poolScheduler, poolID string) {

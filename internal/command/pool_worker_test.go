@@ -794,9 +794,9 @@ func TestPoolWorkerPrefetchesNextLeaseAtLearnedPace(t *testing.T) {
 			t.Fatalf("acquires=%v", got)
 		}
 
-		// Lease one ran at half its estimate, so prefetch two at half its
-		// estimate minus the minimum lease request allowance (30s - 2s).
-		time.Sleep(28*time.Second - time.Millisecond)
+		// Lease one ran at half its estimate, so lease two's predicted runtime is
+		// 30s: prefetch after 30s - 6s headroom - 2s lease request allowance.
+		time.Sleep(22*time.Second - time.Millisecond)
 		synctest.Wait()
 		if got := len(acquires(f)); got != 2 {
 			t.Fatalf("prefetched too early: acquires=%v", acquires(f))
@@ -840,7 +840,7 @@ func TestPoolWorkerReleasesUnusedPrefetchedLease(t *testing.T) {
 				go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 0) }()
 				time.Sleep(time.Second)
 				one := dispatchOffered(t, s, "one")
-				time.Sleep(58 * time.Second)
+				time.Sleep(46 * time.Second) // 60s - 12s headroom - 2s allowance
 				synctest.Wait()
 				if got := acquires(f); !slices.Equal(got, []string{"acquire one", "acquire two"}) {
 					t.Fatalf("acquires=%v", got)
@@ -884,9 +884,9 @@ func TestPoolWorkerDropsPrefetchedLeaseLostBeforeDispatch(t *testing.T) {
 		defer cancel()
 		s := newPoolSource(cancel)
 		two := costLease("two", time.Minute)
-		// Prefetched at 58 seconds with 30 seconds left: its first heartbeat is
-		// due at 68 seconds, before the idle limit.
-		two.ExpiresAt = time.Now().Add(88 * time.Second)
+		// Prefetched at 47 seconds with 30 seconds left: its first heartbeat is
+		// due at 57 seconds, before the idle limit at 77 seconds.
+		two.ExpiresAt = time.Now().Add(77 * time.Second)
 		f := &fakePoolScheduler{
 			acquire: leaseSequence(costLease("one", time.Minute), two, costLease("three", time.Minute)),
 			heartbeat: func(_ context.Context, id string) (time.Time, error) {
@@ -923,4 +923,26 @@ func TestPoolWorkerDropsPrefetchedLeaseLostBeforeDispatch(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+func TestPoolPrefetchHeadroomIsCapped(t *testing.T) {
+	for _, tc := range []struct {
+		p90Total, want time.Duration
+	}{
+		{time.Minute, 46 * time.Second},                     // 60s - 12s headroom - 2s allowance
+		{10 * time.Minute, 10*time.Minute - 17*time.Second}, // headroom capped at 15s
+		{time.Second, 0}, // prefetch immediately
+	} {
+		t.Run(tc.p90Total.String(), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				p := &leasePrefetch{}
+				p.schedule(newPoolSource(func() {}), &poolLease{Lease: *costLease("lease", tc.p90Total)}, time.Now())
+				start := time.Now()
+				<-p.due.C
+				if got := time.Since(start); got != tc.want {
+					t.Fatalf("prefetch after %s, want %s", got, tc.want)
+				}
+			})
+		})
+	}
 }
