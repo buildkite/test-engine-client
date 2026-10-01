@@ -46,9 +46,9 @@ type poolSource struct {
 	results         chan runnerexec.Result
 	starts          chan batchStart
 	cancel          context.CancelFunc
-	// Worker goroutine only: tune when to prefetch the next lease.
-	pace           float64
-	acquireLatency time.Duration
+	// Worker goroutine only; inputs to leasePrefetch.schedule.
+	pace                float64       // actual runtime / p90 total; 0 until observed
+	lastAcquireDuration time.Duration // how long the last lease request took
 }
 
 // poolLease is one Scheduler lease and its heartbeat. Ownership fields are
@@ -244,7 +244,7 @@ func (s *poolSource) work(ctx context.Context, client poolScheduler, pool api.Po
 				s.stop(err)
 				return
 			}
-			s.acquireLatency = time.Since(start)
+			s.lastAcquireDuration = time.Since(start)
 			if response.Lease == nil {
 				debug.Printf("Returned no lease (state=%s)", response.Pool.State)
 				switch response.Pool.State {
@@ -315,7 +315,7 @@ func (s *poolSource) releaseUnused(client poolScheduler, poolID string, lease *p
 }
 
 const (
-	// prefetchMinLead covers a lease request before the predicted finish.
+	// prefetchMinLead is the minimum requestLead in leasePrefetch.schedule.
 	prefetchMinLead = 2 * time.Second
 	// prefetchMaxIdle bounds how long a prefetched lease can wait behind an
 	// overrunning current lease, so idle workers can take its attempts and the
@@ -355,23 +355,39 @@ func timerC(t *time.Timer) <-chan time.Time {
 	return t.C
 }
 
-// schedule arms the prefetch when round 0 of the current lease is dispatched.
-// Summed p90 costs overestimate a typical lease, so scale the estimate by the
-// actual/estimate pace observed on this worker's earlier leases. Without cost
-// estimates, the next lease is requested after accounting.
+// schedule starts the prefetch timer when round 0 of the current lease is
+// dispatched. The timer fires after:
+//
+//	delay            = predictedRuntime - requestLead
+//	predictedRuntime = p90Total × pace
+//	requestLead      = max(prefetchMinLead, 2 × last lease request duration)
+//
+// where:
+//   - p90Total sums the attempts' duration_p90_ms. A sum of p90s overestimates
+//     a typical lease.
+//   - pace corrects that: the ratio of actual runtime to p90Total on this
+//     worker's earlier leases, or 1 before any are observed.
+//   - requestLead is a padded estimate of how long the lease request takes, so
+//     the next lease arrives just before the current lease finishes.
+//
+// A delay of zero or less prefetches immediately. Without costs there is no
+// prefetch; the next lease is requested after accounting.
 func (p *leasePrefetch) schedule(s *poolSource, lease *poolLease, started time.Time) {
-	estimate := leaseEstimate(lease.Attempts)
-	if estimate <= 0 {
+	p90Total := leaseEstimate(lease.Attempts)
+	if p90Total <= 0 {
 		return
 	}
 	pace := s.pace
 	if pace == 0 {
 		pace = 1
 	}
-	lead := max(prefetchMinLead, 2*s.acquireLatency)
-	delay := time.Duration(float64(estimate)*pace) - lead - time.Since(started)
-	p.due = time.NewTimer(max(delay, 0))
-	debug.Printf("Scheduled next lease prefetch in %s (estimate=%s; pace=%.2f)", max(delay, 0).Round(time.Millisecond), estimate, pace)
+	predictedRuntime := time.Duration(float64(p90Total) * pace)
+	requestLead := max(prefetchMinLead, 2*s.lastAcquireDuration)
+	// started is the dispatch time; this runs slightly after it.
+	delay := max(predictedRuntime-requestLead-time.Since(started), 0)
+	p.due = time.NewTimer(delay)
+	debug.Printf("Scheduled next lease prefetch in %s (p90 total=%s; pace=%.2f; predicted runtime=%s; request lead=%s)",
+		delay.Round(time.Millisecond), p90Total, pace, predictedRuntime.Round(time.Millisecond), requestLead.Round(time.Millisecond))
 }
 
 func (p *leasePrefetch) start(ctx context.Context, s *poolSource, client poolScheduler, poolID string) {
@@ -396,10 +412,10 @@ func (p *leasePrefetch) receive(s *poolSource, r prefetchResult) {
 		// The ordinary request after accounting reports persistent failures.
 		debug.Printf("Lease prefetch failed: %v", r.err)
 	case r.lease == nil:
-		s.acquireLatency = r.latency
+		s.lastAcquireDuration = r.latency
 		debug.Printf("Lease prefetch returned no lease (state=%s)", r.state)
 	default:
-		s.acquireLatency = r.latency
+		s.lastAcquireDuration = r.latency
 		p.next = r.lease
 		p.idle = time.NewTimer(prefetchMaxIdle)
 		debug.Printf("Prefetched lease %s (%d scheduler attempts, state=%s)", r.lease.ID, len(r.lease.Attempts), r.state)
@@ -586,8 +602,11 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 				default:
 				}
 			}
-			if estimate := leaseEstimate(lease.Attempts); estimate > 0 && !started.IsZero() && result.Status == "completed" {
-				observed := float64(time.Since(started)) / float64(estimate)
+			// pace = average of the previous pace and this lease's actual
+			// runtime / p90 total: recent leases weigh most, and one unusual
+			// lease moves it only halfway.
+			if p90Total := leaseEstimate(lease.Attempts); p90Total > 0 && !started.IsZero() && result.Status == "completed" {
+				observed := float64(time.Since(started)) / float64(p90Total)
 				if s.pace == 0 {
 					s.pace = observed
 				} else {
