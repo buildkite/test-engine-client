@@ -1045,3 +1045,45 @@ func TestPoolWorkerReleasesPrefetchedLeaseWaitingBehindRetries(t *testing.T) {
 		}
 	})
 }
+
+func TestPoolWorkerSlowIdleReleaseDoesNotBlockCurrentLease(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		// Lease one cannot be renewed and expires at 100 seconds.
+		one := costLease("one", time.Minute)
+		one.ExpiresAt = time.Now().Add(100 * time.Second)
+		f := &fakePoolScheduler{
+			acquire: leaseSequence(one, costLease("two", time.Minute)),
+			heartbeat: func(_ context.Context, id string) (time.Time, error) {
+				if id == "one" {
+					return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
+				}
+				return time.Now().Add(10 * time.Minute), nil
+			},
+			complete: func(context.Context, []api.AttemptResult) error { return nil },
+			// Like a release retrying a rate limit until its deadline.
+			release: func() error { time.Sleep(90 * time.Second); return nil },
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 0) }()
+		time.Sleep(time.Second)
+		batch := dispatchOffered(t, s, "one")
+		// Lease two is prefetched at 47 seconds and its idle release starts at 77.
+		time.Sleep(89 * time.Second)
+		synctest.Wait()
+		if got := f.recorded(); !slices.Contains(got, "release two") {
+			t.Fatalf("calls=%v", got)
+		}
+		passBatch(s, batch)
+		synctest.Wait()
+		if got := f.recorded(); !slices.Contains(got, "complete one") {
+			t.Fatalf("lease one was not completed while lease two's release was pending: %v", got)
+		}
+		<-done
+		if err := s.outcome(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}

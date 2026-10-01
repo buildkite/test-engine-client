@@ -49,6 +49,8 @@ type poolSource struct {
 	// Worker goroutine only; inputs to leasePrefetch.schedule.
 	pace                float64       // actual runtime / p90 total; 0 until observed
 	lastAcquireDuration time.Duration // how long the last lease request took
+	// Background releases of idle prefetched leases; work joins them on exit.
+	releasing sync.WaitGroup
 }
 
 // poolLease is one Scheduler lease and its heartbeat. Ownership fields are
@@ -205,6 +207,8 @@ func (s *poolSource) work(ctx context.Context, client poolScheduler, pool api.Po
 		s.mu.Unlock()
 		return
 	}
+	// Deferred first so it runs last, after any release below.
+	defer s.releasing.Wait()
 	var next *poolLease
 	defer func() {
 		if next != nil {
@@ -606,9 +610,13 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 			case r := <-prefetch.acquiring:
 				prefetch.receive(s, r)
 			case <-timerC(prefetch.idle):
-				prefetch.idle = nil
-				s.releaseUnused(client, pool.ID, prefetch.next, fmt.Sprintf("current lease still running after %s", prefetchMaxIdle))
-				prefetch.next = nil
+				// A release can retry for up to 90s; keep processing the current
+				// lease's results meanwhile so it is accounted before it expires.
+				idle := prefetch.next
+				prefetch.idle, prefetch.next = nil, nil
+				s.releasing.Go(func() {
+					s.releaseUnused(client, pool.ID, idle, fmt.Sprintf("current lease still running after %s", prefetchMaxIdle))
+				})
 			}
 		}
 		if round == 0 {
