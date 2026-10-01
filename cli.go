@@ -28,8 +28,16 @@ func applyPlanRequestContext(cmd *cli.Command) error {
 		cfg.SelectionStrategy = ""
 		cfg.SelectionParams = nil
 		cfg.Metadata = nil
-		cfg.CollectGitMetadata = false
+		cfg.CollectGitMetadata = nil
 		return nil
+	}
+
+	// An explicit false (flag or env var) opts out of auto-collection, so an
+	// unset flag must stay distinct from false.
+	cfg.CollectGitMetadata = nil
+	if cmd.IsSet(collectGitMetadataFlag.Name) {
+		collect := cmd.Bool(collectGitMetadataFlag.Name)
+		cfg.CollectGitMetadata = &collect
 	}
 
 	selectionParams, err := parseKeyValueEntries(cmd.StringSlice("selection-param"), "selection parameter")
@@ -234,12 +242,29 @@ var metadataFlag = &cli.StringSliceFlag{
 	Usage:    "Additional metadata key=value sent to the test plan API. Repeat for multiple entries.",
 }
 
+// nonEmptyEnvVar is an environment variable source that treats an empty value
+// as unset. urfave/cli marks a bool flag as set when its env var is present but
+// empty, which would make VAR="" read as an explicit false.
+type nonEmptyEnvVar string
+
+func (e nonEmptyEnvVar) Lookup() (string, bool) {
+	v := os.Getenv(string(e))
+	return v, v != ""
+}
+func (e nonEmptyEnvVar) IsFromEnv() bool  { return true }
+func (e nonEmptyEnvVar) Key() string      { return string(e) }
+func (e nonEmptyEnvVar) String() string   { return fmt.Sprintf("environment variable %q", string(e)) }
+func (e nonEmptyEnvVar) GoString() string { return fmt.Sprintf("nonEmptyEnvVar(%q)", string(e)) }
+
+// collectGitMetadataFlag is three-state: applyPlanRequestContext uses IsSet to
+// tell an explicit false apart from unset, so it has no Destination.
 var collectGitMetadataFlag = &cli.BoolFlag{
-	Name:        "collect-git-metadata",
-	Category:    "PREVIEW: TEST SELECTION",
-	Usage:       "Collect git commit metadata and include it in the plan request, even without --selection-strategy",
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA"),
-	Destination: &cfg.CollectGitMetadata,
+	Name:     "collect-git-metadata",
+	Category: "PREVIEW: TEST SELECTION",
+	Usage: "Collect git metadata (commit, branch, full diff against the base branch, Buildkite context) and send it with the plan request. " +
+		"Defaults to on when --selection-strategy is set. Set to true to collect without a strategy, or false to never collect. " +
+		"--metadata values are always sent",
+	Sources: cli.NewValueSourceChain(nonEmptyEnvVar("BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA")),
 }
 
 var baseURLFlag = &cli.StringFlag{

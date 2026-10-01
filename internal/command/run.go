@@ -567,10 +567,7 @@ func fetchOrCreateTestPlan(ctx context.Context, apiClient *api.Client, cfg *conf
 	debug.Println("No test plan found, creating a new plan")
 	source = sourceCreateResponse
 
-	// Auto-collect git metadata when selection is active, mirroring `bktec plan`.
-	if cfg.SelectionStrategy != "" {
-		autoCollectGitMetadata(ctx, cfg, newGitRunner())
-	}
+	autoCollectGitMetadata(ctx, cfg, newGitRunner())
 
 	// If the cache is empty, create a new plan.
 	params, err := createRequestParam(ctx, cfg, testTargets, *apiClient, testRunner)

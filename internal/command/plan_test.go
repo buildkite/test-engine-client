@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,7 +18,9 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
+	"github.com/buildkite/test-engine-client/v3/internal/git"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/google/go-cmp/cmp"
 )
@@ -946,132 +949,114 @@ func setDebugEnabled(t *testing.T, w io.Writer) {
 	})
 }
 
-func TestPlan_CollectGitMetadataWithoutSelection(t *testing.T) {
-	// Capture the request body to verify metadata is sent
-	var requestBody []byte
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+// TestGitMetadataCollectionGate checks that plan, run (cache miss) and pool
+// all apply the same --collect-git-metadata rule, and that --metadata is sent
+// whether or not auto-collection runs.
+func TestGitMetadataCollectionGate(t *testing.T) {
+	collectingGit := &git.FakeGitRunner{Responses: map[string]string{
+		"rev-parse --git-dir":                           ".git\n",
+		"symbolic-ref --short refs/remotes/origin/HEAD": "origin/main\n",
+		"merge-base origin/main HEAD":                   "abc123\n",
+		"branch --show-current":                         "my-feature\n",
+	}}
 
-		enc := json.NewEncoder(w)
-
-		switch r.URL.Path {
-		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
-			enc.Encode(api.FilteredTestResponse{})
-		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
-			requestBody, _ = io.ReadAll(r.Body)
-			enc.Encode(plan.TestPlan{
-				Identifier:  "facecafe",
-				Parallelism: 42,
-			})
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer svr.Close()
-
-	cfg := getConfig()
-	cfg.ServerBaseURL = svr.URL
-	cfg.CollectGitMetadata = true
-	cfg.SelectionStrategy = "" // no selection
-
-	ctx := context.Background()
-
-	var buf bytes.Buffer
-	setPlanWriter(t, &buf)
-
-	getStderr := captureStderr(t)
-
-	err := Plan(ctx, cfg, "", PlanOutputJSON, "")
-
-	stderrOutput := getStderr()
-
-	if err != nil {
-		t.Fatalf("command.Plan(...) error = %v", err)
+	flows := map[string]func(t *testing.T, cfg *config.Config) error{
+		"plan": func(t *testing.T, cfg *config.Config) error {
+			setPlanWriter(t, io.Discard)
+			return Plan(context.Background(), cfg, "", PlanOutputJSON, "")
+		},
+		"run": func(t *testing.T, cfg *config.Config) error {
+			client := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL, OrganizationSlug: cfg.OrganizationSlug})
+			_, _, err := fetchOrCreateTestPlan(context.Background(), client, cfg, []string{"apple"}, runner.Rspec{})
+			return err
+		},
+		"pool": func(t *testing.T, cfg *config.Config) error {
+			cfg.PipelineSlug, cfg.PoolKey = "pipeline", "rspec"
+			client := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL, OrganizationSlug: cfg.OrganizationSlug})
+			_, err := ResolvePool(context.Background(), cfg, "", client)
+			return err
+		},
 	}
 
-	// The auto-collection should have been triggered. In a test environment
-	// without a git repo, it will warn and skip, but the important thing is
-	// that the code path was entered (the warning proves the gate was passed).
-	if !strings.Contains(stderrOutput, "Not a git repository") &&
-		!strings.Contains(stderrOutput, "auto-detected base branch") {
-		// If we're in a git repo (test runs inside a git checkout), we'll
-		// see metadata in the request body instead.
-		if len(requestBody) > 0 {
-			var params map[string]interface{}
-			if err := json.Unmarshal(requestBody, &params); err == nil {
-				if metadata, ok := params["metadata"]; ok && metadata != nil {
-					// Auto-collection ran and populated metadata -- gate worked
+	for _, tc := range []struct {
+		name     string
+		strategy string
+		collect  *bool
+		metadata map[string]string
+		collects bool
+	}{
+		{name: "strategy set, flag unset", strategy: "manual", collects: true},
+		{name: "strategy set, opted out", strategy: "manual", collect: new(false)},
+		{name: "no strategy, opted in", collect: new(true), collects: true},
+		{name: "no strategy, flag unset"},
+		{name: "opted out keeps --metadata", strategy: "manual", collect: new(false), metadata: map[string]string{"foo": "bar"}},
+		{name: "collected merges --metadata", strategy: "manual", metadata: map[string]string{"foo": "bar"}, collects: true},
+	} {
+		for flow, invoke := range flows {
+			t.Run(flow+"/"+tc.name, func(t *testing.T) {
+				if tc.collects {
+					withGitRunner(t, collectingGit)
+				} else {
+					withGitRunner(t, &failingGitRunner{t: t})
+				}
+
+				var body []byte
+				svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch {
+					case strings.HasSuffix(r.URL.Path, "/filter_tests"):
+						io.WriteString(w, `{"tests":[]}`)
+					case strings.HasSuffix(r.URL.Path, "/pools/plan"):
+						var req struct {
+							Plan json.RawMessage `json:"plan"`
+						}
+						_ = json.NewDecoder(r.Body).Decode(&req)
+						body = req.Plan
+						w.WriteHeader(http.StatusAccepted)
+						io.WriteString(w, `{"id":"pool-1","state":"planning"}`)
+					case r.Method == http.MethodGet:
+						w.WriteHeader(http.StatusNotFound)
+						io.WriteString(w, `{"message":"Not Found"}`)
+					default:
+						body, _ = io.ReadAll(r.Body)
+						io.WriteString(w, `{"identifier":"x","parallelism":1,"tasks":{"0":{"node_number":0,"tests":[{"path":"apple","format":"file"}]}}}`)
+					}
+				}))
+				defer svr.Close()
+
+				cfg := getConfig()
+				cfg.ServerBaseURL = svr.URL
+				cfg.Remote = "origin"
+				cfg.SelectionStrategy = tc.strategy
+				cfg.CollectGitMetadata = tc.collect
+				cfg.Metadata = maps.Clone(tc.metadata)
+
+				if err := invoke(t, cfg); err != nil {
+					t.Fatalf("%s error = %v", flow, err)
+				}
+
+				metadata := requestMetadata(t, body)
+				if tc.collects {
+					if metadata["branch"] != "my-feature" {
+						t.Errorf("expected auto-collected metadata, got %v", metadata)
+					}
+					for k, v := range tc.metadata {
+						if metadata[k] != v {
+							t.Errorf("metadata[%q] = %v, want %q", k, metadata[k], v)
+						}
+					}
 					return
 				}
-			}
-		}
-		t.Errorf("expected auto-collection to run (either git warning or metadata in request), stderr: %s", stderrOutput)
-	}
-}
-
-func TestPlan_NoCollectGitMetadataByDefault(t *testing.T) {
-	// Capture the request body to verify no metadata is sent
-	var requestBody []byte
-	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		enc := json.NewEncoder(w)
-
-		switch r.URL.Path {
-		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan/filter_tests":
-			enc.Encode(api.FilteredTestResponse{})
-		case "/v2/analytics/organizations/buildkite/suites/rspec/test_plan":
-			requestBody, _ = io.ReadAll(r.Body)
-			enc.Encode(plan.TestPlan{
-				Identifier:  "facecafe",
-				Parallelism: 42,
+				var want map[string]any
+				for k, v := range tc.metadata {
+					if want == nil {
+						want = map[string]any{}
+					}
+					want[k] = v
+				}
+				if diff := cmp.Diff(want, metadata); diff != "" {
+					t.Errorf("request metadata diff (-want +got):\n%s", diff)
+				}
 			})
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer svr.Close()
-
-	cfg := getConfig()
-	cfg.ServerBaseURL = svr.URL
-	cfg.CollectGitMetadata = false
-	cfg.SelectionStrategy = ""
-
-	ctx := context.Background()
-
-	var buf bytes.Buffer
-	setPlanWriter(t, &buf)
-
-	getStderr := captureStderr(t)
-
-	err := Plan(ctx, cfg, "", PlanOutputJSON, "")
-
-	stderrOutput := getStderr()
-
-	if err != nil {
-		t.Fatalf("command.Plan(...) error = %v", err)
-	}
-
-	// Auto-collection should NOT have run -- no git warnings expected
-	if strings.Contains(stderrOutput, "Not a git repository") ||
-		strings.Contains(stderrOutput, "auto-detected base branch") ||
-		strings.Contains(stderrOutput, "skipping metadata auto-collection") {
-		t.Errorf("auto-collection should not run when both SelectionStrategy and CollectGitMetadata are unset, stderr: %s", stderrOutput)
-	}
-
-	// Verify no metadata in request body
-	if len(requestBody) > 0 {
-		var params map[string]interface{}
-		if err := json.Unmarshal(requestBody, &params); err == nil {
-			if metadata, ok := params["metadata"]; ok && metadata != nil {
-				t.Errorf("expected no metadata in request, got: %v", metadata)
-			}
 		}
 	}
 }

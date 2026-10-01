@@ -37,10 +37,7 @@ var (
 func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFormat PlanOutput, template string) error {
 	printPlanningRequest(os.Stderr, cfg)
 
-	// Auto-collect git metadata when selection is active or explicitly requested
-	if cfg.SelectionStrategy != "" || cfg.CollectGitMetadata {
-		autoCollectGitMetadata(ctx, cfg, &git.ExecGitRunner{})
-	}
+	autoCollectGitMetadata(ctx, cfg, newGitRunner())
 
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
@@ -288,9 +285,14 @@ func createTestPlan(ctx context.Context, cfg *config.Config, testTargets []strin
 }
 
 // autoCollectGitMetadata collects git commit metadata and merges it into
-// cfg.Metadata. User-provided metadata values (from --metadata) take
-// precedence over auto-collected values.
+// cfg.Metadata when cfg.ShouldCollectGitMetadata allows it. User-provided
+// metadata values (from --metadata) take precedence over auto-collected
+// values, and are still sent when collection is disabled.
 func autoCollectGitMetadata(ctx context.Context, cfg *config.Config, runner git.GitRunner) {
+	if !cfg.ShouldCollectGitMetadata() {
+		return
+	}
+
 	// Check if we're in a git repo
 	if _, err := runner.Output(ctx, "rev-parse", "--git-dir"); err != nil {
 		fmt.Fprintln(os.Stderr, "⚠️ Not a git repository, skipping metadata auto-collection.")

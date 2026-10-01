@@ -1,6 +1,7 @@
 # Changelog
 ## Unreleased
 - Treat a plan whose applied selection matched no tests (`selection.applied: true`, `selected_count: 0`) as nothing to run instead of an error plan. `bktec run` no longer falls back to running the full suite, and `bktec plan` emits the server's plan (parallelism 0) instead of a local fallback. Error plans, which carry no selection metadata, still fall back. Both commands warn that the selection matched no tests; for manual selection they also suggest checking the requested paths.
+- Allow opting out of automatic git metadata collection with `--collect-git-metadata=false` (env: `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA=false`). Collection stays on by default whenever a selection strategy is set, including `manual`; `true` still collects without a strategy. `--metadata` values are still sent when opted out. `bktec run` now honours the flag too (previously it ignored it), so `plan`, `run` and `pool` all follow the same rule. An empty env var is treated as unset. Preview; gated behind `BKTEC_PREVIEW_SELECTION`.
 - Support dynamic worker sizing in `bktec pool plan` with `--max-parallelism` and optional `--target-time`. `pool plan` waits for planning and exports `BUILDKITE_TEST_ENGINE_PARALLELISM` alongside `BUILDKITE_TEST_ENGINE_POOL_ID` for `--json` and `--pipeline-upload`. If a ready pool omits the recommended parallelism, `pool plan` warns and falls back to `--max-parallelism`. Requires the matching Test Scheduler server change.
 
 ## 3.1.0 - 2026-09-24

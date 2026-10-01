@@ -453,20 +453,47 @@ BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --selection-strategy percent \
 
 #### Automatic git metadata collection
 
-When `--selection-strategy` is set, the `plan` command automatically collects
-git metadata from the current repository and sends it with the API request.
-This includes commit information (SHA, author, committer, message), diff data
-(files changed, numstat, full diff), and context fields (branch name, base
-branch, pipeline slug, build UUID).
+When `--selection-strategy` is set, `plan`, `run` and
+`pool` automatically collect git metadata from the current repository and send
+it with the plan request. This includes:
 
-For pipelines that use `plan` without `--selection-strategy`, you can opt in
-to metadata collection with the `--collect-git-metadata` flag (or
-`BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA=true`). This collects the same git
-metadata without requiring selection to be configured:
+- commit information (SHA, author, committer, message)
+- diff data against the merge base with the base branch: files changed,
+  numstat, and the **full `git diff`**, which contains your source changes
+- context fields (branch name, base branch, pipeline slug, build UUID)
+
+`--collect-git-metadata` (or `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA`)
+overrides the default:
+
+| Value | Behavior |
+| --- | --- |
+| Not set (or empty) | Collect when a selection strategy is set |
+| `true` | Always collect, even without a selection strategy |
+| `false` | Never collect, even with a selection strategy set |
+
+To collect metadata without configuring selection:
 
 ```sh
 BKTEC_PREVIEW_SELECTION=true ./bktec plan --json --collect-git-metadata
 ```
+
+To opt out, for example because of large diffs, request size, or not wanting
+to send source diffs:
+
+```sh
+export BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA=false
+```
+
+When you opt out, values passed with `--metadata` are still sent; only
+automatic collection is skipped. Some strategies depend on this metadata:
+
+- `rspec_changed_files` requires `files_changed`, so the API rejects the plan
+  request (HTTP 422) unless you pass it with `--metadata files_changed=...`.
+- `xgboost` falls back to running the full suite.
+
+Set the opt-out for the whole build (for example as a pipeline-level `env`),
+not on individual steps. The pool request, including its metadata, identifies
+the pool, so nodes that disagree on the opt-out get a pool conflict error.
 
 The base branch for diff computation is resolved using a fallback chain:
 

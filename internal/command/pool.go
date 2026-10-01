@@ -13,7 +13,6 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
-	"github.com/buildkite/test-engine-client/v3/internal/git"
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 )
 
@@ -26,9 +25,7 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 	if cfg.TestRunner != "rspec" {
 		return api.Pool{}, fmt.Errorf("pool planning requires the rspec runner")
 	}
-	if cfg.SelectionStrategy != "" || cfg.CollectGitMetadata {
-		autoCollectGitMetadata(ctx, cfg, &git.ExecGitRunner{})
-	}
+	autoCollectGitMetadata(ctx, cfg, newGitRunner())
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
 		return api.Pool{}, err
