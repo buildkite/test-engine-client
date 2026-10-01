@@ -92,8 +92,15 @@ func TestPoolRSpec(t *testing.T) {
 		},
 	}
 
+	// Costs far below the prefetch lead make each lease prefetch the next one
+	// as soon as its batch is dispatched.
+	for _, fixture := range leases {
+		for i := range fixture.attempts {
+			fixture.attempts[i].Costs.DurationP90MS = 1
+		}
+	}
 	var mu sync.Mutex
-	acquisitions, completions := 0, 0
+	acquisitions, completions, prefetches := 0, 0, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -103,6 +110,9 @@ func TestPoolRSpec(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == base:
 			_ = json.NewEncoder(w).Encode(api.Pool{ID: "pool", State: "consuming", MutedTests: []plan.TestCase{}})
 		case r.Method == http.MethodPost && r.URL.Path == base+"/leases":
+			if acquisitions > completions {
+				prefetches++
+			}
 			acquisitions++
 			if acquisitions > len(leases) {
 				fmt.Fprint(w, `{"lease":null,"pool":{"id":"pool","state":"consumed"}}`)
@@ -155,7 +165,9 @@ func TestPoolRSpec(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if acquisitions != len(leases)+1 || completions != len(leases) {
-		t.Fatalf("acquisitions=%d completions=%d", acquisitions, completions)
+	// The last lease's prefetch, if any, finds the pool consumed before the
+	// ordinary request after accounting confirms it.
+	if acquisitions < len(leases)+1 || acquisitions > len(leases)+2 || completions != len(leases) || prefetches == 0 {
+		t.Fatalf("acquisitions=%d completions=%d prefetches=%d", acquisitions, completions, prefetches)
 	}
 }

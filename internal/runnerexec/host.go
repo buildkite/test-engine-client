@@ -285,7 +285,9 @@ func (h *host) pull(w http.ResponseWriter) {
 			return
 		}
 		if batch == nil {
-			reply(w, 200, PullResponse{Type: "wait", RetryAfterMS: 1000})
+			// Runners pull right after reporting, usually before the source has
+			// offered the next batch; a short retry keeps that handoff prompt.
+			reply(w, 200, PullResponse{Type: "wait", RetryAfterMS: 100})
 			return
 		}
 		copy := *batch
