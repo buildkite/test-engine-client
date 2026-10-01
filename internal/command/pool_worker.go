@@ -423,7 +423,13 @@ func (s *poolSource) heartbeat(ctx context.Context, client poolScheduler, poolID
 		}
 		if err != nil {
 			var leaseError *api.LeaseHTTPError
-			if errors.As(err, &leaseError) && leaseError.Status == 422 && leaseError.Code == api.LeaseErrorCodeMaximumLifetime {
+			// Only a Scheduler 4xx confirms ownership loss. After the client's
+			// retry budget, keep the lease until its last known expiry.
+			if !errors.As(err, &leaseError) || leaseError.Status >= 500 || leaseError.Status == 429 {
+				debug.Printf("Lease %s heartbeat failed; retaining ownership until %s: %v", leaseID, expires.Format(time.RFC3339), err)
+				continue
+			}
+			if leaseError.Status == 422 && leaseError.Code == api.LeaseErrorCodeMaximumLifetime {
 				debug.Printf("Lease %s reached its maximum lifetime; retaining ownership until %s", leaseID, expires.Format(time.RFC3339))
 				timer := time.NewTimer(time.Until(expires))
 				select {
