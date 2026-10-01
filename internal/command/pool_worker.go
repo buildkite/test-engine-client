@@ -364,9 +364,9 @@ func timerC(t *time.Timer) <-chan time.Time {
 }
 
 // schedule starts the prefetch timer when round 0 of the current lease is
-// dispatched. The timer fires after:
+// dispatched. The timer fires timeUntilPrefetch after dispatch:
 //
-//	delay                 = predictedRuntime - headroom - leaseRequestAllowance
+//	timeUntilPrefetch     = predictedRuntime - headroom - leaseRequestAllowance
 //	predictedRuntime      = p90Total × pace
 //	headroom              = min(prefetchHeadroomRatio × predictedRuntime, maxPrefetchHeadroom)
 //	leaseRequestAllowance = max(minLeaseRequestAllowance, 2 × last lease request duration)
@@ -382,7 +382,7 @@ func timerC(t *time.Timer) <-chan time.Time {
 //     a padded estimate of how long it takes, so the next lease arrives just
 //     before the current lease finishes.
 //
-// A delay of zero or less prefetches immediately. Without costs there is no
+// A timeUntilPrefetch of zero or less prefetches immediately. Without costs there is no
 // prefetch; the next lease is requested after accounting.
 func (p *leasePrefetch) schedule(s *poolSource, lease *poolLease, started time.Time) {
 	p90Total := leaseEstimate(lease.Attempts)
@@ -397,10 +397,10 @@ func (p *leasePrefetch) schedule(s *poolSource, lease *poolLease, started time.T
 	headroom := min(time.Duration(prefetchHeadroomRatio*float64(predictedRuntime)), maxPrefetchHeadroom)
 	leaseRequestAllowance := max(minLeaseRequestAllowance, 2*s.lastAcquireDuration)
 	// started is the dispatch time; this runs slightly after it.
-	delay := max(predictedRuntime-headroom-leaseRequestAllowance-time.Since(started), 0)
-	p.due = time.NewTimer(delay)
+	timeUntilPrefetch := max(predictedRuntime-headroom-leaseRequestAllowance-time.Since(started), 0)
+	p.due = time.NewTimer(timeUntilPrefetch)
 	debug.Printf("Scheduled next lease prefetch in %s (p90 total=%s; pace=%.2f; predicted runtime=%s; headroom=%s; lease request allowance=%s)",
-		delay.Round(time.Millisecond), p90Total, pace, predictedRuntime.Round(time.Millisecond), headroom.Round(time.Millisecond), leaseRequestAllowance.Round(time.Millisecond))
+		timeUntilPrefetch.Round(time.Millisecond), p90Total, pace, predictedRuntime.Round(time.Millisecond), headroom.Round(time.Millisecond), leaseRequestAllowance.Round(time.Millisecond))
 }
 
 func (p *leasePrefetch) start(ctx context.Context, s *poolSource, client poolScheduler, poolID string) {
