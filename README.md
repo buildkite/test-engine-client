@@ -495,6 +495,9 @@ that it couldn't resolve the base branch. That warning doesn't affect which
 tests manual selection runs, but setting the base branch keeps the collected
 metadata accurate.
 
+To pass additional metadata or override auto-collected values, see the
+[Manual Metadata Overrides](./docs/manual-metadata-overrides.md) guide.
+
 ### Where to go next
 
 - Configure the runner-specific command and result output for your test framework.
