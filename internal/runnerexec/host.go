@@ -300,14 +300,17 @@ func (h *host) pull(w http.ResponseWriter) {
 		}
 		for _, test := range copy.Tests {
 			if !h.formats[test.Format] {
-				h.fail(errors.New("batch selector not supported by runner"))
+				err := errors.New("batch selector not supported by runner")
+				if source, ok := h.source.(DispatchSource); ok {
+					source.Undispatchable(copy, err)
+				}
+				h.fail(err)
 				reject(w, 400, "unsupported selector format")
 				return
 			}
 		}
-		// Next only offers work. A rejected selector was never dispatched and
-		// must be released, not completed; this final handoff also lets the
-		// source fence delivery if it released the lease while we validated.
+		// Next only offers work. This final handoff lets the source fence
+		// delivery if it accounted for or lost the lease while we validated.
 		if source, ok := h.source.(DispatchSource); ok {
 			if err := source.Dispatched(copy); err != nil {
 				h.fail(err)

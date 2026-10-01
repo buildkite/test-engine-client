@@ -238,14 +238,17 @@ func TestPoolWorkerRejectsOverlappingFileAndExampleAttempts(t *testing.T) {
 }
 
 func TestPoolWorkerReleaseVersusConservativeCompletion(t *testing.T) {
-	for _, mode := range []string{"undispatched", "dispatched", "terminating", "failure before termination", "malformed", "pool errored"} {
+	for _, mode := range []string{"undispatched", "dispatched", "terminating", "failure before termination", "invalid attempt", "unsupported selector", "pool errored"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			s := newPoolSource(cancel)
 			lease := testLease()
-			if mode == "malformed" {
+			if mode == "invalid attempt" {
 				lease.Attempts[0].SelectorType = "custom"
+			}
+			if mode == "unsupported selector" {
+				lease.Attempts[0].Selector.Format = "unknown"
 			}
 			releases, completes := 0, 0
 			f := &fakePoolScheduler{release: func() error { releases++; return nil }, complete: func(_ context.Context, r []api.AttemptResult) error {
@@ -294,7 +297,7 @@ func TestPoolWorkerReleaseVersusConservativeCompletion(t *testing.T) {
 					t.Fatal("host dispatched an offered batch after release")
 				}
 			}
-			if mode == "dispatched" || mode == "failure before termination" {
+			if mode == "dispatched" || mode == "failure before termination" || mode == "invalid attempt" || mode == "unsupported selector" {
 				if completes != 1 || releases != 0 {
 					t.Fatal(completes, releases)
 				}
