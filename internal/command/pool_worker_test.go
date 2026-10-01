@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -17,24 +19,56 @@ import (
 
 type fakePoolScheduler struct {
 	acquire   func(context.Context) (api.LeaseResponse, error)
-	heartbeat func(context.Context) (time.Time, error)
+	heartbeat func(context.Context, string) (time.Time, error)
 	complete  func(context.Context, []api.AttemptResult) error
 	release   func() error
+	mu        sync.Mutex
+	calls     []string
+}
+
+func (f *fakePoolScheduler) record(call string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, call)
+}
+
+func (f *fakePoolScheduler) recorded() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.calls)
 }
 
 func (f *fakePoolScheduler) AcquireLease(ctx context.Context, _ string) (api.LeaseResponse, error) {
-	return f.acquire(ctx)
+	var r api.LeaseResponse
+	var err error
+	if f.acquire != nil {
+		r, err = f.acquire(ctx)
+	} else {
+		// executeLease prefetches after the final result; report nothing left.
+		r.Pool.State = "consumed"
+	}
+	if r.Lease != nil {
+		f.record("acquire " + r.Lease.ID)
+	} else {
+		f.record("acquire none")
+	}
+	return r, err
 }
-func (f *fakePoolScheduler) HeartbeatLease(ctx context.Context, _, _ string) (time.Time, error) {
+func (f *fakePoolScheduler) HeartbeatLease(ctx context.Context, _, leaseID string) (time.Time, error) {
+	f.record("heartbeat " + leaseID)
 	if f.heartbeat != nil {
-		return f.heartbeat(ctx)
+		return f.heartbeat(ctx, leaseID)
 	}
 	return time.Now().Add(time.Minute), nil
 }
-func (f *fakePoolScheduler) CompleteLease(ctx context.Context, _, _ string, r []api.AttemptResult) error {
+func (f *fakePoolScheduler) CompleteLease(ctx context.Context, _, leaseID string, r []api.AttemptResult) error {
+	f.record("complete " + leaseID)
 	return f.complete(ctx, r)
 }
-func (f *fakePoolScheduler) ReleaseLease(context.Context, string, string) error { return f.release() }
+func (f *fakePoolScheduler) ReleaseLease(_ context.Context, _, leaseID string) error {
+	f.record("release " + leaseID)
+	return f.release()
+}
 
 func testLease() api.Lease {
 	return api.Lease{ID: "lease", ExpiresAt: time.Now().Add(time.Minute), Attempts: []api.LeaseAttempt{{ID: "original", SelectorType: "test_plan_test_case_v1", Selector: plan.TestCase{Format: "file", Path: "a"}}}}
@@ -65,26 +99,28 @@ func TestPoolWorkerRetriesBeforeNextLeaseAndKeepsHeartbeatUntilComplete(t *testi
 	defer cancel()
 	s := newPoolSource(cancel)
 	lease := testLease()
-	calls := 0
-	completed := false
+	var calls atomic.Int32
+	var completed, final atomic.Bool
 	heartbeat := make(chan struct{}, 1)
 	f := &fakePoolScheduler{
 		acquire: func(context.Context) (api.LeaseResponse, error) {
-			calls++
+			n := calls.Add(1)
 			r := api.LeaseResponse{}
 			r.Pool.State = "consuming"
-			if calls == 1 {
+			if n == 1 {
 				lease.ExpiresAt = time.Now().Add(120 * time.Millisecond)
 				r.Lease = &lease
 			} else {
-				if !completed {
-					t.Error("acquired next lease before accounting")
+				// The next lease may be requested alongside completion, but not
+				// before the local retry round has finished.
+				if !final.Load() {
+					t.Error("requested next lease before the final retry result")
 				}
 				r.Pool.State = "consumed"
 			}
 			return r, nil
 		},
-		heartbeat: func(context.Context) (time.Time, error) {
+		heartbeat: func(context.Context, string) (time.Time, error) {
 			select {
 			case heartbeat <- struct{}{}:
 			default:
@@ -100,7 +136,7 @@ func TestPoolWorkerRetriesBeforeNextLeaseAndKeepsHeartbeatUntilComplete(t *testi
 			case <-ctx.Done():
 				return ctx.Err()
 			}
-			completed = true
+			completed.Store(true)
 			return nil
 		},
 		release: func() error { t.Error("released dispatched work"); return nil },
@@ -118,6 +154,7 @@ func TestPoolWorkerRetriesBeforeNextLeaseAndKeepsHeartbeatUntilComplete(t *testi
 		status := "failed"
 		if i == 1 {
 			status = "passed"
+			final.Store(true)
 		}
 		s.Accepted(*batch, poolReport(`[{"id":"a[1]","file_path":"a","status":"`+status+`"}]`, 1, 0))
 	}
@@ -129,8 +166,10 @@ func TestPoolWorkerRetriesBeforeNextLeaseAndKeepsHeartbeatUntilComplete(t *testi
 	if err := s.outcome(); err != nil {
 		t.Fatal(err)
 	}
-	if !completed || calls != 2 {
-		t.Fatalf("completed=%v calls=%d", completed, calls)
+	// The lease, the prefetch alongside completion, then the ordinary request
+	// that confirms the pool is consumed.
+	if !completed.Load() || calls.Load() != 3 {
+		t.Fatalf("completed=%v calls=%d", completed.Load(), calls.Load())
 	}
 	if !strings.Contains(logs.String(), "Received batch b_1 result (status=completed; provisional attempt results: passed=0 failed=1 errored=0)") ||
 		!strings.Contains(logs.String(), "Received batch b_2 result (status=completed; provisional attempt results: passed=1 failed=0 errored=0)") {
@@ -169,7 +208,10 @@ func TestPoolWorkerOutcomeDistinguishesFailedAndErroredAttempts(t *testing.T) {
 		release: func() error { t.Error("dispatched lease released"); return nil },
 	}
 	done := make(chan error, 1)
-	go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+	go func() {
+		_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, s.track(f, "pool", lease, "consuming"), 0)
+		done <- err
+	}()
 	batch := waitPoolBatch(t, s)
 	if err := s.Dispatched(*batch); err != nil {
 		t.Fatal(err)
@@ -220,7 +262,10 @@ func TestPoolWorkerRejectsOverlappingFileAndExampleAttempts(t *testing.T) {
 		release: func() error { t.Error("dispatched lease released"); return nil },
 	}
 	done := make(chan error, 1)
-	go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+	go func() {
+		_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, s.track(f, "pool", lease, "consuming"), 0)
+		done <- err
+	}()
 	batch := waitPoolBatch(t, s)
 	if len(batch.Tests) != 2 || batch.Tests[0].Format != "file" || batch.Tests[1].Format != "example" {
 		t.Fatalf("batch tests=%v", batch.Tests)
@@ -263,7 +308,10 @@ func TestPoolWorkerReleaseVersusConservativeCompletion(t *testing.T) {
 				state = "errored"
 			}
 			done := make(chan error, 1)
-			go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, state) }()
+			go func() {
+				_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, s.track(f, "pool", lease, state), 0)
+				done <- err
+			}()
 			if mode == "undispatched" || mode == "dispatched" || mode == "terminating" || mode == "failure before termination" {
 				batch := waitPoolBatch(t, s)
 				if mode == "dispatched" || mode == "terminating" || mode == "failure before termination" {
@@ -312,14 +360,15 @@ func TestPoolHeartbeatInterval(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		s := newPoolSource(cancel)
-		s.expires = time.Now().Add(10 * time.Minute)
+		lease := &poolLease{owned: true, expires: time.Now().Add(10 * time.Minute)}
+		s.current = lease
 		var calls atomic.Int32
-		f := &fakePoolScheduler{heartbeat: func(context.Context) (time.Time, error) {
+		f := &fakePoolScheduler{heartbeat: func(context.Context, string) (time.Time, error) {
 			calls.Add(1)
 			return time.Now().Add(10 * time.Minute), nil
 		}}
 		done := make(chan struct{})
-		go func() { defer close(done); s.heartbeat(ctx, f, "pool", "lease") }()
+		go func() { defer close(done); s.heartbeat(ctx, f, "pool", lease) }()
 		time.Sleep(59 * time.Second)
 		synctest.Wait()
 		if calls.Load() != 0 {
@@ -344,7 +393,7 @@ func TestPoolMaximumLifetimeHeartbeatAllowsTerminalAccountingBeforeExpiry(t *tes
 		lease.ExpiresAt = time.Now().Add(2 * time.Minute)
 		var heartbeats, completes atomic.Int32
 		f := &fakePoolScheduler{
-			heartbeat: func(context.Context) (time.Time, error) {
+			heartbeat: func(context.Context, string) (time.Time, error) {
 				heartbeats.Add(1)
 				return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
 			},
@@ -362,7 +411,10 @@ func TestPoolMaximumLifetimeHeartbeatAllowsTerminalAccountingBeforeExpiry(t *tes
 			release: func() error { t.Error("dispatched lease released"); return nil },
 		}
 		done := make(chan error, 1)
-		go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+		go func() {
+			_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, s.track(f, "pool", lease, "consuming"), 0)
+			done <- err
+		}()
 		synctest.Wait()
 		batch, _, err := s.Next()
 		if err != nil || batch == nil {
@@ -396,7 +448,7 @@ func TestPoolMaximumLifetimeHeartbeatCancelsRunningWorkAtExpiry(t *testing.T) {
 		lease.ExpiresAt = time.Now().Add(2 * time.Minute)
 		var heartbeats, accounted atomic.Int32
 		f := &fakePoolScheduler{
-			heartbeat: func(context.Context) (time.Time, error) {
+			heartbeat: func(context.Context, string) (time.Time, error) {
 				heartbeats.Add(1)
 				return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
 			},
@@ -404,7 +456,10 @@ func TestPoolMaximumLifetimeHeartbeatCancelsRunningWorkAtExpiry(t *testing.T) {
 			release:  func() error { accounted.Add(1); return nil },
 		}
 		done := make(chan error, 1)
-		go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+		go func() {
+			_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, s.track(f, "pool", lease, "consuming"), 0)
+			done <- err
+		}()
 		synctest.Wait()
 		batch, _, err := s.Next()
 		if err != nil || batch == nil {
@@ -443,11 +498,14 @@ func TestPoolHeartbeatLossStopsDispatchAndAccounting(t *testing.T) {
 				lease := testLease()
 				lease.ExpiresAt = time.Now().Add(10 * time.Minute)
 				var accounted atomic.Int32
-				f := &fakePoolScheduler{heartbeat: func(context.Context) (time.Time, error) {
+				f := &fakePoolScheduler{heartbeat: func(context.Context, string) (time.Time, error) {
 					return time.Time{}, loss
 				}, complete: func(context.Context, []api.AttemptResult) error { accounted.Add(1); return nil }, release: func() error { accounted.Add(1); return nil }}
 				done := make(chan error, 1)
-				go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+				go func() {
+					_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, s.track(f, "pool", lease, "consuming"), 0)
+					done <- err
+				}()
 				synctest.Wait()
 				batch, _, err := s.Next()
 				if err != nil || batch == nil {
@@ -489,7 +547,7 @@ func TestPoolTransientHeartbeatFailuresRetainOwnership(t *testing.T) {
 		lease.ExpiresAt = time.Now().Add(2 * time.Minute)
 		var heartbeats, completes atomic.Int32
 		f := &fakePoolScheduler{
-			heartbeat: func(context.Context) (time.Time, error) {
+			heartbeat: func(context.Context, string) (time.Time, error) {
 				n := int(heartbeats.Add(1))
 				if n <= len(transient) {
 					return time.Time{}, transient[n-1]
@@ -506,7 +564,10 @@ func TestPoolTransientHeartbeatFailuresRetainOwnership(t *testing.T) {
 			release: func() error { t.Error("dispatched lease released"); return nil },
 		}
 		done := make(chan error, 1)
-		go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+		go func() {
+			_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, s.track(f, "pool", lease, "consuming"), 0)
+			done <- err
+		}()
 		synctest.Wait()
 		batch, _, err := s.Next()
 		if err != nil || batch == nil {
@@ -547,7 +608,7 @@ func TestPoolTransientHeartbeatOutageAllowsAccountingUntilExpiry(t *testing.T) {
 				lease.ExpiresAt = time.Now().Add(2 * time.Minute)
 				var heartbeats, completes, releases atomic.Int32
 				f := &fakePoolScheduler{
-					heartbeat: func(ctx context.Context) (time.Time, error) {
+					heartbeat: func(ctx context.Context, _ string) (time.Time, error) {
 						heartbeats.Add(1)
 						// Like the client, keep retrying until the request deadline.
 						<-ctx.Done()
@@ -563,7 +624,10 @@ func TestPoolTransientHeartbeatOutageAllowsAccountingUntilExpiry(t *testing.T) {
 					release: func() error { releases.Add(1); return nil },
 				}
 				done := make(chan error, 1)
-				go func() { done <- s.executeLease(ctx, f, api.Pool{ID: "pool"}, lease, 0, "consuming") }()
+				go func() {
+					_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, s.track(f, "pool", lease, "consuming"), 0)
+					done <- err
+				}()
 				synctest.Wait()
 				batch, _, err := s.Next()
 				if err != nil || batch == nil {
@@ -660,6 +724,366 @@ func TestEmptyLeasePollingStaysBelowTenPerMinute(t *testing.T) {
 			if gap := requests[i].Sub(requests[i-1]); gap < 7*time.Second {
 				t.Fatalf("empty lease requests %d and %d only %s apart", i-1, i, gap)
 			}
+		}
+	})
+}
+
+func costLease(id string, cost time.Duration) *api.Lease {
+	return &api.Lease{ID: id, ExpiresAt: time.Now().Add(10 * time.Minute), Attempts: []api.LeaseAttempt{{
+		ID: id + "-attempt", SelectorType: "test_plan_test_case_v1",
+		Selector: plan.TestCase{Format: "file", Path: id}, Costs: api.AttemptCosts{DurationP90MS: cost.Milliseconds()},
+	}}}
+}
+
+// leaseSequence serves leases in order, then reports the pool consumed.
+func leaseSequence(leases ...*api.Lease) func(context.Context) (api.LeaseResponse, error) {
+	var mu sync.Mutex
+	return func(context.Context) (api.LeaseResponse, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		r := api.LeaseResponse{}
+		r.Pool.State = "consumed"
+		if len(leases) > 0 {
+			r.Pool.State = "consuming"
+			r.Lease, leases = leases[0], leases[1:]
+		}
+		return r, nil
+	}
+}
+
+// dispatchOffered dispatches the batch the worker is offering now, without
+// advancing time.
+func dispatchOffered(t *testing.T, s *poolSource, path string) runnerexec.Batch {
+	t.Helper()
+	synctest.Wait()
+	batch, _, err := s.Next()
+	if err != nil || batch == nil || (path != "" && batch.Tests[0].Path != path) {
+		t.Fatalf("batch=%v err=%v, want %s", batch, err, path)
+	}
+	if err := s.Dispatched(*batch); err != nil {
+		t.Fatal(err)
+	}
+	return *batch
+}
+
+func passBatch(s *poolSource, batch runnerexec.Batch) {
+	path := batch.Tests[0].Path
+	s.Accepted(batch, poolReport(`[{"id":"`+path+`[1]","file_path":"`+path+`","status":"passed"}]`, 1, 0))
+}
+
+func acquires(f *fakePoolScheduler) []string {
+	var calls []string
+	for _, call := range f.recorded() {
+		if strings.HasPrefix(call, "acquire") {
+			calls = append(calls, call)
+		}
+	}
+	return calls
+}
+
+func TestPoolWorkerPrefetchesNextLeaseAtLearnedPace(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		f := &fakePoolScheduler{
+			acquire:  leaseSequence(costLease("one", time.Minute), costLease("two", time.Minute), costLease("three", time.Minute)),
+			complete: func(context.Context, []api.AttemptResult) error { return nil },
+			release:  func() error { t.Error("released a lease"); return nil },
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 0) }()
+
+		// Without history, prefetch near the p90 estimate; finishing at half of it
+		// is before the timer, so lease two is requested alongside completion.
+		time.Sleep(time.Second) // past the lease-start jitter
+		one := dispatchOffered(t, s, "one")
+		time.Sleep(30 * time.Second)
+		passBatch(s, one)
+		time.Sleep(time.Second)
+		two := dispatchOffered(t, s, "two")
+		if got := acquires(f); !slices.Equal(got, []string{"acquire one", "acquire two"}) {
+			t.Fatalf("acquires=%v", got)
+		}
+
+		// Lease one ran at half its estimate, so lease two's predicted runtime is
+		// 30s: prefetch after 30s - 6s headroom - 2s lease request allowance.
+		time.Sleep(22*time.Second - time.Millisecond)
+		synctest.Wait()
+		if got := len(acquires(f)); got != 2 {
+			t.Fatalf("prefetched too early: acquires=%v", acquires(f))
+		}
+		time.Sleep(time.Millisecond)
+		synctest.Wait()
+		if got := acquires(f); !slices.Equal(got, []string{"acquire one", "acquire two", "acquire three"}) {
+			t.Fatalf("acquires=%v", got)
+		}
+
+		// Lease three is offered as soon as lease two is accounted, with no jitter
+		// or lease request in between.
+		time.Sleep(2 * time.Second)
+		passBatch(s, two)
+		three := dispatchOffered(t, s, "three")
+		if got := f.recorded(); !slices.Contains(got, "complete two") || len(acquires(f)) != 3 {
+			t.Fatalf("calls=%v", got)
+		}
+		passBatch(s, three)
+		time.Sleep(time.Second)
+		<-done
+		if err := s.outcome(); err != nil || s.passedAttempts != 3 {
+			t.Fatalf("outcome=%v passed=%d", err, s.passedAttempts)
+		}
+	})
+}
+
+func TestPoolWorkerReleasesUnusedPrefetchedLease(t *testing.T) {
+	for _, mode := range []string{"idle", "terminating"} {
+		t.Run(mode, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				s := newPoolSource(cancel)
+				f := &fakePoolScheduler{
+					acquire:  leaseSequence(costLease("one", time.Minute), costLease("two", time.Minute)),
+					complete: func(context.Context, []api.AttemptResult) error { return nil },
+					release:  func() error { return nil },
+				}
+				done := make(chan struct{})
+				go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 0) }()
+				time.Sleep(time.Second)
+				one := dispatchOffered(t, s, "one")
+				time.Sleep(46 * time.Second) // 60s - 12s headroom - 2s allowance
+				synctest.Wait()
+				if got := acquires(f); !slices.Equal(got, []string{"acquire one", "acquire two"}) {
+					t.Fatalf("acquires=%v", got)
+				}
+				if mode == "terminating" {
+					s.Terminating()
+					<-done
+					got := f.recorded()
+					if !slices.Contains(got, "release one") || !slices.Contains(got, "release two") || slices.Contains(got, "complete one") {
+						t.Fatalf("calls=%v", got)
+					}
+					return
+				}
+				// The current lease overruns: hand its prefetched lease back.
+				time.Sleep(prefetchMaxIdle)
+				synctest.Wait()
+				if got := f.recorded(); !slices.Contains(got, "release two") {
+					t.Fatalf("calls=%v", got)
+				}
+				passBatch(s, one)
+				time.Sleep(time.Second)
+				<-done
+				got := f.recorded()
+				if !slices.Contains(got, "complete one") || slices.Contains(got, "complete two") || slices.Contains(got, "release one") {
+					t.Fatalf("calls=%v", got)
+				}
+				if a := acquires(f); !slices.Equal(a, []string{"acquire one", "acquire two", "acquire none"}) {
+					t.Fatalf("acquires=%v", a)
+				}
+				if err := s.outcome(); err != nil {
+					t.Fatal(err)
+				}
+			})
+		})
+	}
+}
+
+func TestPoolWorkerDropsPrefetchedLeaseLostBeforeDispatch(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		two := costLease("two", time.Minute)
+		// Prefetched at 47 seconds with 30 seconds left: its first heartbeat is
+		// due at 57 seconds, before the idle limit at 77 seconds.
+		two.ExpiresAt = time.Now().Add(77 * time.Second)
+		f := &fakePoolScheduler{
+			acquire: leaseSequence(costLease("one", time.Minute), two, costLease("three", time.Minute)),
+			heartbeat: func(_ context.Context, id string) (time.Time, error) {
+				if id == "two" {
+					return time.Time{}, &api.LeaseHTTPError{Status: 404}
+				}
+				return time.Now().Add(10 * time.Minute), nil
+			},
+			complete: func(context.Context, []api.AttemptResult) error { return nil },
+			release:  func() error { t.Error("released a lease"); return nil },
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 0) }()
+		time.Sleep(time.Second)
+		one := dispatchOffered(t, s, "one")
+		time.Sleep(70 * time.Second)
+		synctest.Wait()
+		if got := f.recorded(); !slices.Contains(got, "acquire two") || !slices.Contains(got, "heartbeat two") {
+			t.Fatalf("calls=%v", got)
+		}
+		if err := s.outcome(); err != nil {
+			t.Fatalf("losing an undispatched lease stopped the worker: %v", err)
+		}
+		passBatch(s, one)
+		time.Sleep(time.Second)
+		three := dispatchOffered(t, s, "three")
+		passBatch(s, three)
+		time.Sleep(time.Second)
+		<-done
+		if got := f.recorded(); slices.Contains(got, "complete two") || !slices.Contains(got, "complete one") || !slices.Contains(got, "complete three") {
+			t.Fatalf("calls=%v", got)
+		}
+		if err := s.outcome(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func TestPoolPrefetchHeadroomIsCapped(t *testing.T) {
+	for _, tc := range []struct {
+		p90Total, want time.Duration
+	}{
+		{time.Minute, 46 * time.Second},                     // 60s - 12s headroom - 2s allowance
+		{10 * time.Minute, 10*time.Minute - 17*time.Second}, // headroom capped at 15s
+		{time.Second, 0}, // prefetch immediately
+	} {
+		t.Run(tc.p90Total.String(), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				p := &leasePrefetch{}
+				p.schedule(newPoolSource(func() {}), &poolLease{Lease: *costLease("lease", tc.p90Total)}, time.Now())
+				start := time.Now()
+				<-p.due.C
+				if got := time.Since(start); got != tc.want {
+					t.Fatalf("prefetch after %s, want %s", got, tc.want)
+				}
+			})
+		})
+	}
+}
+
+func reportBatch(s *poolSource, batch runnerexec.Batch, path, status string) {
+	s.Accepted(batch, poolReport(`[{"id":"`+path+`[1]","file_path":"`+path+`","status":"`+status+`"}]`, 1, 0))
+}
+
+func TestPoolWorkerPrefetchesAlongsideCompletionWhenLeaseFinishesFirst(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		completing := make(chan struct{})
+		f := &fakePoolScheduler{
+			acquire: leaseSequence(costLease("one", time.Minute), costLease("two", time.Minute)),
+			complete: func(context.Context, []api.AttemptResult) error {
+				<-completing
+				return nil
+			},
+			release: func() error { t.Error("released a lease"); return nil },
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 1) }()
+		time.Sleep(time.Second)
+		// The timer is due at 46 seconds; round 0 and its retry finish at 40.
+		one := dispatchOffered(t, s, "one")
+		time.Sleep(30 * time.Second)
+		reportBatch(s, one, "one", "failed")
+		retry := dispatchOffered(t, s, "")
+		time.Sleep(10 * time.Second)
+		reportBatch(s, retry, "one", "passed")
+		synctest.Wait()
+		if got := f.recorded(); !slices.Equal(acquires(f), []string{"acquire one", "acquire two"}) || !slices.Contains(got, "complete one") {
+			t.Fatalf("lease two was not requested while completing lease one: %v", got)
+		}
+		close(completing)
+		two := dispatchOffered(t, s, "two")
+		passBatch(s, two)
+		time.Sleep(time.Second)
+		<-done
+		if err := s.outcome(); err != nil || s.passedAttempts != 2 {
+			t.Fatalf("outcome=%v passed=%d", err, s.passedAttempts)
+		}
+	})
+}
+
+func TestPoolWorkerReleasesPrefetchedLeaseWaitingBehindRetries(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		f := &fakePoolScheduler{
+			acquire:  leaseSequence(costLease("one", time.Minute), costLease("two", time.Minute), costLease("three", time.Minute)),
+			complete: func(context.Context, []api.AttemptResult) error { return nil },
+			release:  func() error { return nil },
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 1) }()
+		time.Sleep(time.Second)
+		one := dispatchOffered(t, s, "one")
+		// Lease two is prefetched at 46 seconds, during round 0.
+		time.Sleep(55 * time.Second)
+		reportBatch(s, one, "one", "failed")
+		retry := dispatchOffered(t, s, "")
+		if got := acquires(f); !slices.Equal(got, []string{"acquire one", "acquire two"}) {
+			t.Fatalf("acquires=%v", got)
+		}
+		// The retry round outlasts lease two's 30-second idle limit.
+		time.Sleep(25 * time.Second)
+		synctest.Wait()
+		if got := f.recorded(); !slices.Contains(got, "release two") || slices.Contains(got, "complete one") {
+			t.Fatalf("calls=%v", got)
+		}
+		time.Sleep(10 * time.Second)
+		reportBatch(s, retry, "one", "passed")
+		time.Sleep(time.Second)
+		three := dispatchOffered(t, s, "three")
+		passBatch(s, three)
+		time.Sleep(time.Second)
+		<-done
+		got := f.recorded()
+		if slices.Contains(got, "complete two") || !slices.Contains(got, "complete one") || !slices.Contains(got, "complete three") {
+			t.Fatalf("calls=%v", got)
+		}
+		if err := s.outcome(); err != nil || s.passedAttempts != 2 {
+			t.Fatalf("outcome=%v passed=%d", err, s.passedAttempts)
+		}
+	})
+}
+
+func TestPoolWorkerSlowIdleReleaseDoesNotBlockCurrentLease(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		// Lease one cannot be renewed and expires at 100 seconds.
+		one := costLease("one", time.Minute)
+		one.ExpiresAt = time.Now().Add(100 * time.Second)
+		f := &fakePoolScheduler{
+			acquire: leaseSequence(one, costLease("two", time.Minute)),
+			heartbeat: func(_ context.Context, id string) (time.Time, error) {
+				if id == "one" {
+					return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
+				}
+				return time.Now().Add(10 * time.Minute), nil
+			},
+			complete: func(context.Context, []api.AttemptResult) error { return nil },
+			// Like a release retrying a rate limit until its deadline.
+			release: func() error { time.Sleep(90 * time.Second); return nil },
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 0) }()
+		time.Sleep(time.Second)
+		batch := dispatchOffered(t, s, "one")
+		// Lease two is prefetched at 47 seconds and its idle release starts at 77.
+		time.Sleep(89 * time.Second)
+		synctest.Wait()
+		if got := f.recorded(); !slices.Contains(got, "release two") {
+			t.Fatalf("calls=%v", got)
+		}
+		passBatch(s, batch)
+		synctest.Wait()
+		if got := f.recorded(); !slices.Contains(got, "complete one") {
+			t.Fatalf("lease one was not completed while lease two's release was pending: %v", got)
+		}
+		<-done
+		if err := s.outcome(); err != nil {
+			t.Fatal(err)
 		}
 	})
 }

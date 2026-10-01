@@ -39,7 +39,7 @@ Send `POST /v1/batches` with `{}`. A `200` response is one of:
 {"type":"batch","batch":{"id":"b_1","tests":[{"format":"file","path":"spec/example_spec.rb"}],"timeout_ms":600000}}
 ```
 ```json
-{"type":"wait","retry_after_ms":1000}
+{"type":"wait","retry_after_ms":100}
 ```
 ```json
 {"type":"done","reason":"plan_completed"}

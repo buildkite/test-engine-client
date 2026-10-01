@@ -21,6 +21,12 @@ type LeaseAttempt struct {
 	ID           string        `json:"id"`
 	SelectorType string        `json:"selector_type"`
 	Selector     plan.TestCase `json:"selector"`
+	Costs        AttemptCosts  `json:"costs"`
+}
+
+// AttemptCosts is absent (zero) for pools scheduled by a custom cost.
+type AttemptCosts struct {
+	DurationP90MS int64 `json:"duration_p90_ms"`
 }
 
 type Lease struct {

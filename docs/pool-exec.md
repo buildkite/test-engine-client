@@ -110,6 +110,18 @@ Test result uploads are the runner's responsibility. Configure them through
 Test Collector Ruby; `bktec pool exec` does not perform the normal bktec result
 upload.
 
+## Lease prefetching
+
+While a lease runs, `bktec` requests the next lease shortly before the current
+lease is expected to finish, so the runner can start it as soon as the current
+lease is reported. The expected finish comes from the attempts' p90 duration
+costs, adjusted by how quickly this worker finished earlier leases. Both leases
+are heartbeated independently. If the current lease is still running 30 seconds
+after the next lease arrives, or `bktec` stops early, the unused lease is
+released so other workers can take it. If the current lease finishes first, or
+the pool has no duration costs, `bktec` requests the next lease while it reports
+the current one.
+
 ## Troubleshooting
 
 Use `bktec --debug pool exec ...` to show pool state, lease activity, local

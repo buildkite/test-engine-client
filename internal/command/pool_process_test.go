@@ -374,7 +374,9 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 	if err := PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
 		t.Fatal(err)
 	}
-	if gets != 1 || acquisitions != 3 || completions != 1 {
+	// The third request is the prefetch alongside completion; the fourth is the
+	// ordinary request that confirms the pool is consumed.
+	if gets != 1 || acquisitions != 4 || completions != 1 {
 		t.Fatalf("gets=%d acquisitions=%d completions=%d", gets, acquisitions, completions)
 	}
 	if strings.Count(logs.String(), "existing") != 1 || !strings.Contains(logs.String(), "Fetching supplied pool with ID existing") || !strings.Contains(logs.String(), "Pool resolved (state=populating)") || !strings.Contains(logs.String(), "Received batch b_1 result") {
