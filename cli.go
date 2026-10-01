@@ -550,11 +550,10 @@ var remoteFlag = &cli.StringFlag{
 var planRemoteFlag = &cli.StringFlag{
 	Name:        "remote",
 	Category:    "TEST SELECTION",
-	Usage:       "Git remote name for metadata auto-collection",
+	Usage:       "Git remote used to detect the base branch for git metadata",
 	Value:       "origin",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_REMOTE"),
 	Destination: &cfg.Remote,
-	Hidden:      true,
 }
 
 var concurrencyFlag = &cli.IntFlag{
@@ -631,8 +630,8 @@ var runnerEnvironmentFlags = []cli.Flag{
 	buildkiteAgentCommandFlag,
 }
 
-// selectionFlags are shared by every planning command. --metadata and --remote
-// are hidden from help but usable.
+// selectionFlags are shared by every planning command. --metadata is hidden
+// from help but usable.
 func selectionFlags() []cli.Flag {
 	return []cli.Flag{
 		selectionStrategyFlag,

@@ -481,6 +481,20 @@ Set the opt-out for the whole build (for example as a pipeline-level `env`),
 not on individual steps. The pool request, including its metadata, identifies
 the pool, so nodes that disagree on the opt-out get a pool conflict error.
 
+The diff is computed against a base branch, resolved in this order:
+
+1. `--metadata base_branch=<branch>`
+2. `BUILDKITE_PULL_REQUEST_BASE_BRANCH` (set by Buildkite on pull request builds)
+3. `<remote>/HEAD`, then `<remote>/main`, then `<remote>/master`
+
+`<remote>` is `origin` unless you set `--remote` (or
+`BUILDKITE_TEST_ENGINE_REMOTE`). Most repositories don't need to configure
+anything. Set `base_branch` if your default branch has another name (for
+example `develop` or `trunk`) and `<remote>/HEAD` isn't set, or if bktec warns
+that it couldn't resolve the base branch. That warning doesn't affect which
+tests manual selection runs, but setting the base branch keeps the collected
+metadata accurate.
+
 ### Where to go next
 
 - Configure the runner-specific command and result output for your test framework.
