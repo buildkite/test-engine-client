@@ -344,6 +344,7 @@ func leaseEstimate(attempts []api.LeaseAttempt) time.Duration {
 // Its methods run on the worker goroutine; only the acquisition is concurrent.
 type leasePrefetch struct {
 	due       *time.Timer
+	requested bool
 	acquiring chan prefetchResult
 	next      *poolLease
 	idle      *time.Timer
@@ -382,8 +383,9 @@ func timerC(t *time.Timer) <-chan time.Time {
 //     a padded estimate of how long it takes, so the next lease arrives just
 //     before the current lease finishes.
 //
-// A timeUntilPrefetch of zero or less prefetches immediately. Without costs there is no
-// prefetch; the next lease is requested after accounting.
+// A timeUntilPrefetch of zero or less prefetches immediately. Without costs
+// there is no timer. Either way, if the lease finishes first, executeLease
+// prefetches alongside completing it.
 func (p *leasePrefetch) schedule(s *poolSource, lease *poolLease, started time.Time) {
 	p90Total := leaseEstimate(lease.Attempts)
 	if p90Total <= 0 {
@@ -404,7 +406,11 @@ func (p *leasePrefetch) schedule(s *poolSource, lease *poolLease, started time.T
 }
 
 func (p *leasePrefetch) start(ctx context.Context, s *poolSource, client poolScheduler, poolID string) {
-	p.due = nil
+	if p.due != nil {
+		p.due.Stop()
+		p.due = nil
+	}
+	p.requested = true
 	p.acquiring = make(chan prefetchResult, 1)
 	go func(out chan<- prefetchResult) {
 		debug.Printf("Prefetching next lease")
@@ -652,6 +658,12 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 			break
 		}
 		tests, owners = results.retries()
+	}
+	// The final result is in. If the timer has not fired, or the pool has no
+	// costs, prefetch now so the request runs alongside completing this lease.
+	if !prefetch.requested && ctx.Err() == nil {
+		debug.Printf("Lease %s finished before its prefetch; prefetching while completing it", lease.ID)
+		prefetch.start(ctx, s, client, pool.ID)
 	}
 	return nil, nil
 }

@@ -118,8 +118,9 @@ lease is reported. The expected finish comes from the attempts' p90 duration
 costs, adjusted by how quickly this worker finished earlier leases. Both leases
 are heartbeated independently. If the current lease is still running 30 seconds
 after the next lease arrives, or `bktec` stops early, the unused lease is
-released so other workers can take it. Pools without duration costs request the
-next lease after the current lease is reported.
+released so other workers can take it. If the current lease finishes first, or
+the pool has no duration costs, `bktec` requests the next lease while it reports
+the current one.
 
 ## Troubleshooting
 
