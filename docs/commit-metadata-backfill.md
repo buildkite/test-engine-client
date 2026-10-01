@@ -4,13 +4,12 @@
 
 bktec can collect historical git commit metadata from your repository and upload it to Buildkite for training test selection models. This data helps test selection identify which tests are relevant to your code changes.
 
-The backfill commands are available under `bktec tools` and are hidden from `bktec --help` by default. Setting `BKTEC_PREVIEW_SELECTION` to a truthy value (`1`, `true`, `yes`, or `on`) makes them visible in help output. The commands can always be invoked directly regardless of this setting.
+The backfill commands are available under `bktec tools`. They are hidden from `bktec --help` but can always be invoked directly.
 
 ## Prerequisites
 
 - A git repository checkout (full clone recommended for best results)
 - A Buildkite API access token with `read_suites` and `write_suites` scopes
-- Optional: `BKTEC_PREVIEW_SELECTION` set to a truthy value to see the commands in `bktec --help`
 
 ## Commands
 
@@ -113,7 +112,6 @@ steps:
   - label: ":git: Backfill commit metadata"
     command: bktec tools backfill-commit-metadata
     env:
-      BKTEC_PREVIEW_SELECTION: "true"
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: "my-suite"
 ```
 
@@ -127,7 +125,6 @@ steps:
       - "my-rspec-suite"
       - "my-jest-suite"
     env:
-      BKTEC_PREVIEW_SELECTION: "true"
       BUILDKITE_TEST_ENGINE_SUITE_SLUG: "{{matrix}}"
 ```
 
