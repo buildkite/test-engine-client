@@ -218,8 +218,7 @@ var selectionParamFlag = &cli.StringSliceFlag{
 var metadataFlag = &cli.StringSliceFlag{
 	Name:     "metadata",
 	Category: "TEST SELECTION",
-	Usage:    "Additional metadata key=value sent to the test plan API. Repeat for multiple entries.",
-	Hidden:   true,
+	Usage:    "Additional metadata key=value sent with the plan request. Overrides auto-collected git metadata with the same key. Repeat for multiple entries.",
 }
 
 // nonEmptyEnvVar is an environment variable source that treats an empty value
@@ -630,8 +629,7 @@ var runnerEnvironmentFlags = []cli.Flag{
 	buildkiteAgentCommandFlag,
 }
 
-// selectionFlags are shared by every planning command. --metadata is hidden
-// from help but usable.
+// selectionFlags are shared by every planning command.
 func selectionFlags() []cli.Flag {
 	return []cli.Flag{
 		selectionStrategyFlag,
