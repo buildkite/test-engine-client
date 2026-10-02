@@ -1,7 +1,7 @@
 # Changelog
 ## 3.2.0 - 2026-10-02
 - Add manual [test selection](./README.md#test-selection): `--selection-strategy manual --selection-param files=<newline-separated test paths>` runs only the listed tests. List paths as bktec discovers them, without the location prefix. The selection flags, `--collect-git-metadata`, `--remote` and `--metadata` are now always available on `run`, `plan` and `pool` and shown in `--help`. `BKTEC_PREVIEW_SELECTION` no longer has any effect, so an existing `BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY` is now sent instead of ignored.
-- When a selection matches no tests, `bktec run` and `bktec plan` warn and run nothing instead of falling back to the full suite, so the job passes unless `--fail-on-no-tests` is set. Error plans still fall back.
+- When a selection matches no tests, `bktec run` and `bktec plan` warn and run nothing instead of falling back to the full suite. `bktec run` jobs pass unless `--fail-on-no-tests` is set; `bktec plan --pipeline-upload` uploads no steps. Error plans still fall back.
 - Allow opting out of automatic git metadata collection with `--collect-git-metadata=false` (env: `BUILDKITE_TEST_ENGINE_COLLECT_GIT_METADATA=false`). Collection stays on by default whenever a selection strategy is set. `bktec run` now honours the flag too.
 - Add `bktec pool plan` and `bktec pool exec` for running tests from a [Test Scheduler pool](./docs/pool-exec.md). Requires Test Scheduler support on the server.
 
