@@ -77,6 +77,23 @@ func printSelectedNothingWarning(w io.Writer, s *plan.SelectionMetadata) {
 	printWarning(w, message, hints...)
 }
 
+// checkManualSelectionMatched fails a manual selection that listed files but
+// matched no tests, which usually means the paths are wrong. An empty list has
+// nothing to match, and an explicit --fail-on-no-tests=false opts out.
+func checkManualSelectionMatched(cfg *config.Config, testPlan plan.TestPlan) error {
+	if !testPlan.SelectedNothing() || (cfg.FailOnNoTests != nil && !*cfg.FailOnNoTests) {
+		return nil
+	}
+	if s := testPlan.Selection; s.Strategy == nil || *s.Strategy != "manual" {
+		return nil
+	}
+	listed := countManualSelectionFiles(cfg.SelectionParams["files"])
+	if listed == 0 {
+		return nil
+	}
+	return fatal("No tests selected", fmt.Sprintf("none of the files passed with --selection-param (%d listed) matched a test. Set --fail-on-no-tests=false to pass without running tests", listed))
+}
+
 // printSplitSummary prints the plan summary and warns when a selector plan had
 // to use default durations because no selector timing history was available.
 func printSplitSummary(w io.Writer, testPlan plan.TestPlan) {

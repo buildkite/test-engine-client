@@ -375,6 +375,39 @@ func TestCollectGitMetadataResolution(t *testing.T) {
 	}
 }
 
+// TestFailOnNoTestsResolution checks that an explicit false, from either the
+// flag or the env var, stays distinct from unset on run and plan.
+func TestFailOnNoTestsResolution(t *testing.T) {
+	commands := map[string]func() []cli.Flag{"run": runCommandFlags, "plan": planCommandFlags}
+	for _, tc := range []struct {
+		name, env string
+		args      []string
+		want      *bool
+	}{
+		{name: "unset"},
+		{name: "empty env", env: ""},
+		{name: "flag true", args: []string{"--fail-on-no-tests"}, want: new(true)},
+		{name: "flag false", args: []string{"--fail-on-no-tests=false"}, want: new(false)},
+		{name: "env true", env: "true", want: new(true)},
+		{name: "env false", env: "false", want: new(false)},
+		{name: "flag overrides env", env: "true", args: []string{"--fail-on-no-tests=false"}, want: new(false)},
+	} {
+		for name, flags := range commands {
+			t.Run(name+"/"+tc.name, func(t *testing.T) {
+				cfg = config.New()
+				t.Cleanup(func() { cfg = config.New() })
+				t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", tc.env)
+				cmd := &cli.Command{Name: "bktec", Commands: []*cli.Command{{
+					Name: "sub", Flags: flags(),
+					Action: func(_ context.Context, cmd *cli.Command) error { return applyPlanRequestContext(cmd) },
+				}}}
+				require.NoError(t, cmd.Run(context.Background(), append([]string{"bktec", "sub"}, tc.args...)))
+				assert.Equal(t, tc.want, cfg.FailOnNoTests)
+			})
+		}
+	}
+}
+
 // TestCollectGitMetadataOptOutRequestBody checks the wire request when a
 // strategy is set but collection is opted out: only --metadata is sent, for
 // run, plan followed by a cached run, and pool plan.
@@ -597,7 +630,6 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "/tmp/results.json")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_SELECTOR_FILE", "selectors.txt")
-	t.Setenv("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS", "true")
 	t.Setenv("BUILDKITE_TEST_ENGINE_LOCATION_PREFIX", "app/")
 	t.Setenv("BUILDKITE_TEST_ENGINE_RETRY_COUNT", "3")
 	t.Setenv("BUILDKITE_TEST_ENGINE_DISABLE_RETRY_FOR_MUTED_TEST", "true")
@@ -652,7 +684,6 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"ResultPath", cfg.ResultPath, "/tmp/results.json"},
 		{"SplitByExample", cfg.SplitByExample, true},
 		{"SelectorListPath", cfg.SelectorListPath, "selectors.txt"},
-		{"FailOnNoTests", cfg.FailOnNoTests, true},
 		{"LocationPrefix", cfg.LocationPrefix, "app/"},
 		{"MaxRetries", cfg.MaxRetries, 3},
 		// DISABLE_RETRY_FOR_MUTED_TEST=true means RetryForMutedTest should be false (flag Action inverts the bool)
