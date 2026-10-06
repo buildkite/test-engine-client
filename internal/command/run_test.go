@@ -994,7 +994,7 @@ func TestFetchOrCreateTestPlan_ZeroMatchSelection(t *testing.T) {
 	}
 }
 
-// A manual selection that lists files but matches none fails before running
+// A manual selection that lists selectors but matches none fails before running
 // anything, unless --fail-on-no-tests=false opts out. An empty list passes.
 func TestRun_ZeroMatchSelection(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1004,21 +1004,22 @@ func TestRun_ZeroMatchSelection(t *testing.T) {
 
 	for _, tc := range []struct {
 		name          string
-		files         string
+		params        map[string]string
 		failOnNoTests *bool
 		wantErr       string
 	}{
-		{name: "files listed", files: "spec/a_spec.rb\n\nspec/b_spec.rb\n", wantErr: "(2 listed) matched a test"},
-		{name: "files listed, fail-on-no-tests", files: "spec/a_spec.rb", failOnNoTests: new(true), wantErr: "(1 listed) matched a test"},
-		{name: "files listed, opted out", files: "spec/a_spec.rb", failOnNoTests: new(false)},
-		{name: "empty list", files: " \n"},
+		{name: "selectors listed", params: map[string]string{"selectors": "spec/a_spec.rb\n\nspec/b_spec.rb\n"}, wantErr: "(2 listed) matched a test"},
+		{name: "legacy files listed", params: map[string]string{"files": "spec/a_spec.rb"}, wantErr: "(1 listed) matched a test"},
+		{name: "selectors listed, fail-on-no-tests", params: map[string]string{"selectors": "spec/a_spec.rb"}, failOnNoTests: new(true), wantErr: "(1 listed) matched a test"},
+		{name: "selectors listed, opted out", params: map[string]string{"selectors": "spec/a_spec.rb"}, failOnNoTests: new(false)},
+		{name: "empty list", params: map[string]string{"selectors": " \n"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := getConfig()
 			cfg.ServerBaseURL = svr.URL
 			cfg.Identifier = "identifier"
 			cfg.SelectionStrategy = "manual"
-			cfg.SelectionParams = map[string]string{"files": tc.files}
+			cfg.SelectionParams = tc.params
 			cfg.CollectGitMetadata = new(false)
 			cfg.FailOnNoTests = tc.failOnNoTests
 			// Running the suite would fail: bktec must not invoke the test runner.

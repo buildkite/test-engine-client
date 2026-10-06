@@ -209,7 +209,7 @@ var suiteSlugFlag = &cli.StringFlag{
 var selectionStrategyFlag = &cli.StringFlag{
 	Name:        "selection-strategy",
 	Category:    "TEST SELECTION",
-	Usage:       "Test selection strategy. Set to manual to run only the tests passed with --selection-param files=...",
+	Usage:       "Test selection strategy. Set to manual to run only the tests passed with --selection-param selectors=...",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"),
 	Destination: &cfg.SelectionStrategy,
 }
@@ -217,7 +217,7 @@ var selectionStrategyFlag = &cli.StringFlag{
 var selectionParamFlag = &cli.StringSliceFlag{
 	Name:     "selection-param",
 	Category: "TEST SELECTION",
-	Usage:    "Selection strategy parameter as key=value. For manual selection, pass files= followed by newline-separated test paths. Repeat for multiple entries.",
+	Usage:    "Selection strategy parameter as key=value. For manual selection, pass selectors= followed by newline-separated test selectors. Repeat for multiple entries.",
 }
 
 var metadataFlag = &cli.StringSliceFlag{

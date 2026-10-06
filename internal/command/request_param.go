@@ -47,9 +47,10 @@ func printPlanningRequest(w io.Writer, cfg *config.Config) {
 		switch key {
 		case "sample_rate", "threshold", "score_cutoff", "count_cutoff", "proportion_cutoff", "duration_proportion_cutoff", "include_scores", "percent", "top":
 			rendered = boundedRequestValue(value)
-		case "files":
-			// Count the supplied entries without exposing the list in CI logs.
-			rendered = fmt.Sprintf("<%d nonblank entries; %d bytes>", countManualSelectionFiles(value), len(value))
+		case "selectors", "files":
+			// Manual selection accepts newline-delimited selectors (files is the
+			// legacy key). Count the entries without exposing the list in CI logs.
+			rendered = fmt.Sprintf("<%d nonblank entries; %d bytes>", countManualSelectionEntries(value), len(value))
 		default:
 			// Unknown payloads may contain model inputs, predictions or secrets.
 			rendered = fmt.Sprintf("<value omitted; %d bytes>", len(value))
@@ -181,11 +182,11 @@ func encodeRequestTargets(targets []requestTarget) api.TestPlanParamsTest {
 	return api.TestPlanParamsTest{Selectors: selectorParamsFromValues(values)}
 }
 
-// countManualSelectionFiles counts the nonblank entries in a manual selection's
-// newline-delimited files parameter.
-func countManualSelectionFiles(files string) int {
+// countManualSelectionEntries counts the nonblank entries in a manual
+// selection's newline-delimited selectors (or legacy files) parameter.
+func countManualSelectionEntries(list string) int {
 	count := 0
-	for line := range strings.SplitSeq(files, "\n") {
+	for line := range strings.SplitSeq(list, "\n") {
 		if strings.TrimSpace(line) != "" {
 			count++
 		}

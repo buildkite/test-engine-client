@@ -72,13 +72,13 @@ func printSelectedNothingWarning(w io.Writer, s *plan.SelectionMetadata) {
 	}
 	var hints []string
 	if s.Strategy != nil && *s.Strategy == "manual" {
-		hints = append(hints, "Check that the files passed with --selection-param match the test paths bktec discovers, without any location prefix.")
+		hints = append(hints, "Check that the selectors passed with --selection-param match the selectors bktec discovers or reads from --selector-file, without any location prefix.")
 	}
 	printWarning(w, message, hints...)
 }
 
-// checkManualSelectionMatched fails a manual selection that listed files but
-// matched no tests, which usually means the paths are wrong. An empty list has
+// checkManualSelectionMatched fails a manual selection that listed selectors
+// but matched no tests, which usually means the selectors are wrong. An empty list has
 // nothing to match, and an explicit --fail-on-no-tests=false opts out.
 func checkManualSelectionMatched(cfg *config.Config, testPlan plan.TestPlan) error {
 	if !testPlan.SelectedNothing() || (cfg.FailOnNoTests != nil && !*cfg.FailOnNoTests) {
@@ -87,11 +87,12 @@ func checkManualSelectionMatched(cfg *config.Config, testPlan plan.TestPlan) err
 	if s := testPlan.Selection; s.Strategy == nil || *s.Strategy != "manual" {
 		return nil
 	}
-	listed := countManualSelectionFiles(cfg.SelectionParams["files"])
+	// files is the legacy key; the server rejects requests that send both.
+	listed := countManualSelectionEntries(cfg.SelectionParams["selectors"]) + countManualSelectionEntries(cfg.SelectionParams["files"])
 	if listed == 0 {
 		return nil
 	}
-	return fatal("No tests selected", fmt.Sprintf("none of the files passed with --selection-param (%d listed) matched a test. Set --fail-on-no-tests=false to pass without running tests", listed))
+	return fatal("No tests selected", fmt.Sprintf("none of the selectors passed with --selection-param (%d listed) matched a test. Set --fail-on-no-tests=false to pass without running tests", listed))
 }
 
 // printSplitSummary prints the plan summary and warns when a selector plan had
