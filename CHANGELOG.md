@@ -1,6 +1,7 @@
 # Changelog
 ## Unreleased
-- Change `bktec run` and `bktec plan` to fail when a [manual selection](./README.md#test-selection) matches none of the listed files, instead of warning and passing. Set `--fail-on-no-tests=false` to keep the old behaviour.
+- [Manual test selection](./README.md#test-selection) now takes the tests to run as `--selection-param selectors=...`. `files=` still works.
+- Change `bktec run` and `bktec plan` to fail when a [manual selection](./README.md#test-selection) matches none of the listed selectors, instead of warning and passing. Set `--fail-on-no-tests=false` to keep the old behaviour.
 - Fix retried `bktec pool exec` jobs passing without running tests when their pool had already finished with failures. Such retries now fail; retries of jobs whose pool finished without failures, such as after a lost agent, still pass.
 
 ## 3.2.0 - 2026-10-02
