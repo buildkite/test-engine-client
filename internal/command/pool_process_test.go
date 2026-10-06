@@ -252,6 +252,47 @@ func TestPoolExecSuppliedConsumedIDSkipsRunnerAndPlanning(t *testing.T) {
 	}
 }
 
+func TestPoolExecRetriedJobConsumedPoolFailsOnlyWithPoolFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		results string
+		wantErr string
+	}{
+		{"no failures", `{"passed":3,"failed":0,"errored":0}`, ""},
+		{"failed attempts", `{"passed":3,"failed":2,"errored":0}`, "already finished with 2 failed and 0 errored attempts"},
+		{"errored attempts", `{"passed":3,"failed":0,"errored":1}`, "already finished with 0 failed and 1 errored attempts"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing":
+					_, _ = io.WriteString(w, `{"id":"existing","state":"consumed","muted_tests":[]}`)
+				case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/metrics":
+					_, _ = io.WriteString(w, `{"pool":{"id":"existing","state":"consumed"},"attempts":{"total":5,"results":`+tc.results+`}}`)
+				default:
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					http.Error(w, "unexpected request", http.StatusBadRequest)
+				}
+			}))
+			defer server.Close()
+			cfg := config.New()
+			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.JobRetryCount = "existing", "org", "suite", 1
+			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
+			err := PoolExec(context.Background(), &cfg, "", []string{filepath.Join(t.TempDir(), "nonexistent-runner")}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			var exit cli.ExitCoder
+			if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("err=%v, want exit 1 containing %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestPoolExecSuppliedConsumingIDReusesSnapshot(t *testing.T) {
 	gets := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

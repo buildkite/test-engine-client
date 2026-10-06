@@ -100,6 +100,11 @@ Test Scheduler. With `--no-oidc`, it must remain valid for the entire command.
 `--local-retry-count` retries failed examples in the same worker. These retries
 do not create additional Scheduler attempts. Muted failures are not retried.
 
+Retrying a Buildkite job doesn't re-run its tests. A retried job that finds its
+pool already consumed exits 1 if the pool has failed or errored attempts, so the
+retry doesn't hide those failures, and exits 0 otherwise, for example after an
+automatic retry for a lost agent. To re-run failed tests, rebuild instead.
+
 Each Scheduler attempt is reported as passed, failed, or errored. A failed test
 run exits with status 1. Runner process failures retain the runner's exit status
 when available. Protocol, reporting, or accounting errors exit with status 16.

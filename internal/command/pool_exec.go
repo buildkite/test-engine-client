@@ -60,6 +60,18 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		return fmt.Errorf("test pool %s has unsupported state %q", pool.ID, pool.State)
 	}
 	if pool.State == "consumed" {
+		// A job retry can't re-run a consumed pool's tests, so passing would hide
+		// the failures that made the job red. A pool without failures is fine: its
+		// entries finished on other workers, e.g. after a spot termination.
+		if cfg.JobRetryCount > 0 {
+			results, err := client.GetPoolAttemptResults(ctx, pool.ID)
+			if err != nil {
+				return err
+			}
+			if results.Failed > 0 || results.Errored > 0 {
+				return cli.Exit(fmt.Sprintf("This Test Scheduler pool has already finished with %d failed and %d errored attempts. Retrying a job doesn't re-run its tests; rebuild instead, or use --local-retry-count to retry failed tests within a worker.", results.Failed, results.Errored), 1)
+			}
+		}
 		debug.Printf("Pool already consumed; skipping persistent runner")
 		return nil
 	}

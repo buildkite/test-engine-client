@@ -85,6 +85,25 @@ func (c *Client) GetPool(ctx context.Context, id string) (Pool, error) {
 	return c.requestPool(ctx, http.MethodGet, c.poolURL(id), nil, http.StatusOK)
 }
 
+// PoolAttemptResults counts a pool's completed attempts that did not pass.
+type PoolAttemptResults struct {
+	Failed  int `json:"failed"`
+	Errored int `json:"errored"`
+}
+
+// GetPoolAttemptResults reads completed attempt counts from the pool metrics.
+func (c *Client) GetPoolAttemptResults(ctx context.Context, id string) (PoolAttemptResults, error) {
+	var metrics struct {
+		Attempts struct {
+			Results PoolAttemptResults `json:"results"`
+		} `json:"attempts"`
+	}
+	if _, err := c.doJSONWithRetry(ctx, httpRequest{Method: http.MethodGet, URL: c.poolURL(id) + "/metrics"}, &metrics); err != nil {
+		return PoolAttemptResults{}, fmt.Errorf("getting test pool metrics: %w", err)
+	}
+	return metrics.Attempts.Results, nil
+}
+
 // requestPool is only for idempotent pool reads and fetch-or-create planning.
 // Do not use it for lease creation: ambiguous failures are safe to retry here,
 // but could create a second lease. Unlike doWithRetry, not every 409 is retried.
