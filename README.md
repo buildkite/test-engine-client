@@ -455,7 +455,6 @@ location prefix. A leading `./`, surrounding whitespace and blank lines are
 ignored. If none of the listed files match a test, `bktec run` and `bktec plan`
 fail rather than falling back to the full suite. Set `--fail-on-no-tests=false`
 (or `BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS=false`) to warn and pass instead.
-An empty list runs nothing and passes.
 
 `bktec plan` accepts the same flags. The plan is cached under its plan
 identifier, so the plan step and every run node that shares the identifier
