@@ -268,7 +268,7 @@ func TestPoolExecRetriedJobConsumedPoolFailsOnlyWithPoolFailures(t *testing.T) {
 				case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing":
 					_, _ = io.WriteString(w, `{"id":"existing","state":"consumed","muted_tests":[]}`)
 				case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/metrics":
-					_, _ = io.WriteString(w, `{"pool":{"id":"existing","state":"consumed"},"attempts":{"total":5,"results":`+tc.results+`}}`)
+					_, _ = io.WriteString(w, `{"pool":{"id":"existing","state":"consumed","drained":true},"attempts":{"total":5,"results":`+tc.results+`}}`)
 				default:
 					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 					http.Error(w, "unexpected request", http.StatusBadRequest)

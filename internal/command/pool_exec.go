@@ -64,7 +64,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		// the failures that made the job red. A pool without failures is fine: its
 		// entries finished on other workers, e.g. after a spot termination.
 		if cfg.JobRetryCount > 0 {
-			results, err := client.GetPoolAttemptResults(ctx, pool.ID)
+			results, err := client.WaitForPoolResults(ctx, pool.ID)
 			if err != nil {
 				return err
 			}

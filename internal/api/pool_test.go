@@ -160,3 +160,47 @@ func TestWaitForPoolCancellation(t *testing.T) {
 		require.Equal(t, 3, requests, "polls at 0, 1, and 3 seconds, then cancellation during backoff")
 	})
 }
+
+func TestWaitForPoolResults(t *testing.T) {
+	stale := `{"pool":{"id":"p","state":"consuming","drained":false},"attempts":{"results":{"passed":0,"failed":0,"errored":0}}}`
+	writerFallback := `{"pool":{"id":"p","state":"consumed","drained":false},"attempts":{"results":{"passed":0,"failed":0,"errored":0}}}`
+	for _, tc := range []struct {
+		name      string
+		responses []string
+		want      PoolAttemptResults
+		wantError string
+		wantWait  time.Duration
+	}{
+		{"stale zero then failures", []string{stale, `{"pool":{"id":"p","state":"consumed","drained":true},"attempts":{"results":{"passed":3,"failed":2,"errored":1}}}`}, PoolAttemptResults{Failed: 2, Errored: 1}, "", time.Second},
+		{"stale zero then drained without failures", []string{stale, writerFallback, `{"pool":{"id":"p","state":"consumed","drained":true},"attempts":{"results":{"passed":3,"failed":0,"errored":0}}}`}, PoolAttemptResults{}, "", 3 * time.Second},
+		{"failures before replica shows consumed", []string{`{"pool":{"id":"p","state":"consuming","drained":false},"attempts":{"results":{"passed":0,"failed":1,"errored":0}}}`}, PoolAttemptResults{Failed: 1}, "", 0},
+		{"replica never catches up", nil, PoolAttemptResults{}, "waiting for test pool p results: context deadline exceeded", poolResultsTimeout},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				requests := 0
+				client := NewClient(ClientConfig{ServerBaseURL: "https://example.test", OrganizationSlug: "acme"})
+				client.httpClient.Transport = poolTransport(func(r *http.Request) (*http.Response, error) {
+					require.Equal(t, "GET", r.Method)
+					require.Equal(t, "/v2/organizations/acme/test-scheduler/pools/p/metrics", r.URL.Path)
+					body := writerFallback
+					if requests < len(tc.responses) {
+						body = tc.responses[requests]
+					}
+					requests++
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+				})
+				start := time.Now()
+				results, err := client.WaitForPoolResults(context.Background(), "p")
+				if tc.wantError != "" {
+					require.EqualError(t, err, tc.wantError)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, tc.want, results)
+					require.Equal(t, len(tc.responses), requests)
+				}
+				require.Equal(t, tc.wantWait, time.Since(start))
+			})
+		})
+	}
+}
