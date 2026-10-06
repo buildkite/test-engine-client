@@ -23,6 +23,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/config"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
+	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/urfave/cli/v3"
 )
 
@@ -240,9 +241,14 @@ func TestPoolExecSuppliedConsumedIDSkipsRunnerAndPlanning(t *testing.T) {
 	cfg.OIDC = true
 	cfg.OIDCLifetime = time.Hour
 	cfg.BuildkiteAgentCommand = filepath.Join("..", "config", "mock-buildkite-agent")
+	stderr := captureStderr(t)
 	err := PoolExec(context.Background(), &cfg, "", []string{filepath.Join(t.TempDir(), "nonexistent-runner")}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
 	if err != nil {
 		t.Fatal(err)
+	}
+	want := "+++ Buildkite Test Engine Client: Planning\nbktec " + version.Version + "\n\nUsing existing pool\n  ID: existing\n"
+	if got := stderr(); got != want {
+		t.Fatalf("stderr=%q, want %q", got, want)
 	}
 	if gets != 1 {
 		t.Fatalf("GET count=%d, want one full snapshot for ready pool ID", gets)
@@ -258,7 +264,7 @@ func TestPoolExecSuppliedConsumingIDReusesSnapshot(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing":
 			gets++
-			_, _ = io.WriteString(w, `{"id":"existing","state":"consuming","muted_tests":[]}`)
+			_, _ = io.WriteString(w, `{"id":"existing","state":"consuming","parallelism":4,"muted_tests":[]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/leases":
 			_, _ = io.WriteString(w, `{"lease":null,"pool":{"id":"existing","state":"consumed"}}`)
 		default:
@@ -290,7 +296,7 @@ func TestPoolExecIdempotentPlanAlreadyConsumingSkipsReadinessGet(t *testing.T) {
 			_, _ = io.WriteString(w, `{"tests":[]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/plan":
 			w.WriteHeader(http.StatusAccepted)
-			_, _ = io.WriteString(w, `{"id":"existing","state":"consuming","muted_tests":[]}`)
+			_, _ = io.WriteString(w, `{"id":"existing","state":"consuming","parallelism":4,"muted_tests":[]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/leases":
 			_, _ = io.WriteString(w, `{"lease":null,"pool":{"id":"existing","state":"consumed"}}`)
 		default:
@@ -310,6 +316,8 @@ func TestPoolExecIdempotentPlanAlreadyConsumingSkipsReadinessGet(t *testing.T) {
 	cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = "org", "suite", "rspec"
 	cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
 	cfg.PoolKey, cfg.BuildID, cfg.PipelineSlug = "key", "build", "pipeline"
+	cfg.MaxParallelism = 10
+	stderr := captureStderr(t)
 	if err := PoolExec(context.Background(), &cfg, files, []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
 		t.Fatal(err)
 	}
@@ -318,6 +326,9 @@ func TestPoolExecIdempotentPlanAlreadyConsumingSkipsReadinessGet(t *testing.T) {
 	resolved := strings.Index(logs.String(), "Pool existing resolved (state=consuming)")
 	if filtered < 0 || start <= filtered || resolved <= start {
 		t.Fatalf("expected discovery and filtering before resolution: %s", logs.String())
+	}
+	if want := "\nPlanning test pool\n  Key: key\n  ID: existing\n  Parallelism: 4 (recommended)\n"; !strings.Contains(stderr(), want) {
+		t.Fatalf("stderr missing planning section %q", want)
 	}
 }
 

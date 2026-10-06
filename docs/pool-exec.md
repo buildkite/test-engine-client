@@ -124,8 +124,9 @@ the current one.
 
 ## Troubleshooting
 
-Use `bktec --debug pool exec ...` to show pool state, lease activity, local
-retry rounds, and final attempt counts in the job log.
+The job log shows each lease as it is acquired, completed or released. Use
+`bktec --debug pool exec ...` to also show pool state, lease renewals and
+prefetch timing, batches, and local retry rounds.
 
 If the runner does not start, check that:
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -213,7 +214,9 @@ func TestPoolPlanDynamicSizingWaitsAndExportsParallelism(t *testing.T) {
 			var buf bytes.Buffer
 			setPlanWriter(t, &buf)
 			setPipelineUploadCommand(t, "sh", "-c", `printf '%s:%s:%s' "$BUILDKITE_TEST_ENGINE_POOL_ID" "$BUILDKITE_TEST_ENGINE_PARALLELISM" "$0"`)
+			stderr := captureStderr(t)
 			require.NoError(t, PoolPlan(context.Background(), cfg, "", tc.output, "pipeline.yml"))
+			require.Contains(t, stderr(), fmt.Sprintf("\nPlanning test pool\n  Key: rspec\n  ID: dynamic\n  Waiting for planning to finish...\n  Parallelism: %d (recommended)\n", tc.count))
 			require.Equal(t, 120, filter.MaxParallelism)
 			require.Equal(t, 90.0, filter.TargetTime)
 			require.Equal(t, 1, post)
@@ -239,12 +242,17 @@ func TestPoolPlanDynamicSizingFallsBackToMaxParallelism(t *testing.T) {
 	defer server.Close()
 	cfg := getConfig()
 	cfg.ServerBaseURL, cfg.PipelineSlug, cfg.PoolKey, cfg.MaxParallelism = server.URL, "pipeline", "rspec", 12
+	cfg.SelectionStrategy, cfg.SelectionParams = "xgboost", map[string]string{"duration_proportion_cutoff": "0.5"}
+	cfg.PoolLeaseDurationMS, cfg.PoolLeaseMaxAttempts = 30_000, 50
 	var buf bytes.Buffer
 	setPlanWriter(t, &buf)
 	stderr := captureStderr(t)
 	require.NoError(t, PoolPlan(context.Background(), cfg, "", PlanOutputJSON, ""))
 	require.JSONEq(t, `{"BUILDKITE_TEST_ENGINE_POOL_ID":"dynamic","BUILDKITE_TEST_ENGINE_PARALLELISM":"12"}`, buf.String())
-	require.Contains(t, stderr(), "falling back to --max-parallelism (12)")
+	output := stderr()
+	require.Contains(t, output, "+++ Buildkite Test Engine Client: Planning\nbktec "+version.Version+"\n\nRequested\n  Selection strategy: xgboost\n    duration_proportion_cutoff = 0.5\n  Target time: automatic\n  Maximum nodes: 12\n  Pool lease duration budget: 30s\n  Pool lease max attempts: 50\n")
+	require.Contains(t, output, "\nPlanning test pool\n  Key: rspec\n  ID: dynamic\n⚠️ Test pool dynamic did not return")
+	require.Contains(t, output, "falling back to --max-parallelism (12)")
 }
 
 func TestPoolPlanDynamicSizingSurfacesPlanningFailureAndCancellation(t *testing.T) {

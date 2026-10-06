@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
@@ -24,6 +26,13 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 	}
 	if cfg.TestRunner != "rspec" {
 		return api.Pool{}, fmt.Errorf("pool planning requires the rspec runner")
+	}
+	printRequested(os.Stderr, cfg)
+	if cfg.PoolLeaseDurationMS != 0 {
+		fmt.Fprintf(os.Stderr, "  Pool lease duration budget: %s\n", time.Duration(cfg.PoolLeaseDurationMS)*time.Millisecond)
+	}
+	if cfg.PoolLeaseMaxAttempts != 0 {
+		fmt.Fprintf(os.Stderr, "  Pool lease max attempts: %d\n", cfg.PoolLeaseMaxAttempts)
 	}
 	autoCollectGitMetadata(ctx, cfg, newGitRunner())
 	testRunner, err := runner.DetectRunner(cfg)
@@ -69,10 +78,19 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 	return client.PlanPool(ctx, request)
 }
 
+// printPlanningPool starts the section for a pool created or reused from a
+// key. Callers print any waiting or parallelism lines after it.
+func printPlanningPool(w io.Writer, cfg *config.Config, pool api.Pool) {
+	fmt.Fprintln(w, "\nPlanning test pool")
+	fmt.Fprintf(w, "  Key: %s\n", boundedRequestValue(cfg.PoolKey))
+	fmt.Fprintf(w, "  ID: %s\n", boundedRequestValue(pool.ID))
+}
+
 func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, output PlanOutput, template string) error {
 	if cfg.PoolID != "" {
 		return fmt.Errorf("pool plan requires a pool key, not a pool ID; pass the ID to pool exec")
 	}
+	printPlanningBanner(os.Stderr)
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseURL: cfg.ServerBaseURL, OrganizationSlug: cfg.OrganizationSlug, AccessToken: cfg.AccessToken,
 	})
@@ -81,15 +99,17 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 		return err
 	}
 	debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
+	printPlanningPool(os.Stderr, cfg, pool)
 	env := map[string]string{"BUILDKITE_TEST_ENGINE_POOL_ID": pool.ID}
-	if cfg.MaxParallelism > 0 {
-		if pool.State == "planning" {
-			pool, err = client.WaitForPool(ctx, pool.ID)
-			if err != nil {
-				return err
-			}
-			debug.Printf("Pool %s planned (state=%s)", pool.ID, pool.State)
+	if cfg.MaxParallelism > 0 && pool.State == "planning" {
+		fmt.Fprintln(os.Stderr, "  Waiting for planning to finish...")
+		pool, err = client.WaitForPool(ctx, pool.ID)
+		if err != nil {
+			return err
 		}
+		debug.Printf("Pool %s planned (state=%s)", pool.ID, pool.State)
+	}
+	if cfg.MaxParallelism > 0 {
 		parallelism := cfg.MaxParallelism
 		if pool.Parallelism == nil {
 			// Like bktec plan's local fallback, keep the build running at the
@@ -99,6 +119,7 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 			fmt.Fprintf(os.Stderr, "⚠️ Test pool %s did not return recommended parallelism; falling back to --max-parallelism (%d).\n", pool.ID, parallelism)
 		} else {
 			parallelism = *pool.Parallelism
+			fmt.Fprintf(os.Stderr, "  Parallelism: %d (recommended)\n", parallelism)
 		}
 		env["BUILDKITE_TEST_ENGINE_PARALLELISM"] = strconv.Itoa(parallelism)
 	}
