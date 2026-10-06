@@ -85,6 +85,51 @@ func (c *Client) GetPool(ctx context.Context, id string) (Pool, error) {
 	return c.requestPool(ctx, http.MethodGet, c.poolURL(id), nil, http.StatusOK)
 }
 
+// PoolAttemptResults counts a pool's completed attempts that did not pass.
+type PoolAttemptResults struct {
+	Failed  int `json:"failed"`
+	Errored int `json:"errored"`
+}
+
+// poolResultsTimeout bounds how long WaitForPoolResults waits for the metrics
+// replica to catch up with a consumed pool.
+const poolResultsTimeout = 30 * time.Second
+
+// WaitForPoolResults returns a consumed pool's failed and errored attempt
+// counts. Metrics are read from a replica that can lag behind the pool state,
+// so zero counts are only trusted once the metrics snapshot itself shows the
+// pool consumed and drained. Completed results never change, so any failures
+// are returned straight away.
+func (c *Client) WaitForPoolResults(ctx context.Context, id string) (PoolAttemptResults, error) {
+	ctx, cancel := context.WithTimeout(ctx, poolResultsTimeout)
+	defer cancel()
+	delay := time.Second
+	for {
+		var metrics struct {
+			Pool struct {
+				State   string `json:"state"`
+				Drained bool   `json:"drained"`
+			} `json:"pool"`
+			Attempts struct {
+				Results PoolAttemptResults `json:"results"`
+			} `json:"attempts"`
+		}
+		if _, err := c.doJSONWithRetry(ctx, httpRequest{Method: http.MethodGet, URL: c.poolURL(id) + "/metrics"}, &metrics); err != nil {
+			return PoolAttemptResults{}, fmt.Errorf("getting test pool %s metrics: %w", id, err)
+		}
+		results := metrics.Attempts.Results
+		if results.Failed > 0 || results.Errored > 0 || (metrics.Pool.State == "consumed" && metrics.Pool.Drained) {
+			return results, nil
+		}
+		select {
+		case <-ctx.Done():
+			return PoolAttemptResults{}, fmt.Errorf("waiting for test pool %s results: %w", id, ctx.Err())
+		case <-time.After(delay):
+		}
+		delay = min(delay*2, 5*time.Second)
+	}
+}
+
 // requestPool is only for idempotent pool reads and fetch-or-create planning.
 // Do not use it for lease creation: ambiguous failures are safe to retry here,
 // but could create a second lease. Unlike doWithRetry, not every 409 is retried.

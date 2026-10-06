@@ -34,8 +34,11 @@ type Config struct {
 	Days int `json:"-"`
 	// Enable debug output
 	DebugEnabled bool `json:"-"`
-	// FailOnNoTests causes the client to exit with an error if no tests are assigned to the node
-	FailOnNoTests bool `json:"-"`
+	// FailOnNoTests controls failing when there are no tests to run:
+	//   - nil (flag unset): fail only when a manual selection matches no tests
+	//   - true: also fail when no tests are assigned to this node
+	//   - false: never fail, even when a manual selection matches no tests
+	FailOnNoTests *bool `json:"-"`
 	// Identifier is the identifier of the build.
 	Identifier string `json:"-"`
 	JobID      string `json:"-"`

@@ -71,6 +71,18 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		fmt.Fprintf(os.Stderr, "  Parallelism: %d (recommended)\n", *pool.Parallelism)
 	}
 	if pool.State == "consumed" {
+		// A job retry can't re-run a consumed pool's tests, so passing would hide
+		// the failures that made the job red. A pool without failures is fine: its
+		// entries finished on other workers, e.g. after a spot termination.
+		if cfg.JobRetryCount > 0 {
+			results, err := client.WaitForPoolResults(ctx, pool.ID)
+			if err != nil {
+				return err
+			}
+			if results.Failed > 0 || results.Errored > 0 {
+				return cli.Exit(fmt.Sprintf("This Test Scheduler pool has already finished with %d failed and %d errored attempts. Retrying a job doesn't re-run its tests; rebuild instead, or use --local-retry-count to retry failed tests within a worker.", results.Failed, results.Errored), 1)
+			}
+		}
 		fmt.Println("+++ Buildkite Test Engine Client: No tests to run on this node")
 		debug.Printf("Pool already consumed; skipping persistent runner")
 		return nil

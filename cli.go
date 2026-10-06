@@ -18,6 +18,11 @@ func applyPlanRequestContext(cmd *cli.Command) error {
 		collect := cmd.Bool(collectGitMetadataFlag.Name)
 		cfg.CollectGitMetadata = &collect
 	}
+	cfg.FailOnNoTests = nil
+	if cmd.IsSet(failOnNoTestsFlag.Name) {
+		fail := cmd.Bool(failOnNoTestsFlag.Name)
+		cfg.FailOnNoTests = &fail
+	}
 
 	selectionParams, err := parseKeyValueEntries(cmd.StringSlice("selection-param"), "selection parameter")
 	if err != nil {
@@ -204,7 +209,7 @@ var suiteSlugFlag = &cli.StringFlag{
 var selectionStrategyFlag = &cli.StringFlag{
 	Name:        "selection-strategy",
 	Category:    "TEST SELECTION",
-	Usage:       "Test selection strategy. Set to manual to run only the tests passed with --selection-param files=...",
+	Usage:       "Test selection strategy. Set to manual to run only the tests passed with --selection-param selectors=...",
 	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY"),
 	Destination: &cfg.SelectionStrategy,
 }
@@ -212,7 +217,7 @@ var selectionStrategyFlag = &cli.StringFlag{
 var selectionParamFlag = &cli.StringSliceFlag{
 	Name:     "selection-param",
 	Category: "TEST SELECTION",
-	Usage:    "Selection strategy parameter as key=value. For manual selection, pass files= followed by newline-separated test paths. Repeat for multiple entries.",
+	Usage:    "Selection strategy parameter as key=value. For manual selection, pass selectors= followed by newline-separated test selectors. Repeat for multiple entries.",
 }
 
 var metadataFlag = &cli.StringSliceFlag{
@@ -381,12 +386,14 @@ var selectorSplittingCompatibilityFlag = &cli.BoolFlag{
 	Hidden:  true,
 }
 
+// failOnNoTestsFlag is three-state: applyPlanRequestContext uses IsSet to tell
+// an explicit false apart from unset, so it has no Destination.
 var failOnNoTestsFlag = &cli.BoolFlag{
-	Name:        "fail-on-no-tests",
-	Category:    "TEST RUNNER",
-	Usage:       "Exit with an error if no tests are assigned to this node",
-	Sources:     cli.EnvVars("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS"),
-	Destination: &cfg.FailOnNoTests,
+	Name:     "fail-on-no-tests",
+	Category: "TEST RUNNER",
+	Usage: "Exit with an error if no tests are assigned to this node. " +
+		"A manual selection that matches no tests fails unless this is set to false",
+	Sources: cli.NewValueSourceChain(nonEmptyEnvVar("BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS")),
 }
 
 var locationPrefixFlag = &cli.StringFlag{
@@ -720,6 +727,7 @@ func planCommandFlags() []cli.Flag {
 	flags = append(flags, testEngineFlags...)
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
+	flags = append(flags, failOnNoTestsFlag)
 	flags = append(flags, selectionFlags()...)
 	return freshFlags(flags)
 }

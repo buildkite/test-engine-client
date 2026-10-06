@@ -28,7 +28,8 @@ func TestPrintPlanningRequest(t *testing.T) {
 		{"automatic", config.Config{MaxParallelism: 20}, []string{"Target time: automatic\n  Maximum nodes: 20"}},
 		{"target", config.Config{TargetTime: 2 * time.Minute, MaxParallelism: 20}, []string{"Target time: 2m0s\n  Maximum nodes: 20"}},
 		{"selection", config.Config{SelectionStrategy: "xgboost", SelectionParams: map[string]string{"score_cutoff": "0.8", "count_cutoff": "12"}}, []string{"Selection strategy: xgboost", "count_cutoff = 12\n    score_cutoff = 0.8"}},
-		{"manual", config.Config{SelectionStrategy: "manual", SelectionParams: map[string]string{"files": "a\n\n b\n"}}, []string{"files = <2 nonblank entries; 6 bytes>"}},
+		{"manual", config.Config{SelectionStrategy: "manual", SelectionParams: map[string]string{"selectors": "a\n\n b\n"}}, []string{"selectors = <2 nonblank entries; 6 bytes>"}},
+		{"manual legacy files", config.Config{SelectionStrategy: "manual", SelectionParams: map[string]string{"files": "a\n\n b\n"}}, []string{"files = <2 nonblank entries; 6 bytes>"}},
 		{"escaped", config.Config{SelectionStrategy: "random\n+++ fake", SelectionParams: map[string]string{"sample_rate": "0.1\n\x1b"}}, []string{`"random\n+++ fake"`, `sample_rate = "0.1\n\x1b"`}},
 		{"bounded", config.Config{SelectionStrategy: "xgboost", SelectionParams: map[string]string{"score_cutoff": strings.Repeat("x", 1000), "features": "secret-features"}}, []string{"score_cutoff = <value omitted; 1000 bytes>", "features = <value omitted; 15 bytes>"}},
 	} {
