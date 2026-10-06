@@ -435,11 +435,11 @@ See the [runner guides](#runner-guides) for runner-specific selector details and
 
 Manual test selection runs only the tests you list, instead of the full suite.
 Set the selection strategy to `manual` and pass the tests as a newline-separated
-`files` selection parameter:
+`selectors` selection parameter:
 
 ```sh
 bktec run --selection-strategy manual \
-  --selection-param "files=$(cat tests-to-run.txt)"
+  --selection-param "selectors=$(cat tests-to-run.txt)"
 ```
 
 The strategy can also be set with an environment variable. `--selection-param`
@@ -449,16 +449,20 @@ is only supported as a repeatable CLI flag.
 export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=manual
 ```
 
-Each line must match a test file as bktec discovers it (or a selector from
-`--selector-file`): relative to the directory bktec runs in, and without any
-location prefix. A leading `./`, surrounding whitespace and blank lines are
-ignored. If none of the listed files match a test, `bktec run` and `bktec plan`
-fail rather than falling back to the full suite. Set `--fail-on-no-tests=false`
-(or `BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS=false`) to warn and pass instead.
+Each line must match a [selector](#how-selectors-are-matched) as bktec
+discovers it (or as listed in `--selector-file`): relative to the directory
+bktec runs in, and without any location prefix. For most runners a selector is
+a test file path. A leading `./`, surrounding whitespace and blank lines are
+ignored. If none of the listed selectors match a test, `bktec run` and
+`bktec plan` fail rather than falling back to the full suite. Set
+`--fail-on-no-tests=false` (or `BUILDKITE_TEST_ENGINE_FAIL_ON_NO_TESTS=false`)
+to warn and pass instead.
+
+The `files` selection parameter is still accepted in place of `selectors`.
 
 `bktec plan` accepts the same flags. The plan is cached under its plan
 identifier, so the plan step and every run node that shares the identifier
-must pass the same strategy and file list.
+must pass the same strategy and selector list.
 
 #### Git metadata
 

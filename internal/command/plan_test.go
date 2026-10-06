@@ -1434,7 +1434,7 @@ func TestPlan_ZeroMatchSelection(t *testing.T) {
 			for _, wanted := range []string{
 				"Parallelism is 0, there is nothing to run.",
 				"Selection matched none of the 4 candidate test selectors, so there are no tests to run.",
-				"Check that the files passed with --selection-param match",
+				"Check that the selectors passed with --selection-param match",
 			} {
 				if !strings.Contains(stderr, wanted) {
 					t.Errorf("stderr missing %q: %s", wanted, stderr)
@@ -1469,7 +1469,7 @@ func TestPlan_ZeroMatchManualSelectionFails(t *testing.T) {
 			cfg := getConfig()
 			cfg.ServerBaseURL = svr.URL
 			cfg.SelectionStrategy = "manual"
-			cfg.SelectionParams = map[string]string{"files": "spec/a_spec.rb"}
+			cfg.SelectionParams = map[string]string{"selectors": "spec/a_spec.rb"}
 			cfg.CollectGitMetadata = new(false)
 			cfg.FailOnNoTests = tc.failOnNoTests
 			if tc.format == PlanOutputPlanOut {

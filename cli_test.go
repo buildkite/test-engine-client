@@ -523,7 +523,7 @@ func TestManualSelectionRequestBody(t *testing.T) {
 					selectionArgs = nil
 				}
 				selectionArgs = append(selectionArgs,
-					"--selection-param", "files=spec/a_spec.rb\n spec/b_spec.rb\n",
+					"--selection-param", "selectors=spec/a_spec.rb\n spec/b_spec.rb\n",
 					"--selection-param", "extra=a=b, c")
 
 				var posts []json.RawMessage
@@ -586,7 +586,7 @@ func TestManualSelectionRequestBody(t *testing.T) {
 				invoke("run", runCommandFlags(), runTests)
 
 				require.Len(t, posts, 1, "a cached run must not create another plan")
-				assert.JSONEq(t, `{"strategy":"manual","params":{"files":"spec/a_spec.rb\n spec/b_spec.rb\n","extra":"a=b, c"}}`, string(posts[0]))
+				assert.JSONEq(t, `{"strategy":"manual","params":{"selectors":"spec/a_spec.rb\n spec/b_spec.rb\n","extra":"a=b, c"}}`, string(posts[0]))
 			})
 		}
 	}

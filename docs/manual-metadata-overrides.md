@@ -10,7 +10,7 @@ Use `--selection-param key=value` to pass strategy parameters. Both flags are re
 
 ```sh
 bktec plan --json --selection-strategy manual \
-  --selection-param "files=$(cat tests-to-run.txt)" \
+  --selection-param "selectors=$(cat tests-to-run.txt)" \
   --metadata base_branch=develop
 ```
 
