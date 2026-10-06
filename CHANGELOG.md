@@ -1,8 +1,9 @@
 # Changelog
-## Unreleased
+## 3.2.1 - 2026-10-07
 - [Manual test selection](./README.md#test-selection) now takes the tests to run as `--selection-param selectors=...`. `files=` still works.
 - Change `bktec run` and `bktec plan` to fail when a [manual selection](./README.md#test-selection) matches none of the listed selectors, instead of warning and passing. Set `--fail-on-no-tests=false` to keep the old behaviour.
 - Fix retried `bktec pool exec` jobs passing without running tests when their pool had already finished with failures. Such retries now fail; retries of jobs whose pool finished without failures, such as after a lost agent, still pass.
+- Show planning details and lease activity in `bktec pool plan` and `bktec pool exec` output, like `bktec plan` and `bktec run` do, instead of printing almost nothing until the run ends.
 
 ## 3.2.0 - 2026-10-02
 - Add manual [test selection](./README.md#test-selection): `--selection-strategy manual --selection-param files=<newline-separated test paths>` runs only the listed tests. List paths as bktec discovers them, without the location prefix. The selection flags, `--collect-git-metadata`, `--remote` and `--metadata` are now always available on `run`, `plan` and `pool` and shown in `--help`. `BKTEC_PREVIEW_SELECTION` no longer has any effect, so an existing `BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY` is now sent instead of ignored.
