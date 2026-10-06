@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand/v2"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -26,6 +28,10 @@ type poolScheduler interface {
 
 // All protocol callbacks are nonblocking; network and report work runs outside
 // the host lock. One worker holds one lease, including its local retries.
+// leaseLog reports each lease's lifecycle in the job log alongside runner
+// output. log.Logger serializes writes from heartbeat and prefetch goroutines.
+var leaseLog = log.New(os.Stdout, "", 0)
+
 type poolSource struct {
 	mu              sync.Mutex
 	pending         *runnerexec.Batch
@@ -224,7 +230,7 @@ func (s *poolSource) work(ctx context.Context, client poolScheduler, pool api.Po
 			s.mu.Unlock()
 			if lost {
 				lease.stop()
-				debug.Printf("Prefetched lease %s was lost before dispatch; requesting another", lease.ID)
+				leaseLog.Printf("Prefetched lease %s was lost before dispatch; requesting another", lease.ID)
 				lease = nil
 			} else {
 				debug.Printf("Using prefetched lease %s (%d scheduler attempts, state=%s)", lease.ID, len(lease.Attempts), lease.state)
@@ -274,7 +280,7 @@ func (s *poolSource) work(ctx context.Context, client poolScheduler, pool api.Po
 				}
 			}
 			lease = s.track(client, pool.ID, *response.Lease, response.Pool.State)
-			debug.Printf("Acquired lease %s (%d scheduler attempts, state=%s)", lease.ID, len(lease.Attempts), lease.state)
+			leaseLog.Printf("Acquired lease %s (%d tests)", lease.ID, len(lease.Attempts))
 		}
 		var err error
 		if next, err = s.executeLease(ctx, client, pool, lease, retries); err != nil {
@@ -315,7 +321,11 @@ func (s *poolSource) releaseUnused(client poolScheduler, poolID string, lease *p
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 	err := client.ReleaseLease(ctx, poolID, lease.ID)
-	debug.Printf("Released prefetched lease %s (%s; error=%v)", lease.ID, why, err)
+	if err != nil {
+		leaseLog.Printf("Failed to release prefetched lease %s (%s): %v", lease.ID, why, err)
+	} else {
+		leaseLog.Printf("Released prefetched lease %s (%s)", lease.ID, why)
+	}
 }
 
 const (
@@ -441,7 +451,7 @@ func (p *leasePrefetch) receive(s *poolSource, r prefetchResult) {
 		s.lastAcquireDuration = r.latency
 		p.next = r.lease
 		p.idle = time.NewTimer(prefetchMaxIdle)
-		debug.Printf("Prefetched lease %s (%d scheduler attempts, state=%s)", r.lease.ID, len(r.lease.Attempts), r.state)
+		leaseLog.Printf("Prefetched lease %s (%d tests)", r.lease.ID, len(r.lease.Attempts))
 	}
 }
 
@@ -530,7 +540,15 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		defer cancel()
 		if terminating || (!dispatched && !undispatchable) {
 			err = errors.Join(err, client.ReleaseLease(accounting, pool.ID, lease.ID))
-			debug.Printf("Released lease %s (dispatched=%t; terminating=%t; error=%v)", lease.ID, dispatched, terminating, err)
+			why := "not run"
+			if terminating {
+				why = "runner stopping"
+			}
+			if err != nil {
+				leaseLog.Printf("Failed to release lease %s (%s): %v", lease.ID, why, err)
+			} else {
+				leaseLog.Printf("Released lease %s (%s)", lease.ID, why)
+			}
 			return
 		}
 		final := results.final()
@@ -555,7 +573,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		s.erroredAttempts += errored
 		s.recordSettled(results)
 		s.mu.Unlock()
-		debug.Printf("Completed lease %s (scheduler attempts=%d; final: passed=%d failed=%d errored=%d)", lease.ID, len(final), passed, failed, errored)
+		leaseLog.Printf("Completed lease %s (passed: %d, failed: %d, errored: %d)", lease.ID, passed, failed, errored)
 	}()
 	if err = validateLease(lease.Lease); err != nil {
 		for i := range results.broken {
@@ -707,11 +725,11 @@ func (s *poolSource) heartbeat(ctx context.Context, client poolScheduler, poolID
 			// Only a Scheduler 4xx confirms ownership loss. After the client's
 			// retry budget, keep the lease until its last known expiry.
 			if !errors.As(err, &leaseError) || leaseError.Status >= 500 || leaseError.Status == 429 {
-				debug.Printf("Lease %s heartbeat failed; retaining ownership until %s: %v", lease.ID, expires.Format(time.RFC3339), err)
+				leaseLog.Printf("Lease %s heartbeat failed; retaining ownership until %s: %v", lease.ID, expires.Format(time.RFC3339), err)
 				continue
 			}
 			if leaseError.Status == 422 && leaseError.Code == api.LeaseErrorCodeMaximumLifetime {
-				debug.Printf("Lease %s reached its maximum lifetime; retaining ownership until %s", lease.ID, expires.Format(time.RFC3339))
+				leaseLog.Printf("Lease %s reached its maximum lifetime; retaining ownership until %s", lease.ID, expires.Format(time.RFC3339))
 				timer := time.NewTimer(time.Until(expires))
 				select {
 				case <-ctx.Done():
@@ -743,5 +761,5 @@ func (s *poolSource) lose(lease *poolLease, err error) {
 		s.stop(err)
 		return
 	}
-	debug.Printf("Prefetched lease %s lost before dispatch: %v", lease.ID, err)
+	leaseLog.Printf("Prefetched lease %s lost before dispatch: %v", lease.ID, err)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -95,6 +96,7 @@ func waitPoolBatch(t *testing.T, s *poolSource) *runnerexec.Batch {
 func TestPoolWorkerRetriesBeforeNextLeaseAndKeepsHeartbeatUntilComplete(t *testing.T) {
 	var logs bytes.Buffer
 	setDebugEnabled(t, &logs)
+	leases := setLeaseLog(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s := newPoolSource(cancel)
@@ -177,14 +179,15 @@ func TestPoolWorkerRetriesBeforeNextLeaseAndKeepsHeartbeatUntilComplete(t *testi
 	}
 	if !strings.Contains(logs.String(), "Offered local retry batch b_2 from lease lease (round=1; 1 tests)") ||
 		!strings.Contains(logs.String(), "Dispatched local retry batch b_2 to persistent runner (round=1)") ||
-		!strings.Contains(logs.String(), "Completed lease lease (scheduler attempts=1; final: passed=1 failed=0 errored=0)") {
-		t.Fatalf("retry and final lease result unclear: %s", logs.String())
+		!strings.Contains(leases.String(), "Completed lease lease (passed: 1, failed: 0, errored: 0)") {
+		t.Fatalf("retry and final lease result unclear: %s\n%s", logs.String(), leases.String())
 	}
 }
 
 func TestPoolWorkerOutcomeDistinguishesFailedAndErroredAttempts(t *testing.T) {
 	var logs bytes.Buffer
 	setDebugEnabled(t, &logs)
+	leases := setLeaseLog(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s := newPoolSource(cancel)
@@ -226,8 +229,8 @@ func TestPoolWorkerOutcomeDistinguishesFailedAndErroredAttempts(t *testing.T) {
 	if !strings.Contains(logs.String(), "Received batch b_1 result (status=completed; provisional attempt results: passed=1 failed=1 errored=1)") {
 		t.Fatalf("missing batch attempt summary: %s", logs.String())
 	}
-	if !strings.Contains(logs.String(), "Completed lease lease (scheduler attempts=3; final: passed=1 failed=1 errored=1)") {
-		t.Fatalf("missing final lease result: %s", logs.String())
+	if !strings.Contains(leases.String(), "Completed lease lease (passed: 1, failed: 1, errored: 1)") {
+		t.Fatalf("missing final lease result: %s", leases.String())
 	}
 }
 
@@ -1086,4 +1089,13 @@ func TestPoolWorkerSlowIdleReleaseDoesNotBlockCurrentLease(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// setLeaseLog captures lease lifecycle lines until test cleanup.
+func setLeaseLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	leaseLog.SetOutput(&buf)
+	t.Cleanup(func() { leaseLog.SetOutput(os.Stdout) })
+	return &buf
 }

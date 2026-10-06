@@ -31,6 +31,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	if cfg.AccessToken == "" && !cfg.OIDC {
 		return errors.New("pool exec requires a supplied Scheduler OIDC token or agent OIDC authentication")
 	}
+	printPlanningBanner(os.Stderr)
 	var mint func(context.Context) (string, error)
 	if cfg.OIDC {
 		mint = cfg.RequestSchedulerOIDCToken
@@ -48,8 +49,15 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	} else {
 		debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
 	}
+	if cfg.PoolID == "" {
+		printPlanningPool(os.Stderr, cfg, pool)
+	} else {
+		// Like run's "Using existing plan": the pool was planned elsewhere.
+		fmt.Fprintf(os.Stderr, "\nUsing existing pool\n  ID: %s\n", boundedRequestValue(pool.ID))
+	}
 	switch pool.State {
 	case "planning":
+		fmt.Fprintln(os.Stderr, "  Waiting for planning to finish...")
 		pool, err = client.WaitForPool(ctx, pool.ID)
 		if err != nil {
 			return err
@@ -58,6 +66,9 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		// GET and idempotent planning POST return the same representation.
 	default:
 		return fmt.Errorf("test pool %s has unsupported state %q", pool.ID, pool.State)
+	}
+	if cfg.PoolID == "" && cfg.MaxParallelism > 0 && pool.Parallelism != nil {
+		fmt.Fprintf(os.Stderr, "  Parallelism: %d (recommended)\n", *pool.Parallelism)
 	}
 	if pool.State == "consumed" {
 		// A job retry can't re-run a consumed pool's tests, so passing would hide
@@ -72,6 +83,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 				return cli.Exit(fmt.Sprintf("This Test Scheduler pool has already finished with %d failed and %d errored attempts. Retrying a job doesn't re-run its tests; rebuild instead, or use --local-retry-count to retry failed tests within a worker.", results.Failed, results.Errored), 1)
 			}
 		}
+		fmt.Println("+++ Buildkite Test Engine Client: No tests to run on this node")
 		debug.Printf("Pool already consumed; skipping persistent runner")
 		return nil
 	}
@@ -82,6 +94,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		return fmt.Errorf("test pool %s is missing its muted tests snapshot", pool.ID)
 	}
 	debug.Printf("Pool ready (state=%s); starting persistent runner", pool.State)
+	fmt.Println("+++ Buildkite Test Engine Client: Running tests")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	source := newPoolSource(cancel)

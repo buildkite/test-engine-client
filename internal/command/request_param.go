@@ -20,11 +20,26 @@ type requestTarget struct {
 	file  api.TestPlanFile
 }
 
+// printPlanningBanner opens the planning log group shared by plan, run and
+// the pool commands.
+func printPlanningBanner(w io.Writer) {
+	fmt.Fprintln(w, "+++ Buildkite Test Engine Client: Planning")
+	fmt.Fprintln(w, "bktec "+version.Version)
+}
+
 // printPlanningRequest describes this invocation, not the provenance of a
 // returned (possibly cached) plan. Share normalization with the API request.
 func printPlanningRequest(w io.Writer, cfg *config.Config) {
-	fmt.Fprintln(w, "+++ Buildkite Test Engine Client: Planning")
-	fmt.Fprintln(w, "bktec "+version.Version)
+	printPlanningBanner(w)
+	printRequested(w, cfg)
+	if cfg.MaxParallelism == 0 {
+		fmt.Fprintf(w, "  Parallelism: %d (fixed)\n", cfg.Parallelism)
+	}
+}
+
+// printRequested starts the Requested section with the selection and dynamic
+// sizing this invocation sends, using the same normalization as the API request.
+func printRequested(w io.Writer, cfg *config.Config) {
 	fmt.Fprintln(w, "\nRequested")
 	selection := buildSelectionParams(cfg.SelectionStrategy, cfg.SelectionParams)
 	if selection == nil {
@@ -67,8 +82,6 @@ func printPlanningRequest(w io.Writer, cfg *config.Config) {
 			target = cfg.TargetTime.String()
 		}
 		fmt.Fprintf(w, "  Target time: %s\n  Maximum nodes: %d\n", target, cfg.MaxParallelism)
-	} else {
-		fmt.Fprintf(w, "  Parallelism: %d (fixed)\n", cfg.Parallelism)
 	}
 }
 
