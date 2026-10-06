@@ -1444,6 +1444,57 @@ func TestPlan_ZeroMatchSelection(t *testing.T) {
 	}
 }
 
+// A manual selection that lists files but matches none fails plan, unless
+// --fail-on-no-tests=false opts out. --plan-out still emits the plan first.
+func TestPlan_ZeroMatchManualSelectionFails(t *testing.T) {
+	const response = `{"identifier":"facecafe","parallelism":0,"tasks":{},"selection":{"applied":true,"strategy":"manual","candidate_count":4,"selected_count":0}}`
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(response))
+	}))
+	defer svr.Close()
+
+	for _, tc := range []struct {
+		name          string
+		format        PlanOutput
+		failOnNoTests *bool
+		wantErr       bool
+		wantOutput    bool
+	}{
+		{name: "json", format: PlanOutputJSON, wantErr: true},
+		{name: "pipeline-upload", format: PlanOutputPipelineUpload, wantErr: true},
+		{name: "plan-out", format: PlanOutputPlanOut, wantErr: true, wantOutput: true},
+		{name: "json, opted out", format: PlanOutputJSON, failOnNoTests: new(false), wantOutput: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := getConfig()
+			cfg.ServerBaseURL = svr.URL
+			cfg.SelectionStrategy = "manual"
+			cfg.SelectionParams = map[string]string{"files": "spec/a_spec.rb"}
+			cfg.CollectGitMetadata = new(false)
+			cfg.FailOnNoTests = tc.failOnNoTests
+			if tc.format == PlanOutputPlanOut {
+				cfg.PlanOut = "-"
+			}
+
+			var buf bytes.Buffer
+			setPlanWriter(t, &buf)
+			captureStderr(t)
+
+			err := Plan(context.Background(), cfg, "", tc.format, "")
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "(1 listed) matched a test") {
+					t.Errorf("command.Plan(...) error = %v, want manual zero-match error", err)
+				}
+			} else if err != nil {
+				t.Errorf("command.Plan(...) error = %v", err)
+			}
+			if got := buf.Len() > 0; got != tc.wantOutput {
+				t.Errorf("command.Plan(...) wrote output = %v, want %v: %q", got, tc.wantOutput, buf.String())
+			}
+		})
+	}
+}
+
 func TestPrintSelectedNothingWarning(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

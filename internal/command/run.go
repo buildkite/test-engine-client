@@ -79,6 +79,10 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 		}
 	}
 
+	if err := checkManualSelectionMatched(cfg, testPlan); err != nil {
+		return err
+	}
+
 	debug.Printf("My favourite ice cream is %s", testPlan.Experiment)
 
 	// get plan for this node
@@ -99,7 +103,8 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 
 	// execute tests
 	var timeline []api.Timeline
-	runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, cfg.FailOnNoTests)
+	failOnNoTests := cfg.FailOnNoTests != nil && *cfg.FailOnNoTests
+	runResult, runErr := runTestsWithRetry(ctx, apiClient, cfg, testRunner, &thisNodeTask.Tests, cfg.MaxRetries, testPlan.MutedTests, &timeline, cfg.RetryForMutedTest, failOnNoTests)
 
 	// Abort immediately and propagate the error if the process was terminated by a signal,
 	// since the test results may be unreliable and cannot be trusted.

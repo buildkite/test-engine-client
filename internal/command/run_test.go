@@ -25,6 +25,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStartOTLPRelayWiresTestEnvironmentAndOIDCForwarding(t *testing.T) {
@@ -993,25 +994,48 @@ func TestFetchOrCreateTestPlan_ZeroMatchSelection(t *testing.T) {
 	}
 }
 
-func TestRun_ZeroMatchSelectionRunsNothing(t *testing.T) {
+// A manual selection that lists files but matches none fails before running
+// anything, unless --fail-on-no-tests=false opts out. An empty list passes.
+func TestRun_ZeroMatchSelection(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"identifier":"identifier","parallelism":0,"tasks":{},"selection":{"applied":true,"strategy":"manual","candidate_count":4,"selected_count":0}}`)
 	}))
 	defer svr.Close()
 
-	cfg := getConfig()
-	cfg.ServerBaseURL = svr.URL
-	cfg.Identifier = "identifier"
-	// Running the suite would fail: bktec must not invoke the test runner.
-	cfg.TestCommand = "false"
+	for _, tc := range []struct {
+		name          string
+		files         string
+		failOnNoTests *bool
+		wantErr       string
+	}{
+		{name: "files listed", files: "spec/a_spec.rb\n\nspec/b_spec.rb\n", wantErr: "(2 listed) matched a test"},
+		{name: "files listed, fail-on-no-tests", files: "spec/a_spec.rb", failOnNoTests: new(true), wantErr: "(1 listed) matched a test"},
+		{name: "files listed, opted out", files: "spec/a_spec.rb", failOnNoTests: new(false)},
+		{name: "empty list", files: " \n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := getConfig()
+			cfg.ServerBaseURL = svr.URL
+			cfg.Identifier = "identifier"
+			cfg.SelectionStrategy = "manual"
+			cfg.SelectionParams = map[string]string{"files": tc.files}
+			cfg.CollectGitMetadata = new(false)
+			cfg.FailOnNoTests = tc.failOnNoTests
+			// Running the suite would fail: bktec must not invoke the test runner.
+			cfg.TestCommand = "false"
 
-	getStderr := captureStderr(t)
-	if err := Run(context.Background(), cfg, ""); err != nil {
-		t.Fatalf("Run() error = %v", err)
+			getStderr := captureStderr(t)
+			err := Run(context.Background(), cfg, "")
+			stderr := getStderr()
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.wantErr)
+			}
+			assert.NotContains(t, stderr, "Falling back to non-intelligent splitting")
+			assert.Contains(t, stderr, "Selection matched none of the 4 candidate test selectors, so there are no tests to run.")
+		})
 	}
-	stderr := getStderr()
-	assert.NotContains(t, stderr, "Falling back to non-intelligent splitting")
-	assert.Contains(t, stderr, "Selection matched none of the 4 candidate test selectors, so there are no tests to run.")
 }
 
 func TestFetchOrCreateTestPlan_InternalServerError(t *testing.T) {

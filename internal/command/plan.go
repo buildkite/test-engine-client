@@ -77,6 +77,9 @@ func Plan(ctx context.Context, cfg *config.Config, testFileList string, outputFo
 	}
 
 	printPlanningSummary(os.Stderr, testPlan, sourceCreateResponse, cfg)
+	if err := checkManualSelectionMatched(cfg, testPlan); err != nil {
+		return err
+	}
 
 	switch outputFormat {
 
@@ -170,7 +173,11 @@ func planOut(ctx context.Context, cfg *config.Config, testTargets []string, apiC
 		fmt.Fprintln(os.Stderr, "⚠️ Parallelism is 0, there is nothing to run.")
 	}
 
-	return writeIndentedJSON(out, raw)
+	// Emit the plan before failing so it is available for debugging.
+	if err := writeIndentedJSON(out, raw); err != nil {
+		return err
+	}
+	return checkManualSelectionMatched(cfg, testPlan)
 }
 
 // planOutWriter resolves the --plan-out destination: "-" writes to planWriter
