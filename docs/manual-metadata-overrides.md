@@ -14,4 +14,4 @@ bktec plan --json --selection-strategy manual \
   --metadata base_branch=develop
 ```
 
-`--selection-param` and `--metadata` are only supported as repeatable CLI flags.
+`--selection-param` and `--metadata` are only supported as repeatable CLI flags. The exception is manual selection's selectors, which can also be set with `BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS`; see [Test selection](../README.md#test-selection).

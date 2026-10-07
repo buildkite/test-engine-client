@@ -34,10 +34,25 @@ func applyPlanRequestContext(cmd *cli.Command) error {
 		return fmt.Errorf("invalid metadata: %w", err)
 	}
 
+	// Manual selection can take its selectors from an env var, so a step that
+	// sets the strategy by env var needs no --selection-param. A set but empty
+	// variable is an empty list, which selects no tests.
+	if cfg.SelectionStrategy == "manual" {
+		_, hasSelectors := selectionParams["selectors"]
+		_, hasFiles := selectionParams["files"]
+		if selectors, ok := os.LookupEnv(selectionSelectorsEnvVar); ok && !hasSelectors && !hasFiles {
+			selectionParams["selectors"] = selectors
+		}
+	}
+
 	cfg.SelectionParams = selectionParams
 	cfg.Metadata = metadata
 	return nil
 }
+
+// selectionSelectorsEnvVar holds newline-separated selectors for manual
+// selection. A --selection-param selectors= or files= entry takes precedence.
+const selectionSelectorsEnvVar = "BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS"
 
 func parseKeyValueEntries(entries []string, fieldName string) (map[string]string, error) {
 	result := map[string]string{}
@@ -217,7 +232,7 @@ var selectionStrategyFlag = &cli.StringFlag{
 var selectionParamFlag = &cli.StringSliceFlag{
 	Name:     "selection-param",
 	Category: "TEST SELECTION",
-	Usage:    "Selection strategy parameter as key=value. For manual selection, pass selectors= followed by newline-separated test selectors. Repeat for multiple entries.",
+	Usage:    "Selection strategy parameter as key=value. For manual selection, pass selectors= followed by newline-separated test selectors, or set BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS. Repeat for multiple entries.",
 }
 
 var metadataFlag = &cli.StringSliceFlag{

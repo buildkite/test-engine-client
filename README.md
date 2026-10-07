@@ -442,12 +442,18 @@ bktec run --selection-strategy manual \
   --selection-param "selectors=$(cat tests-to-run.txt)"
 ```
 
-The strategy can also be set with an environment variable. `--selection-param`
-is only supported as a repeatable CLI flag.
+The strategy and selectors can also be set with environment variables. A
+`--selection-param selectors=` or `files=` entry takes precedence over
+`BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS`. If the variable is set but empty,
+the list is empty and no tests are selected.
 
 ```sh
 export BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY=manual
+export BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS="$(cat tests-to-run.txt)"
+bktec run
 ```
+
+Other `--selection-param` entries are only supported as a repeatable CLI flag.
 
 Each line must match a [selector](#how-selectors-are-matched) as bktec
 discovers it (or as listed in `--selector-file`): relative to the directory
