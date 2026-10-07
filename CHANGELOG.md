@@ -1,4 +1,7 @@
 # Changelog
+## Unreleased
+- [Manual test selection](./README.md#test-selection) can read its selectors from `BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS` instead of `--selection-param selectors=...`.
+
 ## 3.2.1 - 2026-10-07
 - [Manual test selection](./README.md#test-selection) now takes the tests to run as `--selection-param selectors=...`. `files=` still works.
 - Change `bktec run` and `bktec plan` to fail when a [manual selection](./README.md#test-selection) matches none of the listed selectors, instead of warning and passing. Set `--fail-on-no-tests=false` to keep the old behaviour.

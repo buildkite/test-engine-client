@@ -408,6 +408,48 @@ func TestFailOnNoTestsResolution(t *testing.T) {
 	}
 }
 
+// TestSelectionSelectorsEnvVar checks that manual selection reads its
+// selectors from BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS unless
+// --selection-param already lists them.
+func TestSelectionSelectorsEnvVar(t *testing.T) {
+	commands := map[string]func() []cli.Flag{"run": runCommandFlags, "plan": planCommandFlags}
+	for _, tc := range []struct {
+		name     string
+		strategy string
+		env      *string
+		args     []string
+		want     map[string]string
+	}{
+		{name: "env selectors", strategy: "manual", env: new("spec/a_spec.rb\nspec/b_spec.rb"), want: map[string]string{"selectors": "spec/a_spec.rb\nspec/b_spec.rb"}},
+		{name: "empty env is an empty list", strategy: "manual", env: new(""), want: map[string]string{"selectors": ""}},
+		{name: "unset env", strategy: "manual", want: map[string]string{}},
+		{name: "flag selectors win", strategy: "manual", env: new("spec/env_spec.rb"), args: []string{"--selection-param", "selectors=spec/flag_spec.rb"}, want: map[string]string{"selectors": "spec/flag_spec.rb"}},
+		{name: "flag files win", strategy: "manual", env: new("spec/env_spec.rb"), args: []string{"--selection-param", "files=spec/flag_spec.rb"}, want: map[string]string{"files": "spec/flag_spec.rb"}},
+		{name: "other strategy ignores env", strategy: "random", env: new("spec/a_spec.rb"), want: map[string]string{}},
+		{name: "no strategy ignores env", env: new("spec/a_spec.rb"), want: map[string]string{}},
+	} {
+		for name, flags := range commands {
+			t.Run(name+"/"+tc.name, func(t *testing.T) {
+				cfg = config.New()
+				t.Cleanup(func() { cfg = config.New() })
+				t.Setenv("BUILDKITE_TEST_ENGINE_SELECTION_STRATEGY", tc.strategy)
+				t.Setenv("BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS", "")
+				if tc.env == nil {
+					os.Unsetenv("BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS")
+				} else {
+					t.Setenv("BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS", *tc.env)
+				}
+				cmd := &cli.Command{Name: "bktec", Commands: []*cli.Command{{
+					Name: "sub", Flags: flags(), DisableSliceFlagSeparator: true,
+					Action: func(_ context.Context, cmd *cli.Command) error { return applyPlanRequestContext(cmd) },
+				}}}
+				require.NoError(t, cmd.Run(context.Background(), append([]string{"bktec", "sub"}, tc.args...)))
+				assert.Equal(t, tc.want, cfg.SelectionParams)
+			})
+		}
+	}
+}
+
 // TestCollectGitMetadataOptOutRequestBody checks the wire request when a
 // strategy is set but collection is opted out: only --metadata is sent, for
 // run, plan followed by a cached run, and pool plan.
