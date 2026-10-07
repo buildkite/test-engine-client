@@ -1,5 +1,5 @@
 # Changelog
-## Unreleased
+## 3.3.0 - 2026-10-08
 - [Manual test selection](./README.md#test-selection) can read its selectors from `BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS` instead of `--selection-param selectors=...`.
 
 ## 3.2.1 - 2026-10-07
