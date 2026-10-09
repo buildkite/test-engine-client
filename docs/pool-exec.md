@@ -56,7 +56,9 @@ then exports `BUILDKITE_TEST_ENGINE_PARALLELISM` alongside
 `BUILDKITE_TEST_ENGINE_POOL_ID`, either in `--json` output or in the
 environment of `--pipeline-upload`. A completed empty plan exports `0`.
 
-If planning fails, `pool plan` exits with an error. If a ready pool does not
+If Test Scheduler is unavailable or planning fails, `pool plan` falls back like
+`bktec plan`; see [Fallback when Test Scheduler is unavailable](#fallback-when-test-scheduler-is-unavailable).
+If a ready pool does not
 include recommended parallelism, `pool plan` prints a warning and exports the
 `--max-parallelism` value instead, like the local fallback used by `bktec plan`.
 Workers lease from the shared pool as they start, so the fallback can spread
@@ -114,6 +116,29 @@ worker can acquire those attempts without waiting for the lease to expire.
 Test result uploads are the runner's responsibility. Configure them through
 Test Collector Ruby; `bktec pool exec` does not perform the normal bktec result
 upload.
+
+## Fallback when Test Scheduler is unavailable
+
+Like `bktec run` and `bktec plan`, the pool commands fall back to a local split
+when Test Scheduler can't plan the pool. This applies when its requests keep
+failing with network errors, `429` or `5xx` responses until retries run out,
+or when the pool's planning fails. Rejected requests (`4xx`) still fail the
+command.
+
+- `pool plan` warns and exports an empty `BUILDKITE_TEST_ENGINE_POOL_ID` and
+  `BUILDKITE_TEST_ENGINE_PARALLELISM` set to `--max-parallelism`, or to
+  `BUILDKITE_PARALLEL_JOB_COUNT` (default 1) when that is unset. Workers given
+  an empty pool ID create or reuse a pool themselves.
+- `pool exec` warns and runs its share of the locally discovered tests, split
+  round-robin by `BUILDKITE_PARALLEL_JOB` across `BUILDKITE_PARALLEL_JOB_COUNT`
+  jobs. Tests still run in the persistent runner and `--local-retry-count`
+  still applies, but test selection and muting are not applied.
+
+The fallback only happens before a worker starts leasing. If Test Scheduler
+becomes unavailable once leasing has started, other workers may already have
+run some tests, so the job fails instead. Because each worker decides on its
+own, a worker that falls back can run tests that workers using the pool also
+run, but no tests are skipped.
 
 ## Lease prefetching
 

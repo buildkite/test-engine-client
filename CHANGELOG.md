@@ -1,4 +1,7 @@
 # Changelog
+## Unreleased
+- `bktec pool plan` and `bktec pool exec` now [fall back to a local split](./docs/pool-exec.md#fallback-when-test-scheduler-is-unavailable) when Test Scheduler is unavailable or fails to plan the pool, instead of failing. Like `bktec run`, each `pool exec` job runs its share of the tests across `BUILDKITE_PARALLEL_JOB_COUNT` jobs.
+
 ## 3.3.0 - 2026-10-08
 - [Manual test selection](./README.md#test-selection) can read its selectors from `BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS` instead of `--selection-param selectors=...`.
 

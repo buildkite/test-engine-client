@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -96,7 +97,7 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 	})
 	pool, err := ResolvePool(ctx, cfg, testFileList, client)
 	if err != nil {
-		return err
+		return poolPlanFallback(ctx, cfg, err, output, template)
 	}
 	debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
 	printPlanningPool(os.Stderr, cfg, pool)
@@ -105,7 +106,7 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 		fmt.Fprintln(os.Stderr, "  Waiting for planning to finish...")
 		pool, err = client.WaitForPool(ctx, pool.ID)
 		if err != nil {
-			return err
+			return poolPlanFallback(ctx, cfg, err, output, template)
 		}
 		debug.Printf("Pool %s planned (state=%s)", pool.ID, pool.State)
 	}
@@ -123,6 +124,45 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 		}
 		env["BUILDKITE_TEST_ENGINE_PARALLELISM"] = strconv.Itoa(parallelism)
 	}
+	return writePoolPlan(env, output, template)
+}
+
+// poolSchedulerUnavailable reports whether err means Test Scheduler could not
+// plan or serve the pool: retries ran out, or the pool's planning failed.
+// Rejected requests (4xx) and the caller's own cancellation are not fallbacks.
+func poolSchedulerUnavailable(ctx context.Context, err error) bool {
+	var errored *api.PoolErroredError
+	return ctx.Err() == nil && (errors.Is(err, api.ErrRetryTimeout) || errors.As(err, &errored))
+}
+
+// warnPoolFallback prints the same warnings as the run and plan fallbacks.
+func warnPoolFallback(err error) {
+	var errored *api.PoolErroredError
+	if errors.As(err, &errored) {
+		printWarn("Error Plan", fmt.Sprintf("Test Scheduler failed to plan test pool %s: %s", errored.ID, errored.Message))
+		return
+	}
+	// A retry timeout is recoverable, so handleError only prints its warning.
+	_ = handleError(err)
+}
+
+// poolPlanFallback mirrors bktec plan's local fallback when Test Scheduler is
+// unavailable. It exports an empty pool ID so workers still try to create or
+// reuse a pool themselves, then fall back to a static split if they can't.
+func poolPlanFallback(ctx context.Context, cfg *config.Config, err error, output PlanOutput, template string) error {
+	if !poolSchedulerUnavailable(ctx, err) {
+		return err
+	}
+	warnPoolFallback(err)
+	fallback := makeFallbackPlan(cfg)
+	printPlanningSummary(os.Stderr, fallback, "local fallback", cfg)
+	return writePoolPlan(map[string]string{
+		"BUILDKITE_TEST_ENGINE_POOL_ID":     "",
+		"BUILDKITE_TEST_ENGINE_PARALLELISM": strconv.Itoa(fallback.Parallelism),
+	}, output, template)
+}
+
+func writePoolPlan(env map[string]string, output PlanOutput, template string) error {
 	switch output {
 	case PlanOutputJSON:
 		return json.NewEncoder(planWriter).Encode(env)
