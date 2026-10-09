@@ -262,7 +262,7 @@ func TestPoolPlanFallsBackOnlyWhenSchedulerUnavailable(t *testing.T) {
 		cancel               bool
 	}{
 		{name: "planning failure", ready: `{"id":"dynamic","state":"errored","error":{"message":"timing calculation failed"}}`},
-		{name: "rejected request", postStatus: http.StatusForbidden, wantErr: "test pool API (403): forbidden"},
+		{name: "rejected request", postStatus: http.StatusForbidden, wantErr: "Access Denied: forbidden"},
 		{name: "cancellation", ready: `{"id":"dynamic","state":"planning"}`, wantErr: "context deadline exceeded", cancel: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

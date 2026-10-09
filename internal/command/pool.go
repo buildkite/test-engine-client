@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"slices"
 	"strconv"
@@ -146,12 +147,58 @@ func warnPoolFallback(err error) {
 	_ = handleError(err)
 }
 
+// poolFatal formats a rejected API request like the fatal errors of run and
+// plan. Unlike them, every 4xx is fatal here, because the pool commands fall
+// back only when Test Scheduler is unavailable. Other errors are unchanged.
+func poolFatal(err error) error {
+	var (
+		pool       *api.PoolError
+		auth       *api.AuthError
+		forbidden  *api.ForbiddenError
+		billing    *api.BillingError
+		badRequest *api.BadRequestError
+		notFound   *api.NotFoundError
+		disabled   *api.UnprocessableEntityError
+	)
+	switch {
+	case errors.As(err, &pool):
+		switch pool.StatusCode {
+		case http.StatusBadRequest, http.StatusUnprocessableEntity:
+			return fatal("Invalid Request", pool.Message)
+		case http.StatusUnauthorized:
+			return fatal("Authentication Failed", pool.Message)
+		case http.StatusForbidden:
+			return fatal("Access Denied", pool.Message)
+		case http.StatusNotFound:
+			return fatal("Not Found", pool.Message)
+		case http.StatusConflict:
+			return fatal("Test Pool Conflict", pool.Message)
+		case http.StatusGone:
+			return fatal("Test Pool Expired", pool.Message)
+		}
+		return fatal("Test Scheduler Error", pool)
+	case errors.As(err, &auth):
+		return fatal("Authentication Failed", auth.Message)
+	case errors.As(err, &billing):
+		return fatal("Billing Error", billing.Message)
+	case errors.As(err, &forbidden):
+		return fatal("Access Denied", forbidden.Message)
+	case errors.As(err, &badRequest):
+		return fatal("Invalid Request", badRequest.Message)
+	case errors.As(err, &notFound):
+		return fatal("Not Found", notFound.Message)
+	case errors.As(err, &disabled):
+		return fatal("Unavailable", disabled.Message)
+	}
+	return err
+}
+
 // poolPlanFallback mirrors bktec plan's local fallback when Test Scheduler is
 // unavailable. It exports an empty pool ID so workers still try to create or
 // reuse a pool themselves, then fall back to a static split if they can't.
 func poolPlanFallback(ctx context.Context, cfg *config.Config, err error, output PlanOutput, template string) error {
 	if !poolSchedulerUnavailable(ctx, err) {
-		return err
+		return poolFatal(err)
 	}
 	warnPoolFallback(err)
 	fallback := makeFallbackPlan(cfg)

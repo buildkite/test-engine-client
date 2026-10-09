@@ -105,7 +105,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 // failures after that point are never recovered this way.
 func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files string, argv []string, retries int, opts runnerexec.Options) error {
 	if !poolSchedulerUnavailable(ctx, err) {
-		return err
+		return poolFatal(err)
 	}
 	warnPoolFallback(err)
 	if cfg.Parallelism < 1 || cfg.NodeIndex < 0 || cfg.NodeIndex >= cfg.Parallelism {
