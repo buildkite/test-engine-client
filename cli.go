@@ -774,6 +774,8 @@ func poolPlanCommandFlags() []cli.Flag {
 		},
 	}
 	flags = append(flags, buildEnvironmentFlags...)
+	// Only used to split tests locally when Test Scheduler is unavailable.
+	flags = append(flags, parallelismFlag)
 	flags = append(flags, suiteSlugFlag, baseURLFlag, oidcFlag, oidcLifetimeFlag)
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, selectionFlags()...)

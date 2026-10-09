@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,7 +44,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	}
 	pool, err := ResolvePool(ctx, cfg, files, client)
 	if err != nil {
-		return err
+		return poolExecFallback(ctx, cfg, err, files, argv, retries, opts)
 	}
 	if cfg.PoolID != "" {
 		debug.Printf("Pool resolved (state=%s)", pool.State)
@@ -60,7 +62,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		fmt.Fprintln(os.Stderr, "  Waiting for planning to finish...")
 		pool, err = client.WaitForPool(ctx, pool.ID)
 		if err != nil {
-			return err
+			return poolExecFallback(ctx, cfg, err, files, argv, retries, opts)
 		}
 	case "populating", "consuming", "consumed":
 		// GET and idempotent planning POST return the same representation.
@@ -94,10 +96,96 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		return fmt.Errorf("test pool %s is missing its muted tests snapshot", pool.ID)
 	}
 	debug.Printf("Pool ready (state=%s); starting persistent runner", pool.State)
+	return runPool(ctx, client, pool, argv, retries, opts, leaseLog)
+}
+
+// poolExecFallback runs this job's share of a static split when Test Scheduler
+// is unavailable before leasing starts, like bktec run's local fallback. Once
+// leasing has started, other workers may already have run some tests, so
+// failures after that point are never recovered this way.
+func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files string, argv []string, retries int, opts runnerexec.Options) error {
+	if !poolSchedulerUnavailable(ctx, err) {
+		return poolFatal(err)
+	}
+	warnPoolFallback(err)
+	if cfg.Parallelism < 1 || cfg.NodeIndex < 0 || cfg.NodeIndex >= cfg.Parallelism {
+		return fmt.Errorf("%w; cannot fall back to a static split: BUILDKITE_PARALLEL_JOB (%d) must be less than BUILDKITE_PARALLEL_JOB_COUNT (%d)", err, cfg.NodeIndex, cfg.Parallelism)
+	}
+	testRunner, detectErr := runner.DetectRunner(cfg)
+	if detectErr != nil {
+		return fmt.Errorf("%w; cannot fall back to a static split: %w", err, detectErr)
+	}
+	targets, discoverErr := getTestTargets(cfg, testRunner, files)
+	if discoverErr != nil {
+		return fmt.Errorf("%w; cannot fall back to a static split: %w", err, discoverErr)
+	}
+	fallback := plan.CreateFallbackPlan(targets, cfg.Parallelism)
+	printPlanningSummary(os.Stderr, fallback, "local fallback", cfg)
+	share := fallback.Tasks[strconv.Itoa(cfg.NodeIndex)].Tests
+	if len(share) == 0 {
+		fmt.Println("+++ Buildkite Test Engine Client: No tests to run on this node")
+		return nil
+	}
+	scheduler := &fallbackScheduler{}
+	for i, test := range share {
+		// One selector per lease keeps each batch well inside the runner batch
+		// timeout, since a local split has no timings to size batches with.
+		scheduler.leases = append(scheduler.leases, api.Lease{
+			ID: fmt.Sprintf("fallback-%d", i+1),
+			Attempts: []api.LeaseAttempt{{
+				ID:           fmt.Sprintf("fallback-%d", i+1),
+				SelectorType: "test_plan_test_case_v1",
+				Selector:     plan.TestCase{Format: plan.TestCaseFormatSelector, Value: test.Path},
+			}},
+		})
+	}
+	// Local leases are an implementation detail; like bktec run, show only the
+	// runner's output and the final result.
+	return runPool(ctx, scheduler, api.Pool{ID: "fallback", State: "consuming"}, argv, retries, opts, log.New(io.Discard, "", 0))
+}
+
+// fallbackLeaseTTL is how long a local fallback lease stays owned between
+// heartbeats; nothing else can take its tests.
+const fallbackLeaseTTL = 10 * time.Minute
+
+// fallbackScheduler serves a static split's share as local leases, so the
+// fallback reuses pool exec's runner protocol, local retries and results.
+type fallbackScheduler struct {
+	mu     sync.Mutex
+	leases []api.Lease
+}
+
+func (f *fallbackScheduler) AcquireLease(context.Context, string) (api.LeaseResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var response api.LeaseResponse
+	response.Pool.State = "consumed"
+	if len(f.leases) > 0 {
+		lease := f.leases[0]
+		f.leases = f.leases[1:]
+		lease.ExpiresAt = time.Now().Add(fallbackLeaseTTL)
+		response.Lease = &lease
+		response.Pool.State = "consuming"
+	}
+	return response, nil
+}
+
+func (f *fallbackScheduler) HeartbeatLease(context.Context, string, string) (time.Time, error) {
+	return time.Now().Add(fallbackLeaseTTL), nil
+}
+
+func (f *fallbackScheduler) CompleteLease(context.Context, string, string, []api.AttemptResult) error {
+	return nil
+}
+
+func (f *fallbackScheduler) ReleaseLease(context.Context, string, string) error { return nil }
+
+func runPool(ctx context.Context, client poolScheduler, pool api.Pool, argv []string, retries int, opts runnerexec.Options, leases *log.Logger) error {
 	fmt.Println("+++ Buildkite Test Engine Client: Running tests")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	source := newPoolSource(cancel)
+	source.leaseLog = leases
 	done := make(chan struct{})
 	go func() { defer close(done); source.work(ctx, client, pool, retries) }()
 	// #nosec G204 G702 -- the runner executable and arguments are explicitly supplied by the CLI user after --.
@@ -105,7 +193,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	err = runnerexec.Run(ctx, cmd, source, opts)
+	err := runnerexec.Run(ctx, cmd, source, opts)
 	cancel()
 	<-done
 	outcome := source.outcome()

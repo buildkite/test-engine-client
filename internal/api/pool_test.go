@@ -161,6 +161,18 @@ func TestWaitForPoolCancellation(t *testing.T) {
 	})
 }
 
+func TestGetPoolUnavailableReturnsRetryTimeout(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		client := NewClient(ClientConfig{ServerBaseURL: "https://example.test"})
+		client.httpClient.Transport = poolTransport(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader(`{"message":"unavailable"}`)), Header: http.Header{}}, nil
+		})
+		_, err := client.GetPool(context.Background(), "p")
+		require.ErrorIs(t, err, ErrRetryTimeout)
+		require.ErrorContains(t, err, "test pool API (503): unavailable")
+	})
+}
+
 func TestWaitForPoolResults(t *testing.T) {
 	stale := `{"pool":{"id":"p","state":"consuming","drained":false},"attempts":{"results":{"passed":0,"failed":0,"errored":0}}}`
 	writerFallback := `{"pool":{"id":"p","state":"consumed","drained":false},"attempts":{"results":{"passed":0,"failed":0,"errored":0}}}`

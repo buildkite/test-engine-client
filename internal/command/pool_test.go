@@ -255,13 +255,15 @@ func TestPoolPlanDynamicSizingFallsBackToMaxParallelism(t *testing.T) {
 	require.Contains(t, output, "falling back to --max-parallelism (12)")
 }
 
-func TestPoolPlanDynamicSizingSurfacesPlanningFailureAndCancellation(t *testing.T) {
+func TestPoolPlanFallsBackOnlyWhenSchedulerUnavailable(t *testing.T) {
 	for _, tc := range []struct {
-		name, ready, want string
-		cancel            bool
+		name, ready, wantErr string
+		postStatus           int
+		cancel               bool
 	}{
-		{name: "planning failure", ready: `{"id":"dynamic","state":"errored","error":{"message":"timing calculation failed"}}`, want: "timing calculation failed"},
-		{name: "cancellation", ready: `{"id":"dynamic","state":"planning"}`, want: "context deadline exceeded", cancel: true},
+		{name: "planning failure", ready: `{"id":"dynamic","state":"errored","error":{"message":"timing calculation failed"}}`},
+		{name: "rejected request", postStatus: http.StatusForbidden, wantErr: "Access Denied: forbidden"},
+		{name: "cancellation", ready: `{"id":"dynamic","state":"planning"}`, wantErr: "context deadline exceeded", cancel: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +272,11 @@ func TestPoolPlanDynamicSizingSurfacesPlanningFailureAndCancellation(t *testing.
 					return
 				}
 				if r.Method == http.MethodPost {
+					if tc.postStatus != 0 {
+						w.WriteHeader(tc.postStatus)
+						io.WriteString(w, `{"message":"forbidden"}`)
+						return
+					}
 					w.WriteHeader(http.StatusAccepted)
 					io.WriteString(w, `{"id":"dynamic","state":"planning"}`)
 					return
@@ -285,7 +292,22 @@ func TestPoolPlanDynamicSizingSurfacesPlanningFailureAndCancellation(t *testing.
 				ctx, cancel = context.WithTimeout(ctx, 20*time.Millisecond)
 				defer cancel()
 			}
-			require.ErrorContains(t, PoolPlan(ctx, cfg, "", PlanOutputJSON, ""), tc.want)
+			var buf bytes.Buffer
+			setPlanWriter(t, &buf)
+			stderr := captureStderr(t)
+			err := PoolPlan(ctx, cfg, "", PlanOutputJSON, "")
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				require.Empty(t, buf.String())
+				return
+			}
+			require.NoError(t, err)
+			// Like bktec plan: size the build at --max-parallelism, and leave the
+			// pool ID empty so workers try Test Scheduler again themselves.
+			require.JSONEq(t, `{"BUILDKITE_TEST_ENGINE_POOL_ID":"","BUILDKITE_TEST_ENGINE_PARALLELISM":"10"}`, buf.String())
+			output := stderr()
+			require.Contains(t, output, "Error Plan: Test Scheduler failed to plan test pool dynamic: timing calculation failed")
+			require.Contains(t, output, "Using local fallback")
 		})
 	}
 }

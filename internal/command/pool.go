@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"slices"
 	"strconv"
@@ -96,7 +98,7 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 	})
 	pool, err := ResolvePool(ctx, cfg, testFileList, client)
 	if err != nil {
-		return err
+		return poolPlanFallback(ctx, cfg, err, output, template)
 	}
 	debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
 	printPlanningPool(os.Stderr, cfg, pool)
@@ -105,7 +107,7 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 		fmt.Fprintln(os.Stderr, "  Waiting for planning to finish...")
 		pool, err = client.WaitForPool(ctx, pool.ID)
 		if err != nil {
-			return err
+			return poolPlanFallback(ctx, cfg, err, output, template)
 		}
 		debug.Printf("Pool %s planned (state=%s)", pool.ID, pool.State)
 	}
@@ -123,6 +125,91 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 		}
 		env["BUILDKITE_TEST_ENGINE_PARALLELISM"] = strconv.Itoa(parallelism)
 	}
+	return writePoolPlan(env, output, template)
+}
+
+// poolSchedulerUnavailable reports whether err means Test Scheduler could not
+// plan or serve the pool: retries ran out, or the pool's planning failed.
+// Rejected requests (4xx) and the caller's own cancellation are not fallbacks.
+func poolSchedulerUnavailable(ctx context.Context, err error) bool {
+	var errored *api.PoolErroredError
+	return ctx.Err() == nil && (errors.Is(err, api.ErrRetryTimeout) || errors.As(err, &errored))
+}
+
+// warnPoolFallback prints the same warnings as the run and plan fallbacks.
+func warnPoolFallback(err error) {
+	var errored *api.PoolErroredError
+	if errors.As(err, &errored) {
+		printWarn("Error Plan", fmt.Sprintf("Test Scheduler failed to plan test pool %s: %s", errored.ID, errored.Message))
+		return
+	}
+	// A retry timeout is recoverable, so handleError only prints its warning.
+	_ = handleError(err)
+}
+
+// poolFatal formats a rejected API request like the fatal errors of run and
+// plan. Unlike them, every 4xx is fatal here, because the pool commands fall
+// back only when Test Scheduler is unavailable. Other errors are unchanged.
+func poolFatal(err error) error {
+	var (
+		pool       *api.PoolError
+		auth       *api.AuthError
+		forbidden  *api.ForbiddenError
+		billing    *api.BillingError
+		badRequest *api.BadRequestError
+		notFound   *api.NotFoundError
+		disabled   *api.UnprocessableEntityError
+	)
+	switch {
+	case errors.As(err, &pool):
+		switch pool.StatusCode {
+		case http.StatusBadRequest, http.StatusUnprocessableEntity:
+			return fatal("Invalid Request", pool.Message)
+		case http.StatusUnauthorized:
+			return fatal("Authentication Failed", pool.Message)
+		case http.StatusForbidden:
+			return fatal("Access Denied", pool.Message)
+		case http.StatusNotFound:
+			return fatal("Not Found", pool.Message)
+		case http.StatusConflict:
+			return fatal("Test Pool Conflict", pool.Message)
+		case http.StatusGone:
+			return fatal("Test Pool Expired", pool.Message)
+		}
+		return fatal("Test Scheduler Error", pool)
+	case errors.As(err, &auth):
+		return fatal("Authentication Failed", auth.Message)
+	case errors.As(err, &billing):
+		return fatal("Billing Error", billing.Message)
+	case errors.As(err, &forbidden):
+		return fatal("Access Denied", forbidden.Message)
+	case errors.As(err, &badRequest):
+		return fatal("Invalid Request", badRequest.Message)
+	case errors.As(err, &notFound):
+		return fatal("Not Found", notFound.Message)
+	case errors.As(err, &disabled):
+		return fatal("Unavailable", disabled.Message)
+	}
+	return err
+}
+
+// poolPlanFallback mirrors bktec plan's local fallback when Test Scheduler is
+// unavailable. It exports an empty pool ID so workers still try to create or
+// reuse a pool themselves, then fall back to a static split if they can't.
+func poolPlanFallback(ctx context.Context, cfg *config.Config, err error, output PlanOutput, template string) error {
+	if !poolSchedulerUnavailable(ctx, err) {
+		return poolFatal(err)
+	}
+	warnPoolFallback(err)
+	fallback := makeFallbackPlan(cfg)
+	printPlanningSummary(os.Stderr, fallback, "local fallback", cfg)
+	return writePoolPlan(map[string]string{
+		"BUILDKITE_TEST_ENGINE_POOL_ID":     "",
+		"BUILDKITE_TEST_ENGINE_PARALLELISM": strconv.Itoa(fallback.Parallelism),
+	}, output, template)
+}
+
+func writePoolPlan(env map[string]string, output PlanOutput, template string) error {
 	switch output {
 	case PlanOutputJSON:
 		return json.NewEncoder(planWriter).Encode(env)

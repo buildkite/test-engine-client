@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/buildkite/roko"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
@@ -133,11 +135,28 @@ func (c *Client) WaitForPoolResults(ctx context.Context, id string) (PoolAttempt
 // requestPool is only for idempotent pool reads and fetch-or-create planning.
 // Do not use it for lease creation: ambiguous failures are safe to retry here,
 // but could create a second lease. Unlike doWithRetry, not every 409 is retried.
-func (c *Client) requestPool(ctx context.Context, method, endpoint string, body []byte, success int) (Pool, error) {
-	ctx, cancel := context.WithTimeout(ctx, retryTimeout)
+// After the retry budget runs out, it returns a RetryTimeoutError holding the
+// last retryable failure, so callers can tell an unavailable Scheduler apart
+// from a rejected request or the caller's own cancellation.
+func (c *Client) requestPool(parent context.Context, method, endpoint string, body []byte, success int) (Pool, error) {
+	ctx, cancel := context.WithTimeout(parent, retryTimeout)
 	defer cancel()
 	r := roko.NewRetrier(roko.TryForever(), roko.WithStrategy(roko.ExponentialSubsecond(initialDelay)), roko.WithJitter())
-	return roko.DoFunc(ctx, r, func(r *roko.Retrier) (Pool, error) {
+	var lastErr error
+	// Like doWithRetry, report failed attempts and retries. Planning contention
+	// is expected while another worker creates the pool, so it isn't reported.
+	failed := false
+	pool, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (_ Pool, err error) {
+		if failed {
+			fmt.Fprintf(os.Stderr, "bktec: Retrying API request (attempt %d)\n", r.AttemptCount()+1)
+		}
+		failed = false
+		defer func() {
+			// Errors caused by the retry deadline itself say nothing new.
+			if err != nil && ctx.Err() == nil {
+				lastErr = err
+			}
+		}()
 		req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(body))
 		if err != nil {
 			r.Break()
@@ -148,18 +167,32 @@ func (c *Client) requestPool(ctx context.Context, method, endpoint string, body 
 		client.Timeout = 15 * time.Second
 		resp, err := client.Do(req)
 		if err != nil {
+			failed = ctx.Err() == nil
+			if failed {
+				printRetryError(err)
+			}
 			return Pool{}, err
 		}
 		defer resp.Body.Close()
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
+			failed = ctx.Err() == nil
+			if failed {
+				printRetryError(err)
+			}
 			return Pool{}, err
 		}
 		var message responseError
 		_ = json.Unmarshal(data, &message)
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 ||
-			(method == http.MethodPost && resp.StatusCode == http.StatusConflict && message.Message == "Still creating test pool, please retry.") {
+		if method == http.MethodPost && resp.StatusCode == http.StatusConflict && message.Message == "Still creating test pool, please retry." {
+			debug.Printf("Test pool is still being created; retrying")
 			return Pool{}, &PoolError{StatusCode: resp.StatusCode, Message: message.Message}
+		}
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			err := &PoolError{StatusCode: resp.StatusCode, Message: message.Message}
+			failed = true
+			printRetryError(err)
+			return Pool{}, err
 		}
 		r.Break()
 		var pool Pool
@@ -183,6 +216,23 @@ func (c *Client) requestPool(ctx context.Context, method, endpoint string, body 
 		pool.Location = resp.Header.Get("Location")
 		return pool, nil
 	})
+	if err != nil && parent.Err() == nil && ctx.Err() != nil {
+		if lastErr == nil {
+			lastErr = err
+		}
+		return Pool{}, &RetryTimeoutError{LastError: lastErr}
+	}
+	return pool, err
+}
+
+// PoolErroredError reports a pool whose server-side planning failed.
+type PoolErroredError struct {
+	ID      string
+	Message string
+}
+
+func (e *PoolErroredError) Error() string {
+	return fmt.Sprintf("test pool %s is errored: %s", e.ID, e.Message)
 }
 
 func poolFailure(pool Pool) error {
@@ -190,7 +240,7 @@ func poolFailure(pool Pool) error {
 	if pool.Error != nil && pool.Error.Message != "" {
 		message = pool.Error.Message
 	}
-	return fmt.Errorf("test pool %s is errored: %s", pool.ID, message)
+	return &PoolErroredError{ID: pool.ID, Message: message}
 }
 
 // WaitForPool polls while planning and returns the full representation once
