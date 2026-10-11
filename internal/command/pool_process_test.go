@@ -535,40 +535,49 @@ func TestPoolExecSuppliedJWTIsInitialAuth(t *testing.T) {
 }
 
 func TestPoolExecFallsBackToStaticSplitWhenSchedulerUnavailable(t *testing.T) {
-	leaseRequests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing":
-			_, _ = io.WriteString(w, `{"id":"existing","state":"errored","error":{"message":"timing calculation failed"}}`)
-		default:
-			leaseRequests++
-			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
-			http.Error(w, "unexpected request", http.StatusBadRequest)
-		}
-	}))
-	defer server.Close()
-	files := filepath.Join(t.TempDir(), "files")
-	if err := os.WriteFile(files, []byte("b\na\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BKTEC_POOL_TEST_CHILD", "fallback")
-	t.Setenv("BKTEC_POOL_TEST_FLUSH", filepath.Join(t.TempDir(), "flushed"))
-	cfg := config.New()
-	cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = "existing", "org", "suite", "rspec"
-	cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
-	cfg.NodeIndex, cfg.Parallelism = 0, 2
-	stderr := captureStderr(t)
-	if err := PoolExec(context.Background(), &cfg, files, []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
-		t.Fatal(err)
-	}
-	if leaseRequests != 0 {
-		t.Fatalf("fallback made %d Scheduler requests after resolution", leaseRequests)
-	}
-	output := stderr()
-	for _, want := range []string{"Error Plan: Test Scheduler failed to plan test pool existing: timing calculation failed", "Using local fallback", "2 test selectors across 2 nodes"} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("stderr missing %q:\n%s", want, output)
-		}
+	defer func(timeout time.Duration) { poolPlanningTimeout = timeout }(poolPlanningTimeout)
+	poolPlanningTimeout = 300 * time.Millisecond
+	for _, tc := range []struct{ name, pool, wantWarning string }{
+		{"planning failure", `{"id":"existing","state":"errored","error":{"message":"timing calculation failed"}}`, "Error Plan: Test Scheduler failed to plan test pool existing: timing calculation failed"},
+		{"planning deadline", `{"id":"existing","state":"planning"}`, "Timeout: Test Scheduler did not finish planning the test pool within 300ms"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			leaseRequests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing":
+					_, _ = io.WriteString(w, tc.pool)
+				default:
+					leaseRequests++
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					http.Error(w, "unexpected request", http.StatusBadRequest)
+				}
+			}))
+			defer server.Close()
+			files := filepath.Join(t.TempDir(), "files")
+			if err := os.WriteFile(files, []byte("b\na\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("BKTEC_POOL_TEST_CHILD", "fallback")
+			t.Setenv("BKTEC_POOL_TEST_FLUSH", filepath.Join(t.TempDir(), "flushed"))
+			cfg := config.New()
+			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = "existing", "org", "suite", "rspec"
+			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
+			cfg.NodeIndex, cfg.Parallelism = 0, 2
+			stderr := captureStderr(t)
+			if err := PoolExec(context.Background(), &cfg, files, []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
+				t.Fatal(err)
+			}
+			if leaseRequests != 0 {
+				t.Fatalf("fallback made %d Scheduler requests after resolution", leaseRequests)
+			}
+			output := stderr()
+			for _, want := range []string{tc.wantWarning, "Using local fallback", "2 test selectors across 2 nodes"} {
+				if !strings.Contains(output, want) {
+					t.Fatalf("stderr missing %q:\n%s", want, output)
+				}
+			}
+		})
 	}
 }
 

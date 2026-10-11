@@ -51,12 +51,13 @@ bktec pool plan \
   --pipeline-upload pool-workers.yml
 ```
 
-With these options, `pool plan` waits for Test Scheduler to finish planning. It
-then exports `BUILDKITE_TEST_ENGINE_PARALLELISM` alongside
+With these options, `pool plan` waits for Test Scheduler to finish planning,
+for up to 130 seconds. It then exports `BUILDKITE_TEST_ENGINE_PARALLELISM` alongside
 `BUILDKITE_TEST_ENGINE_POOL_ID`, either in `--json` output or in the
 environment of `--pipeline-upload`. A completed empty plan exports `0`.
 
-If Test Scheduler is unavailable or planning fails, `pool plan` falls back like
+If Test Scheduler is unavailable, planning fails, or planning doesn't finish in
+time, `pool plan` falls back like
 `bktec plan`; see [Fallback when Test Scheduler is unavailable](#fallback-when-test-scheduler-is-unavailable).
 If a ready pool does not
 include recommended parallelism, `pool plan` prints a warning and exports the
@@ -122,8 +123,10 @@ upload.
 Like `bktec run` and `bktec plan`, the pool commands fall back to a local split
 when Test Scheduler can't plan the pool. This applies when its requests keep
 failing with network errors, `429` or `5xx` responses until retries run out,
-or when the pool's planning fails. Rejected requests (`4xx`) still fail the
-command.
+when the pool's planning fails, or when the pool isn't ready to lease within
+130 seconds of creating or fetching it. Test Scheduler can take up to 15
+minutes to give up on planning, so bktec doesn't wait that long. Rejected
+requests (`4xx`) still fail the command.
 
 - `pool plan` warns and exports an empty `BUILDKITE_TEST_ENGINE_POOL_ID` and
   `BUILDKITE_TEST_ENGINE_PARALLELISM` set to `--max-parallelism`, or to

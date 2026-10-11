@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"slices"
@@ -20,14 +19,66 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 )
 
-// ResolvePool is shared by pool plan and pool exec. It stops after durable
-// resolution; execution must call client.WaitForPool before dispatching work.
-func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, client *api.Client) (api.Pool, error) {
-	if cfg.PoolID != "" {
-		return client.GetPool(ctx, cfg.PoolID)
+// poolPlanningTimeout bounds creating or fetching a pool and waiting for its
+// planning, like the retry budget of run and plan's API requests. Test
+// Scheduler keeps retrying planning for up to 15 minutes, which is too long to
+// hold up a build, so the pool commands fall back to a local split instead.
+var poolPlanningTimeout = 130 * time.Second
+
+var errPoolPlanningTimeout = errors.New("test pool planning timed out")
+
+// ResolvePool is shared by pool plan and pool exec. It creates or reuses the
+// pool, or fetches a supplied pool ID, and, if wait is set, waits for planning
+// to finish. Test discovery is not counted against poolPlanningTimeout.
+func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, client *api.Client, wait bool) (pool api.Pool, err error) {
+	var request api.PoolPlanParams
+	if cfg.PoolID == "" {
+		if request, err = poolPlanRequest(ctx, cfg, testFileList, client); err != nil {
+			return api.Pool{}, err
+		}
 	}
+	planCtx, cancel := context.WithTimeout(ctx, poolPlanningTimeout)
+	defer cancel()
+	defer func() {
+		// Only the planning deadline is a fallback; the job's own cancellation isn't.
+		if err != nil && ctx.Err() == nil && planCtx.Err() != nil {
+			err = fmt.Errorf("%w after %s: %w", errPoolPlanningTimeout, poolPlanningTimeout, err)
+		}
+	}()
+	if cfg.PoolID != "" {
+		debug.Printf("Fetching supplied pool with ID %s", cfg.PoolID)
+		if pool, err = client.GetPool(planCtx, cfg.PoolID); err != nil {
+			return api.Pool{}, err
+		}
+		debug.Printf("Pool resolved (state=%s)", pool.State)
+		// Like run's "Using existing plan": the pool was planned elsewhere.
+		fmt.Fprintf(os.Stderr, "\nUsing existing pool\n  ID: %s\n", boundedRequestValue(pool.ID))
+	} else {
+		debug.Printf("Creating or reusing pool with key %s", cfg.PoolKey)
+		if pool, err = client.PlanPool(planCtx, request); err != nil {
+			return api.Pool{}, err
+		}
+		debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
+		fmt.Fprintln(os.Stderr, "\nPlanning test pool")
+		fmt.Fprintf(os.Stderr, "  Key: %s\n", boundedRequestValue(cfg.PoolKey))
+		fmt.Fprintf(os.Stderr, "  ID: %s\n", boundedRequestValue(pool.ID))
+	}
+	if !wait || pool.State != "planning" {
+		return pool, nil
+	}
+	fmt.Fprintln(os.Stderr, "  Waiting for planning to finish...")
+	if pool, err = client.WaitForPool(planCtx, pool.ID); err != nil {
+		return api.Pool{}, err
+	}
+	debug.Printf("Pool planned (state=%s)", pool.State)
+	return pool, nil
+}
+
+// poolPlanRequest discovers the tests and builds the request that creates or
+// reuses the pool for cfg.PoolKey.
+func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList string, client *api.Client) (api.PoolPlanParams, error) {
 	if cfg.TestRunner != "rspec" {
-		return api.Pool{}, fmt.Errorf("pool planning requires the rspec runner")
+		return api.PoolPlanParams{}, fmt.Errorf("pool planning requires the rspec runner")
 	}
 	printRequested(os.Stderr, cfg)
 	if cfg.PoolLeaseDurationMS != 0 {
@@ -39,18 +90,18 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 	autoCollectGitMetadata(ctx, cfg, newGitRunner())
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
-		return api.Pool{}, err
+		return api.PoolPlanParams{}, err
 	}
 	targets, err := getTestTargets(cfg, testRunner, testFileList)
 	if err != nil {
-		return api.Pool{}, err
+		return api.PoolPlanParams{}, err
 	}
 	// Both discovery and example expansion can return nondeterministic order.
 	// The server retains array order when fingerprinting the accepted request.
 	slices.Sort(targets)
 	params, err := createRequestParam(ctx, cfg, targets, *client, testRunner)
 	if err != nil {
-		return api.Pool{}, err
+		return api.PoolPlanParams{}, err
 	}
 	slices.SortFunc(params.Tests.Selectors, func(a, b api.TestPlanParamsSelector) int {
 		return strings.Compare(a.Value, b.Value)
@@ -76,16 +127,7 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 			request.Lease.Costs = &api.PoolPlanLeaseCosts{DurationP90MS: cfg.PoolLeaseDurationMS}
 		}
 	}
-	debug.Printf("Creating or reusing pool with key %s", cfg.PoolKey)
-	return client.PlanPool(ctx, request)
-}
-
-// printPlanningPool starts the section for a pool created or reused from a
-// key. Callers print any waiting or parallelism lines after it.
-func printPlanningPool(w io.Writer, cfg *config.Config, pool api.Pool) {
-	fmt.Fprintln(w, "\nPlanning test pool")
-	fmt.Fprintf(w, "  Key: %s\n", boundedRequestValue(cfg.PoolKey))
-	fmt.Fprintf(w, "  ID: %s\n", boundedRequestValue(pool.ID))
+	return request, nil
 }
 
 func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, output PlanOutput, template string) error {
@@ -96,21 +138,12 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 	client := api.NewClient(api.ClientConfig{
 		ServerBaseURL: cfg.ServerBaseURL, OrganizationSlug: cfg.OrganizationSlug, AccessToken: cfg.AccessToken,
 	})
-	pool, err := ResolvePool(ctx, cfg, testFileList, client)
+	// Dynamic sizing needs the planned pool's recommended parallelism.
+	pool, err := ResolvePool(ctx, cfg, testFileList, client, cfg.MaxParallelism > 0)
 	if err != nil {
 		return poolPlanFallback(ctx, cfg, err, output, template)
 	}
-	debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
-	printPlanningPool(os.Stderr, cfg, pool)
 	env := map[string]string{"BUILDKITE_TEST_ENGINE_POOL_ID": pool.ID}
-	if cfg.MaxParallelism > 0 && pool.State == "planning" {
-		fmt.Fprintln(os.Stderr, "  Waiting for planning to finish...")
-		pool, err = client.WaitForPool(ctx, pool.ID)
-		if err != nil {
-			return poolPlanFallback(ctx, cfg, err, output, template)
-		}
-		debug.Printf("Pool %s planned (state=%s)", pool.ID, pool.State)
-	}
 	if cfg.MaxParallelism > 0 {
 		parallelism := cfg.MaxParallelism
 		if pool.Parallelism == nil {
@@ -129,11 +162,12 @@ func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, outp
 }
 
 // poolSchedulerUnavailable reports whether err means Test Scheduler could not
-// plan or serve the pool: retries ran out, or the pool's planning failed.
-// Rejected requests (4xx) and the caller's own cancellation are not fallbacks.
+// plan or serve the pool: retries ran out, the pool's planning failed, or the
+// pool wasn't ready within poolPlanningTimeout. Rejected requests (4xx) and the
+// caller's own cancellation are not fallbacks.
 func poolSchedulerUnavailable(ctx context.Context, err error) bool {
 	var errored *api.PoolErroredError
-	return ctx.Err() == nil && (errors.Is(err, api.ErrRetryTimeout) || errors.As(err, &errored))
+	return ctx.Err() == nil && (errors.Is(err, api.ErrRetryTimeout) || errors.Is(err, errPoolPlanningTimeout) || errors.As(err, &errored))
 }
 
 // warnPoolFallback prints the same warnings as the run and plan fallbacks.
@@ -141,6 +175,10 @@ func warnPoolFallback(err error) {
 	var errored *api.PoolErroredError
 	if errors.As(err, &errored) {
 		printWarn("Error Plan", fmt.Sprintf("Test Scheduler failed to plan test pool %s: %s", errored.ID, errored.Message))
+		return
+	}
+	if errors.Is(err, errPoolPlanningTimeout) {
+		printWarn("Timeout", fmt.Sprintf("Test Scheduler did not finish planning the test pool within %s", poolPlanningTimeout))
 		return
 	}
 	// A retry timeout is recoverable, so handleError only prints its warning.

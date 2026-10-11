@@ -973,7 +973,7 @@ func TestGitMetadataCollectionGate(t *testing.T) {
 		"pool": func(t *testing.T, cfg *config.Config) error {
 			cfg.PipelineSlug, cfg.PoolKey = "pipeline", "rspec"
 			client := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL, OrganizationSlug: cfg.OrganizationSlug})
-			_, err := ResolvePool(context.Background(), cfg, "", client)
+			_, err := ResolvePool(context.Background(), cfg, "", client, false)
 			return err
 		},
 	}

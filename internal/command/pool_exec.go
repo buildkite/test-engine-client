@@ -39,31 +39,11 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 		mint = cfg.RequestSchedulerOIDCToken
 	}
 	client := api.NewClient(api.ClientConfig{OrganizationSlug: cfg.OrganizationSlug, ServerBaseURL: cfg.ServerBaseURL, TokenProvider: refreshingPoolToken(cfg.AccessToken, mint, cfg.OIDCLifetime)})
-	if cfg.PoolID != "" {
-		debug.Printf("Fetching supplied pool with ID %s", cfg.PoolID)
-	}
-	pool, err := ResolvePool(ctx, cfg, files, client)
+	pool, err := ResolvePool(ctx, cfg, files, client, true)
 	if err != nil {
 		return poolExecFallback(ctx, cfg, err, files, argv, retries, opts)
 	}
-	if cfg.PoolID != "" {
-		debug.Printf("Pool resolved (state=%s)", pool.State)
-	} else {
-		debug.Printf("Pool %s resolved (state=%s)", pool.ID, pool.State)
-	}
-	if cfg.PoolID == "" {
-		printPlanningPool(os.Stderr, cfg, pool)
-	} else {
-		// Like run's "Using existing plan": the pool was planned elsewhere.
-		fmt.Fprintf(os.Stderr, "\nUsing existing pool\n  ID: %s\n", boundedRequestValue(pool.ID))
-	}
 	switch pool.State {
-	case "planning":
-		fmt.Fprintln(os.Stderr, "  Waiting for planning to finish...")
-		pool, err = client.WaitForPool(ctx, pool.ID)
-		if err != nil {
-			return poolExecFallback(ctx, cfg, err, files, argv, retries, opts)
-		}
 	case "populating", "consuming", "consumed":
 		// GET and idempotent planning POST return the same representation.
 	default:
