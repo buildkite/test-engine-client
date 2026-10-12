@@ -69,7 +69,7 @@ func poolPlan(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if cfg.PoolID != "" {
-		return fmt.Errorf("bktec pool plan: --pool-id / BUILDKITE_TEST_ENGINE_POOL_ID is for pool exec; omit it to plan a pool")
+		return fmt.Errorf("bktec pool plan: --pool-id / BUILDKITE_TEST_ENGINE_POOL_ID is for pool exec and pool consume; omit it to plan a pool")
 	}
 	if err := cfg.ValidateForPoolPlan(); err != nil {
 		return fmt.Errorf("bktec pool plan: invalid configuration:\n%w", err)
@@ -97,10 +97,28 @@ func poolExec(ctx context.Context, cmd *cli.Command) error {
 	if err := applyPlanRequestContext(cmd); err != nil {
 		return err
 	}
-	if err := cfg.ValidateForPoolPlan(); err != nil {
+	if err := cfg.ValidateForPoolExec(); err != nil {
 		return fmt.Errorf("bktec pool exec: invalid configuration: %w", err)
 	}
 	return command.PoolExec(ctx, &cfg, cmd.String("files"), cmd.Args().Slice(), cmd.Int("local-retry-count"), opts)
+}
+
+func poolConsume(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() > 0 {
+		return fmt.Errorf("pool consume takes no arguments; set the test command with --test-command")
+	}
+	if cmd.Int("local-retry-count") < 0 {
+		return fmt.Errorf("local-retry-count must not be negative")
+	}
+	debug.SetDebug(cmd.Root().Bool("debug"))
+	debug.SetOutput(os.Stderr)
+	if err := applyPlanRequestContext(cmd); err != nil {
+		return err
+	}
+	if err := cfg.ValidateForPoolConsume(); err != nil {
+		return fmt.Errorf("bktec pool consume: invalid configuration: %w", err)
+	}
+	return command.PoolConsume(ctx, &cfg, cmd.String("files"), cmd.Int("local-retry-count"))
 }
 
 func backfillCommitMetadata(ctx context.Context, cmd *cli.Command) error {

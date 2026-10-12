@@ -86,3 +86,43 @@ func TestPoolExecCLIBindsSuppliedOIDCToken(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPoolConsumeCLI(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+	var definition *cli.Command
+	for _, c := range poolCommand.Commands {
+		if c.Name == "consume" {
+			definition = c
+		}
+	}
+	if definition == nil {
+		t.Fatal("pool consume not registered")
+	}
+	consumeCmd := *definition
+	consumeCmd.Flags = poolConsumeCommandFlags()
+	cmd := &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&consumeCmd}}}}
+	if err := cmd.Run(context.Background(), []string{"bktec", "pool", "consume", "--", "npx", "jest"}); err == nil || !strings.Contains(err.Error(), "--test-command") {
+		t.Fatalf("argument validation: %v", err)
+	}
+
+	// Configured like bktec run, with pool exec's local retries.
+	t.Setenv("BUILDKITE_TEST_ENGINE_TEST_CMD", "yarn jest {{testExamples}} --json --outputFile {{resultPath}}")
+	t.Setenv("BUILDKITE_TEST_ENGINE_RESULT_PATH", "jest.json")
+	t.Setenv("BUILDKITE_TEST_SCHEDULER_LOCAL_RETRY_COUNT", "2")
+	consumeCmd = *definition
+	consumeCmd.Flags = poolConsumeCommandFlags()
+	consumeCmd.Action = func(_ context.Context, c *cli.Command) error {
+		if cfg.TestCommand != "yarn jest {{testExamples}} --json --outputFile {{resultPath}}" || cfg.ResultPath != "jest.json" || cfg.TestRunner != "jest" {
+			t.Errorf("runner configuration: command=%q result=%q runner=%q", cfg.TestCommand, cfg.ResultPath, cfg.TestRunner)
+		}
+		if !cfg.UploadResults || cfg.UploadToken != "upload-token" || c.Int("local-retry-count") != 2 {
+			t.Errorf("upload or retry configuration: upload=%t token=%q retries=%d", cfg.UploadResults, cfg.UploadToken, c.Int("local-retry-count"))
+		}
+		return nil
+	}
+	cmd = &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&consumeCmd}}}}
+	if err := cmd.Run(context.Background(), []string{"bktec", "pool", "consume", "--test-runner", "jest", "--upload-results", "--upload-token", "upload-token"}); err != nil {
+		t.Fatal(err)
+	}
+}

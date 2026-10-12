@@ -108,7 +108,7 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 	s.dispatchable = false
 	s.dispatched = true
 	if s.retryRound > 0 {
-		debug.Printf("Dispatched local retry batch %s to persistent runner (round=%d)", batch.ID, s.retryRound)
+		debug.Printf("Dispatched local retry batch %s to runner (round=%d)", batch.ID, s.retryRound)
 	} else {
 		// Replace any stale start; this is the only sender and holds s.mu.
 		select {
@@ -116,7 +116,7 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 		default:
 		}
 		s.starts <- batchStart{id: batch.ID, at: time.Now()}
-		debug.Printf("Dispatched pool batch %s to persistent runner", batch.ID)
+		debug.Printf("Dispatched pool batch %s to runner", batch.ID)
 	}
 	return nil
 }
@@ -160,11 +160,12 @@ func reportedTestKey(test runner.ReportedTest) string {
 	if test.TestCase.Identifier != "" {
 		return test.TestCase.Identifier
 	}
-	if test.TestCase.Path != "" {
-		return test.TestCase.Path
-	}
+	// Runners without test IDs, such as Jest, identify tests by file and name.
 	if test.TestCase.Scope != "" || test.TestCase.Name != "" {
 		return strings.Join([]string{test.Selector, test.TestCase.Scope, test.TestCase.Name}, "\x00")
+	}
+	if test.TestCase.Path != "" {
+		return test.TestCase.Path
 	}
 	return test.Location
 }
@@ -661,7 +662,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 				}
 			}
 		}
-		results.absorb(tests, owners, result)
+		results.absorb(tests, owners, round > 0, result)
 		if debug.Enabled {
 			current := results.final()
 			seen := make(map[int]bool, len(owners))

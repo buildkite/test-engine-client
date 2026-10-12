@@ -48,8 +48,8 @@ func (c *Config) ValidateForPoolPlan() error {
 		if c.PipelineSlug == "" {
 			c.errs.appendFieldError("BUILDKITE_PIPELINE_SLUG", "must not be blank")
 		}
-		if c.TestRunner != "rspec" {
-			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool planning requires rspec")
+		if c.TestRunner != "rspec" && c.TestRunner != "jest" {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool planning requires rspec or jest")
 		}
 		if c.TagFilters != "" {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TAG_FILTERS", "tag filtering is only supported for the pytest test runner")
@@ -58,6 +58,33 @@ func (c *Config) ValidateForPoolPlan() error {
 			c.errs.appendFieldError("selection-param", "selection strategy must be set when selection params are provided")
 		}
 	}
+	if len(c.errs) > 0 {
+		return c.errs
+	}
+	return nil
+}
+
+// ValidateForPoolExec only allows the runners that have a persistent runner.
+func (c *Config) ValidateForPoolExec() error {
+	if c.PoolID == "" && c.TestRunner != "rspec" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec; use pool consume for jest")
+	}
+	return c.ValidateForPoolPlan()
+}
+
+// ValidateForPoolConsume also checks what running the test command needs, and
+// resolves the collector upload token like bktec run.
+func (c *Config) ValidateForPoolConsume() error {
+	if c.TestRunner != "jest" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool consume requires jest")
+	}
+	if c.ResultPath == "" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
+	}
+	if err := c.ValidateForPoolPlan(); err != nil {
+		return err
+	}
+	c.resolveUploadToken()
 	if len(c.errs) > 0 {
 		return c.errs
 	}

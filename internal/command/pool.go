@@ -27,9 +27,9 @@ var poolPlanningTimeout = 130 * time.Second
 
 var errPoolPlanningTimeout = errors.New("test pool planning timed out")
 
-// ResolvePool is shared by pool plan and pool exec. It creates or reuses the
-// pool, or fetches a supplied pool ID, and, if wait is set, waits for planning
-// to finish. Test discovery is not counted against poolPlanningTimeout.
+// ResolvePool is shared by pool plan, pool exec and pool consume. It creates or
+// reuses the pool, or fetches a supplied pool ID, and, if wait is set, waits for
+// planning to finish. Test discovery is not counted against poolPlanningTimeout.
 func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, client *api.Client, wait bool) (pool api.Pool, err error) {
 	var request api.PoolPlanParams
 	if cfg.PoolID == "" {
@@ -77,8 +77,8 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 // poolPlanRequest discovers the tests and builds the request that creates or
 // reuses the pool for cfg.PoolKey.
 func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList string, client *api.Client) (api.PoolPlanParams, error) {
-	if cfg.TestRunner != "rspec" {
-		return api.PoolPlanParams{}, fmt.Errorf("pool planning requires the rspec runner")
+	if cfg.TestRunner != "rspec" && cfg.TestRunner != "jest" {
+		return api.PoolPlanParams{}, fmt.Errorf("pool planning requires the rspec or jest runner")
 	}
 	printRequested(os.Stderr, cfg)
 	if cfg.PoolLeaseDurationMS != 0 {
@@ -132,7 +132,7 @@ func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList strin
 
 func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, output PlanOutput, template string) error {
 	if cfg.PoolID != "" {
-		return fmt.Errorf("pool plan requires a pool key, not a pool ID; pass the ID to pool exec")
+		return fmt.Errorf("pool plan requires a pool key, not a pool ID; pass the ID to pool exec or pool consume")
 	}
 	printPlanningBanner(os.Stderr)
 	client := api.NewClient(api.ClientConfig{
