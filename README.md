@@ -470,6 +470,16 @@ The `files` selection parameter is still accepted in place of `selectors`.
 identifier, so the plan step and every run node that shares the identifier
 must pass the same strategy and selector list.
 
+For trying out selection, the `random` strategy runs a random sample of test
+files. Pass the fraction to run as `sample_rate`, between 0 and 1:
+
+```sh
+bktec run --selection-strategy random --selection-param sample_rate=0.25
+```
+
+The sample is fixed per plan identifier, so every node in a step runs the same
+sample. If no tests are sampled, bktec runs nothing and the job passes.
+
 #### Git metadata
 
 When a selection strategy is set, `plan`, `run` and `pool` also collect git
