@@ -71,8 +71,43 @@ Pools plan Playwright tests by file. `--split-by-example`
 (`BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE`) is not supported for Playwright
 pools.
 
-`BUILDKITE_TEST_ENGINE_RETRY_COUNT` and the muted-test retry options of
-`bktec run` don't apply; muted failures are not retried.
+### Setup projects
+
+Playwright runs a project's dependencies, such as a
+[setup project](https://playwright.dev/docs/test-global-setup-teardown#option-1-project-dependencies),
+with every command, whichever test files it runs. In a pool, setup runs for
+each lease and each local retry round, on every worker, and its tests are
+uploaded with each command's results. bktec doesn't count setup tests toward
+the lease unless one fails, which errors the lease's tests, because Playwright
+skips the tests that depend on it.
+
+To run setup once per job instead, run it before bktec and add `--no-deps` to
+the test command. The retry command defaults to the test command, so retries
+skip setup too:
+
+```sh
+npx playwright test --project=setup
+export BUILDKITE_TEST_ENGINE_TEST_CMD="npx playwright test --no-deps {{testExamples}}"
+
+bktec pool consume --suite-slug my-suite --local-retry-count 1
+```
+
+Before you use `--no-deps`, check that:
+
+- Setup saves its results outside Playwright, such as a `storageState` file or
+  a seeded database, and they stay valid for the whole job. For example, a
+  login session must not expire while the worker runs leases.
+- Setup doesn't have a `teardown` project, or you skip it when running setup.
+  `--project=setup` also runs the setup's teardown straight away, which undoes
+  the setup before any tests run. For example, set
+  `teardown: process.env.SKIP_TEARDOWN ? undefined : 'cleanup'` in the setup
+  project, run setup with `SKIP_TEARDOWN=1`, then run
+  `npx playwright test --project=cleanup` after bktec, even if it fails.
+- None of your projects depend on projects of other tests. `--no-deps` skips
+  every dependency of the leased tests' projects, not only setup.
+
+If setup didn't run, or its results are missing, the leased tests fail like
+any other failed test rather than erroring.
 
 ## Results
 
@@ -97,9 +132,8 @@ write a usable report, when the report has errors outside tests (for example,
 because a test file doesn't load, which stops Playwright from running any
 tests), or when Playwright exits with an error but reports no failed tests.
 Tests from files outside the lease, such as those of a
-[setup project](https://playwright.dev/docs/test-global-setup-teardown#option-1-project-dependencies),
-are ignored unless they fail. A failed one errors the lease's tests, since
-Playwright skips the tests that depend on it.
+[setup project](#setup-projects), are ignored unless they fail. A failed one
+errors the lease's tests.
 
 bktec exits with status 16 if any tests errored, or with status 1 if tests
 failed.
@@ -114,3 +148,6 @@ its lease. If they don't exit within 90 seconds, bktec kills them.
 the persistent runner timeouts. It also accepts the test runner and upload
 options of `bktec run`, such as `--test-command`, `--retry-command`,
 `--result-path`, `--upload-results` and `--tag`.
+
+`BUILDKITE_TEST_ENGINE_RETRY_COUNT` and the muted-test retry options of
+`bktec run` don't apply; muted failures are not retried.

@@ -17,13 +17,21 @@ module.exports = defineConfig({
     baseURL: 'http://localhost:8987/',
   },
   projects: [
+    // Runs before the browser projects whenever they run, whichever test files
+    // are selected. Set PLAYWRIGHT_FAIL_SETUP=1 to make it fail.
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.js/,
+    },
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup'],
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      dependencies: ['setup'],
     },
   ],
 });
