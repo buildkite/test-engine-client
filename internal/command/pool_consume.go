@@ -122,7 +122,7 @@ func runPoolCommand(ctx context.Context, testRunner runner.TestRunner, batch run
 		fmt.Printf("Buildkite Test Engine Client: "+message+"\n", args...)
 		return runnerexec.Result{Status: "errored", ReportFormat: format}
 	}
-	// Local retries are the only batches of examples, since leases split Jest by file.
+	// Local retries are the only batches of examples, since pool consume's leases are files.
 	retry := slices.ContainsFunc(batch.Tests, func(test plan.TestCase) bool { return test.Format == plan.TestCaseFormatExample })
 	if retry {
 		fmt.Printf("+++ Buildkite Test Engine Client: ♻️ Retrying %d failed tests\n", len(batch.Tests))

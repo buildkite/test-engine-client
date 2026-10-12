@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -150,6 +151,100 @@ func (p Playwright) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (s
 	}
 
 	return words[0], words[1:], nil
+}
+
+// parsePlaywrightBatchReport handles the JSON report of one Playwright command
+// run by bktec pool consume. A test runs once in each project and is reported
+// once per project, with the project in its scope like Buildkite Test
+// Collector, so muting stays per project while the attempt of the test's
+// leased file accounts for every project.
+func parsePlaywrightBatchReport(data []byte) (ParsedReport, error) {
+	var report struct {
+		Config struct {
+			RootDir string `json:"rootDir"`
+		} `json:"config"`
+		Suites *[]PlaywrightReportSuite `json:"suites"`
+		Errors []json.RawMessage        `json:"errors"`
+	}
+	if err := json.Unmarshal(data, &report); err != nil {
+		return ParsedReport{}, fmt.Errorf("invalid Playwright report: %w", err)
+	}
+	if report.Suites == nil || report.Config.RootDir == "" {
+		return ParsedReport{}, fmt.Errorf("incomplete Playwright report: missing suites or config.rootDir")
+	}
+	workDir, err := os.Getwd()
+	if err != nil {
+		return ParsedReport{}, err
+	}
+	parsed := ParsedReport{
+		// Playwright doesn't run any tests when a file fails to load, and reports
+		// that and other errors outside tests without saying which tests they
+		// affect.
+		ErrorsOutsideTests: len(report.Errors) > 0,
+		// Playwright runs the tests of setup projects with every command.
+		UnselectedTests: true,
+	}
+	seen := map[string]int{}
+	var walk func(suite PlaywrightReportSuite, titles string) error
+	walk = func(suite PlaywrightReportSuite, titles string) error {
+		for _, spec := range suite.Specs {
+			if spec.File == "" {
+				return fmt.Errorf("playwright test %q has no file", spec.Title)
+			}
+			// Spec files are relative to the root directory; selectors to the working directory.
+			path, err := filepath.Rel(workDir, filepath.Join(report.Config.RootDir, spec.File))
+			if err != nil {
+				return fmt.Errorf("failed to get relative path of test file: %w", err)
+			}
+			path = filepath.ToSlash(path)
+			for _, run := range spec.Tests {
+				var status TestStatus
+				switch run.Status {
+				case "expected", "flaky":
+					status = TestStatusPassed
+				case "unexpected":
+					status = TestStatusFailed
+				case "skipped":
+					status = TestStatusSkipped
+				default:
+					return fmt.Errorf("unknown Playwright test status %q", run.Status)
+				}
+				// Matches the scope of Buildkite Test Collector, as in mapSpecToTestCase.
+				test := ReportedTest{
+					TestCase: plan.TestCase{
+						Scope: fmt.Sprintf(" %s %s %s", run.ProjectName, titles, spec.Title),
+						Name:  spec.Title,
+						Path:  fmt.Sprintf("%s:%d", path, spec.Line),
+					},
+					Status:   status,
+					Selector: path,
+				}
+				// A test repeated in one project, such as with --repeat-each, is
+				// reported once: failed if any run failed.
+				key := strings.Join([]string{path, test.TestCase.Scope}, "\x00")
+				if i, ok := seen[key]; ok {
+					if status == TestStatusFailed || parsed.Tests[i].Status == TestStatusSkipped {
+						parsed.Tests[i].Status = status
+					}
+					continue
+				}
+				seen[key] = len(parsed.Tests)
+				parsed.Tests = append(parsed.Tests, test)
+			}
+		}
+		for _, child := range suite.Suites {
+			if err := walk(child, titles+" "+child.Title); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, suite := range *report.Suites {
+		if err := walk(suite, suite.Title); err != nil {
+			return ParsedReport{}, err
+		}
+	}
+	return parsed, nil
 }
 
 func (p Playwright) parseReport(path string) (PlaywrightReport, error) {

@@ -130,7 +130,14 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, re
 		// Runners that retry by name can report tests that weren't retried: Jest
 		// reports the other tests in each file as skipped, and runs same-named
 		// tests in other files. Every retried test must still be reported.
-		if match == -1 && retry {
+		// Playwright also runs its setup projects' tests with every command. A
+		// failed one errors the batch, because the tests that depend on it skip.
+		if match == -1 && (retry || report.UnselectedTests) {
+			if !retry && test.Status == runner.TestStatusFailed {
+				for _, i := range owners {
+					r.reportErrors[i] = true
+				}
+			}
 			continue
 		}
 		if match < 0 {

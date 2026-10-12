@@ -77,8 +77,8 @@ func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, c
 // poolPlanRequest discovers the tests and builds the request that creates or
 // reuses the pool for cfg.PoolKey.
 func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList string, client *api.Client) (api.PoolPlanParams, error) {
-	if cfg.TestRunner != "rspec" && cfg.TestRunner != "jest" {
-		return api.PoolPlanParams{}, fmt.Errorf("pool planning requires the rspec or jest runner")
+	if cfg.TestRunner != "rspec" && cfg.TestRunner != "jest" && cfg.TestRunner != "playwright" {
+		return api.PoolPlanParams{}, fmt.Errorf("pool planning requires the rspec, jest or playwright runner")
 	}
 	printRequested(os.Stderr, cfg)
 	if cfg.PoolLeaseDurationMS != 0 {
