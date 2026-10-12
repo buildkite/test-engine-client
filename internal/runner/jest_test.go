@@ -473,7 +473,7 @@ func TestJestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 	}
 
 	wantName := "jest"
-	wantArgs := []string{"--testNamePattern", "(this will fail|this other one will fail)", "--json", "--testLocationInResults", "--outputFile", "jest.json"}
+	wantArgs := []string{"--testNamePattern", "^(this will fail|this other one will fail)$", "--json", "--testLocationInResults", "--outputFile", "jest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
@@ -495,6 +495,10 @@ func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
 			Name:  "test",
 			Path:  "spec/billing.spec.js",
 		},
+		{
+			Name: "top-level test",
+			Path: "spec/billing.spec.js",
+		},
 	}
 	retryTestCommand := "jest --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 
@@ -509,7 +513,7 @@ func TestJestRetryCommandNameAndArgs_WithSpecialCharacters(t *testing.T) {
 	}
 
 	wantName := "jest"
-	wantArgs := []string{"--testNamePattern", `(test with special characters \.\+\*\?\(\)\|\[\]\{\}\^\$|another test)`, "--json", "--testLocationInResults", "--outputFile", "jest.json"}
+	wantArgs := []string{"--testNamePattern", `^(test with special characters \.\+\*\?\(\)\|\[\]\{\}\^\$|another test|top-level test)$`, "--json", "--testLocationInResults", "--outputFile", "jest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
@@ -586,7 +590,7 @@ func TestJestRetryCommandNameAndArgs_WithTestExamplesPlaceholder(t *testing.T) {
 	wantName := "jest"
 	wantArgs := []string{
 		"--testNamePattern",
-		"(this will fail|this other one will fail)",
+		"^(this will fail|this other one will fail)$",
 		"spec/billing.spec.js",
 		"spec/user.spec.js",
 		"--json",
