@@ -55,6 +55,11 @@ test('renders twice', () => {})`,
 		"b.test.js":      `test('renders', () => { throw new Error('b') })`,
 		"broken.test.js": `boom()`,
 		"ok.test.js":     `test('works', () => {})`,
+		// A muted failure must not hide an error outside the file's tests.
+		"hook.test.js": `describe('muted', () => {
+  afterAll(() => { throw new Error('afterAll') })
+  test('fails', () => { throw new Error('muted') })
+})`,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
 			t.Fatal(err)
@@ -70,6 +75,7 @@ test('renders twice', () => {})`,
 		{attempt("a", "a.test.js"), attempt("b", "b.test.js")},
 		// A file that doesn't load errors only its own attempt.
 		{attempt("broken", "broken.test.js"), attempt("ok", "ok.test.js")},
+		{attempt("hook", "hook.test.js")},
 	}
 	var mu sync.Mutex
 	acquired, uploads := 0, 0
@@ -127,17 +133,18 @@ test('renders twice', () => {})`,
 		"lease-1": {{AttemptID: "flaky", Result: "passed"}, {AttemptID: "muted", Result: "passed"}},
 		"lease-2": {{AttemptID: "a", Result: "failed"}, {AttemptID: "b", Result: "failed"}},
 		"lease-3": {{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok", Result: "passed"}},
+		"lease-4": {{AttemptID: "hook", Result: "errored"}},
 	}
 	if !reflect.DeepEqual(completed, want) {
 		t.Errorf("completed=%v, want %v", completed, want)
 	}
 	// Each lease runs once and lease 1 and 2 retry their failed tests once;
 	// bktec uploads the report of every command.
-	if uploads != 5 {
-		t.Errorf("uploads=%d, want 5", uploads)
+	if uploads != 6 {
+		t.Errorf("uploads=%d, want 6", uploads)
 	}
 	var coded cli.ExitCoder
-	if err == nil || errors.As(err, &coded) || !strings.Contains(err.Error(), "passed attempts: 3; failed attempts: 2; errored attempts: 1") {
+	if err == nil || errors.As(err, &coded) || !strings.Contains(err.Error(), "passed attempts: 3; failed attempts: 2; errored attempts: 2") {
 		t.Fatalf("err=%v, want an internal error counting every attempt", err)
 	}
 }

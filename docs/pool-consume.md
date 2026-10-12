@@ -54,9 +54,11 @@ uploads each command's JSON report instead.
 A lease's tests are reported as passed or failed from the Jest report. A test
 file that fails outside its tests, for example because it doesn't load, is
 reported as errored without affecting the lease's other files. All of a lease's
-tests are reported as errored when the command doesn't write a usable report, or
-when Jest exits with an error but reports no failed tests, such as when a
-coverage threshold isn't met. bktec exits with status 16 if any tests errored,
+tests are reported as errored when the command doesn't write a usable report,
+when a file with failed tests also fails outside them (for example, in an
+`afterAll` hook), because the Jest report doesn't say which file, or when Jest
+exits with an error but reports no failed tests, such as when a coverage
+threshold isn't met. bktec exits with status 16 if any tests errored,
 or with status 1 if tests failed.
 
 When `bktec` receives SIGINT or SIGTERM, it stops the running command, including

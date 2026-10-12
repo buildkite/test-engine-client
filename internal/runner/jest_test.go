@@ -659,13 +659,24 @@ func TestParseNativeJestReport(t *testing.T) {
 
 	// A file that fails without a failed test, such as one that didn't load,
 	// failed outside its tests. Other files are unaffected.
-	got, err = ParseNativeReport("jest-json", []byte(`{"numRuntimeErrorTestSuites":1,"testResults":[
+	got, err = ParseNativeReport("jest-json", []byte(`{"numRuntimeErrorTestSuites":2,"testResults":[
 		{"name":"c.test.js","status":"failed","assertionResults":[{"title":"t","ancestorTitles":[],"status":"passed"}]},
 		{"name":"d.test.js","status":"failed","assertionResults":[]},
 		{"name":"e.test.js","status":"passed","assertionResults":[{"title":"t","ancestorTitles":[],"status":"passed"}]}
 	]}`))
 	if err != nil || got.ErrorsOutsideTests || !reflect.DeepEqual(got.ErroredFiles, []string{"c.test.js", "d.test.js"}) {
 		t.Fatalf("report=%+v err=%v, want only c.test.js and d.test.js errored", got, err)
+	}
+
+	// A file whose tests failed can also fail outside them, such as in an
+	// afterAll hook. Jest counts it but doesn't name it, so the whole report
+	// errors rather than losing the error.
+	got, err = ParseNativeReport("jest-json", []byte(`{"numRuntimeErrorTestSuites":1,"testResults":[
+		{"name":"f.test.js","status":"failed","assertionResults":[{"title":"t","ancestorTitles":[],"status":"failed"}]},
+		{"name":"g.test.js","status":"failed","assertionResults":[{"title":"t","ancestorTitles":[],"status":"failed"}]}
+	]}`))
+	if err != nil || !got.ErrorsOutsideTests {
+		t.Fatalf("report=%+v err=%v, want errors outside tests", got, err)
 	}
 
 	for _, invalid := range []string{`{}`, `{"testResults":[{"name":"c.test.js","assertionResults":[{"title":"t","status":"focused"}]}]}`} {

@@ -165,7 +165,8 @@ type JestReport struct {
 // report and maps assertions to test cases for lease matching and retries.
 func parseJestBatchReport(data []byte) (ParsedReport, error) {
 	var report struct {
-		TestResults *[]struct {
+		NumRuntimeErrorTestSuites int `json:"numRuntimeErrorTestSuites"`
+		TestResults               *[]struct {
 			AssertionResults []JestExample `json:"assertionResults"`
 			FileName         string        `json:"name"`
 			Status           string        `json:"status"`
@@ -234,6 +235,13 @@ func parseJestBatchReport(data []byte) (ParsedReport, error) {
 		if file.Status == "failed" && !failed {
 			parsed.ErroredFiles = append(parsed.ErroredFiles, path)
 		}
+	}
+	// A file can also fail outside its tests, such as in an afterAll hook, when
+	// some of its tests failed. The report counts these files without naming
+	// them, so they error every test in the batch. Otherwise a muted failure or
+	// a passing retry could hide the error.
+	if report.NumRuntimeErrorTestSuites > len(parsed.ErroredFiles) {
+		parsed.ErrorsOutsideTests = true
 	}
 	return parsed, nil
 }
