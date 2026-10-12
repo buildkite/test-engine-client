@@ -261,7 +261,7 @@ func TestPoolExecSuppliedConsumedIDSkipsRunnerAndPlanning(t *testing.T) {
 	if gets != 1 {
 		t.Fatalf("GET count=%d, want one full snapshot for ready pool ID", gets)
 	}
-	if !strings.Contains(logs.String(), "Pool already consumed; skipping persistent runner") || strings.Contains(logs.String(), "starting persistent runner") {
+	if !strings.Contains(logs.String(), "Pool already consumed; skipping runner") || strings.Contains(logs.String(), "starting runner") {
 		t.Fatalf("wrong consumed-pool log: %s", logs.String())
 	}
 }
@@ -442,7 +442,7 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 	if strings.Count(logs.String(), "existing") != 1 || !strings.Contains(logs.String(), "Fetching supplied pool with ID existing") || !strings.Contains(logs.String(), "Pool resolved (state=populating)") || !strings.Contains(logs.String(), "Received batch b_1 result") {
 		t.Fatalf("supplied pool ID should appear only at fetch: %s", logs.String())
 	}
-	start := strings.Index(logs.String(), "starting persistent runner")
+	start := strings.Index(logs.String(), "starting runner")
 	connected := strings.Index(logs.String(), "Persistent runner connected")
 	dispatched := strings.Index(logs.String(), "Dispatched pool batch b_1")
 	if start < 0 || connected <= start || dispatched <= connected || strings.Count(logs.String(), "Persistent runner connected") != 1 {

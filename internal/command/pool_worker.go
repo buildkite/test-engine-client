@@ -108,7 +108,7 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 	s.dispatchable = false
 	s.dispatched = true
 	if s.retryRound > 0 {
-		debug.Printf("Dispatched local retry batch %s to persistent runner (round=%d)", batch.ID, s.retryRound)
+		debug.Printf("Dispatched local retry batch %s to runner (round=%d)", batch.ID, s.retryRound)
 	} else {
 		// Replace any stale start; this is the only sender and holds s.mu.
 		select {
@@ -116,7 +116,7 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 		default:
 		}
 		s.starts <- batchStart{id: batch.ID, at: time.Now()}
-		debug.Printf("Dispatched pool batch %s to persistent runner", batch.ID)
+		debug.Printf("Dispatched pool batch %s to runner", batch.ID)
 	}
 	return nil
 }

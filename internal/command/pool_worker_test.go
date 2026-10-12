@@ -178,7 +178,7 @@ func TestPoolWorkerRetriesBeforeNextLeaseAndKeepsHeartbeatUntilComplete(t *testi
 		t.Fatalf("retry attempt summaries missing: %s", logs.String())
 	}
 	if !strings.Contains(logs.String(), "Offered local retry batch b_2 from lease lease (round=1; 1 tests)") ||
-		!strings.Contains(logs.String(), "Dispatched local retry batch b_2 to persistent runner (round=1)") ||
+		!strings.Contains(logs.String(), "Dispatched local retry batch b_2 to runner (round=1)") ||
 		!strings.Contains(leases.String(), "Completed lease lease (passed: 1, failed: 0, errored: 0)") {
 		t.Fatalf("retry and final lease result unclear: %s\n%s", logs.String(), leases.String())
 	}

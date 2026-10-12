@@ -27,11 +27,30 @@ import (
 // PoolExec resolves directly (no separate pool plan invocation is required), then
 // runs one persistent process. Native bktec uploads are never invoked here.
 func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []string, retries int, opts runnerexec.Options) error {
-	if len(argv) == 0 || retries < 0 {
-		return errors.New("pool exec requires a runner executable and a nonnegative local retry count")
+	if len(argv) == 0 {
+		return errors.New("pool exec requires a runner executable")
+	}
+	return poolWork(ctx, cfg, files, retries, func(ctx context.Context, source *poolSource) error {
+		// #nosec G204 G702 -- the runner executable and arguments are explicitly supplied by the CLI user after --.
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return runnerexec.Run(ctx, cmd, source, opts)
+	})
+}
+
+// poolRunner runs the batches a pool source offers until the source finishes.
+type poolRunner func(context.Context, *poolSource) error
+
+// poolWork resolves the pool for a pool worker, then runs
+// this worker's leases with run.
+func poolWork(ctx context.Context, cfg *config.Config, files string, retries int, run poolRunner) error {
+	if retries < 0 {
+		return errors.New("local retry count must not be negative")
 	}
 	if cfg.AccessToken == "" && !cfg.OIDC {
-		return errors.New("pool exec requires a supplied Scheduler OIDC token or agent OIDC authentication")
+		return errors.New("test pools require a supplied Scheduler OIDC token or agent OIDC authentication")
 	}
 	printPlanningBanner(os.Stderr)
 	var mint func(context.Context) (string, error)
@@ -41,7 +60,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	client := api.NewClient(api.ClientConfig{OrganizationSlug: cfg.OrganizationSlug, ServerBaseURL: cfg.ServerBaseURL, TokenProvider: refreshingPoolToken(cfg.AccessToken, mint, cfg.OIDCLifetime)})
 	pool, err := ResolvePool(ctx, cfg, files, client, true)
 	if err != nil {
-		return poolExecFallback(ctx, cfg, err, files, argv, retries, opts)
+		return poolExecFallback(ctx, cfg, err, files, retries, run)
 	}
 	switch pool.State {
 	case "populating", "consuming", "consumed":
@@ -66,24 +85,24 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 			}
 		}
 		fmt.Println("+++ Buildkite Test Engine Client: No tests to run on this node")
-		debug.Printf("Pool already consumed; skipping persistent runner")
+		debug.Printf("Pool already consumed; skipping runner")
 		return nil
 	}
 	// Server-planned pools publish entries, the muted-tests snapshot, and their
 	// ready state atomically. An externally visible ready pool without a snapshot
-	// is therefore a manual pool, which pool exec cannot account for safely.
+	// is therefore a manual pool, which pool workers cannot account for safely.
 	if pool.MutedTests == nil {
 		return fmt.Errorf("test pool %s is missing its muted tests snapshot", pool.ID)
 	}
-	debug.Printf("Pool ready (state=%s); starting persistent runner", pool.State)
-	return runPool(ctx, client, pool, argv, retries, opts, leaseLog)
+	debug.Printf("Pool ready (state=%s); starting runner", pool.State)
+	return runPool(ctx, client, pool, retries, leaseLog, run)
 }
 
 // poolExecFallback runs this job's share of a static split when Test Scheduler
 // is unavailable before leasing starts, like bktec run's local fallback. Once
 // leasing has started, other workers may already have run some tests, so
 // failures after that point are never recovered this way.
-func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files string, argv []string, retries int, opts runnerexec.Options) error {
+func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files string, retries int, run poolRunner) error {
 	if !poolSchedulerUnavailable(ctx, err) {
 		return poolFatal(err)
 	}
@@ -121,7 +140,7 @@ func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files 
 	}
 	// Local leases are an implementation detail; like bktec run, show only the
 	// runner's output and the final result.
-	return runPool(ctx, scheduler, api.Pool{ID: "fallback", State: "consuming"}, argv, retries, opts, log.New(io.Discard, "", 0))
+	return runPool(ctx, scheduler, api.Pool{ID: "fallback", State: "consuming"}, retries, log.New(io.Discard, "", 0), run)
 }
 
 // fallbackLeaseTTL is how long a local fallback lease stays owned between
@@ -129,7 +148,7 @@ func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files 
 const fallbackLeaseTTL = 10 * time.Minute
 
 // fallbackScheduler serves a static split's share as local leases, so the
-// fallback reuses pool exec's runner protocol, local retries and results.
+// fallback reuses the pool runner, local retries and results.
 type fallbackScheduler struct {
 	mu     sync.Mutex
 	leases []api.Lease
@@ -160,7 +179,7 @@ func (f *fallbackScheduler) CompleteLease(context.Context, string, string, []api
 
 func (f *fallbackScheduler) ReleaseLease(context.Context, string, string) error { return nil }
 
-func runPool(ctx context.Context, client poolScheduler, pool api.Pool, argv []string, retries int, opts runnerexec.Options, leases *log.Logger) error {
+func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries int, leases *log.Logger, run poolRunner) error {
 	fmt.Println("+++ Buildkite Test Engine Client: Running tests")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -168,12 +187,7 @@ func runPool(ctx context.Context, client poolScheduler, pool api.Pool, argv []st
 	source.leaseLog = leases
 	done := make(chan struct{})
 	go func() { defer close(done); source.work(ctx, client, pool, retries) }()
-	// #nosec G204 G702 -- the runner executable and arguments are explicitly supplied by the CLI user after --.
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := runnerexec.Run(ctx, cmd, source, opts)
+	err := run(ctx, source)
 	cancel()
 	<-done
 	outcome := source.outcome()
