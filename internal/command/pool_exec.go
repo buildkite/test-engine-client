@@ -43,7 +43,7 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 // poolRunner runs the batches a pool source offers until the source finishes.
 type poolRunner func(context.Context, *poolSource) error
 
-// poolWork resolves the pool for a pool worker, then runs
+// poolWork resolves the pool shared by pool exec and pool consume, then runs
 // this worker's leases with run.
 func poolWork(ctx context.Context, cfg *config.Config, files string, retries int, run poolRunner) error {
 	if retries < 0 {

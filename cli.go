@@ -761,7 +761,7 @@ func poolPlanCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
 		filesFlag, tagFiltersFlag, accessTokenFlag, maxParallelismFlag, targetTimeFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
 		&cli.StringFlag{
-			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec; pool plan rejects it)",
+			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec and pool consume; pool plan rejects it)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,
 		},
 		&cli.StringFlag{
@@ -782,14 +782,24 @@ func poolPlanCommandFlags() []cli.Flag {
 	return freshFlags(flags)
 }
 
+var localRetryCountFlag = &cli.IntFlag{
+	Name: "local-retry-count", Usage: "Additional local example executions before completing the original Scheduler attempt",
+	Sources: cli.EnvVars("BUILDKITE_TEST_SCHEDULER_LOCAL_RETRY_COUNT"),
+}
+
 func poolExecCommandFlags() []cli.Flag {
 	flags := poolPlanCommandFlags()
 	return append(flags,
-		&cli.IntFlag{Name: "local-retry-count", Usage: "Additional local example executions before completing the original Scheduler attempt", Sources: cli.EnvVars("BUILDKITE_TEST_SCHEDULER_LOCAL_RETRY_COUNT")},
+		freshFlag(localRetryCountFlag),
 		&cli.DurationFlag{Name: "runner-startup-timeout", Value: 5 * time.Minute, Usage: "Persistent runner handshake timeout (Go duration, e.g. 5m)"},
 		&cli.DurationFlag{Name: "runner-batch-timeout", Value: 10 * time.Minute, Usage: "Persistent runner batch timeout including report submission"},
 		&cli.DurationFlag{Name: "runner-shutdown-timeout", Value: 90 * time.Second, Usage: "Runner exit and collector flush grace period"},
 	)
+}
+
+func poolConsumeCommandFlags() []cli.Flag {
+	flags := append(poolPlanCommandFlags(), localRetryCountFlag, uploadTokenFlag, uploadResultsFlag, uploadTagsFlag, uploadBaseURLFlag)
+	return freshFlags(flags)
 }
 
 var poolCommand = &cli.Command{
@@ -816,6 +826,12 @@ var poolCommand = &cli.Command{
 		Action:                    poolExec,
 		DisableSliceFlagSeparator: true,
 		Flags:                     poolExecCommandFlags(),
+	}, {
+		Name:                      "consume",
+		Usage:                     "Execute Scheduler leases with a new test runner command per lease",
+		Action:                    poolConsume,
+		DisableSliceFlagSeparator: true,
+		Flags:                     poolConsumeCommandFlags(),
 	}},
 }
 

@@ -5,7 +5,9 @@ runner process.
 
 RSpec support requires Test Collector Ruby, which provides the
 [`buildkite-rspec`](https://github.com/bktest/test-collector-ruby) persistent
-runner. Linux and macOS are supported.
+runner. Linux and macOS are supported. For Jest, use
+[`bktec pool consume`](./pool-consume.md), which starts a new test runner
+command for each lease.
 
 ## Run a pool worker
 

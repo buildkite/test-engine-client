@@ -1,0 +1,171 @@
+//go:build !windows
+
+package command
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/config"
+	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/test-engine-client/v3/internal/runner"
+	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
+	"github.com/urfave/cli/v3"
+)
+
+// TestPoolConsumeJest runs real Jest commands against a fake Scheduler: a new
+// command per lease and per local retry round, with muting and accounting.
+func TestPoolConsumeJest(t *testing.T) {
+	jest, err := filepath.Abs(filepath.Join("..", "runner", "testdata", "node_modules", ".bin", "jest"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for name, source := range map[string]string{
+		"jest.config.js": `module.exports = {}`,
+		// Fails on its first run only, so the local retry passes it.
+		"flaky.test.js": `const fs = require('fs')
+describe('flaky', () => {
+  test('passes on retry', () => {
+    const marker = __dirname + '/flaky.ran'
+    if (!fs.existsSync(marker)) {
+      fs.writeFileSync(marker, '')
+      throw new Error('first run')
+    }
+  })
+})`,
+		"muted.test.js": `describe('muted', () => { test('fails', () => { throw new Error('muted') }) })`,
+		// Top-level tests with the same name in two files: retries must match
+		// each by file and run it again rather than report it skipped.
+		"a.test.js": `test('renders', () => { throw new Error('a') })
+test('renders twice', () => {})`,
+		"b.test.js":      `test('renders', () => { throw new Error('b') })`,
+		"broken.test.js": `boom()`,
+		"ok.test.js":     `test('works', () => {})`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
+
+	attempt := func(id, path string) api.LeaseAttempt {
+		return api.LeaseAttempt{ID: id, SelectorType: "test_plan_test_case_v1", Selector: plan.TestCase{Format: plan.TestCaseFormatSelector, Value: path}}
+	}
+	leases := [][]api.LeaseAttempt{
+		{attempt("flaky", "flaky.test.js"), attempt("muted", "muted.test.js")},
+		{attempt("a", "a.test.js"), attempt("b", "b.test.js")},
+		// A file that doesn't load errors only its own attempt.
+		{attempt("broken", "broken.test.js"), attempt("ok", "ok.test.js")},
+	}
+	var mu sync.Mutex
+	acquired, uploads := 0, 0
+	completed := map[string][]api.AttemptResult{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		base := "/v2/organizations/org/test-scheduler/pools/existing"
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == base:
+			fmt.Fprint(w, `{"id":"existing","state":"consuming","muted_tests":[{"scope":"muted","name":"fails"}]}`)
+		case r.Method == http.MethodPost && r.URL.Path == base+"/leases":
+			if acquired == len(leases) {
+				fmt.Fprint(w, `{"lease":null,"pool":{"state":"consumed"}}`)
+				return
+			}
+			lease := api.Lease{ID: fmt.Sprintf("lease-%d", acquired+1), ExpiresAt: time.Now().Add(time.Minute), Attempts: leases[acquired]}
+			acquired++
+			_ = json.NewEncoder(w).Encode(map[string]any{"lease": lease, "pool": map[string]string{"state": "consuming"}})
+		case r.Method == http.MethodPost && r.URL.Path == base+"/leases/complete":
+			var body struct {
+				Leases []struct {
+					ID       string              `json:"lease_id"`
+					Attempts []api.AttemptResult `json:"attempts"`
+				} `json:"leases"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Leases) != 1 {
+				t.Errorf("completion=%+v err=%v", body, err)
+			}
+			completed[body.Leases[0].ID] = body.Leases[0].Attempts
+			fmt.Fprint(w, `{}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/uploads":
+			if r.Header.Get("Authorization") != "Token token=upload-token" {
+				t.Errorf("upload authorization=%q", r.Header.Get("Authorization"))
+			}
+			uploads++
+			fmt.Fprint(w, `{}`)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	cfg := config.New()
+	cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = "existing", "org", "suite", "jest"
+	cfg.ServerBaseURL, cfg.UploadBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, server.URL, "header.payload.signature", false
+	cfg.ResultPath = filepath.Join(dir, "jest.json")
+	cfg.UploadResults, cfg.UploadToken = true, "upload-token"
+	cfg.TestCommand = jest + " --runTestsByPath {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}"
+	cfg.RetryCommand = jest + " --runTestsByPath {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
+	err = PoolConsume(context.Background(), &cfg, "", 1)
+
+	want := map[string][]api.AttemptResult{
+		"lease-1": {{AttemptID: "flaky", Result: "passed"}, {AttemptID: "muted", Result: "passed"}},
+		"lease-2": {{AttemptID: "a", Result: "failed"}, {AttemptID: "b", Result: "failed"}},
+		"lease-3": {{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok", Result: "passed"}},
+	}
+	if !reflect.DeepEqual(completed, want) {
+		t.Errorf("completed=%v, want %v", completed, want)
+	}
+	// Each lease runs once and lease 1 and 2 retry their failed tests once;
+	// bktec uploads the report of every command.
+	if uploads != 5 {
+		t.Errorf("uploads=%d, want 5", uploads)
+	}
+	var coded cli.ExitCoder
+	if err == nil || errors.As(err, &coded) || !strings.Contains(err.Error(), "passed attempts: 3; failed attempts: 2; errored attempts: 1") {
+		t.Fatalf("err=%v, want an internal error counting every attempt", err)
+	}
+}
+
+func TestRunPoolCommandRequiresUsableReport(t *testing.T) {
+	for _, tc := range []struct {
+		name, script string
+		wantStatus   string
+	}{
+		{"report with failures", `printf '%s' '{"testResults":[{"name":"a.test.js","status":"failed","assertionResults":[{"status":"failed","title":"t","ancestorTitles":[]}]}]}' > "$2"; exit 1`, "completed"},
+		{"no report", `exit 0`, "errored"},
+		// Like bktec run, Jest failing outside its tests, such as on a coverage
+		// threshold, fails even when every test passed.
+		{"non-zero exit without failures", `printf '%s' '{"testResults":[{"name":"a.test.js","status":"passed","assertionResults":[{"status":"passed","title":"t","ancestorTitles":[]}]}]}' > "$2"; exit 1`, "errored"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resultPath := filepath.Join(t.TempDir(), "jest.json")
+			// A previous lease's report must not be reused.
+			if err := os.WriteFile(resultPath, []byte(`{"testResults":[]}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			testRunner := runner.NewJest(runner.RunnerConfig{
+				TestCommand: fmt.Sprintf("sh -c %q sh {{testExamples}} {{resultPath}}", tc.script),
+				ResultPath:  resultPath,
+			})
+			batch := runnerexec.Batch{ID: "b_1", Tests: []plan.TestCase{{Format: plan.TestCaseFormatSelector, Value: "a.test.js"}}}
+			if got := runPoolCommand(context.Background(), testRunner, batch); got.Status != tc.wantStatus {
+				t.Fatalf("status=%q, want %q", got.Status, tc.wantStatus)
+			}
+		})
+	}
+}
