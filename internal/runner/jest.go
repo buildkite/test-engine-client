@@ -202,12 +202,19 @@ func (j Jest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (string,
 			return "", []string{}, err
 		}
 
+		// Jest matches the pattern anywhere in a test's full name, which joins its
+		// describe titles and title with spaces. Anchor it so only the failed tests
+		// run, not every test whose name contains one of theirs.
 		escapedTestCases := make([]string, len(testCases))
 		for i, testCase := range testCases {
-			escapedTestCases[i] = regexp.QuoteMeta(fmt.Sprintf("%s %s", testCase.Scope, testCase.Name))
+			fullName := testCase.Name
+			if testCase.Scope != "" {
+				fullName = testCase.Scope + " " + testCase.Name
+			}
+			escapedTestCases[i] = regexp.QuoteMeta(fullName)
 		}
 
-		testNamePattern := fmt.Sprintf("(%s)", strings.Join(escapedTestCases, "|"))
+		testNamePattern := fmt.Sprintf("^(%s)$", strings.Join(escapedTestCases, "|"))
 
 		words = slices.Replace(words, idx, idx+1, testNamePattern)
 
