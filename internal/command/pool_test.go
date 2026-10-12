@@ -69,7 +69,7 @@ func TestResolvePoolConcurrentWorkers(t *testing.T) {
 			cfg.MaxRetries = i + 4 // Neither retries nor node identity belongs in the planning fingerprint.
 			cfg.NodeIndex = i
 			cfg.TestCommand = "rspec {{testExamples}}"
-			pool, err := ResolvePool(context.Background(), cfg, list, client)
+			pool, err := ResolvePool(context.Background(), cfg, list, client, false)
 			assert.NoError(t, err)
 			assert.Equal(t, "shared-pool", pool.ID)
 			assert.Equal(t, "planning", pool.State)
@@ -119,7 +119,7 @@ func TestResolvePoolLeaseOptions(t *testing.T) {
 			cfg.PoolLeaseDurationMS, cfg.PoolLeaseMaxAttempts = tc.durationMS, tc.maxAttempts
 			cfg.MaxRetries = 8
 			client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: cfg.OrganizationSlug})
-			_, err := ResolvePool(context.Background(), cfg, "", client)
+			_, err := ResolvePool(context.Background(), cfg, "", client, false)
 			require.NoError(t, err)
 			if tc.lease == "" {
 				require.NotContains(t, received, "lease")
@@ -256,12 +256,18 @@ func TestPoolPlanDynamicSizingFallsBackToMaxParallelism(t *testing.T) {
 }
 
 func TestPoolPlanFallsBackOnlyWhenSchedulerUnavailable(t *testing.T) {
+	// Shorten the planning deadline; the job's own cancellation still comes first.
+	defer func(timeout time.Duration) { poolPlanningTimeout = timeout }(poolPlanningTimeout)
+	poolPlanningTimeout = 300 * time.Millisecond
 	for _, tc := range []struct {
-		name, ready, wantErr string
-		postStatus           int
-		cancel               bool
+		name, ready, wantErr, wantWarning string
+		postStatus                        int
+		cancel                            bool
 	}{
-		{name: "planning failure", ready: `{"id":"dynamic","state":"errored","error":{"message":"timing calculation failed"}}`},
+		{name: "planning failure", ready: `{"id":"dynamic","state":"errored","error":{"message":"timing calculation failed"}}`, wantWarning: "Error Plan: Test Scheduler failed to plan test pool dynamic: timing calculation failed"},
+		{name: "planning deadline", ready: `{"id":"dynamic","state":"planning"}`, wantWarning: "Timeout: Test Scheduler did not finish planning the test pool within 300ms"},
+		// The deadline also bounds creating the pool, not just waiting for it.
+		{name: "unavailable while creating", postStatus: http.StatusServiceUnavailable, wantWarning: "Timeout: Test Scheduler did not finish planning the test pool within 300ms"},
 		{name: "rejected request", postStatus: http.StatusForbidden, wantErr: "Access Denied: forbidden"},
 		{name: "cancellation", ready: `{"id":"dynamic","state":"planning"}`, wantErr: "context deadline exceeded", cancel: true},
 	} {
@@ -306,7 +312,7 @@ func TestPoolPlanFallsBackOnlyWhenSchedulerUnavailable(t *testing.T) {
 			// pool ID empty so workers try Test Scheduler again themselves.
 			require.JSONEq(t, `{"BUILDKITE_TEST_ENGINE_POOL_ID":"","BUILDKITE_TEST_ENGINE_PARALLELISM":"10"}`, buf.String())
 			output := stderr()
-			require.Contains(t, output, "Error Plan: Test Scheduler failed to plan test pool dynamic: timing calculation failed")
+			require.Contains(t, output, tc.wantWarning)
 			require.Contains(t, output, "Using local fallback")
 		})
 	}
@@ -327,7 +333,7 @@ func TestResolvePrecreatedPoolSnapshot(t *testing.T) {
 	client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "acme"})
 	pool, err := ResolvePool(context.Background(), &config.Config{
 		PoolID: "ready", PoolLeaseDurationMS: 60_000, PoolLeaseMaxAttempts: 25,
-	}, "does-not-exist", client)
+	}, "does-not-exist", client, false)
 	require.NoError(t, err)
 	ready, err := client.WaitForPool(context.Background(), pool.ID)
 	require.NoError(t, err)
