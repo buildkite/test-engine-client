@@ -28,7 +28,7 @@ func poolReport(examples string, count, loadErrors int) runnerexec.Result {
 func TestPoolResultsRetryMappingAndMuting(t *testing.T) {
 	tests := []plan.TestCase{{Format: "selector", Value: "spec/a.rb"}, {Format: "selector", Value: "spec/b.rb"}}
 	r := newPoolResults([]api.LeaseAttempt{{ID: "a", Selector: tests[0]}, {ID: "b", Selector: tests[1]}}, []plan.TestCase{{Name: "muted", Scope: "B"}})
-	r.absorb(tests, []int{0, 1}, poolReport(`[
+	r.absorb(tests, []int{0, 1}, false, poolReport(`[
  {"id":"./spec/a.rb[1:2]","file_path":"./spec/a.rb","status":"failed","description":"retry","full_description":"A retry"},
  {"id":"spec/a.rb[1:1]","file_path":"spec/a.rb","status":"passed"},
  {"id":"spec/b.rb[1:1]","file_path":"spec/b.rb","status":"failed","description":"muted","full_description":"B muted"},
@@ -37,7 +37,7 @@ func TestPoolResultsRetryMappingAndMuting(t *testing.T) {
 	if len(retry) != 1 || retry[0].Format != "example" || retry[0].Identifier != "spec/a.rb[1:2]" || !reflect.DeepEqual(owners, []int{0}) {
 		t.Fatalf("retry=%+v owners=%v", retry, owners)
 	}
-	r.absorb(retry, owners, poolReport(`[{"id":"spec/a.rb[1:2]","file_path":"spec/a.rb","status":"passed","description":"retry","full_description":"A retry"}]`, 1, 0))
+	r.absorb(retry, owners, true, poolReport(`[{"id":"spec/a.rb[1:2]","file_path":"spec/a.rb","status":"passed","description":"retry","full_description":"A retry"}]`, 1, 0))
 	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "a", Result: "passed"}, {AttemptID: "b", Result: "passed"}}) {
 		t.Fatal(got)
 	}
@@ -49,7 +49,7 @@ func TestPoolResultsSharedExampleBelongsToOwningSpec(t *testing.T) {
 		{Format: "file", Path: "spec/spells/expelliarmus_spec.rb"},
 	}
 	r := newPoolResults([]api.LeaseAttempt{{ID: "shared", Selector: tests[0]}, {ID: "spell", Selector: tests[1]}}, nil)
-	r.absorb(tests, []int{0, 1}, poolReport(`[
+	r.absorb(tests, []int{0, 1}, false, poolReport(`[
 {"id":"./spec/specs_with_shared_examples_spec.rb[1:1:1]","file_path":"./spec/shared_examples.rb","status":"passed"},
 {"id":"./spec/spells/expelliarmus_spec.rb[1:1]","file_path":"./spec/spells/expelliarmus_spec.rb","status":"passed"}]`, 2, 0))
 	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "shared", Result: "passed"}, {AttemptID: "spell", Result: "passed"}}) {
@@ -66,7 +66,7 @@ func TestPoolResultsMatchCanonicalFileSelectors(t *testing.T) {
 		{Format: "selector", Value: "./spec/a_spec.rb"},
 	} {
 		r := newPoolResults([]api.LeaseAttempt{{ID: "attempt", Selector: test}}, nil)
-		r.absorb([]plan.TestCase{test}, []int{0}, poolReport(`[{"id":"./spec/a_spec.rb[1:1]","file_path":"./spec/a_spec.rb","status":"passed"}]`, 1, 0))
+		r.absorb([]plan.TestCase{test}, []int{0}, false, poolReport(`[{"id":"./spec/a_spec.rb[1:1]","file_path":"./spec/a_spec.rb","status":"passed"}]`, 1, 0))
 		if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "attempt", Result: "passed"}}) {
 			t.Fatalf("%s target with ./ prefix did not match canonical report selector: %v", test.Format, got)
 		}
@@ -76,7 +76,7 @@ func TestPoolResultsMatchCanonicalFileSelectors(t *testing.T) {
 func TestPoolResultMatchesExampleByLocationWithID(t *testing.T) {
 	test := plan.TestCase{Format: "example", Path: "spec/a_spec.rb:7"}
 	r := newPoolResults([]api.LeaseAttempt{{ID: "attempt", Selector: test}}, nil)
-	r.absorb([]plan.TestCase{test}, []int{0}, poolReport(`[{"id":"./spec/a_spec.rb[1:2]","file_path":"./spec/a_spec.rb","line_number":7,"status":"failed"}]`, 1, 0))
+	r.absorb([]plan.TestCase{test}, []int{0}, false, poolReport(`[{"id":"./spec/a_spec.rb[1:2]","file_path":"./spec/a_spec.rb","line_number":7,"status":"failed"}]`, 1, 0))
 	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "attempt", Result: "failed"}}) {
 		t.Fatalf("file:line selector did not match reported example: %v", got)
 	}
@@ -85,7 +85,7 @@ func TestPoolResultMatchesExampleByLocationWithID(t *testing.T) {
 func TestPoolResultMatchesExampleByTestEngineIdentity(t *testing.T) {
 	test := plan.TestCase{Format: "example", Identifier: "./spec/a_spec.rb[1:2]", Path: "./spec/a_spec.rb[1:2]", Scope: "A", Name: "works"}
 	r := newPoolResults([]api.LeaseAttempt{{ID: "attempt", Selector: test}}, nil)
-	r.absorb([]plan.TestCase{test}, []int{0}, poolReport(`[{"id":"spec/a_spec.rb[2:3]","file_path":"spec/a_spec.rb","status":"failed","description":"works","full_description":"A works"}]`, 1, 0))
+	r.absorb([]plan.TestCase{test}, []int{0}, false, poolReport(`[{"id":"spec/a_spec.rb[2:3]","file_path":"spec/a_spec.rb","status":"failed","description":"works","full_description":"A works"}]`, 1, 0))
 	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "attempt", Result: "failed"}}) {
 		t.Fatalf("canonical scope and name did not match example with a different runner identifier: %v", got)
 	}
@@ -110,7 +110,7 @@ func TestPoolResultsConservativeReports(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			test := plan.TestCase{Format: tc.format, Path: "a"}
 			r := newPoolResults([]api.LeaseAttempt{{ID: "attempt", Selector: test}}, nil)
-			r.absorb([]plan.TestCase{test}, []int{0}, poolReport(tc.examples, tc.count, tc.loads))
+			r.absorb([]plan.TestCase{test}, []int{0}, false, poolReport(tc.examples, tc.count, tc.loads))
 			if got := r.final()[0].Result; got != tc.want {
 				t.Fatalf("got %s want %s", got, tc.want)
 			}
@@ -118,13 +118,13 @@ func TestPoolResultsConservativeReports(t *testing.T) {
 	}
 	for _, raw := range []string{`{}`, `{"examples":null,"summary":{}}`, `null`, `{"examples":[]} `, `{"examples":[],"summary":{}}`} {
 		r := newPoolResults([]api.LeaseAttempt{{ID: "attempt"}}, nil)
-		r.absorb([]plan.TestCase{{Format: "file", Path: "a"}}, []int{0}, runnerexec.Result{Status: "completed", ReportFormat: "rspec-json", Report: json.RawMessage(raw)})
+		r.absorb([]plan.TestCase{{Format: "file", Path: "a"}}, []int{0}, false, runnerexec.Result{Status: "completed", ReportFormat: "rspec-json", Report: json.RawMessage(raw)})
 		if r.final()[0].Result != "errored" {
 			t.Fatalf("accepted %s", raw)
 		}
 	}
 	r := newPoolResults([]api.LeaseAttempt{{ID: "attempt"}}, nil)
-	r.absorb([]plan.TestCase{{Format: "file", Path: "a"}}, []int{0}, runnerexec.Result{Status: "completed", ReportFormat: "unrecognized", Report: json.RawMessage(`{"examples":[],"summary":{"example_count":0}}`)})
+	r.absorb([]plan.TestCase{{Format: "file", Path: "a"}}, []int{0}, false, runnerexec.Result{Status: "completed", ReportFormat: "unrecognized", Report: json.RawMessage(`{"examples":[],"summary":{"example_count":0}}`)})
 	if r.final()[0].Result != "errored" {
 		t.Fatal("unsupported report format was treated as a passing empty file")
 	}
@@ -133,12 +133,12 @@ func TestPoolResultsConservativeReports(t *testing.T) {
 func TestPoolLoadErrorStillRetriesFailureWithPathFallback(t *testing.T) {
 	test := plan.TestCase{Format: "file", Path: "a"}
 	r := newPoolResults([]api.LeaseAttempt{{ID: "original", Selector: test}}, nil)
-	r.absorb([]plan.TestCase{test}, []int{0}, poolReport(`[{"file_path":"./a","line_number":12,"status":"failed"}]`, 1, 1))
+	r.absorb([]plan.TestCase{test}, []int{0}, false, poolReport(`[{"file_path":"./a","line_number":12,"status":"failed"}]`, 1, 1))
 	retry, owners := r.retries()
 	if len(retry) != 1 || retry[0].Identifier != "" || retry[0].Path != "a:12" || retry[0].Format != "example" {
 		t.Fatal(retry)
 	}
-	r.absorb(retry, owners, poolReport(`[{"file_path":"a","line_number":12,"status":"passed"}]`, 1, 0))
+	r.absorb(retry, owners, true, poolReport(`[{"file_path":"a","line_number":12,"status":"passed"}]`, 1, 0))
 	if r.final()[0].Result != "errored" {
 		t.Fatal("load error was hidden by passing retry")
 	}
@@ -157,7 +157,7 @@ func TestPoolSummaryReportsOnlyFinalFailuresAndErroredAttempts(t *testing.T) {
 		{ID: "missing-attempt", Selector: tests[2]},
 		{ID: "example-attempt", Selector: tests[3]},
 	}, []plan.TestCase{{Scope: "Suite", Name: "muted"}})
-	r.absorb(tests, []int{0, 1, 2, 3}, poolReport(`[
+	r.absorb(tests, []int{0, 1, 2, 3}, false, poolReport(`[
 {"id":"spec/a_spec.rb[1:1]","file_path":"spec/a_spec.rb","line_number":10,"status":"failed","description":"passes on retry","full_description":"Suite passes on retry"},
 {"id":"spec/a_spec.rb[1:2]","file_path":"spec/a_spec.rb","line_number":20,"status":"failed","description":"still fails","full_description":"Suite still fails"},
 {"id":"spec/a_spec.rb[1:3]","file_path":"spec/a_spec.rb","line_number":30,"status":"failed","description":"muted","full_description":"Suite muted"},
@@ -167,7 +167,7 @@ func TestPoolSummaryReportsOnlyFinalFailuresAndErroredAttempts(t *testing.T) {
 	if len(retries) != 4 {
 		t.Fatalf("retries=%v, want four unmuted examples", retries)
 	}
-	r.absorb(retries, owners, poolReport(`[
+	r.absorb(retries, owners, true, poolReport(`[
 {"id":"spec/a_spec.rb[1:1]","file_path":"spec/a_spec.rb","line_number":10,"status":"passed","description":"passes on retry","full_description":"Suite passes on retry"},
 {"id":"spec/a_spec.rb[1:2]","file_path":"spec/a_spec.rb","line_number":20,"status":"failed","description":"still fails","full_description":"Suite still fails"},
 {"id":"spec/b_spec.rb[1:1]","file_path":"spec/b_spec.rb","line_number":35,"status":"failed","description":"another failure","full_description":"Suite another failure"},

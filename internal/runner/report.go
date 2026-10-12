@@ -18,8 +18,13 @@ type ReportedTest struct {
 }
 
 type ParsedReport struct {
-	Tests              []ReportedTest
+	Tests []ReportedTest
+	// ErrorsOutsideTests reports an error the report can't attribute to a file,
+	// so it applies to every test in the batch.
 	ErrorsOutsideTests bool
+	// ErroredFiles lists files that failed outside their tests, for example
+	// because they didn't load. Only those files' tests are affected.
+	ErroredFiles []string
 }
 
 // ParseNativeReport selects the runner's parser using the reported format.
@@ -28,6 +33,8 @@ func ParseNativeReport(format string, data []byte) (ParsedReport, error) {
 	switch format {
 	case "rspec-json":
 		return parseRSpecBatchReport(data)
+	case "jest-json":
+		return parseJestBatchReport(data)
 	default:
 		return ParsedReport{}, fmt.Errorf("unsupported runner report format %q", format)
 	}

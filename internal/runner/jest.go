@@ -160,6 +160,84 @@ type JestReport struct {
 	}
 }
 
+// parseJestBatchReport handles the report of one Jest command run by bktec pool
+// consume. Unlike Jest.Run, it does not update a RunResult: it validates the
+// report and maps assertions to test cases for lease matching and retries.
+func parseJestBatchReport(data []byte) (ParsedReport, error) {
+	var report struct {
+		TestResults *[]struct {
+			AssertionResults []JestExample `json:"assertionResults"`
+			FileName         string        `json:"name"`
+			Status           string        `json:"status"`
+		} `json:"testResults"`
+	}
+	if err := json.Unmarshal(data, &report); err != nil {
+		return ParsedReport{}, fmt.Errorf("invalid Jest report: %w", err)
+	}
+	if report.TestResults == nil {
+		return ParsedReport{}, fmt.Errorf("incomplete Jest report: missing testResults")
+	}
+	workDir, err := os.Getwd()
+	if err != nil {
+		return ParsedReport{}, err
+	}
+	var parsed ParsedReport
+	seen := map[string]int{}
+	for _, file := range *report.TestResults {
+		path := file.FileName
+		if filepath.IsAbs(path) {
+			if path, err = filepath.Rel(workDir, path); err != nil {
+				return ParsedReport{}, fmt.Errorf("failed to get relative path of test file: %w", err)
+			}
+		}
+		path = strings.TrimPrefix(filepath.ToSlash(path), "./")
+		if path == "" {
+			return ParsedReport{}, fmt.Errorf("jest test file has no name")
+		}
+		failed := false
+		for _, example := range file.AssertionResults {
+			var status TestStatus
+			switch example.Status {
+			case "passed":
+				status = TestStatusPassed
+			case "failed":
+				status = TestStatusFailed
+				failed = true
+			case "pending", "skipped", "todo", "disabled":
+				status = TestStatusSkipped
+			default:
+				return ParsedReport{}, fmt.Errorf("unknown Jest test status %q", example.Status)
+			}
+			// Matches the scope and name of Buildkite Test Collector, as in Jest.Run.
+			test := ReportedTest{
+				TestCase: plan.TestCase{Scope: strings.Join(example.AncestorTitles, " "), Name: example.Title, Path: path},
+				Status:   status,
+				Selector: path,
+			}
+			if example.Location.Line > 0 {
+				test.Location = fmt.Sprintf("%s:%d", path, example.Location.Line)
+			}
+			// Tests with the same name in one file, such as from test.each, can't be
+			// told apart, so report them once: failed if any failed.
+			key := strings.Join([]string{path, test.TestCase.Scope, test.TestCase.Name}, "\x00")
+			if i, ok := seen[key]; ok {
+				if status == TestStatusFailed || parsed.Tests[i].Status == TestStatusSkipped {
+					parsed.Tests[i].Status = status
+				}
+				continue
+			}
+			seen[key] = len(parsed.Tests)
+			parsed.Tests = append(parsed.Tests, test)
+		}
+		// A file that fails without a failed test, for example because it didn't
+		// load or an afterAll hook threw, failed outside its tests.
+		if file.Status == "failed" && !failed {
+			parsed.ErroredFiles = append(parsed.ErroredFiles, path)
+		}
+	}
+	return parsed, nil
+}
+
 func (j Jest) ParseReport(path string) (JestReport, error) {
 	return ParseJestReport(path)
 }

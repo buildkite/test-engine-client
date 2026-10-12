@@ -34,7 +34,14 @@ func newPoolResults(attempts []api.LeaseAttempt, muted []plan.TestCase) *poolRes
 
 func matchesReportedTest(dispatched plan.TestCase, reported runner.ReportedTest) bool {
 	if dispatched.Format == plan.TestCaseFormatExample && (dispatched.Scope != "" || dispatched.Name != "") {
-		return dispatched.Scope == reported.TestCase.Scope && dispatched.Name == reported.TestCase.Name
+		if dispatched.Scope != reported.TestCase.Scope || dispatched.Name != reported.TestCase.Name {
+			return false
+		}
+		// Runners without test IDs, such as Jest, can repeat a name across files.
+		if reported.TestCase.Identifier == "" && dispatched.Path != "" {
+			return dispatched.Path == reported.TestCase.Path
+		}
+		return true
 	}
 	target := dispatched.Path
 	if dispatched.Format == plan.TestCaseFormatExample && dispatched.Identifier != "" {
@@ -63,7 +70,7 @@ func (r *poolResults) isMuted(test plan.TestCase) bool {
 // absorb maps every reported test to exactly one dispatched case. Retry owners
 // retain original attempt indices. Report-level errors are sticky, but do not
 // suppress retries of failed tests.
-func (r *poolResults) absorb(tests []plan.TestCase, owners []int, result runnerexec.Result) {
+func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, result runnerexec.Result) {
 	bad := func() {
 		for _, i := range owners {
 			r.broken[i] = true
@@ -83,10 +90,28 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, result runnere
 			r.reportErrors[i] = true
 		}
 	}
+	for _, file := range report.ErroredFiles {
+		matched := false
+		for i, dispatched := range tests {
+			target := dispatched.Path
+			if dispatched.Format == plan.TestCaseFormatSelector {
+				target = dispatched.Value
+			}
+			if strings.TrimPrefix(target, "./") == file {
+				r.reportErrors[owners[i]] = true
+				matched = true
+			}
+		}
+		// Like a reported test, an errored file that wasn't dispatched breaks the
+		// batch, unless a name-filtered retry ran it.
+		if !matched && !retry {
+			bad()
+		}
+	}
 	seen := make([]bool, len(tests))
 	keys := map[string]bool{}
 	for _, test := range report.Tests {
-		key := test.TestCase.Path
+		key := reportedTestKey(test)
 		if key == "" || keys[key] {
 			bad()
 			continue
@@ -102,8 +127,19 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, result runnere
 				match = i
 			}
 		}
+		// Runners that retry by name can report tests that weren't retried: Jest
+		// reports the other tests in each file as skipped, and runs same-named
+		// tests in other files. Every retried test must still be reported.
+		if match == -1 && retry {
+			continue
+		}
 		if match < 0 {
 			bad()
+			continue
+		}
+		// A retried test that didn't run, such as one Jest's name pattern missed,
+		// must not pass.
+		if retry && test.Status == runner.TestStatusSkipped {
 			continue
 		}
 		seen[match] = true
