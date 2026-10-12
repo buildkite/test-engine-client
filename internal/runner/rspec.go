@@ -89,7 +89,7 @@ func (r Rspec) DiscoverTestTargets() ([]string, error) {
 //
 // Test failure is not considered an error, and is instead returned as a RunResult.
 func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(r, testCases, retry)
+	cmd, err := BuildCommand(r, testCases, retry)
 	if err != nil {
 		return err
 	}

@@ -111,7 +111,7 @@ func (p Pytest) SupportedFeatures() SupportedFeatures {
 }
 
 func (p Pytest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(p, testCases, retry)
+	cmd, err := BuildCommand(p, testCases, retry)
 	if err != nil {
 		return err
 	}

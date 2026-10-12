@@ -80,7 +80,7 @@ func commandProducesGoJSONL(command string) bool {
 
 // Run executes the configured command for the specified packages.
 func (g GoTest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(g, testCases, retry)
+	cmd, err := BuildCommand(g, testCases, retry)
 	if err != nil {
 		return err
 	}

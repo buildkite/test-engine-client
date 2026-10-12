@@ -84,7 +84,7 @@ func (c Cucumber) DiscoverTestTargets() ([]string, error) {
 
 // Run executes the Cucumber command and records results.
 func (c Cucumber) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(c, testCases, retry)
+	cmd, err := BuildCommand(c, testCases, retry)
 	if err != nil {
 		return err
 	}
