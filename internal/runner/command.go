@@ -12,7 +12,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
 
-func buildCommand(runner TestRunner, testCases []plan.TestCase, retry bool) (*exec.Cmd, error) {
+func BuildCommand(runner TestRunner, testCases []plan.TestCase, retry bool) (*exec.Cmd, error) {
 	commandName, commandArgs, err := runner.CommandNameAndArgs(testCases, retry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build command: %w", err)

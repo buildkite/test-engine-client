@@ -79,7 +79,7 @@ func (v Vitest) DiscoverTestTargets() ([]string, error) {
 }
 
 func (v Vitest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(v, testCases, retry)
+	cmd, err := BuildCommand(v, testCases, retry)
 	if err != nil {
 		return err
 	}

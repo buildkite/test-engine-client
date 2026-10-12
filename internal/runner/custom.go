@@ -79,7 +79,7 @@ func (r Custom) DiscoverTestTargets() ([]string, error) {
 	return files, nil
 }
 func (r Custom) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(r, testCases, retry)
+	cmd, err := BuildCommand(r, testCases, retry)
 	if err != nil {
 		return err
 	}

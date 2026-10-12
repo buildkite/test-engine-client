@@ -102,9 +102,9 @@ func TestBuildCommandUsesTestProcessEnvironment(t *testing.T) {
 		uploadToken:    "upstream-token",
 		testProcessEnv: map[string]string{"BUILDKITE_TESTS_OTLP_TOKEN": "local-token", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://127.0.0.1:1234/v1/traces"},
 	})
-	cmd, err := buildCommand(testRunner, nil, false)
+	cmd, err := BuildCommand(testRunner, nil, false)
 	if err != nil {
-		t.Fatalf("buildCommand() error = %v", err)
+		t.Fatalf("BuildCommand() error = %v", err)
 	}
 
 	values := make(map[string]string)

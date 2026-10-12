@@ -50,7 +50,7 @@ func (c Cypress) SupportedFeatures() SupportedFeatures {
 }
 
 func (c Cypress) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(c, testCases, retry)
+	cmd, err := BuildCommand(c, testCases, retry)
 	if err != nil {
 		return err
 	}

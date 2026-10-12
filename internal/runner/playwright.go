@@ -67,7 +67,7 @@ func (p Playwright) SupportedFeatures() SupportedFeatures {
 }
 
 func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(p, testCases, retry)
+	cmd, err := BuildCommand(p, testCases, retry)
 	if err != nil {
 		return err
 	}

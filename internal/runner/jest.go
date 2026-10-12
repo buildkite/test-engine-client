@@ -75,7 +75,7 @@ func (j Jest) DiscoverTestTargets() ([]string, error) {
 }
 
 func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) error {
-	cmd, err := buildCommand(j, testCases, retry)
+	cmd, err := BuildCommand(j, testCases, retry)
 	if err != nil {
 		return err
 	}
