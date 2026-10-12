@@ -144,37 +144,7 @@ func (c *Config) ValidateForRun() error {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 
-	// Upload token could come from the env BUILDKITE_ANALYTICS_TOKEN, but may be blank ...
-	if c.UploadToken == "" {
-		if c.accessTokenIsOIDC {
-			// If OIDC was used to generate the bktec API access token then the same token
-			// can be used for collector uploads.
-			c.UploadToken = c.AccessToken
-			c.UploadTokenIsOIDC = true
-		} else {
-			// If OIDC was *not* used to generate the bktec API access token then we need
-			// to generate a token for collector uploads.
-			token, err := c.generateOIDCToken()
-
-			switch {
-			case err == nil:
-				c.UploadToken = token
-				c.UploadTokenIsOIDC = token != ""
-			case errors.Is(err, ErrOIDCRefused):
-				// The API positively refused to issue the token (e.g. an audience
-				// disallowed by policy); retrying will not succeed, so the
-				// misconfiguration should fail loudly.
-				c.errs.appendFieldError("BUILDKITE_ANALYTICS_TOKEN", "%v", err)
-			default:
-				// Transient failure (endpoint outage, timeout, or an agent
-				// predating the distinct refusal exit status). The upload token
-				// only carries telemetry — test result uploads are skipped with a
-				// warning when it is blank, and the OTLP relay retries minting in
-				// the background — so it must never fail the job.
-				fmt.Printf("Buildkite Test Engine Client: Warning: could not generate a collector upload token, continuing without one: %v\n", err)
-			}
-		}
-	}
+	c.resolveUploadToken()
 
 	// The order of the range validation matters.
 	// The range validation of BUILDKITE_PARALLEL_JOB depends on the result of BUILDKITE_PARALLEL_JOB_COUNT validation at the first step.
@@ -308,6 +278,41 @@ func (c *Config) validateDynamicParallelism() {
 	if c.MaxParallelism != 0 {
 		if c.MaxParallelism < 0 || c.MaxParallelism > 1000 {
 			c.errs.appendFieldError("max-parallelism", "was %d, must be between 0 and 1000", c.MaxParallelism)
+		}
+	}
+}
+
+// resolveUploadToken defaults the collector upload token, which may come from
+// BUILDKITE_ANALYTICS_TOKEN, to an OIDC token.
+func (c *Config) resolveUploadToken() {
+	if c.UploadToken == "" {
+		if c.accessTokenIsOIDC {
+			// If OIDC was used to generate the bktec API access token then the same token
+			// can be used for collector uploads.
+			c.UploadToken = c.AccessToken
+			c.UploadTokenIsOIDC = true
+		} else {
+			// If OIDC was *not* used to generate the bktec API access token then we need
+			// to generate a token for collector uploads.
+			token, err := c.generateOIDCToken()
+
+			switch {
+			case err == nil:
+				c.UploadToken = token
+				c.UploadTokenIsOIDC = token != ""
+			case errors.Is(err, ErrOIDCRefused):
+				// The API positively refused to issue the token (e.g. an audience
+				// disallowed by policy); retrying will not succeed, so the
+				// misconfiguration should fail loudly.
+				c.errs.appendFieldError("BUILDKITE_ANALYTICS_TOKEN", "%v", err)
+			default:
+				// Transient failure (endpoint outage, timeout, or an agent
+				// predating the distinct refusal exit status). The upload token
+				// only carries telemetry — test result uploads are skipped with a
+				// warning when it is blank, and the OTLP relay retries minting in
+				// the background — so it must never fail the job.
+				fmt.Printf("Buildkite Test Engine Client: Warning: could not generate a collector upload token, continuing without one: %v\n", err)
+			}
 		}
 	}
 }
