@@ -59,9 +59,9 @@ when Jest exits with an error but reports no failed tests, such as when a
 coverage threshold isn't met. bktec exits with status 16 if any tests errored,
 or with status 1 if tests failed.
 
-When `bktec` receives SIGINT or SIGTERM, it stops the running command and
-releases its lease. If the command doesn't exit within 90 seconds, bktec kills
-it.
+When `bktec` receives SIGINT or SIGTERM, it stops the running command, including
+any processes it started such as Jest under `npx`, and releases its lease. If
+they don't exit within 90 seconds, bktec kills them.
 
 ## Options
 

@@ -156,15 +156,21 @@ func runPoolCommand(ctx context.Context, testRunner runner.TestRunner, batch run
 }
 
 // runPoolProcess runs cmd with bktec's output streams. When ctx is cancelled,
-// it sends SIGTERM, then kills cmd if it hasn't exited in time.
+// it asks cmd and its descendants to stop, then kills them if they haven't
+// exited in time.
 func runPoolProcess(ctx context.Context, cmd *exec.Cmd) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	fmt.Println(cmd.String())
 	fmt.Println("")
+	// A wrapper such as npx can exit on SIGTERM while its test runner keeps
+	// running, so cmd runs in its own process group and stops as a group.
+	startProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+	// Remove remaining descendants even when the wrapper exits first.
+	defer killProcessGroup(cmd)
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
 	select {
@@ -172,17 +178,14 @@ func runPoolProcess(ctx context.Context, cmd *exec.Cmd) error {
 		return err
 	case <-ctx.Done():
 	}
-	// Windows can't send SIGTERM, so kill straight away.
-	if cmd.Process.Signal(syscall.SIGTERM) != nil {
-		_ = cmd.Process.Kill()
-	}
+	stopProcessGroup(cmd)
 	timer := time.NewTimer(poolCommandStopTimeout)
 	defer timer.Stop()
 	select {
 	case err := <-exited:
 		return err
 	case <-timer.C:
-		_ = cmd.Process.Kill()
+		killProcessGroup(cmd)
 		return <-exited
 	}
 }

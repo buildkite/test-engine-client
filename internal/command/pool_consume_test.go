@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -167,5 +168,21 @@ func TestRunPoolCommandRequiresUsableReport(t *testing.T) {
 				t.Fatalf("status=%q, want %q", got.Status, tc.wantStatus)
 			}
 		})
+	}
+}
+
+// A wrapper such as npx exits on SIGTERM while the test runner it started
+// keeps running, so stopping a command must stop its descendants too.
+func TestRunPoolProcessStopsDescendants(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "still-running")
+	cmd := exec.Command("sh", "-c", `(sleep 1; touch "$1") & wait`, "sh", marker)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := runPoolProcess(ctx, cmd); err == nil {
+		t.Fatal("stopped command exited cleanly")
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("descendant kept running after the command was stopped")
 	}
 }
