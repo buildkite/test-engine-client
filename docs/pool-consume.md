@@ -128,9 +128,10 @@ threshold isn't met.
 
 A Playwright lease's tests are reported as passed or failed from the Playwright
 report. All of a lease's tests are reported as errored when the command doesn't
-write a usable report, when the report has errors outside tests (for example,
-because a test file doesn't load, which stops Playwright from running any
-tests), or when Playwright exits with an error but reports no failed tests.
+write a usable report, when the report has errors outside tests, or when
+Playwright exits with an error but reports no failed tests. For example, a test
+file that doesn't load stops Playwright from running any tests, so it errors
+every test in its lease, like it errors the job with `bktec run`.
 Tests from files outside the lease, such as those of a
 [setup project](#setup-projects), are ignored unless they fail. A failed one
 errors the lease's tests.
