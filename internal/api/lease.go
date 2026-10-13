@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
@@ -50,6 +51,10 @@ type AttemptResult struct {
 
 const LeaseErrorCodeMaximumLifetime = "MAXIMUM_LIFETIME"
 
+// The key was used for a different request or its lease is no longer active.
+// Nothing was leased, so a new key can acquire again.
+const LeaseErrorCodeNotReplayable = "LEASE_NOT_REPLAYABLE"
+
 // LeaseHTTPError retains structured response details for ownership-loss decisions.
 type LeaseHTTPError struct {
 	Status int
@@ -58,9 +63,17 @@ type LeaseHTTPError struct {
 
 func (e *LeaseHTTPError) Error() string { return fmt.Sprintf("Scheduler returned HTTP %d", e.Status) }
 
+// Retries reuse one idempotency key, so the Scheduler replays a lease it
+// committed before the response was lost instead of leasing more attempts.
+// An empty response commits nothing, so every call starts with a new key.
 func (c *Client) AcquireLease(ctx context.Context, poolID string) (LeaseResponse, error) {
 	var result LeaseResponse
-	err := c.leaseRequest(ctx, poolID, "", map[string]int{"lease_ttl_seconds": 600}, &result, false)
+	key := uuid.NewV7().String()
+	err := c.leaseRequest(ctx, poolID, "", &key, map[string]int{"lease_ttl_seconds": 600}, &result, true)
+	if err == nil && result.Lease != nil && result.Lease.ID != key {
+		// Without the key a retry may have leased attempts that nothing will run.
+		return result, fmt.Errorf("scheduler returned lease %s for idempotency key %s", result.Lease.ID, key)
+	}
 	return result, err
 }
 
@@ -71,7 +84,7 @@ func (c *Client) HeartbeatLease(ctx context.Context, poolID, leaseID string) (ti
 			ExpiresAt time.Time `json:"expires_at"`
 		} `json:"leases"`
 	}
-	err := c.leaseRequest(ctx, poolID, "/heartbeat", map[string]any{"lease_ids": []string{leaseID}, "lease_ttl_seconds": 600}, &result, true)
+	err := c.leaseRequest(ctx, poolID, "/heartbeat", nil, map[string]any{"lease_ids": []string{leaseID}, "lease_ttl_seconds": 600}, &result, true)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -83,20 +96,22 @@ func (c *Client) HeartbeatLease(ctx context.Context, poolID, leaseID string) (ti
 
 func (c *Client) CompleteLease(ctx context.Context, poolID, leaseID string, results []AttemptResult) error {
 	body := map[string]any{"leases": []any{map[string]any{"lease_id": leaseID, "attempts": results}}}
-	return c.leaseRequest(ctx, poolID, "/complete", body, nil, true)
+	return c.leaseRequest(ctx, poolID, "/complete", nil, body, nil, true)
 }
 
 // Do not replay an ambiguous release: unlike completion the server does not
 // promise idempotency.
 func (c *Client) ReleaseLease(ctx context.Context, poolID, leaseID string) error {
-	return c.leaseRequest(ctx, poolID, "/release", map[string]any{"leases": []any{map[string]string{"id": leaseID, "reason": "Worker shutdown"}}}, nil, false)
+	return c.leaseRequest(ctx, poolID, "/release", nil, map[string]any{"leases": []any{map[string]string{"id": leaseID, "reason": "Worker shutdown"}}}, nil, false)
 }
 
 // The shared doWithRetry retries ambiguous network failures and every 409.
-// Acquiring another lease after a lost response could strand the first one,
-// so only explicit rate limits and connection-open timeouts can retry it.
-// Heartbeat and same-result completion can replay safely after uncertainty.
-func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, body, out any, replaySafe bool) error {
+// Lease requests retry ambiguous failures (transport errors, unreadable
+// bodies, 5xx) only when replaySafe: heartbeat, same-result completion and
+// keyed acquisition. Others retry only rate limits and connection-open timeouts.
+// A keyed request whose key can no longer be replayed retries with a new key.
+// Retries stop at the 90-second deadline.
+func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, idempotencyKey *string, body, out any, replaySafe bool) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -113,6 +128,9 @@ func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, bod
 		// Do not let net/http infer that lease creation can be automatically replayed.
 		req.GetBody = nil
 		req.Header.Set("Content-Type", "application/json")
+		if idempotencyKey != nil {
+			req.Header.Set("Idempotency-Key", *idempotencyKey)
+		}
 		hc := *c.httpClient
 		hc.Timeout = 15 * time.Second
 		hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -146,6 +164,10 @@ func (c *Client) leaseRequest(ctx context.Context, poolID, operation string, bod
 				err = readErr
 			}
 			retry = resp.StatusCode == 429 || (replaySafe && (readErr != nil || resp.StatusCode >= 500))
+			if idempotencyKey != nil && resp.StatusCode == http.StatusConflict && code == LeaseErrorCodeNotReplayable {
+				*idempotencyKey = uuid.NewV7().String()
+				retry = true
+			}
 			if resp.StatusCode == 429 {
 				seconds := 0
 				for _, prefix := range []string{"RateLimit-Job", "RateLimit", "RateLimit-Pool"} {
