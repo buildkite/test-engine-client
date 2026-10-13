@@ -178,6 +178,48 @@ func TestAcquireLeaseRetriesWithSameKeyUntilDeadline(t *testing.T) {
 	}
 }
 
+func TestAcquireLeaseStartsOverWithNewKeyWhenLeaseIsNotReplayable(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		scheduler := &fakeLeaseScheduler{}
+		var keys []string
+		c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler", OrganizationSlug: "org"})
+		c.httpClient.Transport = leaseTransport(func(r *http.Request) (*http.Response, error) {
+			keys = append(keys, r.Header.Get("Idempotency-Key"))
+			switch len(keys) {
+			case 1:
+				return nil, io.EOF
+			case 2:
+				return &http.Response{StatusCode: 503, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+			case 3:
+				// For example, the lease committed by the first request has expired.
+				return &http.Response{StatusCode: 409, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"message":"Lease cannot be replayed","code":"LEASE_NOT_REPLAYABLE"}`))}, nil
+			}
+			return scheduler.acquire(t, r), nil
+		})
+		response, err := c.AcquireLease(context.Background(), "pool")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(keys) != 4 || keys[1] != keys[0] || keys[2] != keys[0] || keys[3] == keys[0] || response.Lease.ID != keys[3] {
+			t.Fatalf("keys=%v lease=%+v, want three requests with one key, then a lease for a new key", keys, response.Lease)
+		}
+	})
+}
+
+func TestAcquireLeaseReturnsOtherConflicts(t *testing.T) {
+	calls := 0
+	c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})
+	c.httpClient.Transport = leaseTransport(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 409, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"message":"test pool is not available for leasing"}`))}, nil
+	})
+	_, err := c.AcquireLease(context.Background(), "pool")
+	var leaseError *LeaseHTTPError
+	if calls != 1 || !errors.As(err, &leaseError) || leaseError.Status != 409 {
+		t.Fatalf("calls=%d err=%v, want one request returning HTTP 409", calls, err)
+	}
+}
+
 func TestAcquireLeaseRejectsLeaseForAnotherKey(t *testing.T) {
 	c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})
 	c.httpClient.Transport = leaseTransport(func(*http.Request) (*http.Response, error) {
