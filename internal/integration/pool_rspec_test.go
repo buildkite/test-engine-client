@@ -101,6 +101,8 @@ func TestPoolRSpec(t *testing.T) {
 	}
 	var mu sync.Mutex
 	acquisitions, completions, prefetches := 0, 0, 0
+	// The Scheduler uses each acquisition's idempotency key as its lease ID.
+	var leaseIDs []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -119,7 +121,8 @@ func TestPoolRSpec(t *testing.T) {
 				return
 			}
 			fixture := leases[acquisitions-1]
-			lease := api.Lease{ID: fixture.id, ExpiresAt: time.Now().Add(10 * time.Minute), Attempts: fixture.attempts}
+			leaseIDs = append(leaseIDs, r.Header.Get("Idempotency-Key"))
+			lease := api.Lease{ID: leaseIDs[acquisitions-1], ExpiresAt: time.Now().Add(10 * time.Minute), Attempts: fixture.attempts}
 			_ = json.NewEncoder(w).Encode(map[string]any{"lease": lease, "pool": map[string]string{"id": "pool", "state": "consuming"}})
 		case r.Method == http.MethodPost && r.URL.Path == base+"/leases/complete":
 			var request struct {
@@ -141,8 +144,8 @@ func TestPoolRSpec(t *testing.T) {
 			for i, attempt := range request.Leases[0].Attempts {
 				got[i] = api.AttemptResult{AttemptID: attempt.ID, Result: attempt.Result}
 			}
-			if request.Leases[0].ID != fixture.id || !slices.Equal(got, fixture.want) {
-				t.Errorf("completion for %s = %+v, want %+v", request.Leases[0].ID, got, fixture.want)
+			if request.Leases[0].ID != leaseIDs[completions] || !slices.Equal(got, fixture.want) {
+				t.Errorf("completion for %s = %+v, want lease %s with %+v", request.Leases[0].ID, got, fixture.id, fixture.want)
 				http.Error(w, "invalid completion", http.StatusBadRequest)
 				return
 			}
