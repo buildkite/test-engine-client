@@ -132,7 +132,12 @@ report. All of a lease's tests are reported as errored when the command doesn't
 write a usable report, when the report has errors outside tests, or when
 Playwright exits with an error but reports no failed tests. For example, a test
 file that doesn't load stops Playwright from running any tests, so it errors
-every test in its lease, like it errors the job with `bktec run`.
+every test in its lease, like it errors the job with `bktec run`. A file's
+tests are reported as errored when Playwright skips one of them because
+something else failed, such as an earlier test in a
+[serial group](https://playwright.dev/docs/api/class-test#test-describe-serial),
+since that test didn't run. Tests skipped on purpose, such as with `test.skip`,
+are fine.
 Tests from files outside the lease, such as those of a
 [setup project](#setup-projects), are ignored unless they fail. A failed one
 errors the lease's tests.

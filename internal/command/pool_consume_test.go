@@ -196,9 +196,25 @@ test('fails', ({}, info) => { if (info.project.name === 'beta') throw new Error(
 test.describe('group', () => {
   test('fails', ({}, info) => { if (info.project.name === 'alpha') throw new Error('alpha') })
 })`,
+		// The first test fails on its first run only, which skips the second.
+		// The second test never runs until the first passes, so a passing retry
+		// of the first must not pass the file.
+		"tests/serial.spec.js": `const { test } = require('@playwright/test')
+test.describe.serial('serial', () => {
+  test('flaky', ({}, info) => {
+    const marker = __dirname + '/../serial.' + info.project.name
+    if (!require('fs').existsSync(marker)) {
+      require('fs').writeFileSync(marker, '')
+      throw new Error('first run')
+    }
+  })
+  test('fails', () => { throw new Error('fails') })
+})`,
 		"tests/broken.spec.js": `boom()`,
+		// A test skipped on purpose doesn't affect the file's attempt.
 		"tests/ok.spec.js": `const { test } = require('@playwright/test')
-test('works', () => {})`,
+test('works', () => {})
+test.skip('not yet', () => {})`,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
 			t.Fatal(err)
@@ -210,7 +226,7 @@ test('works', () => {})`,
 		return api.LeaseAttempt{ID: id, SelectorType: "test_plan_test_case_v1", Selector: plan.TestCase{Format: plan.TestCaseFormatSelector, Value: path}}
 	}
 	leases := [][]api.LeaseAttempt{
-		{attempt("flaky", "tests/flaky.spec.js"), attempt("muted", "tests/muted.spec.js")},
+		{attempt("flaky", "tests/flaky.spec.js"), attempt("muted", "tests/muted.spec.js"), attempt("serial", "tests/serial.spec.js")},
 		// A failure in one project fails the test's attempt.
 		{attempt("failed", "tests/failed.spec.js"), attempt("ok", "tests/ok.spec.js")},
 		// Playwright runs no tests when a file doesn't load.
@@ -268,7 +284,7 @@ test('works', () => {})`,
 	err = PoolConsume(context.Background(), &cfg, "", 1)
 
 	want := map[string][]api.AttemptResult{
-		"lease-1": {{AttemptID: "flaky", Result: "passed"}, {AttemptID: "muted", Result: "passed"}},
+		"lease-1": {{AttemptID: "flaky", Result: "passed"}, {AttemptID: "muted", Result: "passed"}, {AttemptID: "serial", Result: "errored"}},
 		"lease-2": {{AttemptID: "failed", Result: "failed"}, {AttemptID: "ok", Result: "passed"}},
 		"lease-3": {{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok-after-broken", Result: "errored"}},
 		"lease-4": {{AttemptID: "ok-after-setup", Result: "errored"}},
@@ -276,7 +292,7 @@ test('works', () => {})`,
 	if !reflect.DeepEqual(completed, want) {
 		t.Errorf("completed=%v, want %v", completed, want)
 	}
-	if err == nil || !strings.Contains(err.Error(), "passed attempts: 3; failed attempts: 1; errored attempts: 3") {
+	if err == nil || !strings.Contains(err.Error(), "passed attempts: 3; failed attempts: 1; errored attempts: 4") {
 		t.Fatalf("err=%v, want every attempt counted", err)
 	}
 }

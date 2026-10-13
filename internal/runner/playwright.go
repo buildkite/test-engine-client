@@ -206,6 +206,12 @@ func parsePlaywrightBatchReport(data []byte) (ParsedReport, error) {
 					status = TestStatusFailed
 				case "skipped":
 					status = TestStatusSkipped
+					// A test that wasn't meant to be skipped didn't run because
+					// something else failed, such as an earlier test in a serial
+					// group. A passing retry of that test must not hide it.
+					if run.ExpectedStatus != "skipped" && !slices.Contains(parsed.ErroredFiles, path) {
+						parsed.ErroredFiles = append(parsed.ErroredFiles, path)
+					}
 				default:
 					return fmt.Errorf("unknown Playwright test status %q", run.Status)
 				}
@@ -362,8 +368,9 @@ func mapSpecToTestCase(spec PlaywrightSpec, suiteName string) plan.TestCase {
 }
 
 type PlaywrightTest struct {
-	ProjectName string
-	Status      string
+	ProjectName    string
+	Status         string
+	ExpectedStatus string
 }
 
 type PlaywrightSpec struct {
