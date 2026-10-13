@@ -65,7 +65,8 @@ tests are muted in their own project only.
 
 With `--local-retry-count`, bktec reruns a lease's failed tests by their
 `file:line` with the retry command, which defaults to the test command. Each
-retried test runs in every project again.
+retried test runs in every project again, and its result in every project
+counts toward the file's attempt.
 
 Pools plan Playwright tests by file. `--split-by-example`
 (`BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE`) is not supported for Playwright
