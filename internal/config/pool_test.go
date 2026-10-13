@@ -16,7 +16,7 @@ func TestValidatePoolPlanIdentity(t *testing.T) {
 		{"explicit key", "", "shared", "", "rspec", ""},
 		{"missing key", "", "", "", "rspec", "POOL_KEY"},
 		{"jest", "", "shared", "", "jest", ""},
-		{"unsupported runner", "", "shared", "", "pytest", "requires rspec, jest or playwright"},
+		{"unsupported runner", "", "shared", "", "cypress", "requires rspec, jest, playwright or pytest"},
 		{"precreated skips discovery validation", "pool-1", "", "", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -53,7 +53,8 @@ func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 		{name: "consume plans jest", command: "consume", runner: "jest", resultPath: "jest.json"},
 		{name: "consume plans playwright", command: "consume", runner: "playwright", resultPath: "results.json"},
 		{name: "consume plans playwright files only", command: "consume", runner: "playwright", resultPath: "results.json", splitByExample: true, wantError: "split by example is not supported for Playwright pools"},
-		{name: "consume with pool ID still runs jest or playwright", command: "consume", poolID: "pool-1", runner: "rspec", resultPath: "out.json", wantError: "pool consume requires jest or playwright"},
+		{name: "consume plans pytest with its default result path", command: "consume", runner: "pytest"},
+		{name: "consume with pool ID still runs jest, playwright or pytest", command: "consume", poolID: "pool-1", runner: "rspec", resultPath: "out.json", wantError: "pool consume requires jest, playwright or pytest"},
 		{name: "consume reads the result path", command: "consume", poolID: "pool-1", runner: "jest", wantError: "BUILDKITE_TEST_ENGINE_RESULT_PATH"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

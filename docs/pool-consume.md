@@ -1,7 +1,7 @@
 # `bktec pool consume`
 
 `bktec pool consume` runs tests from a Test Scheduler pool, starting a new test
-runner command for each lease. Jest and Playwright are supported. Use
+runner command for each lease. Jest, Playwright and pytest are supported. Use
 [`bktec pool exec`](./pool-exec.md) for runners that provide a persistent
 runner, such as RSpec.
 
@@ -110,13 +110,50 @@ Before you use `--no-deps`, check that:
 If setup didn't run, or its results are missing, the leased tests fail like
 any other failed test rather than erroring.
 
+## Run a pytest pool worker
+
+Configure pytest like you would for [`bktec run`](./pytest.md), then run
+`pool consume`:
+
+```shell
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER=pytest
+
+bktec pool consume --suite-slug my-suite --local-retry-count 1
+```
+
+For each lease, bktec runs the test command with the lease's test files, or
+the node IDs of its tests:
+
+```sh
+pytest {{testExamples}} --json={{resultPath}}
+```
+
+Without `buildkite-test-collector`, the default command writes JUnit XML with
+`--junit-xml={{resultPath}}` instead. Set `BUILDKITE_TEST_ENGINE_TEST_CMD`
+(`--test-command`) to customize it. Like with `bktec run`, the command must
+include `--json=` or `--junit-xml`, and the result path defaults to a temporary
+file.
+
+Each command starts a new pytest session, so every lease pays pytest's startup
+cost, such as collecting tests and running `conftest.py` and session-scoped
+fixtures.
+
+With `--local-retry-count`, bktec reruns a lease's failed tests by node ID with
+the retry command, which defaults to the test command.
+
+Run bktec from pytest's rootdir. pytest reports tests relative to its rootdir,
+and bktec matches them to the leased files, which are relative to the working
+directory.
+
 ## Results
 
 Test results are uploaded as they are with `bktec run`. A
 [JavaScript test collector](https://buildkite.com/docs/test-engine/test-collection/javascript-collectors)
-in your Jest or Playwright configuration uploads them from each command, using
-the `BUILDKITE_ANALYTICS_TOKEN` that bktec provides. With `--upload-results`,
-bktec uploads each command's JSON report instead.
+in your Jest or Playwright configuration, or
+[Buildkite Test Collector for pytest](https://buildkite.com/docs/test-engine/python-collectors#pytest-collector),
+uploads them from each command, using the `BUILDKITE_ANALYTICS_TOKEN` that bktec
+provides. With `--upload-results`, bktec uploads each command's Jest or
+Playwright JSON report, or pytest JUnit XML report, instead.
 
 A Jest lease's tests are reported as passed or failed from the Jest report. A
 test file that fails outside its tests, for example because it doesn't load, is
@@ -141,6 +178,12 @@ are fine.
 Tests from files outside the lease, such as those of a
 [setup project](#setup-projects), are ignored unless they fail. A failed one
 errors the lease's tests.
+
+A pytest lease's tests are reported as passed or failed from the pytest report.
+All of a lease's tests are reported as errored when the command doesn't write a
+usable report, when a test file fails to collect, which stops pytest from
+running any tests, or when pytest exits with an error but reports no failed
+tests, such as when it collects no tests.
 
 bktec exits with status 16 if any tests errored, or with status 1 if tests
 failed.

@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -186,6 +187,83 @@ func pytestPathFromTestEngineResult(scope, name string) string {
 	}
 
 	return fmt.Sprintf("%s::%s", scope, name)
+}
+
+// parsePytestJSONBatchReport handles the buildkite-test-collector JSON report
+// of one pytest command run by bktec pool consume.
+func parsePytestJSONBatchReport(data []byte) (ParsedReport, error) {
+	var tests *[]TestEngineTest
+	if err := json.Unmarshal(data, &tests); err != nil {
+		return ParsedReport{}, fmt.Errorf("invalid pytest JSON report: %w", err)
+	}
+	if tests == nil {
+		return ParsedReport{}, fmt.Errorf("invalid pytest JSON report: not a list of tests")
+	}
+	var parsed ParsedReport
+	seen := map[string]int{}
+	for _, test := range *tests {
+		// pytest runs no tests after a collection error, unless
+		// --continue-on-collection-errors is set, so it errors every leased file.
+		if test.Tags[pytestCollectionErrorTag] == "true" {
+			parsed.ErrorsOutsideTests = true
+			continue
+		}
+		path := pytestPathFromTestEngineResult(test.Scope, test.Name)
+		if err := addPytestBatchTest(&parsed, seen, plan.TestCase{Scope: test.Scope, Name: test.Name, Path: path}, test.Result); err != nil {
+			return ParsedReport{}, err
+		}
+	}
+	return parsed, nil
+}
+
+// parsePytestJUnitBatchReport handles the JUnit XML report of one pytest
+// command run by bktec pool consume.
+func parsePytestJUnitBatchReport(data []byte) (ParsedReport, error) {
+	tests, err := parseJUnitXML(data)
+	if err != nil {
+		return ParsedReport{}, fmt.Errorf("invalid pytest JUnit XML report: %w", err)
+	}
+	var parsed ParsedReport
+	seen := map[string]int{}
+	for _, test := range tests {
+		// pytest reports a collection error as an error without a classname.
+		if test.Classname == "" && test.Error != nil {
+			parsed.ErrorsOutsideTests = true
+			continue
+		}
+		// Scope is the raw classname, as in runParseJUnit.
+		path := pytestNodeIDFromJUnit(test.Classname, test.Name)
+		if err := addPytestBatchTest(&parsed, seen, plan.TestCase{Scope: test.Classname, Name: test.Name, Path: path}, test.Result); err != nil {
+			return ParsedReport{}, err
+		}
+	}
+	return parsed, nil
+}
+
+// addPytestBatchTest reports a test by its node ID, which pytest reports
+// relative to its rootdir, and matches it to the leased file in the node ID.
+// pytest can report a test twice, such as when it fails and its teardown
+// errors, so the test is reported once: failed if any report failed.
+func addPytestBatchTest(parsed *ParsedReport, seen map[string]int, test plan.TestCase, status TestStatus) error {
+	switch status {
+	case TestStatusPassed, TestStatusFailed, TestStatusSkipped:
+	default:
+		return fmt.Errorf("unknown pytest test status %q", status)
+	}
+	file, _, _ := strings.Cut(test.Path, "::")
+	if file == "" || test.Name == "" {
+		return fmt.Errorf("pytest test %q has no file or name", test.Path)
+	}
+	if i, ok := seen[test.Path]; ok {
+		if status == TestStatusFailed || parsed.Tests[i].Status == TestStatusSkipped {
+			parsed.Tests[i].Status = status
+		}
+		return nil
+	}
+	test.Identifier = test.Path
+	seen[test.Path] = len(parsed.Tests)
+	parsed.Tests = append(parsed.Tests, ReportedTest{TestCase: test, Status: status, Selector: file})
+	return nil
 }
 
 func (p Pytest) runParseJUnit(result *RunResult) error {

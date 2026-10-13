@@ -48,8 +48,8 @@ func (c *Config) ValidateForPoolPlan() error {
 		if c.PipelineSlug == "" {
 			c.errs.appendFieldError("BUILDKITE_PIPELINE_SLUG", "must not be blank")
 		}
-		if c.TestRunner != "rspec" && c.TestRunner != "jest" && c.TestRunner != "playwright" {
-			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool planning requires rspec, jest or playwright")
+		if c.TestRunner != "rspec" && c.TestRunner != "jest" && c.TestRunner != "playwright" && c.TestRunner != "pytest" {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool planning requires rspec, jest, playwright or pytest")
 		}
 		// A Playwright example is one test in one project, but its file:line runs
 		// the test in every project, so pools only lease Playwright files.
@@ -57,7 +57,7 @@ func (c *Config) ValidateForPoolPlan() error {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "split by example is not supported for Playwright pools")
 		}
 		if c.TagFilters != "" {
-			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TAG_FILTERS", "tag filtering is only supported for the pytest test runner")
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TAG_FILTERS", "tag filtering is not supported for test pools")
 		}
 		if c.SelectionStrategy == "" && len(c.SelectionParams) > 0 {
 			c.errs.appendFieldError("selection-param", "selection strategy must be set when selection params are provided")
@@ -72,7 +72,7 @@ func (c *Config) ValidateForPoolPlan() error {
 // ValidateForPoolExec only allows the runners that have a persistent runner.
 func (c *Config) ValidateForPoolExec() error {
 	if c.PoolID == "" && c.TestRunner != "rspec" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec; use pool consume for jest or playwright")
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec; use pool consume for jest, playwright or pytest")
 	}
 	return c.ValidateForPoolPlan()
 }
@@ -80,10 +80,11 @@ func (c *Config) ValidateForPoolExec() error {
 // ValidateForPoolConsume also checks what running the test command needs, and
 // resolves the collector upload token like bktec run.
 func (c *Config) ValidateForPoolConsume() error {
-	if c.TestRunner != "jest" && c.TestRunner != "playwright" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool consume requires jest or playwright")
+	if c.TestRunner != "jest" && c.TestRunner != "playwright" && c.TestRunner != "pytest" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool consume requires jest, playwright or pytest")
 	}
-	if c.ResultPath == "" {
+	// Like bktec run, pytest writes its report to a temporary file by default.
+	if c.ResultPath == "" && c.TestRunner != "pytest" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
 	if err := c.ValidateForPoolPlan(); err != nil {
