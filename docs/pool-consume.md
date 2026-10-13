@@ -138,9 +138,11 @@ errors the lease's tests.
 bktec exits with status 16 if any tests errored, or with status 1 if tests
 failed.
 
-When `bktec` receives SIGINT or SIGTERM, it stops the running command, including
-any processes it started such as Jest or Playwright under `npx`, and releases
-its lease. If they don't exit within 90 seconds, bktec kills them.
+When `bktec` receives SIGINT or SIGTERM, it interrupts the running command with
+SIGINT, like Ctrl+C in a terminal, so Playwright can stop its `webServer`. This
+includes any processes it started, such as Jest or Playwright under `npx`. bktec
+then releases its lease. If they don't exit within 90 seconds, bktec kills
+them.
 
 ## Options
 

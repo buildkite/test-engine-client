@@ -23,7 +23,7 @@ import (
 // bktec run default, it only runs the files of the lease's failed tests.
 const jestPoolRetryCommand = "npx jest --runTestsByPath {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
 
-// poolCommandStopTimeout is how long a test command has to exit after SIGTERM
+// poolCommandStopTimeout is how long a test command has to exit after SIGINT
 // before it is killed, like pool exec's default runner shutdown timeout.
 var poolCommandStopTimeout = 90 * time.Second
 
@@ -163,7 +163,7 @@ func runPoolProcess(ctx context.Context, cmd *exec.Cmd) error {
 	cmd.Stderr = os.Stderr
 	fmt.Println(cmd.String())
 	fmt.Println("")
-	// A wrapper such as npx can exit on SIGTERM while its test runner keeps
+	// A wrapper such as npx can exit on a signal while its test runner keeps
 	// running, so cmd runs in its own process group and stops as a group.
 	startProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {

@@ -310,6 +310,19 @@ func TestRunPoolCommandRequiresUsableReport(t *testing.T) {
 	}
 }
 
+// Playwright only stops its webServer on SIGINT, so commands are interrupted
+// rather than terminated.
+func TestRunPoolProcessInterruptsCommand(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "interrupted")
+	cmd := exec.Command("sh", "-c", `trap 'touch "$1"; exit 1' INT; while :; do sleep 0.1; done`, "sh", marker)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = runPoolProcess(ctx, cmd)
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatal("command was not interrupted with SIGINT")
+	}
+}
+
 // A wrapper such as npx exits on SIGTERM while the test runner it started
 // keeps running, so stopping a command must stop its descendants too.
 func TestRunPoolProcessStopsDescendants(t *testing.T) {
