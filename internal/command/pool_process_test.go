@@ -402,7 +402,7 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 			case 1:
 				_, _ = io.WriteString(w, `{"lease":null,"pool":{"state":"populating"}}`)
 			case 2:
-				fmt.Fprintf(w, `{"lease":{"id":"lease","expires_at":%q,"attempts":[{"id":"attempt","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"a"}}]},"pool":{"state":"populating"}}`, time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano))
+				fmt.Fprintf(w, `{"lease":{"id":%q,"expires_at":%q,"attempts":[{"id":"attempt","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"a"}}]},"pool":{"state":"populating"}}`, r.Header.Get("Idempotency-Key"), time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano))
 			default:
 				_, _ = io.WriteString(w, `{"lease":null,"pool":{"state":"consumed"}}`)
 			}
@@ -600,7 +600,7 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 				case r.Method == http.MethodPost && r.URL.Path == base+"/leases":
 					acquisitions++
 					if acquisitions == 1 {
-						fmt.Fprintf(w, `{"lease":{"id":"lease","expires_at":%q,"attempts":[{"id":"attempt","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"a"}}]},"pool":{"state":"consuming"}}`, time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano))
+						fmt.Fprintf(w, `{"lease":{"id":%q,"expires_at":%q,"attempts":[{"id":"attempt","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"a"}}]},"pool":{"state":"consuming"}}`, r.Header.Get("Idempotency-Key"), time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano))
 					} else {
 						fmt.Fprint(w, `{"lease":null,"pool":{"state":"consumed"}}`)
 					}

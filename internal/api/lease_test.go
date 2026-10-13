@@ -10,10 +10,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
+	"uuid"
 )
 
 type leaseTransport func(*http.Request) (*http.Response, error)
@@ -60,23 +62,129 @@ func TestLeaseTTLOnAcquireAndHeartbeat(t *testing.T) {
 	}
 }
 
-func TestLeaseAmbiguousFailuresAreNotRetried(t *testing.T) {
-	for _, cause := range []error{io.EOF, syscall.ECONNRESET, &net.OpError{Op: "read", Err: context.DeadlineExceeded}} {
-		t.Run(cause.Error(), func(t *testing.T) {
-			calls := 0
-			c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler", OrganizationSlug: "org"})
-			c.httpClient.Transport = leaseTransport(func(r *http.Request) (*http.Response, error) {
-				calls++
-				if r.GetBody != nil {
-					t.Error("lease can be automatically replayed")
+// fakeLeaseScheduler commits one lease per idempotency key and replays it for
+// retries with that key, as the Scheduler does.
+type fakeLeaseScheduler struct {
+	mu      sync.Mutex
+	commits map[string]int
+	keys    []string
+}
+
+func (f *fakeLeaseScheduler) acquire(t *testing.T, r *http.Request) *http.Response {
+	key := r.Header.Get("Idempotency-Key")
+	if u, err := uuid.Parse(key); err != nil || u[6]>>4 != 7 {
+		t.Errorf("Idempotency-Key %q is not a UUIDv7", key)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.commits == nil {
+		f.commits = map[string]int{}
+	}
+	if f.commits[key] == 0 {
+		f.keys = append(f.keys, key)
+	}
+	f.commits[key] = 1
+	body := fmt.Sprintf(`{"lease":{"id":%q,"expires_at":"2030-01-01T00:00:00Z","attempts":[{"id":"attempt-%d"}]},"pool":{"state":"consuming"}}`, key, len(f.keys))
+	return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}
+}
+
+type failingBody struct{}
+
+func (failingBody) Read([]byte) (int, error) { return 0, syscall.ECONNRESET }
+func (failingBody) Close() error             { return nil }
+
+func TestAcquireLeaseReplaysCommittedLeaseAfterAmbiguousFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		lose func(r *http.Request, committed *http.Response) (*http.Response, error)
+	}{
+		{"response lost", func(*http.Request, *http.Response) (*http.Response, error) { return nil, io.EOF }},
+		{"unreadable response", func(_ *http.Request, committed *http.Response) (*http.Response, error) {
+			committed.Body = failingBody{}
+			return committed, nil
+		}},
+		{"server error after commit", func(*http.Request, *http.Response) (*http.Response, error) {
+			return &http.Response{StatusCode: 502, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+		}},
+		{"timed out while server commits", func(r *http.Request, _ *http.Response) (*http.Response, error) {
+			// The retry is a duplicate of a request the server is still handling.
+			<-r.Context().Done()
+			return nil, r.Context().Err()
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				scheduler := &fakeLeaseScheduler{}
+				calls := 0
+				c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler", OrganizationSlug: "org"})
+				c.httpClient.Transport = leaseTransport(func(r *http.Request) (*http.Response, error) {
+					calls++
+					committed := scheduler.acquire(t, r)
+					if calls == 1 {
+						return tc.lose(r, committed)
+					}
+					return committed, nil
+				})
+				var leases []*Lease
+				for range 2 {
+					response, err := c.AcquireLease(context.Background(), "pool")
+					if err != nil {
+						t.Fatal(err)
+					}
+					leases = append(leases, response.Lease)
 				}
-				return nil, cause
+				if calls != 3 || len(scheduler.keys) != 2 {
+					t.Fatalf("calls=%d keys=%v, want one replayed acquisition and one new key", calls, scheduler.keys)
+				}
+				for i, lease := range leases {
+					if lease.ID != scheduler.keys[i] || len(lease.Attempts) != 1 || lease.Attempts[0].ID != fmt.Sprintf("attempt-%d", i+1) {
+						t.Errorf("lease %d=%+v, want lease for key %s", i, lease, scheduler.keys[i])
+					}
+				}
 			})
-			_, err := c.AcquireLease(context.Background(), "pool")
-			if err == nil || calls != 1 {
-				t.Fatalf("calls=%d err=%v", calls, err)
-			}
 		})
+	}
+}
+
+func TestAcquireLeaseRetriesWithSameKeyUntilDeadline(t *testing.T) {
+	for _, cause := range []error{io.EOF, syscall.ECONNRESET, &net.OpError{Op: "read", Err: context.DeadlineExceeded}, nil} {
+		name := "server error"
+		if cause != nil {
+			name = cause.Error()
+		}
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				keys := map[string]bool{}
+				calls := 0
+				c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler", OrganizationSlug: "org"})
+				c.httpClient.Transport = leaseTransport(func(r *http.Request) (*http.Response, error) {
+					calls++
+					keys[r.Header.Get("Idempotency-Key")] = true
+					if r.GetBody != nil {
+						t.Error("net/http can replay the lease request")
+					}
+					if cause != nil {
+						return nil, cause
+					}
+					return &http.Response{StatusCode: 503, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+				})
+				start := time.Now()
+				_, err := c.AcquireLease(context.Background(), "pool")
+				if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != 90*time.Second || calls < 3 || len(keys) != 1 {
+					t.Fatalf("err=%v elapsed=%s calls=%d keys=%v", err, time.Since(start), calls, keys)
+				}
+			})
+		})
+	}
+}
+
+func TestAcquireLeaseRejectsLeaseForAnotherKey(t *testing.T) {
+	c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})
+	c.httpClient.Transport = leaseTransport(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"lease":{"id":"server-chosen","attempts":[]},"pool":{"state":"consuming"}}`))}, nil
+	})
+	if _, err := c.AcquireLease(context.Background(), "pool"); err == nil {
+		t.Fatal("accepted a lease that ignored the idempotency key")
 	}
 }
 
@@ -89,8 +197,9 @@ func TestLeaseRetryPolicy(t *testing.T) {
 	}{
 		{name: "rate limited", code: 429, want: 2},
 		{name: "open timeout", network: &net.OpError{Op: "dial", Err: context.DeadlineExceeded}, want: 2},
-		{name: "ambiguous server error", code: 503, want: 1},
-		{name: "conflict", code: 409, want: 1},
+		{name: "ambiguous server error", code: 503, want: 2},
+		{name: "idempotency conflict", code: 409, want: 1},
+		{name: "invalid idempotency key", code: 400, want: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
