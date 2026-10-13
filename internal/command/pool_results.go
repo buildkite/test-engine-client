@@ -127,6 +127,33 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, re
 				match = i
 			}
 		}
+		if match == -1 && report.UnselectedTests {
+			// Playwright reruns a retried test's file:line in every project, so
+			// every project's run counts toward the retried test's attempt.
+			owner := -1
+			if retry {
+				for i, dispatched := range tests {
+					if dispatched.Path == test.TestCase.Path {
+						owner = owners[i]
+						break
+					}
+				}
+			}
+			switch {
+			case owner >= 0:
+				if test.Status != runner.TestStatusSkipped {
+					r.reported[owner][key] = test
+				}
+			case test.Status == runner.TestStatusFailed:
+				// Playwright also runs its setup projects' tests with every
+				// command. A failed one errors the batch, because the tests that
+				// depend on it skip.
+				for _, i := range owners {
+					r.reportErrors[i] = true
+				}
+			}
+			continue
+		}
 		// Runners that retry by name can report tests that weren't retried: Jest
 		// reports the other tests in each file as skipped, and runs same-named
 		// tests in other files. Every retried test must still be reported.

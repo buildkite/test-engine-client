@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -356,4 +357,48 @@ func TestSuppliedPoolTokenWithoutOIDCExpiresClearly(t *testing.T) {
 			t.Fatalf("expired token: %q, %v", got, err)
 		}
 	})
+}
+
+// Playwright reruns a retried test's file:line in every project, so a project
+// that fails on the retry fails the attempt, and so does a failure outside the
+// lease, such as a setup project's.
+func TestPoolResultsPlaywrightRetryRunsEveryProject(t *testing.T) {
+	workDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := func(tests ...string) runnerexec.Result {
+		var specs []string
+		for _, test := range tests {
+			fields := strings.Fields(test)
+			file, project, status := fields[0], fields[1], fields[2]
+			specs = append(specs, fmt.Sprintf(`{"title":"t","file":%q,"line":3,"tests":[{"projectName":%q,"status":%q}]}`, file, project, status))
+		}
+		return runnerexec.Result{Status: "completed", ReportFormat: "playwright-json", Report: json.RawMessage(fmt.Sprintf(`{"config":{"rootDir":%q},"suites":[{"title":"","specs":[%s]}]}`, workDir, strings.Join(specs, ",")))}
+	}
+	for _, tc := range []struct {
+		name  string
+		retry runnerexec.Result
+		muted []plan.TestCase
+		want  string
+	}{
+		{"failing project passes, another fails", report("a.spec.js alpha unexpected", "a.spec.js beta expected"), nil, "failed"},
+		{"another project fails but is muted", report("a.spec.js alpha unexpected", "a.spec.js beta expected"), []plan.TestCase{{Scope: " alpha  t", Name: "t"}}, "passed"},
+		{"every project passes", report("a.spec.js alpha expected", "a.spec.js beta expected"), nil, "passed"},
+		{"setup fails", report("auth.setup.js setup unexpected", "a.spec.js alpha expected", "a.spec.js beta expected"), nil, "errored"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tests := []plan.TestCase{{Format: plan.TestCaseFormatSelector, Value: "a.spec.js"}}
+			r := newPoolResults([]api.LeaseAttempt{{ID: "a", Selector: tests[0]}}, tc.muted)
+			r.absorb(tests, []int{0}, false, report("a.spec.js alpha expected", "a.spec.js beta unexpected"))
+			retry, owners := r.retries()
+			if len(retry) != 1 || retry[0].Scope != " beta  t" {
+				t.Fatalf("retry=%+v", retry)
+			}
+			r.absorb(retry, owners, true, tc.retry)
+			if got := r.final()[0].Result; got != tc.want {
+				t.Fatalf("result=%s, want %s", got, tc.want)
+			}
+		})
+	}
 }

@@ -48,8 +48,13 @@ func (c *Config) ValidateForPoolPlan() error {
 		if c.PipelineSlug == "" {
 			c.errs.appendFieldError("BUILDKITE_PIPELINE_SLUG", "must not be blank")
 		}
-		if c.TestRunner != "rspec" && c.TestRunner != "jest" {
-			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool planning requires rspec or jest")
+		if c.TestRunner != "rspec" && c.TestRunner != "jest" && c.TestRunner != "playwright" {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool planning requires rspec, jest or playwright")
+		}
+		// A Playwright example is one test in one project, but its file:line runs
+		// the test in every project, so pools only lease Playwright files.
+		if c.TestRunner == "playwright" && c.SplitByExample {
+			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE", "split by example is not supported for Playwright pools")
 		}
 		if c.TagFilters != "" {
 			c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TAG_FILTERS", "tag filtering is only supported for the pytest test runner")
@@ -67,7 +72,7 @@ func (c *Config) ValidateForPoolPlan() error {
 // ValidateForPoolExec only allows the runners that have a persistent runner.
 func (c *Config) ValidateForPoolExec() error {
 	if c.PoolID == "" && c.TestRunner != "rspec" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec; use pool consume for jest")
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec; use pool consume for jest or playwright")
 	}
 	return c.ValidateForPoolPlan()
 }
@@ -75,8 +80,8 @@ func (c *Config) ValidateForPoolExec() error {
 // ValidateForPoolConsume also checks what running the test command needs, and
 // resolves the collector upload token like bktec run.
 func (c *Config) ValidateForPoolConsume() error {
-	if c.TestRunner != "jest" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool consume requires jest")
+	if c.TestRunner != "jest" && c.TestRunner != "playwright" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool consume requires jest or playwright")
 	}
 	if c.ResultPath == "" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")

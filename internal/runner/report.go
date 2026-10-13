@@ -25,6 +25,10 @@ type ParsedReport struct {
 	// ErroredFiles lists files that failed outside their tests, for example
 	// because they didn't load. Only those files' tests are affected.
 	ErroredFiles []string
+	// UnselectedTests reports that the runner also runs tests outside the files
+	// it was given, such as Playwright's setup projects. Those tests are ignored
+	// unless one fails, which errors the batch.
+	UnselectedTests bool
 }
 
 // ParseNativeReport selects the runner's parser using the reported format.
@@ -35,6 +39,8 @@ func ParseNativeReport(format string, data []byte) (ParsedReport, error) {
 		return parseRSpecBatchReport(data)
 	case "jest-json":
 		return parseJestBatchReport(data)
+	case "playwright-json":
+		return parsePlaywrightBatchReport(data)
 	default:
 		return ParsedReport{}, fmt.Errorf("unsupported runner report format %q", format)
 	}

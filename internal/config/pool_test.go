@@ -16,7 +16,7 @@ func TestValidatePoolPlanIdentity(t *testing.T) {
 		{"explicit key", "", "shared", "", "rspec", ""},
 		{"missing key", "", "", "", "rspec", "POOL_KEY"},
 		{"jest", "", "shared", "", "jest", ""},
-		{"unsupported runner", "", "shared", "", "pytest", "requires rspec or jest"},
+		{"unsupported runner", "", "shared", "", "pytest", "requires rspec, jest or playwright"},
 		{"precreated skips discovery validation", "pool-1", "", "", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -45,19 +45,22 @@ func TestValidatePoolPlanIdentity(t *testing.T) {
 func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 	for _, tc := range []struct {
 		name, command, poolID, runner, resultPath, wantError string
+		splitByExample                                       bool
 	}{
 		{name: "exec plans rspec", command: "exec", runner: "rspec"},
 		{name: "exec has no jest runner", command: "exec", runner: "jest", wantError: "pool exec requires rspec"},
 		{name: "exec with pool ID", command: "exec", poolID: "pool-1"},
 		{name: "consume plans jest", command: "consume", runner: "jest", resultPath: "jest.json"},
-		{name: "consume with pool ID still runs jest", command: "consume", poolID: "pool-1", runner: "rspec", resultPath: "out.json", wantError: "pool consume requires jest"},
+		{name: "consume plans playwright", command: "consume", runner: "playwright", resultPath: "results.json"},
+		{name: "consume plans playwright files only", command: "consume", runner: "playwright", resultPath: "results.json", splitByExample: true, wantError: "split by example is not supported for Playwright pools"},
+		{name: "consume with pool ID still runs jest or playwright", command: "consume", poolID: "pool-1", runner: "rspec", resultPath: "out.json", wantError: "pool consume requires jest or playwright"},
 		{name: "consume reads the result path", command: "consume", poolID: "pool-1", runner: "jest", wantError: "BUILDKITE_TEST_ENGINE_RESULT_PATH"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
 			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "header.payload.signature", "acme", "suite"
 			c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, "./mock-buildkite-agent"
-			c.PoolID, c.PoolKey, c.TestRunner, c.ResultPath = tc.poolID, "shared", tc.runner, tc.resultPath
+			c.PoolID, c.PoolKey, c.TestRunner, c.ResultPath, c.SplitByExample = tc.poolID, "shared", tc.runner, tc.resultPath, tc.splitByExample
 			c.BuildID, c.PipelineSlug = "build", "pipeline"
 			validate := c.ValidateForPoolExec
 			if tc.command == "consume" {

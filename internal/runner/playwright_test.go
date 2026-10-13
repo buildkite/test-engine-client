@@ -32,8 +32,9 @@ func TestPlaywrightRun(t *testing.T) {
 		t.Errorf("Playwright.Run(%v) error = %v", testCases, err)
 	}
 
-	if len(result.tests) != 4 {
-		t.Errorf("Rspec.Run(%v) len(RunResult.tests) = %d, want 4", testCases, len(result.tests))
+	// 2 tests in 2 projects, plus the setup project's test.
+	if len(result.tests) != 5 {
+		t.Errorf("Playwright.Run(%v) len(RunResult.tests) = %d, want 5", testCases, len(result.tests))
 	}
 
 	if result.Status() != RunStatusPassed {
@@ -278,8 +279,14 @@ func TestPlaywrightGetExamples(t *testing.T) {
 	}
 
 	// example.spec.js has 2 tests in a "home page" describe block.
-	// With 2 projects (chromium, firefox), we expect 4 test cases.
+	// With 2 projects (chromium, firefox), we expect 4 test cases, plus the
+	// setup project's test, which Playwright lists whichever files are given.
 	want := []plan.TestCase{
+		{
+			Name:  "set up app",
+			Path:  "app.setup.js:3",
+			Scope: " setup app.setup.js set up app",
+		},
 		{
 			Name:  "has title",
 			Path:  "example.spec.js:4",
