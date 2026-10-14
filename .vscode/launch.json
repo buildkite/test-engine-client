@@ -80,7 +80,7 @@
       "envFile": "${workspaceFolder}/.vscode/.env",
       "env": {
         "BUILDKITE_TEST_ENGINE_TEST_RUNNER": "playwright",
-        "BUILDKITE_TEST_ENGINE_RESULT_PATH": "tmp/result.json",
+        "BUILDKITE_TEST_ENGINE_RESULT_PATH": "test-results/results.json",
         "BUILDKITE_STEP_ID": "playwright",
         "BUILDKITE_BUILD_ID": "${input:build-id}"
       }
