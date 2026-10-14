@@ -570,6 +570,8 @@ Make sure you have Go, Ruby, and Node.js installed in your environment. You can 
 
 Once you have these dependencies installed, run `bin/setup` to install dependencies for the sample projects for testing purposes.
 
+`bin/setup` installs pytest into a `.venv` virtualenv. If you use [mise](https://mise.jdx.dev), run `mise trust` once and it activates `.venv` whenever you're in this directory, so `pytest` and `go test` work without extra steps. Otherwise, run `source .venv/bin/activate` first.
+
 To test, run:
 ```sh
 ./bin/test
