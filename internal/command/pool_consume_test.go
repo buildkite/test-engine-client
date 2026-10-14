@@ -241,6 +241,7 @@ test.skip('not yet', () => {})`,
 	var mu sync.Mutex
 	acquired := 0
 	completed := map[string][]api.AttemptResult{}
+	names := map[string]string{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -258,7 +259,10 @@ test.skip('not yet', () => {})`,
 					t.Error(err)
 				}
 			}
-			lease := api.Lease{ID: fmt.Sprintf("lease-%d", acquired+1), ExpiresAt: time.Now().Add(time.Minute), Attempts: leases[acquired]}
+			// The Scheduler uses the idempotency key as the lease ID.
+			key := r.Header.Get("Idempotency-Key")
+			names[key] = fmt.Sprintf("lease-%d", acquired+1)
+			lease := api.Lease{ID: key, ExpiresAt: time.Now().Add(time.Minute), Attempts: leases[acquired]}
 			acquired++
 			_ = json.NewEncoder(w).Encode(map[string]any{"lease": lease, "pool": map[string]string{"state": "consuming"}})
 		case r.Method == http.MethodPost && r.URL.Path == base+"/leases/complete":
@@ -271,7 +275,7 @@ test.skip('not yet', () => {})`,
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Leases) != 1 {
 				t.Errorf("completion=%+v err=%v", body, err)
 			}
-			completed[body.Leases[0].ID] = body.Leases[0].Attempts
+			completed[names[body.Leases[0].ID]] = body.Leases[0].Attempts
 			fmt.Fprint(w, `{}`)
 		default:
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
