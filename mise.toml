@@ -1,0 +1,7 @@
+# Tool versions are pinned in .tool-versions.
+
+[env]
+# Activate the virtualenv created by bin/setup whenever you're in this repo,
+# so pytest is on PATH for your shell and for `go test`. --seed adds pip, which
+# bin/setup uses to install pytest into the venv.
+_.python.venv = { path = ".venv", create = true, uv_create_args = ["--seed"] }

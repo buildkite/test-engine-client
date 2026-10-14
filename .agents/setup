@@ -20,6 +20,7 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 eval "$(mise activate bash)"
 mise trust --yes "$repo_root/.tool-versions"
+mise trust --yes "$repo_root/mise.toml"
 mise install
 done_step "Toolchains"
 
