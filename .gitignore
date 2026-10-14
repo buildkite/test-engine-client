@@ -44,3 +44,6 @@ test-engine-client
 internal/runner/testdata/*/tmp/
 
 .amp/portals/*
+
+# Ignore env files for VScode debugging
+.vscode/.env
