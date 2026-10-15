@@ -145,11 +145,50 @@ func TestPlaywrightRun_Error(t *testing.T) {
 	result := NewRunResult([]plan.TestCase{})
 	err := playwright.Run(result, testCases, false)
 
+	// error.spec.js doesn't load, so Playwright runs no tests. The command
+	// fails even though example.spec.js passes when it runs again without it.
 	exitError := new(exec.ExitError)
 	assert.ErrorAs(t, err, &exitError)
 
 	if result.Status() != RunStatusError {
 		t.Errorf("Playwright.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
+	}
+	if got, want := result.Error().Error(), "Test files failed to run: tests/error.spec.js"; got != want {
+		t.Errorf("Playwright.Run(%v) RunResult.Error = %q, want %q", testCases, got, want)
+	}
+	if !result.Retryable() {
+		t.Errorf("Playwright.Run(%v) RunResult.Retryable = false, want true", testCases)
+	}
+	// 2 tests in 2 projects, plus the setup project's test.
+	if stats := result.Statistics(); stats.PassedOnFirstRun != 5 || stats.Total != 5 {
+		t.Errorf("Playwright.Run(%v) RunResult.Statistics = %+v, want 5 passed", testCases, stats)
+	}
+}
+
+func TestPlaywrightRun_ErrorOutsideTestFiles(t *testing.T) {
+	changeCwd(t, "./testdata/playwright")
+
+	playwright := NewPlaywright(RunnerConfig{
+		ResultPath: "test-results/results.json",
+	})
+
+	// error.spec.js isn't given to the command as itself, so its load error
+	// can't be attributed to one of the command's files.
+	testCases := []plan.TestCase{
+		{Path: "./tests/example.spec.js"},
+		{Path: "error"},
+	}
+	result := NewRunResult([]plan.TestCase{})
+	err := playwright.Run(result, testCases, false)
+
+	exitError := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitError)
+
+	if result.Retryable() {
+		t.Errorf("Playwright.Run(%v) RunResult.Retryable = true, want false", testCases)
+	}
+	if len(result.tests) != 0 {
+		t.Errorf("Playwright.Run(%v) len(RunResult.tests) = %d, want 0", testCases, len(result.tests))
 	}
 }
 

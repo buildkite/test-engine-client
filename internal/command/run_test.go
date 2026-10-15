@@ -588,6 +588,44 @@ func TestRunTestsWithRetry_RunResultError(t *testing.T) {
 	}
 }
 
+func TestRunTestsWithRetry_TestFileErrored(t *testing.T) {
+	modules, err := filepath.Abs(filepath.Join("..", "runner", "testdata", "node_modules"))
+	require.NoError(t, err)
+	dir := t.TempDir()
+	require.NoError(t, os.Symlink(modules, filepath.Join(dir, "node_modules")))
+	for name, source := range map[string]string{
+		"jest.config.js": `module.exports = {}`,
+		"broken.spec.js": `boom()`,
+		// Fails on its first run only.
+		"flaky.spec.js": `test('flaky', () => {
+  const marker = __dirname + '/flaky.marker'
+  if (!require('fs').existsSync(marker)) {
+    require('fs').writeFileSync(marker, '')
+    throw new Error('first run')
+  }
+})`,
+	} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(source), 0600))
+	}
+	t.Chdir(dir)
+
+	testRunner := runner.NewJest(runner.RunnerConfig{
+		TestCommand: filepath.Join(modules, ".bin", "jest") + " --runTestsByPath {{testExamples}} --json --outputFile {{resultPath}}",
+		// Runs only the retried test's file, so the retry passes.
+		RetryTestCommand: filepath.Join(modules, ".bin", "jest") + " --runTestsByPath {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --outputFile {{resultPath}}",
+		ResultPath:       filepath.Join(dir, "jest.json"),
+	})
+	testCases := []plan.TestCase{{Path: "broken.spec.js"}, {Path: "flaky.spec.js"}}
+	timeline := []api.Timeline{}
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, 1, []plan.TestCase{}, &timeline, false, false)
+
+	// The broken file errors the run, so it still fails after the retry passes.
+	exitErr := new(exec.ExitError)
+	assert.ErrorAs(t, err, &exitErr)
+	assert.Equal(t, runner.RunStatusError, testResult.Status())
+	assert.Equal(t, 1, testResult.Statistics().PassedOnRetry)
+}
+
 func TestRunTestsWithRetry_GoTestBuildFailed(t *testing.T) {
 	t.Chdir("../runner/testdata/go")
 

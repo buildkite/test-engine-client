@@ -84,6 +84,8 @@ To enable automatic retry, set the following environment variable:
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
 
+When a test file fails to load, Playwright runs no tests at all, so bktec runs the other test files again without it. The broken file fails the job, but failed tests in the other files are still retried. Errors that Playwright doesn't locate in one of the test files bktec ran, such as a failed `globalSetup` or an error in a helper file that a test file imports, error the whole job and stop retries.
+
 ## Run tests from a Test Scheduler pool
 To run Playwright tests from a Test Scheduler pool, use [`bktec pool consume`](./pool-consume.md). It uses the test command and result path configured above, and runs Playwright once for each lease.
 
@@ -125,7 +127,9 @@ If setup didn't run, or its results are missing, the leased tests fail like any 
 
 A lease's tests are reported as passed or failed from the Playwright report.
 
-All of a lease's tests are reported as errored when the command doesn't write a usable report, when the report has errors outside tests, or when Playwright exits with an error but reports no failed tests. For example, a test file that doesn't load stops Playwright from running any tests, so it errors every test in its lease, like it errors the job with `bktec run`.
+A leased test file that doesn't load is reported as errored. Playwright doesn't run any tests when a file fails to load, so bktec runs the lease's other files again without it, and they keep their local retries.
+
+All of a lease's tests are reported as errored when the command doesn't write a usable report, when the report has errors that Playwright doesn't locate in a leased file, such as a failed `globalSetup` or an error in a helper file that a test file imports, or when Playwright exits with an error but reports no failed tests.
 
 A file's tests are reported as errored when Playwright skips one of them because something else failed, such as an earlier test in a [serial group](https://playwright.dev/docs/api/class-test#test-describe-serial), since that test didn't run. Tests skipped on purpose, such as with `test.skip`, are fine.
 

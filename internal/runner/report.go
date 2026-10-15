@@ -25,6 +25,10 @@ type ParsedReport struct {
 	// ErroredFiles lists files that failed outside their tests, for example
 	// because they didn't load. Only those files' tests are affected.
 	ErroredFiles []string
+	// ErroredFilesStoppedRun reports that the runner ran no tests because
+	// ErroredFiles failed to load, as Playwright does. When they are all files
+	// of the batch, the batch's other tests can run again without them.
+	ErroredFilesStoppedRun bool
 	// UnselectedTests reports that the runner also runs tests outside the files
 	// it was given, such as Playwright's setup projects. Those tests are ignored
 	// unless one fails, which errors the batch.

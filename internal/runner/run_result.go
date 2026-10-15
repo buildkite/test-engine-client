@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
@@ -30,7 +32,13 @@ type RunResult struct {
 	// mutedTestLookup is a map containing the test identifiers of muted tests.
 	// This list might contain tests that are not part of the current run (i.e. belong to a different node).
 	mutedTestLookup map[string]bool
-	error           error
+	// error is an error outside the tests, such as a failed build, that
+	// retrying failed tests can't fix.
+	error error
+	// erroredFiles lists test files that failed to run, such as files that
+	// didn't load. They error the run, but the other files' failed tests can
+	// still be retried.
+	erroredFiles []string
 }
 
 func NewRunResult(mutedTests []plan.TestCase) *RunResult {
@@ -166,7 +174,7 @@ func (r *RunResult) OnlyMutedFailures() bool {
 // If there are failed tests, it returns RunStatusFailed.
 // Otherwise, it returns RunStatusPassed.
 func (r *RunResult) Status() RunStatus {
-	if r.error != nil {
+	if r.error != nil || len(r.erroredFiles) > 0 {
 		return RunStatusError
 	}
 
@@ -186,7 +194,22 @@ func (r *RunResult) Status() RunStatus {
 }
 
 func (r *RunResult) Error() error {
+	if r.error == nil && len(r.erroredFiles) > 0 {
+		return fmt.Errorf("Test files failed to run: %s", strings.Join(r.erroredFiles, ", "))
+	}
 	return r.error
+}
+
+// Retryable reports whether failed tests can be retried despite the run's
+// status: only test files, not the whole run, have errored.
+func (r *RunResult) Retryable() bool {
+	return r.error == nil
+}
+
+func (r *RunResult) recordErroredFile(path string) {
+	if !slices.Contains(r.erroredFiles, path) {
+		r.erroredFiles = append(r.erroredFiles, path)
+	}
 }
 
 type RunStatistics struct {

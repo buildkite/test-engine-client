@@ -69,8 +69,10 @@ func (r *poolResults) isMuted(test plan.TestCase) bool {
 
 // absorb maps every reported test to exactly one dispatched case. Retry owners
 // retain original attempt indices. Report-level errors are sticky, but do not
-// suppress retries of failed tests.
-func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, result runnerexec.Result) {
+// suppress retries of failed tests. When the runner ran no tests because some of
+// the dispatched files failed to load, it returns the other dispatched tests and
+// their owners to run again without them.
+func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, result runnerexec.Result) ([]plan.TestCase, []int) {
 	bad := func() {
 		for _, i := range owners {
 			r.broken[i] = true
@@ -78,18 +80,20 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, re
 	}
 	if result.Status != "completed" {
 		bad()
-		return
+		return nil, nil
 	}
 	report, err := runner.ParseNativeReport(result.ReportFormat, result.Report)
 	if err != nil {
 		bad()
-		return
+		return nil, nil
 	}
 	if report.ErrorsOutsideTests {
 		for _, i := range owners {
 			r.reportErrors[i] = true
 		}
 	}
+	erroredFile := make([]bool, len(tests))
+	allMatched := true
 	for _, file := range report.ErroredFiles {
 		matched := false
 		for i, dispatched := range tests {
@@ -99,14 +103,27 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, re
 			}
 			if strings.TrimPrefix(target, "./") == file {
 				r.reportErrors[owners[i]] = true
+				erroredFile[i] = true
 				matched = true
 			}
 		}
+		allMatched = allMatched && matched
 		// Like a reported test, an errored file that wasn't dispatched breaks the
 		// batch, unless a name-filtered retry ran it.
 		if !matched && !retry {
 			bad()
 		}
+	}
+	if report.ErroredFilesStoppedRun && len(report.ErroredFiles) > 0 && allMatched {
+		var rerun []plan.TestCase
+		var rerunOwners []int
+		for i, test := range tests {
+			if !erroredFile[i] {
+				rerun = append(rerun, test)
+				rerunOwners = append(rerunOwners, owners[i])
+			}
+		}
+		return rerun, rerunOwners
 	}
 	seen := make([]bool, len(tests))
 	keys := map[string]bool{}
@@ -177,6 +194,7 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, re
 			r.broken[owners[i]] = true
 		}
 	}
+	return nil, nil
 }
 
 func (r *poolResults) retries() ([]plan.TestCase, []int) {

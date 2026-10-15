@@ -608,7 +608,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		owners[i] = i
 	}
 	var started time.Time
-	for round := 0; len(tests) > 0; round++ {
+	for round := 0; len(tests) > 0; {
 		s.mu.Lock()
 		s.sequence++
 		s.retryRound = round
@@ -651,6 +651,34 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 				})
 			}
 		}
+		rerun, rerunOwners := results.absorb(tests, owners, round > 0, result)
+		if debug.Enabled {
+			current := results.final()
+			seen := make(map[int]bool, len(owners))
+			passed, failed, errored := 0, 0, 0
+			for _, i := range owners {
+				if seen[i] {
+					continue
+				}
+				seen[i] = true
+				switch current[i].Result {
+				case "passed":
+					passed++
+				case "failed":
+					failed++
+				case "errored":
+					errored++
+				}
+			}
+			debug.Printf("Received batch %s result (status=%s; provisional attempt results: passed=%d failed=%d errored=%d)", batchID, result.Status, passed, failed, errored)
+		}
+		if len(rerun) > 0 {
+			// The runner ran no tests because other files failed to load. Run the
+			// rest in the same round, so they keep their local retries.
+			fmt.Printf("+++ Buildkite Test Engine Client: Test files failed to load, running the other %d tests again without them\n", len(rerun))
+			tests, owners = rerun, rerunOwners
+			continue
+		}
 		if round == 0 {
 			if started.IsZero() {
 				select {
@@ -673,31 +701,11 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 				}
 			}
 		}
-		results.absorb(tests, owners, round > 0, result)
-		if debug.Enabled {
-			current := results.final()
-			seen := make(map[int]bool, len(owners))
-			passed, failed, errored := 0, 0, 0
-			for _, i := range owners {
-				if seen[i] {
-					continue
-				}
-				seen[i] = true
-				switch current[i].Result {
-				case "passed":
-					passed++
-				case "failed":
-					failed++
-				case "errored":
-					errored++
-				}
-			}
-			debug.Printf("Received batch %s result (status=%s; provisional attempt results: passed=%d failed=%d errored=%d)", batchID, result.Status, passed, failed, errored)
-		}
 		if round >= retries {
 			break
 		}
 		tests, owners = results.retries()
+		round++
 	}
 	// The final result is in. If the timer has not fired, or the pool has no
 	// costs, prefetch now so the request runs alongside completing this lease.

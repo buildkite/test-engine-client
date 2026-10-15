@@ -248,6 +248,14 @@ func TestJestRun_RuntimeError(t *testing.T) {
 	if result.Status() != RunStatusError {
 		t.Errorf("Jest.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
+
+	// Only the file errored, so the other files' failed tests can be retried.
+	if got, want := result.Error().Error(), "Test files failed to run: runtimeError.spec.js"; got != want {
+		t.Errorf("Jest.Run(%v) RunResult.Error = %q, want %q", testCases, got, want)
+	}
+	if !result.Retryable() {
+		t.Errorf("Jest.Run(%v) RunResult.Retryable = false, want true", testCases)
+	}
 }
 
 // This test ensures that when a test fails due to timeout and passes after retry, the run result should be passed.
