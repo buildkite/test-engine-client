@@ -25,8 +25,12 @@ type LeaseAttempt struct {
 	Costs        AttemptCosts  `json:"costs"`
 }
 
-// AttemptCosts is absent (zero) for pools scheduled by a custom cost.
+// AttemptCosts holds only the pool's cost dimension, so at most one duration
+// is set. Both are absent (zero) for pools scheduled by a custom cost. If
+// attempts ever carry several costs, take the dimension from the pool's
+// lease.costs instead.
 type AttemptCosts struct {
+	DurationP50MS int64 `json:"duration_p50_ms"`
 	DurationP90MS int64 `json:"duration_p90_ms"`
 }
 

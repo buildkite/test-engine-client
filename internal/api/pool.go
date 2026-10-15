@@ -41,12 +41,10 @@ type PoolPlanParams struct {
 }
 
 type PoolPlanLease struct {
-	Costs       *PoolPlanLeaseCosts `json:"costs,omitempty"`
-	MaxAttempts int                 `json:"max_attempts,omitempty"`
-}
-
-type PoolPlanLeaseCosts struct {
-	DurationP90MS int `json:"duration_p90_ms"`
+	// Costs maps the pool's single cost dimension, such as duration_p50_ms,
+	// to the budget per lease.
+	Costs       map[string]int `json:"costs,omitempty"`
+	MaxAttempts int            `json:"max_attempts,omitempty"`
 }
 
 // PoolPlan excludes Test Plan identifiers and static lane tasks. Dynamic sizing

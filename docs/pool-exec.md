@@ -86,12 +86,26 @@ When creating a pool, `pool exec` supports these test discovery options:
 | --- | --- | --- |
 | `--pool-id` | unset | Consume an existing pool instead of creating or reusing one. |
 | `--pool-key` | `BUILDKITE_STEP_ID` | Identify the pool for workers in this build. |
-| `--pool-lease-duration-ms` | `0` | Requested duration budget for each lease; `0` uses the Scheduler default. |
+| `--pool-lease-cost` | unset | Requested cost budget for each lease as `<dimension>=<budget>`; unset uses the Scheduler default. |
 | `--pool-lease-max-attempts` | `0` | Requested maximum attempts per lease; `0` uses the Scheduler default. |
 | `--local-retry-count` | `0` | Retry failed, unmuted examples locally before reporting the Scheduler attempt. |
 | `--runner-startup-timeout` | `5m` | Wait for the persistent runner to become ready. |
 | `--runner-batch-timeout` | `10m` | Allow a batch to run and submit its report. |
 | `--runner-shutdown-timeout` | `1m30s` | Allow the runner to exit and flush the test collector. |
+
+`--pool-lease-cost` (env: `BUILDKITE_TEST_ENGINE_POOL_LEASE_COST`) sets the
+pool's cost dimension and how much of it each lease may hold. Test Scheduler
+supports `duration_p50_ms` and `duration_p90_ms`, the sum of the leased tests'
+median or p90 durations in milliseconds:
+
+```shell
+bktec pool exec --pool-lease-cost duration_p90_ms=120000 -- bundle exec buildkite-rspec
+```
+
+The deprecated `--pool-lease-duration-ms <ms>` (env:
+`BUILDKITE_TEST_ENGINE_POOL_LEASE_DURATION_MS`) is the same as
+`--pool-lease-cost duration_p50_ms=<ms>`. The lease options only apply when
+bktec creates the pool; they're ignored with `--pool-id`.
 
 ## Authentication
 
@@ -149,13 +163,13 @@ run, but no tests are skipped.
 
 While a lease runs, `bktec` requests the next lease shortly before the current
 lease is expected to finish, so the runner can start it as soon as the current
-lease is reported. The expected finish comes from the attempts' p90 duration
-costs, adjusted by how quickly this worker finished earlier leases. Both leases
-are heartbeated independently. If the current lease is still running 30 seconds
-after the next lease arrives, or `bktec` stops early, the unused lease is
-released so other workers can take it. If the current lease finishes first, or
-the pool has no duration costs, `bktec` requests the next lease while it reports
-the current one.
+lease is reported. The expected finish comes from the attempts' p50 or p90
+duration costs, whichever the pool uses, adjusted by how quickly this worker
+finished earlier leases. Both leases are heartbeated independently. If the
+current lease is still running 30 seconds after the next lease arrives, or
+`bktec` stops early, the unused lease is released so other workers can take it.
+If the current lease finishes first, or the pool has no duration costs, `bktec`
+requests the next lease while it reports the current one.
 
 ## Troubleshooting
 

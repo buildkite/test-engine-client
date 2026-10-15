@@ -45,7 +45,7 @@ func TestPoolPlanCLIRejectsExistingID(t *testing.T) {
 func TestPoolPlanCLILeaseOptions(t *testing.T) {
 	cfg = config.New()
 	t.Cleanup(func() { cfg = config.New() })
-	t.Setenv("BUILDKITE_TEST_ENGINE_POOL_LEASE_DURATION_MS", "50000")
+	t.Setenv("BUILDKITE_TEST_ENGINE_POOL_LEASE_COST", "duration_p90_ms=50000")
 	t.Setenv("BUILDKITE_TEST_ENGINE_POOL_LEASE_MAX_ATTEMPTS", "70")
 	planCmd := *poolCommand.Commands[0]
 	planCmd.Flags = poolPlanCommandFlags()
@@ -53,7 +53,7 @@ func TestPoolPlanCLILeaseOptions(t *testing.T) {
 	cmd := &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&planCmd}}}}
 	err := cmd.Run(context.Background(), []string{"bktec", "pool", "plan", "--json", "--pool-lease-max-attempts", "25"})
 	require.Error(t, err, "missing authentication/build context stops before planning")
-	require.Equal(t, 50_000, cfg.PoolLeaseDurationMS, "environment supplies the duration budget")
+	require.Equal(t, "duration_p90_ms=50000", cfg.PoolLeaseCost, "environment supplies the lease cost")
 	require.Equal(t, 25, cfg.PoolLeaseMaxAttempts, "the flag overrides the environment")
 }
 

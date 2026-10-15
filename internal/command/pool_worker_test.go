@@ -3,6 +3,7 @@ package command
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"slices"
@@ -956,6 +957,33 @@ func TestPoolPrefetchHeadroomIsCapped(t *testing.T) {
 				<-p.due.C
 				if got := time.Since(start); got != tc.want {
 					t.Fatalf("prefetch after %s, want %s", got, tc.want)
+				}
+			})
+		})
+	}
+}
+
+// A pool costs leases by one duration dimension, and its attempts carry only
+// that cost, so prefetch must time leases from whichever one is present.
+func TestPoolPrefetchUsesThePoolsDurationCost(t *testing.T) {
+	for _, dimension := range []string{"duration_p50_ms", "duration_p90_ms"} {
+		t.Run(dimension, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				var lease api.Lease
+				body := `{"attempts":[{"id":"a","costs":{"` + dimension + `":40000}},{"id":"b","costs":{"` + dimension + `":20000}}]}`
+				if err := json.Unmarshal([]byte(body), &lease); err != nil {
+					t.Fatal(err)
+				}
+				p := &leasePrefetch{}
+				p.schedule(newPoolSource(func() {}), &poolLease{Lease: lease}, time.Now())
+				if p.due == nil {
+					t.Fatal("no prefetch timer")
+				}
+				start := time.Now()
+				<-p.due.C
+				// 60s - 12s headroom - 2s allowance
+				if got := time.Since(start); got != 46*time.Second {
+					t.Fatalf("prefetch after %s, want 46s", got)
 				}
 			})
 		})
