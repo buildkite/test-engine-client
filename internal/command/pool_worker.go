@@ -121,6 +121,14 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 	}
 	return nil
 }
+
+// retrying reports whether the offered batch retries a lease's failed tests,
+// rather than running the lease, which can also lease individual tests.
+func (s *poolSource) retrying() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.retryRound > 0
+}
 func (s *poolSource) Undispatchable(_ runnerexec.Batch, err error) {
 	s.mu.Lock()
 	s.undispatchable = true

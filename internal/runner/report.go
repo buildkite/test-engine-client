@@ -41,6 +41,10 @@ func ParseNativeReport(format string, data []byte) (ParsedReport, error) {
 		return parseJestBatchReport(data)
 	case "playwright-json":
 		return parsePlaywrightBatchReport(data)
+	case "pytest-json":
+		return parsePytestJSONBatchReport(data)
+	case "pytest-junit":
+		return parsePytestJUnitBatchReport(data)
 	default:
 		return ParsedReport{}, fmt.Errorf("unsupported runner report format %q", format)
 	}

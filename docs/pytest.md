@@ -99,3 +99,6 @@ To enable automatic retry, set the following environment variable:
 ```sh
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
+
+## Run tests from a Test Scheduler pool
+To run pytest tests from a Test Scheduler pool, use [`bktec pool consume`](./pool-consume.md#run-a-pytest-pool-worker). It uses the test command configured above, and runs pytest once for each lease.

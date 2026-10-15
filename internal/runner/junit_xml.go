@@ -61,10 +61,17 @@ func loadAndParseJUnitXML(path string) ([]JUnitXMLTestCase, error) {
 		return nil, fmt.Errorf("failed to read JUnit XML file %s: %w", path, err)
 	}
 
-	var testSuites junitXMLTestSuites
-	err = xml.Unmarshal(byteValue, &testSuites)
+	results, err := parseJUnitXML(byteValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JUnit XML file %s: %w", path, err)
+	}
+	return results, nil
+}
+
+func parseJUnitXML(data []byte) ([]JUnitXMLTestCase, error) {
+	var testSuites junitXMLTestSuites
+	if err := xml.Unmarshal(data, &testSuites); err != nil {
+		return nil, err
 	}
 
 	var results []JUnitXMLTestCase
