@@ -70,8 +70,13 @@ type Config struct {
 	PipelineSlug         string `json:"-"`
 	PoolID               string `json:"-"`
 	PoolKey              string `json:"-"`
-	PoolLeaseDurationMS  int    `json:"-"`
 	PoolLeaseMaxAttempts int    `json:"-"`
+	// PoolLeaseCost is --pool-lease-cost as given, <dimension>=<budget>.
+	// PoolLeaseDurationMS is its deprecated duration_p50_ms alias. Validation
+	// parses either into PoolLeaseCosts, which pool planning sends.
+	PoolLeaseCost       string         `json:"-"`
+	PoolLeaseDurationMS int            `json:"-"`
+	PoolLeaseCosts      map[string]int `json:"-"`
 	// Output is the local file path for the export tarball. If set, skip S3 upload.
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.

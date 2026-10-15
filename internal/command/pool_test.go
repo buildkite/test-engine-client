@@ -93,13 +93,14 @@ func TestResolvePoolConcurrentWorkers(t *testing.T) {
 
 func TestResolvePoolLeaseOptions(t *testing.T) {
 	for _, tc := range []struct {
-		name, lease             string
-		durationMS, maxAttempts int
+		name, lease string
+		costs       map[string]int
+		maxAttempts int
 	}{
 		{name: "server defaults"},
-		{name: "duration only", durationMS: 60_000, lease: `{"costs":{"duration_p90_ms":60000}}`},
+		{name: "cost only", costs: map[string]int{"duration_p50_ms": 60_000}, lease: `{"costs":{"duration_p50_ms":60000}}`},
 		{name: "max attempts only uses server cost default", maxAttempts: 25, lease: `{"max_attempts":25}`},
-		{name: "both", durationMS: 45_000, maxAttempts: 12, lease: `{"costs":{"duration_p90_ms":45000},"max_attempts":12}`},
+		{name: "both", costs: map[string]int{"duration_p90_ms": 45_000}, maxAttempts: 12, lease: `{"costs":{"duration_p90_ms":45000},"max_attempts":12}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var received map[string]json.RawMessage
@@ -116,7 +117,7 @@ func TestResolvePoolLeaseOptions(t *testing.T) {
 			defer server.Close()
 			cfg := getConfig()
 			cfg.ServerBaseURL, cfg.PipelineSlug, cfg.PoolKey = server.URL, "pipeline", "rspec"
-			cfg.PoolLeaseDurationMS, cfg.PoolLeaseMaxAttempts = tc.durationMS, tc.maxAttempts
+			cfg.PoolLeaseCosts, cfg.PoolLeaseMaxAttempts = tc.costs, tc.maxAttempts
 			cfg.MaxRetries = 8
 			client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: cfg.OrganizationSlug})
 			_, err := ResolvePool(context.Background(), cfg, "", client, false)
@@ -243,14 +244,14 @@ func TestPoolPlanDynamicSizingFallsBackToMaxParallelism(t *testing.T) {
 	cfg := getConfig()
 	cfg.ServerBaseURL, cfg.PipelineSlug, cfg.PoolKey, cfg.MaxParallelism = server.URL, "pipeline", "rspec", 12
 	cfg.SelectionStrategy, cfg.SelectionParams = "xgboost", map[string]string{"duration_proportion_cutoff": "0.5"}
-	cfg.PoolLeaseDurationMS, cfg.PoolLeaseMaxAttempts = 30_000, 50
+	cfg.PoolLeaseCosts, cfg.PoolLeaseMaxAttempts = map[string]int{"duration_p50_ms": 30_000}, 50
 	var buf bytes.Buffer
 	setPlanWriter(t, &buf)
 	stderr := captureStderr(t)
 	require.NoError(t, PoolPlan(context.Background(), cfg, "", PlanOutputJSON, ""))
 	require.JSONEq(t, `{"BUILDKITE_TEST_ENGINE_POOL_ID":"dynamic","BUILDKITE_TEST_ENGINE_PARALLELISM":"12"}`, buf.String())
 	output := stderr()
-	require.Contains(t, output, "+++ Buildkite Test Engine Client: Planning\nbktec "+version.Version+"\n\nRequested\n  Selection strategy: xgboost\n    duration_proportion_cutoff = 0.5\n  Target time: automatic\n  Maximum nodes: 12\n  Pool lease duration budget: 30s\n  Pool lease max attempts: 50\n")
+	require.Contains(t, output, "+++ Buildkite Test Engine Client: Planning\nbktec "+version.Version+"\n\nRequested\n  Selection strategy: xgboost\n    duration_proportion_cutoff = 0.5\n  Target time: automatic\n  Maximum nodes: 12\n  Pool lease cost: duration_p50_ms=30000\n  Pool lease max attempts: 50\n")
 	require.Contains(t, output, "\nPlanning test pool\n  Key: rspec\n  ID: dynamic\n⚠️ Test pool dynamic did not return")
 	require.Contains(t, output, "falling back to --max-parallelism (12)")
 }
@@ -332,7 +333,7 @@ func TestResolvePrecreatedPoolSnapshot(t *testing.T) {
 	defer server.Close()
 	client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "acme"})
 	pool, err := ResolvePool(context.Background(), &config.Config{
-		PoolID: "ready", PoolLeaseDurationMS: 60_000, PoolLeaseMaxAttempts: 25,
+		PoolID: "ready", PoolLeaseCosts: map[string]int{"duration_p50_ms": 60_000}, PoolLeaseMaxAttempts: 25,
 	}, "does-not-exist", client, false)
 	require.NoError(t, err)
 	ready, err := client.WaitForPool(context.Background(), pool.ID)

@@ -747,8 +747,13 @@ func planCommandFlags() []cli.Flag {
 	return freshFlags(flags)
 }
 
+var poolLeaseCostFlag = &cli.StringFlag{
+	Name: "pool-lease-cost", Usage: "Cost budget per lease as dimension=budget, such as duration_p50_ms=100000 (unset uses the server default)",
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_LEASE_COST"), Destination: &cfg.PoolLeaseCost,
+}
+
 var poolLeaseDurationFlag = &cli.IntFlag{
-	Name: "pool-lease-duration-ms", Usage: "Duration budget per lease in milliseconds (0 uses the server default)",
+	Name: "pool-lease-duration-ms", Usage: "Deprecated: use --pool-lease-cost duration_p50_ms=<ms>",
 	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_LEASE_DURATION_MS"), Destination: &cfg.PoolLeaseDurationMS,
 }
 
@@ -759,7 +764,7 @@ var poolLeaseMaxAttemptsFlag = &cli.IntFlag{
 
 func poolPlanCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
-		filesFlag, tagFiltersFlag, accessTokenFlag, maxParallelismFlag, targetTimeFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
+		filesFlag, tagFiltersFlag, accessTokenFlag, maxParallelismFlag, targetTimeFlag, poolLeaseCostFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
 		&cli.StringFlag{
 			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec and pool consume; pool plan rejects it)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,

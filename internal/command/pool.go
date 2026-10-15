@@ -81,8 +81,8 @@ func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList strin
 		return api.PoolPlanParams{}, fmt.Errorf("pool planning requires the rspec, jest or playwright runner")
 	}
 	printRequested(os.Stderr, cfg)
-	if cfg.PoolLeaseDurationMS != 0 {
-		fmt.Fprintf(os.Stderr, "  Pool lease duration budget: %s\n", time.Duration(cfg.PoolLeaseDurationMS)*time.Millisecond)
+	for dimension, budget := range cfg.PoolLeaseCosts {
+		fmt.Fprintf(os.Stderr, "  Pool lease cost: %s=%d\n", dimension, budget)
 	}
 	if cfg.PoolLeaseMaxAttempts != 0 {
 		fmt.Fprintf(os.Stderr, "  Pool lease max attempts: %d\n", cfg.PoolLeaseMaxAttempts)
@@ -121,11 +121,8 @@ func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList strin
 			Selection: params.Selection, LocationPrefix: params.LocationPrefix, Metadata: params.Metadata,
 		},
 	}
-	if cfg.PoolLeaseDurationMS != 0 || cfg.PoolLeaseMaxAttempts != 0 {
-		request.Lease = &api.PoolPlanLease{MaxAttempts: cfg.PoolLeaseMaxAttempts}
-		if cfg.PoolLeaseDurationMS != 0 {
-			request.Lease.Costs = &api.PoolPlanLeaseCosts{DurationP90MS: cfg.PoolLeaseDurationMS}
-		}
+	if len(cfg.PoolLeaseCosts) > 0 || cfg.PoolLeaseMaxAttempts != 0 {
+		request.Lease = &api.PoolPlanLease{Costs: cfg.PoolLeaseCosts, MaxAttempts: cfg.PoolLeaseMaxAttempts}
 	}
 	return request, nil
 }

@@ -81,15 +81,22 @@ func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 
 func TestValidatePoolLeaseOptions(t *testing.T) {
 	for _, tc := range []struct {
-		name, poolID, wantError string
-		durationMS, maxAttempts int
+		name, poolID, wantError, cost string
+		durationMS, maxAttempts       int
+		wantCosts                     map[string]int
 	}{
 		{name: "defaults"},
-		{name: "duration override", durationMS: 60_000},
+		{name: "cost override", cost: "duration_p90_ms=60000", wantCosts: map[string]int{"duration_p90_ms": 60_000}},
+		{name: "deprecated duration budgets p50", durationMS: 60_000, wantCosts: map[string]int{"duration_p50_ms": 60_000}},
 		{name: "max attempts override", maxAttempts: 25},
+		{name: "cost and deprecated duration", cost: "duration_p90_ms=60000", durationMS: 60_000, wantError: "pool-lease-cost cannot be combined"},
+		{name: "cost without budget", cost: "duration_p50_ms", wantError: "pool-lease-cost must be"},
+		{name: "cost without dimension", cost: "=60000", wantError: "pool-lease-cost must be"},
+		{name: "zero cost budget", cost: "duration_p50_ms=0", wantError: "pool-lease-cost must be"},
+		{name: "non-integer cost budget", cost: "duration_p50_ms=1m", wantError: "pool-lease-cost must be"},
 		{name: "negative duration", durationMS: -1, wantError: "pool-lease-duration-ms"},
 		{name: "negative attempts", maxAttempts: -1, wantError: "pool-lease-max-attempts"},
-		{name: "existing pool ignores planning options", poolID: "pool-1", durationMS: 60_000, maxAttempts: 25},
+		{name: "existing pool ignores planning options", poolID: "pool-1", cost: "bogus", durationMS: 60_000, maxAttempts: 25},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
@@ -97,12 +104,13 @@ func TestValidatePoolLeaseOptions(t *testing.T) {
 			c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, "./mock-buildkite-agent"
 			c.PoolID, c.PoolKey, c.TestRunner = tc.poolID, "shared", "rspec"
 			c.BuildID, c.PipelineSlug = "build", "pipeline"
-			c.PoolLeaseDurationMS, c.PoolLeaseMaxAttempts = tc.durationMS, tc.maxAttempts
+			c.PoolLeaseCost, c.PoolLeaseDurationMS, c.PoolLeaseMaxAttempts = tc.cost, tc.durationMS, tc.maxAttempts
 			err := c.ValidateForPoolPlan()
 			if tc.wantError != "" {
 				require.ErrorContains(t, err, tc.wantError)
 			} else {
 				require.NoError(t, err)
+				require.Equal(t, tc.wantCosts, c.PoolLeaseCosts)
 			}
 		})
 	}

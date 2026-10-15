@@ -1,6 +1,7 @@
 package command
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -54,7 +55,7 @@ type poolSource struct {
 	cancel          context.CancelFunc
 	leaseLog        *log.Logger
 	// Worker goroutine only; inputs to leasePrefetch.schedule.
-	pace                float64       // actual runtime / p90 total; 0 until observed
+	pace                float64       // actual runtime / duration estimate; 0 until observed
 	lastAcquireDuration time.Duration // how long the last lease request took
 	// Background releases of idle prefetched leases; work joins them on exit.
 	releasing sync.WaitGroup
@@ -348,11 +349,12 @@ const (
 	maxPrefetchHeadroom = prefetchMaxIdle / 2
 )
 
-// leaseEstimate sums attempt p90 costs; zero means no duration estimate.
+// leaseEstimate sums the attempts' duration costs, p50 or p90 depending on the
+// pool; zero means no duration estimate.
 func leaseEstimate(attempts []api.LeaseAttempt) time.Duration {
 	var total int64
 	for _, a := range attempts {
-		total += a.Costs.DurationP90MS
+		total += cmp.Or(a.Costs.DurationP90MS, a.Costs.DurationP50MS)
 	}
 	return time.Duration(total) * time.Millisecond
 }
@@ -385,14 +387,15 @@ func timerC(t *time.Timer) <-chan time.Time {
 // dispatched. The timer fires timeUntilPrefetch after dispatch:
 //
 //	timeUntilPrefetch     = predictedRuntime - headroom - leaseRequestAllowance
-//	predictedRuntime      = p90Total × pace
+//	predictedRuntime      = estimate × pace
 //	headroom              = min(prefetchHeadroomRatio × predictedRuntime, maxPrefetchHeadroom)
 //	leaseRequestAllowance = max(minLeaseRequestAllowance, 2 × last lease request duration)
 //
 // where:
-//   - p90Total sums the attempts' duration_p90_ms. A sum of p90s overestimates
-//     a typical lease.
-//   - pace corrects that: the ratio of actual runtime to p90Total on this
+//   - estimate sums the attempts' duration_p90_ms or duration_p50_ms, whichever
+//     the pool costs leases by. A sum of p90s overestimates a typical lease,
+//     and a sum of p50s tends to underestimate it.
+//   - pace corrects that: the ratio of actual runtime to estimate on this
 //     worker's earlier leases, or 1 before any are observed.
 //   - headroom prefetches earlier to cover leases that finish faster than
 //     predicted, capped so long leases do not hold the next lease for minutes.
@@ -404,22 +407,22 @@ func timerC(t *time.Timer) <-chan time.Time {
 // there is no timer. Either way, if the lease finishes first, executeLease
 // prefetches alongside completing it.
 func (p *leasePrefetch) schedule(s *poolSource, lease *poolLease, started time.Time) {
-	p90Total := leaseEstimate(lease.Attempts)
-	if p90Total <= 0 {
+	estimate := leaseEstimate(lease.Attempts)
+	if estimate <= 0 {
 		return
 	}
 	pace := s.pace
 	if pace == 0 {
 		pace = 1
 	}
-	predictedRuntime := time.Duration(float64(p90Total) * pace)
+	predictedRuntime := time.Duration(float64(estimate) * pace)
 	headroom := min(time.Duration(prefetchHeadroomRatio*float64(predictedRuntime)), maxPrefetchHeadroom)
 	leaseRequestAllowance := max(minLeaseRequestAllowance, 2*s.lastAcquireDuration)
 	// started is the dispatch time; this runs slightly after it.
 	timeUntilPrefetch := max(predictedRuntime-headroom-leaseRequestAllowance-time.Since(started), 0)
 	p.due = time.NewTimer(timeUntilPrefetch)
-	debug.Printf("Scheduled next lease prefetch in %s (p90 total=%s; pace=%.2f; predicted runtime=%s; headroom=%s; lease request allowance=%s)",
-		timeUntilPrefetch.Round(time.Millisecond), p90Total, pace, predictedRuntime.Round(time.Millisecond), headroom.Round(time.Millisecond), leaseRequestAllowance.Round(time.Millisecond))
+	debug.Printf("Scheduled next lease prefetch in %s (estimate=%s; pace=%.2f; predicted runtime=%s; headroom=%s; lease request allowance=%s)",
+		timeUntilPrefetch.Round(time.Millisecond), estimate, pace, predictedRuntime.Round(time.Millisecond), headroom.Round(time.Millisecond), leaseRequestAllowance.Round(time.Millisecond))
 }
 
 func (p *leasePrefetch) start(ctx context.Context, s *poolSource, client poolScheduler, poolID string) {
@@ -651,10 +654,10 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 				}
 			}
 			// pace = average of the previous pace and this lease's actual
-			// runtime / p90 total: recent leases weigh most, and one unusual
-			// lease moves it only halfway.
-			if p90Total := leaseEstimate(lease.Attempts); p90Total > 0 && !started.IsZero() && result.Status == "completed" {
-				observed := float64(time.Since(started)) / float64(p90Total)
+			// runtime / duration estimate: recent leases weigh most, and one
+			// unusual lease moves it only halfway.
+			if estimate := leaseEstimate(lease.Attempts); estimate > 0 && !started.IsZero() && result.Status == "completed" {
+				observed := float64(time.Since(started)) / float64(estimate)
 				if s.pace == 0 {
 					s.pace = observed
 				} else {

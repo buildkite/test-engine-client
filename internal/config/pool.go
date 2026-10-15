@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"strconv"
 	"strings"
 )
 
@@ -32,6 +33,22 @@ func (c *Config) ValidateForPoolPlan() error {
 		c.validateDynamicParallelism()
 		if c.PoolLeaseDurationMS < 0 {
 			c.errs.appendFieldError("pool-lease-duration-ms", "must be 0 (server default) or a positive millisecond budget")
+		}
+		switch {
+		case c.PoolLeaseCost != "" && c.PoolLeaseDurationMS != 0:
+			c.errs.appendFieldError("pool-lease-cost", "cannot be combined with the deprecated pool-lease-duration-ms")
+		case c.PoolLeaseCost != "":
+			// Test Scheduler validates the dimension, so new ones need no bktec change.
+			dimension, value, _ := strings.Cut(c.PoolLeaseCost, "=")
+			budget, err := strconv.Atoi(value)
+			if dimension == "" || err != nil || budget <= 0 {
+				c.errs.appendFieldError("pool-lease-cost", "must be <dimension>=<positive budget>, such as duration_p50_ms=100000")
+			} else {
+				c.PoolLeaseCosts = map[string]int{dimension: budget}
+			}
+		case c.PoolLeaseDurationMS > 0:
+			// p50 matches the Scheduler's default cost dimension.
+			c.PoolLeaseCosts = map[string]int{"duration_p50_ms": c.PoolLeaseDurationMS}
 		}
 		if c.PoolLeaseMaxAttempts < 0 {
 			c.errs.appendFieldError("pool-lease-max-attempts", "must be 0 (server default) or a positive attempt limit")
