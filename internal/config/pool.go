@@ -2,7 +2,10 @@ package config
 
 import (
 	"context"
+	"slices"
 	"strings"
+
+	"github.com/kballard/go-shellquote"
 )
 
 const schedulerOIDCClaims = "organization_id,pipeline_id,build_id,job_id"
@@ -87,6 +90,13 @@ func (c *Config) ValidateForPoolConsume() error {
 	if c.ResultPath == "" && c.TestRunner != "pytest" {
 		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_RESULT_PATH", "must not be blank")
 	}
+	if c.TestRunner == "pytest" {
+		for field, command := range map[string]string{"BUILDKITE_TEST_ENGINE_TEST_CMD": c.TestCommand, "BUILDKITE_TEST_ENGINE_RETRY_CMD": c.RetryCommand} {
+			if pytestStopsEarly(command) {
+				c.errs.appendFieldError(field, "pool consume doesn't support pytest options that stop at a failure, such as -x, --maxfail or --stepwise")
+			}
+		}
+	}
 	if err := c.ValidateForPoolPlan(); err != nil {
 		return err
 	}
@@ -95,4 +105,22 @@ func (c *Config) ValidateForPoolConsume() error {
 		return c.errs
 	}
 	return nil
+}
+
+// pytestStopsEarly reports whether a pytest command stops at a failure. The
+// tests it doesn't run are missing from the report, so their leased files
+// would pass.
+func pytestStopsEarly(command string) bool {
+	words, err := shellquote.Split(command)
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(words, func(word string) bool {
+		option, _, _ := strings.Cut(word, "=")
+		switch option {
+		case "-x", "--exitfirst", "--maxfail", "--sw", "--stepwise", "--sw-skip", "--stepwise-skip":
+			return true
+		}
+		return false
+	})
 }

@@ -141,6 +141,13 @@ fixtures.
 With `--local-retry-count`, bktec reruns a lease's failed tests by node ID with
 the retry command, which defaults to the test command.
 
+pytest options that stop at a failure, such as `-x`, `--maxfail` and
+`--stepwise`, aren't supported. Each worker stops only its own lease while the
+others keep running the pool, and pytest doesn't report the tests it didn't
+run. bktec rejects these options in the test and retry commands, but can't see
+them in pytest's configuration, such as `addopts`, so don't set them there
+either.
+
 Run bktec from pytest's rootdir. pytest reports tests relative to its rootdir,
 and bktec matches them to the leased files, which are relative to the working
 directory.
@@ -182,8 +189,8 @@ errors the lease's tests.
 A pytest lease's tests are reported as passed or failed from the pytest report.
 All of a lease's tests are reported as errored when the command doesn't write a
 usable report, when a test file fails to collect, which stops pytest from
-running any tests, or when pytest exits with an error but reports no failed
-tests, such as when it collects no tests.
+running any tests, or when pytest exits for any reason other than failed tests,
+such as when it's interrupted or collects no tests.
 
 bktec exits with status 16 if any tests errored, or with status 1 if tests
 failed.

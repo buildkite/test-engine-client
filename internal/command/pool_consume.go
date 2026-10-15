@@ -117,7 +117,8 @@ func consumeBatches(ctx context.Context, source *poolSource, run func(ctx contex
 // the batch report. Failures without a usable report are errored results.
 func runPoolCommand(ctx context.Context, testRunner runner.TestRunner, batch runnerexec.Batch, retry bool) runnerexec.Result {
 	format := testRunner.ResultFormat()
-	if _, ok := testRunner.(runner.Pytest); ok {
+	_, pytest := testRunner.(runner.Pytest)
+	if pytest {
 		// pytest's ResultFormat is for uploads, and is empty when
 		// buildkite-test-collector uploads its JSON report itself.
 		format = "pytest-json"
@@ -148,6 +149,11 @@ func runPoolCommand(ctx context.Context, testRunner runner.TestRunner, batch run
 			return errored("%s exited with %v without a report: %v", testRunner.Name(), exitErr, err)
 		}
 		return errored("%s did not write a report: %v", testRunner.Name(), err)
+	}
+	// Like bktec run, pytest exiting other than for failed tests, such as when
+	// it's interrupted, is an error even if the report has failed tests.
+	if exitCode := new(exec.ExitError); pytest && errors.As(exitErr, &exitCode) && exitCode.ExitCode() != 1 {
+		return errored("%s exited with %v", testRunner.Name(), exitErr)
 	}
 	if exitErr != nil {
 		// Like bktec run, a non-zero exit fails the batch even if every test

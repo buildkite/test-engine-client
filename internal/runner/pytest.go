@@ -72,9 +72,9 @@ func NewPytest(c RunnerConfig) Pytest {
 	}
 
 	if useJUnit {
-		fmt.Println("Buildkite Test Engine Client: Using JUnit XML output for pytest results.")
+		fmt.Fprintln(os.Stderr, "Buildkite Test Engine Client: Using JUnit XML output for pytest results.")
 	} else {
-		fmt.Println("Buildkite Test Engine Client: Using JSON output for pytest results.")
+		fmt.Fprintln(os.Stderr, "Buildkite Test Engine Client: Using JSON output for pytest results.")
 	}
 
 	if c.TestFilePattern == "" {
@@ -226,9 +226,12 @@ func parsePytestJUnitBatchReport(data []byte) (ParsedReport, error) {
 	var parsed ParsedReport
 	seen := map[string]int{}
 	for _, test := range tests {
-		// pytest reports a collection error as an error without a classname.
-		if test.Classname == "" && test.Error != nil {
-			parsed.ErrorsOutsideTests = true
+		// pytest reports collection errors and module-level skips without a
+		// classname. Neither is a test.
+		if test.Classname == "" {
+			if test.Result != TestStatusSkipped {
+				parsed.ErrorsOutsideTests = true
+			}
 			continue
 		}
 		// Scope is the raw classname, as in runParseJUnit.

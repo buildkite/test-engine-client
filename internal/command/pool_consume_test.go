@@ -339,6 +339,19 @@ def test_param(v):
 				"tests/test_ok.py":     "def test_works():\n    pass\n",
 				// A leased test runs with the test command, not the retry command.
 				"tests/test_example.py": "import os\ndef test_leased():\n    assert 'BKTEC_RETRY' not in os.environ\n",
+				// JUnit XML reports a module-level skip without a classname.
+				"tests/test_skipped.py": "import pytest\npytest.skip('not yet', allow_module_level=True)\n",
+				// Fails on its first run only, then pytest is interrupted, which
+				// errors the file even though the retry passes.
+				"tests/test_exit.py": `import os, pytest
+def test_flaky():
+    marker = os.path.join(os.path.dirname(__file__), "..", "exit.ran")
+    if not os.path.exists(marker):
+        open(marker, "w").close()
+        assert False
+def test_exit():
+    pytest.exit("interrupted")
+`,
 			} {
 				if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
 					t.Fatal(err)
@@ -355,10 +368,11 @@ def test_param(v):
 			}}
 			leases := [][]api.LeaseAttempt{
 				{attempt("flaky", "tests/test_flaky.py"), attempt("muted", "./tests/test_muted.py")},
-				{attempt("failed", "tests/test_failed.py"), attempt("ok", "tests/test_ok.py")},
+				{attempt("failed", "tests/test_failed.py"), attempt("ok", "tests/test_ok.py"), attempt("skipped", "tests/test_skipped.py")},
 				// pytest runs no tests after a collection error.
 				{attempt("broken", "tests/test_broken.py"), attempt("ok-after-broken", "tests/test_ok.py")},
 				{example},
+				{attempt("exit", "tests/test_exit.py")},
 			}
 			var mu sync.Mutex
 			acquired := 0
@@ -411,14 +425,15 @@ def test_param(v):
 
 			want := map[string][]api.AttemptResult{
 				"lease-1": {{AttemptID: "flaky", Result: "passed"}, {AttemptID: "muted", Result: "passed"}},
-				"lease-2": {{AttemptID: "failed", Result: "failed"}, {AttemptID: "ok", Result: "passed"}},
+				"lease-2": {{AttemptID: "failed", Result: "failed"}, {AttemptID: "ok", Result: "passed"}, {AttemptID: "skipped", Result: "passed"}},
 				"lease-3": {{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok-after-broken", Result: "errored"}},
 				"lease-4": {{AttemptID: "example", Result: "passed"}},
+				"lease-5": {{AttemptID: "exit", Result: "errored"}},
 			}
 			if !reflect.DeepEqual(completed, want) {
 				t.Errorf("completed=%v, want %v", completed, want)
 			}
-			if err == nil || !strings.Contains(err.Error(), "passed attempts: 4; failed attempts: 1; errored attempts: 2") {
+			if err == nil || !strings.Contains(err.Error(), "passed attempts: 5; failed attempts: 1; errored attempts: 3") {
 				t.Fatalf("err=%v, want every attempt counted", err)
 			}
 		})
