@@ -305,6 +305,141 @@ test.skip('not yet', () => {})`,
 	}
 }
 
+// TestPoolConsumePytest runs real pytest commands against a fake Scheduler,
+// with buildkite-test-collector's JSON report and with JUnit XML.
+func TestPoolConsumePytest(t *testing.T) {
+	if err := exec.Command("python", "-c", "import pytest, buildkite_test_collector").Run(); err != nil {
+		t.Skip("pytest and buildkite-test-collector Python packages are not installed")
+	}
+	for _, tc := range []struct{ name, report, scope string }{
+		{"json", "--json={{resultPath}}", "tests/test_%s.py"},
+		// JUnit XML reports the scope as the classname.
+		{"junit", "--junit-xml={{resultPath}}", "tests.test_%s"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, "tests"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			for name, source := range map[string]string{
+				// Node IDs are relative to pytest's rootdir.
+				"pytest.ini": "[pytest]\n",
+				// Fails on its first run only, so the local retry of its node ID passes it.
+				"tests/test_flaky.py": `import os, pytest
+@pytest.mark.parametrize("v", [1, 2])
+def test_param(v):
+    marker = os.path.join(os.path.dirname(__file__), "..", "flaky.ran")
+    if v == 2 and not os.path.exists(marker):
+        open(marker, "w").close()
+        assert False
+`,
+				"tests/test_muted.py":  "def test_fails():\n    assert False\n",
+				"tests/test_failed.py": "class TestGroup:\n    def test_fails(self):\n        assert False\n",
+				"tests/test_broken.py": "boom()\n",
+				"tests/test_ok.py":     "def test_works():\n    pass\n",
+				// A leased test runs with the test command, not the retry command.
+				"tests/test_example.py": "import os\ndef test_leased():\n    assert 'BKTEC_RETRY' not in os.environ\n",
+				// JUnit XML reports a module-level skip without a classname.
+				"tests/test_skipped.py": "import pytest\npytest.skip('not yet', allow_module_level=True)\n",
+				// Fails on its first run only, then pytest is interrupted, which
+				// errors the file even though the retry passes.
+				"tests/test_exit.py": `import os, pytest
+def test_flaky():
+    marker = os.path.join(os.path.dirname(__file__), "..", "exit.ran")
+    if not os.path.exists(marker):
+        open(marker, "w").close()
+        assert False
+def test_exit():
+    pytest.exit("interrupted")
+`,
+			} {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Chdir(dir)
+
+			attempt := func(id, path string) api.LeaseAttempt {
+				return api.LeaseAttempt{ID: id, SelectorType: "test_plan_test_case_v1", Selector: plan.TestCase{Format: plan.TestCaseFormatSelector, Value: path}}
+			}
+			example := api.LeaseAttempt{ID: "example", SelectorType: "test_plan_test_case_v1", Selector: plan.TestCase{
+				Format: plan.TestCaseFormatExample, Identifier: "tests/test_example.py::test_leased", Path: "tests/test_example.py::test_leased",
+				Scope: fmt.Sprintf(tc.scope, "example"), Name: "test_leased",
+			}}
+			leases := [][]api.LeaseAttempt{
+				{attempt("flaky", "tests/test_flaky.py"), attempt("muted", "./tests/test_muted.py")},
+				{attempt("failed", "tests/test_failed.py"), attempt("ok", "tests/test_ok.py"), attempt("skipped", "tests/test_skipped.py")},
+				// pytest runs no tests after a collection error.
+				{attempt("broken", "tests/test_broken.py"), attempt("ok-after-broken", "tests/test_ok.py")},
+				{example},
+				{attempt("exit", "tests/test_exit.py")},
+			}
+			var mu sync.Mutex
+			acquired := 0
+			completed := map[string][]api.AttemptResult{}
+			names := map[string]string{}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				defer mu.Unlock()
+				base := "/v2/organizations/org/test-scheduler/pools/existing"
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == base:
+					fmt.Fprintf(w, `{"id":"existing","state":"consuming","muted_tests":[{"scope":%q,"name":"test_fails"}]}`, fmt.Sprintf(tc.scope, "muted"))
+				case r.Method == http.MethodPost && r.URL.Path == base+"/leases":
+					if acquired == len(leases) {
+						fmt.Fprint(w, `{"lease":null,"pool":{"state":"consumed"}}`)
+						return
+					}
+					// The Scheduler uses the idempotency key as the lease ID.
+					key := r.Header.Get("Idempotency-Key")
+					names[key] = fmt.Sprintf("lease-%d", acquired+1)
+					lease := api.Lease{ID: key, ExpiresAt: time.Now().Add(time.Minute), Attempts: leases[acquired]}
+					acquired++
+					_ = json.NewEncoder(w).Encode(map[string]any{"lease": lease, "pool": map[string]string{"state": "consuming"}})
+				case r.Method == http.MethodPost && r.URL.Path == base+"/leases/complete":
+					var body struct {
+						Leases []struct {
+							ID       string              `json:"lease_id"`
+							Attempts []api.AttemptResult `json:"attempts"`
+						} `json:"leases"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Leases) != 1 {
+						t.Errorf("completion=%+v err=%v", body, err)
+					}
+					completed[names[body.Leases[0].ID]] = body.Leases[0].Attempts
+					fmt.Fprint(w, `{}`)
+				default:
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					http.Error(w, "unexpected request", http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+
+			cfg := config.New()
+			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = "existing", "org", "suite", "pytest"
+			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
+			cfg.ResultPath = filepath.Join(dir, "results")
+			cfg.TestCommand = "python -m pytest -p no:cacheprovider {{testExamples}} " + tc.report
+			cfg.RetryCommand = "env BKTEC_RETRY=1 " + cfg.TestCommand
+			err := PoolConsume(context.Background(), &cfg, "", 1)
+
+			want := map[string][]api.AttemptResult{
+				"lease-1": {{AttemptID: "flaky", Result: "passed"}, {AttemptID: "muted", Result: "passed"}},
+				"lease-2": {{AttemptID: "failed", Result: "failed"}, {AttemptID: "ok", Result: "passed"}, {AttemptID: "skipped", Result: "passed"}},
+				"lease-3": {{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok-after-broken", Result: "errored"}},
+				"lease-4": {{AttemptID: "example", Result: "passed"}},
+				"lease-5": {{AttemptID: "exit", Result: "errored"}},
+			}
+			if !reflect.DeepEqual(completed, want) {
+				t.Errorf("completed=%v, want %v", completed, want)
+			}
+			if err == nil || !strings.Contains(err.Error(), "passed attempts: 5; failed attempts: 1; errored attempts: 3") {
+				t.Fatalf("err=%v, want every attempt counted", err)
+			}
+		})
+	}
+}
+
 func TestRunPoolCommandRequiresUsableReport(t *testing.T) {
 	for _, tc := range []struct {
 		name, script string
@@ -327,7 +462,7 @@ func TestRunPoolCommandRequiresUsableReport(t *testing.T) {
 				ResultPath:  resultPath,
 			})
 			batch := runnerexec.Batch{ID: "b_1", Tests: []plan.TestCase{{Format: plan.TestCaseFormatSelector, Value: "a.test.js"}}}
-			if got := runPoolCommand(context.Background(), testRunner, batch); got.Status != tc.wantStatus {
+			if got := runPoolCommand(context.Background(), testRunner, batch, false); got.Status != tc.wantStatus {
 				t.Fatalf("status=%q, want %q", got.Status, tc.wantStatus)
 			}
 		})

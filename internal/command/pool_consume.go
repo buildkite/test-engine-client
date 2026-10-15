@@ -14,7 +14,6 @@ import (
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
 	"github.com/buildkite/test-engine-client/v3/internal/config"
-	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
 )
@@ -44,8 +43,8 @@ func PoolConsume(ctx context.Context, cfg *config.Config, files string, retries 
 	}
 	uploads := api.NewClient(api.ClientConfig{ServerBaseURL: cfg.ServerBaseURL, UploadBaseURL: cfg.UploadBaseURL, OrganizationSlug: cfg.OrganizationSlug})
 	return poolWork(ctx, cfg, files, retries, func(ctx context.Context, source *poolSource) error {
-		return consumeBatches(ctx, source, func(ctx context.Context, batch runnerexec.Batch) runnerexec.Result {
-			result := runPoolCommand(ctx, testRunner, batch)
+		return consumeBatches(ctx, source, func(ctx context.Context, batch runnerexec.Batch, retry bool) runnerexec.Result {
+			result := runPoolCommand(ctx, testRunner, batch, retry)
 			if ctx.Err() == nil {
 				uploadResults(ctx, uploads, cfg, testRunner)
 			}
@@ -58,7 +57,7 @@ func PoolConsume(ctx context.Context, cfg *config.Config, files string, retries 
 // finishes. It stands in for runnerexec.Run without a persistent process, and
 // like it, stops dispatching and lets the source release its lease on SIGINT
 // or SIGTERM.
-func consumeBatches(ctx context.Context, source *poolSource, run func(context.Context, runnerexec.Batch) runnerexec.Result) error {
+func consumeBatches(ctx context.Context, source *poolSource, run func(ctx context.Context, batch runnerexec.Batch, retry bool) runnerexec.Result) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
@@ -104,7 +103,7 @@ func consumeBatches(ctx context.Context, source *poolSource, run func(context.Co
 		if err := source.Dispatched(*batch); err != nil {
 			return err
 		}
-		result := run(ctx, *batch)
+		result := run(ctx, *batch, source.retrying())
 		if ctx.Err() != nil {
 			// The source already treats this batch as unresolved.
 			return stopped()
@@ -116,14 +115,21 @@ func consumeBatches(ctx context.Context, source *poolSource, run func(context.Co
 // runPoolCommand runs one batch with the runner's test command, or its retry
 // command when the batch retries failed tests, and returns its result file as
 // the batch report. Failures without a usable report are errored results.
-func runPoolCommand(ctx context.Context, testRunner runner.TestRunner, batch runnerexec.Batch) runnerexec.Result {
+func runPoolCommand(ctx context.Context, testRunner runner.TestRunner, batch runnerexec.Batch, retry bool) runnerexec.Result {
 	format := testRunner.ResultFormat()
+	_, pytest := testRunner.(runner.Pytest)
+	if pytest {
+		// pytest's ResultFormat is for uploads, and is empty when
+		// buildkite-test-collector uploads its JSON report itself.
+		format = "pytest-json"
+		if testRunner.ResultFormat() == "junit" {
+			format = "pytest-junit"
+		}
+	}
 	errored := func(message string, args ...any) runnerexec.Result {
 		fmt.Printf("Buildkite Test Engine Client: "+message+"\n", args...)
 		return runnerexec.Result{Status: "errored", ReportFormat: format}
 	}
-	// Local retries are the only batches of examples, since pool consume's leases are files.
-	retry := slices.ContainsFunc(batch.Tests, func(test plan.TestCase) bool { return test.Format == plan.TestCaseFormatExample })
 	if retry {
 		fmt.Printf("+++ Buildkite Test Engine Client: ♻️ Retrying %d failed tests\n", len(batch.Tests))
 	}
@@ -143,6 +149,11 @@ func runPoolCommand(ctx context.Context, testRunner runner.TestRunner, batch run
 			return errored("%s exited with %v without a report: %v", testRunner.Name(), exitErr, err)
 		}
 		return errored("%s did not write a report: %v", testRunner.Name(), err)
+	}
+	// Like bktec run, pytest exiting other than for failed tests, such as when
+	// it's interrupted, is an error even if the report has failed tests.
+	if exitCode := new(exec.ExitError); pytest && errors.As(exitErr, &exitCode) && exitCode.ExitCode() != 1 {
+		return errored("%s exited with %v", testRunner.Name(), exitErr)
 	}
 	if exitErr != nil {
 		// Like bktec run, a non-zero exit fails the batch even if every test
