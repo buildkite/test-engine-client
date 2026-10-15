@@ -101,4 +101,24 @@ export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
 
 ## Run tests from a Test Scheduler pool
-To run pytest tests from a Test Scheduler pool, use [`bktec pool consume`](./pool-consume.md#run-a-pytest-pool-worker). It uses the test command configured above, and runs pytest once for each lease.
+To run pytest tests from a Test Scheduler pool, use [`bktec pool consume`](./pool-consume.md). It uses the test command configured above, and runs pytest once for each lease.
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER=pytest
+
+bktec pool consume --suite-slug my-suite --local-retry-count 1
+```
+
+For each lease, bktec runs the test command with the lease's test files, or the node IDs of its tests. Like with `bktec run`, the command must include `--json=` or `--junit-xml`, and the result path defaults to a temporary file.
+
+Each command starts a new pytest session, so every lease pays pytest's startup cost, such as collecting tests and running `conftest.py` and session-scoped fixtures.
+
+With `--local-retry-count`, bktec reruns a lease's failed tests by node ID with the retry command, which defaults to the test command.
+
+pytest options that stop at a failure, such as `-x`, `--maxfail` and `--stepwise`, aren't supported. Each worker stops only its own lease while the others keep running the pool, and pytest doesn't report the tests it didn't run. bktec rejects these options in the test and retry commands, but can't see them in pytest's configuration, such as `addopts`, so don't set them there either.
+
+Run bktec from pytest's rootdir. pytest reports tests relative to its rootdir, and bktec matches them to the leased files, which are relative to the working directory.
+
+### Pool results
+
+A lease's tests are reported as passed or failed from the pytest report. All of a lease's tests are reported as errored when the command doesn't write a usable report, when a test file fails to collect, which stops pytest from running any tests, or when pytest exits for any reason other than failed tests, such as when it's interrupted or collects no tests.
