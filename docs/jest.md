@@ -108,3 +108,28 @@ Note that this will cause Jest to parse all test files on every retry, which may
 
 ## Run tests from a Test Scheduler pool
 To run Jest tests from a Test Scheduler pool, use [`bktec pool consume`](./pool-consume.md). It uses the test command and result path configured above, and runs Jest once for each lease.
+
+```sh
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER=jest
+export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/jest-result.json
+
+bktec pool consume --suite-slug my-suite --local-retry-count 1
+```
+
+For each lease, bktec runs the test command with the lease's test files. The command must write Jest's JSON report to `{{resultPath}}`.
+
+With `--local-retry-count`, bktec reruns a lease's failed tests with the retry command. Unless you set `BUILDKITE_TEST_ENGINE_RETRY_CMD` (`--retry-command`), the retry command runs only the files of those tests:
+
+```sh
+npx jest --runTestsByPath {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}
+```
+
+### Pool results
+
+A lease's tests are reported as passed or failed from the Jest report. A test file that fails outside its tests, for example because it doesn't load, is reported as errored without affecting the lease's other files.
+
+All of a lease's tests are reported as errored when:
+
+- the command doesn't write a usable report.
+- a file with failed tests also fails outside them, for example in an `afterAll` hook, because the Jest report doesn't say which file.
+- Jest exits with an error but reports no failed tests, such as when a coverage threshold isn't met.
