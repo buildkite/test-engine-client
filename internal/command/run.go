@@ -396,6 +396,15 @@ func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.Tes
 			}
 		}
 	}
+
+	// Errored files have no tests, so they're listed even when no tests ran.
+	if erroredFiles := runResult.ErroredFiles(); len(erroredFiles) > 0 {
+		fmt.Println("")
+		fmt.Println("+++ Errored test files:")
+		for _, file := range erroredFiles {
+			fmt.Printf("- %s\n", file)
+		}
+	}
 	fmt.Println("===================================================")
 }
 

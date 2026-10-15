@@ -250,8 +250,8 @@ func TestJestRun_RuntimeError(t *testing.T) {
 	}
 
 	// Only the file errored, so the other files' failed tests can be retried.
-	if got, want := result.Error().Error(), "Test files failed to run: runtimeError.spec.js"; got != want {
-		t.Errorf("Jest.Run(%v) RunResult.Error = %q, want %q", testCases, got, want)
+	if diff := cmp.Diff(result.ErroredFiles(), []string{"runtimeError.spec.js"}); diff != "" {
+		t.Errorf("Jest.Run(%v) RunResult.ErroredFiles() diff (-got +want):\n%s", testCases, diff)
 	}
 	if !result.Retryable() {
 		t.Errorf("Jest.Run(%v) RunResult.Retryable = false, want true", testCases)

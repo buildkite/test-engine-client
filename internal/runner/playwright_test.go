@@ -153,8 +153,8 @@ func TestPlaywrightRun_Error(t *testing.T) {
 	if result.Status() != RunStatusError {
 		t.Errorf("Playwright.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusError)
 	}
-	if got, want := result.Error().Error(), "Test files failed to run: tests/error.spec.js"; got != want {
-		t.Errorf("Playwright.Run(%v) RunResult.Error = %q, want %q", testCases, got, want)
+	if diff := cmp.Diff(result.ErroredFiles(), []string{"tests/error.spec.js"}); diff != "" {
+		t.Errorf("Playwright.Run(%v) RunResult.ErroredFiles() diff (-got +want):\n%s", testCases, diff)
 	}
 	if !result.Retryable() {
 		t.Errorf("Playwright.Run(%v) RunResult.Retryable = false, want true", testCases)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 )
@@ -194,10 +193,20 @@ func (r *RunResult) Status() RunStatus {
 }
 
 func (r *RunResult) Error() error {
-	if r.error == nil && len(r.erroredFiles) > 0 {
-		return fmt.Errorf("Test files failed to run: %s", strings.Join(r.erroredFiles, ", "))
+	switch {
+	case r.error != nil:
+		return r.error
+	case len(r.erroredFiles) == 1:
+		return fmt.Errorf("1 test file failed to run")
+	case len(r.erroredFiles) > 1:
+		return fmt.Errorf("%d test files failed to run", len(r.erroredFiles))
 	}
-	return r.error
+	return nil
+}
+
+// ErroredFiles returns the test files that failed to run.
+func (r *RunResult) ErroredFiles() []string {
+	return r.erroredFiles
 }
 
 // Retryable reports whether failed tests can be retried despite the run's
