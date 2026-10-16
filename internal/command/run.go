@@ -396,6 +396,15 @@ func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.Tes
 			}
 		}
 	}
+
+	// Errored files have no tests, so they're listed even when no tests ran.
+	if erroredFiles := runResult.ErroredFiles(); len(erroredFiles) > 0 {
+		fmt.Println("")
+		fmt.Println("+++ Errored test files:")
+		for _, file := range erroredFiles {
+			fmt.Printf("- %s\n", file)
+		}
+	}
 	fmt.Println("===================================================")
 }
 
@@ -460,6 +469,9 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 		fmt.Println("Buildkite Test Engine Client: Warning: upload-results is enabled but no upload token was provided. Test results will not be uploaded.")
 	}
 
+	// runErr is the error of the last test command. A run with errored test
+	// files keeps the last failed command's error, even if a retry passes.
+	var runErr error
 	for attemptCount <= maxRetries {
 		if attemptCount == 0 {
 			fmt.Printf("+++ Buildkite Test Engine Client: Running tests\n")
@@ -475,7 +487,9 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 			})
 		}
 
-		err := testRunner.Run(runResult, *testsCases, attemptCount > 0)
+		if err := testRunner.Run(runResult, *testsCases, attemptCount > 0); err != nil || runResult.Status() != runner.RunStatusError {
+			runErr = err
+		}
 
 		uploadResults(ctx, apiClient, cfg, testRunner)
 
@@ -493,14 +507,16 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 
 		// An error outside of the tests (such as a Go compilation failure, or a
 		// runner crashing before running any tests) cannot be fixed by
-		// retrying the failed tests, so the run is terminal.
-		if runResult.Status() == runner.RunStatusError {
-			return *runResult, err
+		// retrying the failed tests, so the run is terminal. Test files that
+		// failed to run, such as files that didn't load, still error the run,
+		// but the other files' failed tests are retried.
+		if !runResult.Retryable() {
+			return *runResult, runErr
 		}
 
 		// Don't retry if we've reached max retries.
 		if attemptCount == maxRetries {
-			return *runResult, err
+			return *runResult, runErr
 		}
 
 		failedTests := runResult.FailedTests()
@@ -519,7 +535,7 @@ func runTestsWithRetry(ctx context.Context, apiClient *api.Client, cfg *config.C
 
 			attemptCount++
 		} else {
-			return *runResult, err
+			return *runResult, runErr
 		}
 	}
 

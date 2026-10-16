@@ -215,6 +215,19 @@ test.describe.serial('serial', () => {
   test('fails', () => { throw new Error('fails') })
 })`,
 		"tests/broken.spec.js": `boom()`,
+		// Fails on its first run only, so it passes only if the run after
+		// broken.spec.js fails to load keeps its local retry.
+		"tests/flaky-after-broken.spec.js": `const { test } = require('@playwright/test')
+test('passes on retry', ({}, info) => {
+  const marker = __dirname + '/../flaky-after-broken.' + info.project.name
+  if (!require('fs').existsSync(marker)) {
+    require('fs').writeFileSync(marker, '')
+    throw new Error('first run')
+  }
+})`,
+		// Playwright locates the load error in the helper, which isn't leased.
+		"broken-helper.js":     `boom()`,
+		"tests/helper.spec.js": `require('../broken-helper.js')`,
 		// A test skipped on purpose doesn't affect the file's attempt.
 		"tests/ok.spec.js": `const { test } = require('@playwright/test')
 test('works', () => {})
@@ -233,8 +246,11 @@ test.skip('not yet', () => {})`,
 		{attempt("flaky", "tests/flaky.spec.js"), attempt("muted", "tests/muted.spec.js"), attempt("serial", "tests/serial.spec.js")},
 		// A failure in one project fails the test's attempt.
 		{attempt("failed", "tests/failed.spec.js"), attempt("ok", "tests/ok.spec.js")},
-		// Playwright runs no tests when a file doesn't load.
-		{attempt("broken", "tests/broken.spec.js"), attempt("ok-after-broken", "tests/ok.spec.js")},
+		// Playwright runs no tests when a file doesn't load, so the other files
+		// run again without it.
+		{attempt("broken", "tests/broken.spec.js"), attempt("ok-after-broken", "tests/ok.spec.js"), attempt("flaky-after-broken", "tests/flaky-after-broken.spec.js")},
+		// A load error outside the leased files errors them all.
+		{attempt("helper", "tests/helper.spec.js"), attempt("ok-after-helper", "tests/ok.spec.js")},
 		// A failed setup skips the tests that depend on it.
 		{attempt("ok-after-setup", "tests/ok.spec.js")},
 	}
@@ -254,7 +270,7 @@ test.skip('not yet', () => {})`,
 				fmt.Fprint(w, `{"lease":null,"pool":{"state":"consumed"}}`)
 				return
 			}
-			if acquired == 3 {
+			if acquired == 4 {
 				if err := os.WriteFile(filepath.Join(dir, "fail-setup"), nil, 0600); err != nil {
 					t.Error(err)
 				}
@@ -294,13 +310,14 @@ test.skip('not yet', () => {})`,
 	want := map[string][]api.AttemptResult{
 		"lease-1": {{AttemptID: "flaky", Result: "passed"}, {AttemptID: "muted", Result: "passed"}, {AttemptID: "serial", Result: "errored"}},
 		"lease-2": {{AttemptID: "failed", Result: "failed"}, {AttemptID: "ok", Result: "passed"}},
-		"lease-3": {{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok-after-broken", Result: "errored"}},
-		"lease-4": {{AttemptID: "ok-after-setup", Result: "errored"}},
+		"lease-3": {{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok-after-broken", Result: "passed"}, {AttemptID: "flaky-after-broken", Result: "passed"}},
+		"lease-4": {{AttemptID: "helper", Result: "errored"}, {AttemptID: "ok-after-helper", Result: "errored"}},
+		"lease-5": {{AttemptID: "ok-after-setup", Result: "errored"}},
 	}
 	if !reflect.DeepEqual(completed, want) {
 		t.Errorf("completed=%v, want %v", completed, want)
 	}
-	if err == nil || !strings.Contains(err.Error(), "passed attempts: 3; failed attempts: 1; errored attempts: 4") {
+	if err == nil || !strings.Contains(err.Error(), "passed attempts: 5; failed attempts: 1; errored attempts: 5") {
 		t.Fatalf("err=%v, want every attempt counted", err)
 	}
 }

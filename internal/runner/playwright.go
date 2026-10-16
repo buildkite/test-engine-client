@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -92,13 +93,74 @@ func (p Playwright) Run(result *RunResult, testCases []plan.TestCase, retry bool
 		}
 	}
 
-	if len(report.Errors) > 0 {
-		result.error = fmt.Errorf("Playwright failed with errors")
+	if len(report.Errors) == 0 {
+		// Return any command error after processing the report
+		return cmdErr
 	}
 
-	// Return any command error after processing the report
-	return cmdErr
+	// Playwright runs no tests at all when a test file fails to load.
+	files, ok := playwrightErrorFiles(report.Errors)
+	unmatched := slices.Clone(files)
+	var remaining []plan.TestCase
+	for _, testCase := range testCases {
+		file := testCase.Path
+		if testCase.Format == plan.TestCaseFormatSelector {
+			file = testCase.Value
+		}
+		file = strings.TrimPrefix(playwrightLineSuffix.ReplaceAllString(file, ""), "./")
+		if slices.Contains(files, file) {
+			unmatched = slices.DeleteFunc(unmatched, func(f string) bool { return f == file })
+		} else {
+			remaining = append(remaining, testCase)
+		}
+	}
+	// Only errors in the files given to the command are attributed to them.
+	// Others, such as an error in a global setup, error the whole run.
+	if !ok || len(report.Suites) > 0 || len(unmatched) > 0 {
+		result.error = fmt.Errorf("Playwright failed with errors")
+		return cmdErr
+	}
 
+	for _, file := range files {
+		result.recordErroredFile(file)
+	}
+	if len(remaining) == 0 {
+		return cmdErr
+	}
+	fmt.Printf("+++ Buildkite Test Engine Client: Playwright failed to load %s. Running the other test files again.\n", strings.Join(files, ", "))
+	// The command failed for the files that didn't load, even if the rerun passes.
+	if err := p.Run(result, remaining, retry); err != nil {
+		return err
+	}
+	return cmdErr
+}
+
+// playwrightLineSuffix matches the line of a file:line test location.
+var playwrightLineSuffix = regexp.MustCompile(`:\d+$`)
+
+// playwrightErrorFiles returns the files, relative to the working
+// directory, that Playwright's errors are located in, such as test files that
+// failed to load. It returns false if any error has no location.
+func playwrightErrorFiles(errors []PlaywrightError) ([]string, bool) {
+	workDir, err := os.Getwd()
+	if err != nil {
+		return nil, false
+	}
+	var files []string
+	for _, e := range errors {
+		if e.Location == nil || e.Location.File == "" {
+			return nil, false
+		}
+		file, err := filepath.Rel(workDir, e.Location.File)
+		if err != nil {
+			return nil, false
+		}
+		file = filepath.ToSlash(file)
+		if !slices.Contains(files, file) {
+			files = append(files, file)
+		}
+	}
+	return files, true
 }
 
 // getTestCasesFromSuite recursively traverses the Playwright report suite and returns all test cases.
@@ -164,7 +226,7 @@ func parsePlaywrightBatchReport(data []byte) (ParsedReport, error) {
 			RootDir string `json:"rootDir"`
 		} `json:"config"`
 		Suites *[]PlaywrightReportSuite `json:"suites"`
-		Errors []json.RawMessage        `json:"errors"`
+		Errors []PlaywrightError        `json:"errors"`
 	}
 	if err := json.Unmarshal(data, &report); err != nil {
 		return ParsedReport{}, fmt.Errorf("invalid Playwright report: %w", err)
@@ -177,10 +239,6 @@ func parsePlaywrightBatchReport(data []byte) (ParsedReport, error) {
 		return ParsedReport{}, err
 	}
 	parsed := ParsedReport{
-		// Playwright doesn't run any tests when a file fails to load, and reports
-		// that and other errors outside tests without saying which tests they
-		// affect.
-		ErrorsOutsideTests: len(report.Errors) > 0,
 		// Playwright runs the tests of setup projects with every command.
 		UnselectedTests: true,
 	}
@@ -248,6 +306,18 @@ func parsePlaywrightBatchReport(data []byte) (ParsedReport, error) {
 	for _, suite := range *report.Suites {
 		if err := walk(suite, suite.Title); err != nil {
 			return ParsedReport{}, err
+		}
+	}
+	if len(report.Errors) > 0 {
+		// Playwright runs no tests at all when a test file fails to load, and
+		// locates the error in that file. Other errors outside tests don't say
+		// which tests they affect.
+		files, ok := playwrightErrorFiles(report.Errors)
+		if ok && len(parsed.Tests) == 0 {
+			parsed.ErroredFiles = files
+			parsed.ErroredFilesStoppedRun = true
+		} else {
+			parsed.ErrorsOutsideTests = true
 		}
 	}
 	return parsed, nil
@@ -395,7 +465,12 @@ type PlaywrightReport struct {
 		Expected   int
 		Unexpected int
 	}
-	Errors []struct {
-		Message string
+	Errors []PlaywrightError
+}
+
+type PlaywrightError struct {
+	Message  string
+	Location *struct {
+		File string
 	}
 }

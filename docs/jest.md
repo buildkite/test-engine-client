@@ -80,6 +80,8 @@ In this command:
 
 You can customize this command using the `BUILDKITE_TEST_ENGINE_RETRY_CMD` environment variable.
 
+A test file that fails outside its tests, for example because it doesn't load, fails the job, but failed tests in the other files are still retried.
+
 ### Recommended retry configuration
 
 To enable automatic retry and customize the retry command, set the following environment variables:

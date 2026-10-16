@@ -608,7 +608,10 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		owners[i] = i
 	}
 	var started time.Time
-	for round := 0; len(tests) > 0; round++ {
+	// The lease's first batch starts its prefetch timer and timing. Running
+	// files again after others failed to load doesn't restart them.
+	var firstBatchID string
+	for round := 0; len(tests) > 0; {
 		s.mu.Lock()
 		s.sequence++
 		s.retryRound = round
@@ -616,6 +619,9 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		s.pending = &runnerexec.Batch{ID: fmt.Sprintf("b_%d", s.sequence), Tests: tests}
 		batchID := s.pending.ID
 		s.mu.Unlock()
+		if firstBatchID == "" {
+			firstBatchID = batchID
+		}
 		if round > 0 {
 			debug.Printf("Offered local retry batch %s from lease %s (round=%d; %d tests)", batchID, lease.ID, round, len(tests))
 		} else {
@@ -633,7 +639,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 				}
 				return nil, ctx.Err()
 			case start := <-s.starts:
-				if start.id == batchID {
+				if start.id == firstBatchID {
 					started = start.at
 					prefetch.schedule(s, lease, started)
 				}
@@ -651,29 +657,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 				})
 			}
 		}
-		if round == 0 {
-			if started.IsZero() {
-				select {
-				case start := <-s.starts:
-					if start.id == batchID {
-						started = start.at
-					}
-				default:
-				}
-			}
-			// pace = average of the previous pace and this lease's actual
-			// runtime / duration estimate: recent leases weigh most, and one
-			// unusual lease moves it only halfway.
-			if estimate := leaseEstimate(lease.Attempts); estimate > 0 && !started.IsZero() && result.Status == "completed" {
-				observed := float64(time.Since(started)) / float64(estimate)
-				if s.pace == 0 {
-					s.pace = observed
-				} else {
-					s.pace = (s.pace + observed) / 2
-				}
-			}
-		}
-		results.absorb(tests, owners, round > 0, result)
+		rerun, rerunOwners := results.absorb(tests, owners, round > 0, result)
 		if debug.Enabled {
 			current := results.final()
 			seen := make(map[int]bool, len(owners))
@@ -694,10 +678,40 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 			}
 			debug.Printf("Received batch %s result (status=%s; provisional attempt results: passed=%d failed=%d errored=%d)", batchID, result.Status, passed, failed, errored)
 		}
+		if len(rerun) > 0 {
+			// The runner ran no tests because other files failed to load. Run the
+			// rest in the same round, so they keep their local retries.
+			fmt.Printf("+++ Buildkite Test Engine Client: Test files failed to load, running the other %d tests again without them\n", len(rerun))
+			tests, owners = rerun, rerunOwners
+			continue
+		}
+		if round == 0 {
+			if started.IsZero() {
+				select {
+				case start := <-s.starts:
+					if start.id == firstBatchID {
+						started = start.at
+					}
+				default:
+				}
+			}
+			// pace = average of the previous pace and this lease's actual
+			// runtime / duration estimate: recent leases weigh most, and one
+			// unusual lease moves it only halfway.
+			if estimate := leaseEstimate(lease.Attempts); estimate > 0 && !started.IsZero() && result.Status == "completed" {
+				observed := float64(time.Since(started)) / float64(estimate)
+				if s.pace == 0 {
+					s.pace = observed
+				} else {
+					s.pace = (s.pace + observed) / 2
+				}
+			}
+		}
 		if round >= retries {
 			break
 		}
 		tests, owners = results.retries()
+		round++
 	}
 	// The final result is in. If the timer has not fired, or the pool has no
 	// costs, prefetch now so the request runs alongside completing this lease.

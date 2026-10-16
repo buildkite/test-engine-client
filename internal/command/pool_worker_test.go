@@ -1077,6 +1077,50 @@ func TestPoolWorkerReleasesPrefetchedLeaseWaitingBehindRetries(t *testing.T) {
 	})
 }
 
+// Running a lease's other files again after one fails to load is part of the
+// lease's first round, so it must not prefetch another lease.
+func TestPoolWorkerPrefetchesOnceWhenFilesRunAgainAfterLoadError(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s := newPoolSource(cancel)
+		dir, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		attempt := func(path string) api.LeaseAttempt {
+			return api.LeaseAttempt{ID: path, SelectorType: "test_plan_test_case_v1", Selector: plan.TestCase{Format: "file", Path: path}, Costs: api.AttemptCosts{DurationP90MS: 500}}
+		}
+		// A one-second estimate prefetches as soon as the lease is dispatched.
+		one := &api.Lease{ID: "one", ExpiresAt: time.Now().Add(10 * time.Minute), Attempts: []api.LeaseAttempt{attempt("broken.spec.js"), attempt("ok.spec.js")}}
+		f := &fakePoolScheduler{
+			acquire:  leaseSequence(one, costLease("two", time.Minute), costLease("three", time.Minute)),
+			complete: func(context.Context, []api.AttemptResult) error { return nil },
+			release:  func() error { return nil },
+		}
+		done := make(chan struct{})
+		go func() { defer close(done); s.work(ctx, f, api.Pool{ID: "pool"}, 0) }()
+		time.Sleep(time.Second)
+		batch := dispatchOffered(t, s, "broken.spec.js")
+		s.Accepted(batch, runnerexec.Result{Status: "completed", ReportFormat: "playwright-json", Report: json.RawMessage(`{"config":{"rootDir":"` + dir + `"},"suites":[],"errors":[{"message":"boom","location":{"file":"` + dir + `/broken.spec.js"}}]}`)})
+		rerun := dispatchOffered(t, s, "ok.spec.js")
+		synctest.Wait()
+		if got := acquires(f); !slices.Equal(got, []string{"acquire one", "acquire two"}) {
+			t.Fatalf("acquires=%v", got)
+		}
+		s.Accepted(rerun, runnerexec.Result{Status: "completed", ReportFormat: "playwright-json", Report: json.RawMessage(`{"config":{"rootDir":"` + dir + `"},"suites":[{"title":"ok.spec.js","specs":[{"title":"works","file":"ok.spec.js","line":1,"tests":[{"projectName":"","status":"expected","expectedStatus":"passed"}]}]}],"errors":[]}`)})
+		two := dispatchOffered(t, s, "two")
+		passBatch(s, two)
+		three := dispatchOffered(t, s, "three")
+		passBatch(s, three)
+		time.Sleep(time.Second)
+		<-done
+		if got := f.recorded(); !slices.Contains(got, "complete one") || !slices.Contains(got, "complete two") || !slices.Contains(got, "complete three") {
+			t.Fatalf("calls=%v", got)
+		}
+	})
+}
+
 func TestPoolWorkerSlowIdleReleaseDoesNotBlockCurrentLease(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
