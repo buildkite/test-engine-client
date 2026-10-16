@@ -62,6 +62,15 @@ func (c Client) FetchCommitList(ctx context.Context, suiteSlug string, days int)
 		return nil, nil
 	}
 
-	commits := strings.Split(text, "\n")
+	// The SHAs become git arguments, so drop anything that isn't hexadecimal,
+	// such as a line starting with "-" that git would parse as an option.
+	var commits []string
+	for _, line := range strings.Split(text, "\n") {
+		if line != "" && strings.Trim(line, "0123456789abcdefABCDEF") == "" {
+			commits = append(commits, line)
+		} else {
+			debug.Printf("Skipping invalid commit SHA %q", line)
+		}
+	}
 	return commits, nil
 }
