@@ -4,6 +4,7 @@
 - Fix `bktec run` not running the other Playwright test files when one fails to load. A Jest or Playwright file that fails to load still fails the job, but no longer stops failed tests in other files from being retried.
 - Support pytest in [`bktec pool exec`](./docs/pytest.md#run-tests-in-one-pytest-process-with-bktec-pool-exec), which runs all of a worker's leases in one pytest process with `buildkite-pytest`. Requires a `buildkite-test-collector` release that includes `buildkite-pytest`.
 - Fix `bktec pool exec` taking a lease before its persistent runner started. A runner that never started held its tests from other workers until the startup timeout; `pool exec` now requests leases only once the runner connects.
+- Change the default `--runner-startup-timeout` of `bktec pool exec` from 5 minutes to 1 minute, so a runner that doesn't start fails the job sooner. Set it higher if your runner takes longer to boot.
 - Fix Jest retries in `bktec run` also running tests whose names contain a failed test's name, and never rerunning failed tests outside a `describe` block.
 - Fix `bktec run` reporting Jest tests that passed on the first run as skipped after a retry.
 - `bktec pool plan` and `bktec pool exec` now [fall back to a local split](./docs/pool-exec.md#fallback-when-test-scheduler-is-unavailable) when Test Scheduler is unavailable, fails to plan the pool, or doesn't finish planning within 130 seconds, instead of failing. Like `bktec run`, each `pool exec` job runs its share of the tests across `BUILDKITE_PARALLEL_JOB_COUNT` jobs.

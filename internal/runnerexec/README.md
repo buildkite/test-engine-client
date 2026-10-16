@@ -112,7 +112,7 @@ On SIGINT/SIGTERM, stop after the current example, flush collector data, send
 The reason may be any nonempty string; success returns `200 {}`. Do not submit a
 partial batch as completed. Keep polling waits interruptible so shutdown is prompt.
 
-The current host defaults to **5 minutes** for boot/handshake, **10 minutes** per
+The current host defaults to **1 minute** for boot/handshake, **10 minutes** per
 batch (use the supplied `timeout_ms`), and **90 seconds** for shutdown/flush.
 Timeouts can be configured by the host; these are provisional, not Rails-calibrated
 defaults. On timeout bktec terminates the process group, escalating to SIGKILL after

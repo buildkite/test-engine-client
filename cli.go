@@ -796,7 +796,7 @@ func poolExecCommandFlags() []cli.Flag {
 	flags := poolPlanCommandFlags()
 	return append(flags,
 		freshFlag(localRetryCountFlag),
-		&cli.DurationFlag{Name: "runner-startup-timeout", Value: 5 * time.Minute, Usage: "Persistent runner handshake timeout (Go duration, e.g. 5m)"},
+		&cli.DurationFlag{Name: "runner-startup-timeout", Value: time.Minute, Usage: "Persistent runner handshake timeout (Go duration, e.g. 1m)"},
 		&cli.DurationFlag{Name: "runner-batch-timeout", Value: 10 * time.Minute, Usage: "Persistent runner batch timeout including report submission"},
 		&cli.DurationFlag{Name: "runner-shutdown-timeout", Value: 90 * time.Second, Usage: "Runner exit and collector flush grace period"},
 	)
