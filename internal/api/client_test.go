@@ -82,6 +82,30 @@ func TestHttpClient_AttachAccessTokenToRequest(t *testing.T) {
 	}
 }
 
+func TestHttpClient_DoesNotFollowRedirectToAnotherHost(t *testing.T) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("other host received a request with Authorization %q", r.Header.Get("Authorization"))
+	}))
+	defer other.Close()
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// localhost and 127.0.0.1 are different hosts to the HTTP client.
+		http.Redirect(w, r, strings.Replace(other.URL, "127.0.0.1", "localhost", 1), http.StatusFound)
+	}))
+	defer svr.Close()
+
+	c := NewClient(ClientConfig{AccessToken: "asdf1234", ServerBaseURL: svr.URL})
+	resp, err := c.httpClient.Get(svr.URL)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusFound {
+		t.Errorf("StatusCode = %d, want %d", resp.StatusCode, http.StatusFound)
+	}
+}
+
 func TestHttpClient_AttachUserAgentToRequest(t *testing.T) {
 	originalVersion := version.Version
 	version.Version = "0.5.1"

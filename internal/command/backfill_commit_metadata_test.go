@@ -228,7 +228,7 @@ func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 		switch r.URL.Path {
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
 			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte("missing111\n"))
+			w.Write([]byte("fff111\n"))
 		case "/v2/analytics/organizations/my-org/suites/my-suite/commit-metadata-backfill/presigned-upload":
 			// The preflight runs before the git filter step, so we still need
 			// to mock it even though no commits will be processed locally.
@@ -248,13 +248,43 @@ func TestBackfillCommitMetadata_AllCommitsMissing(t *testing.T) {
 		},
 		StdinResponses: map[string]func(string) string{
 			"cat-file --batch-check": func(_ string) string {
-				return "missing111 missing\n"
+				return "fff111 missing\n"
 			},
 		},
 	}
 	err := BackfillCommitMetadata(context.Background(), cfg, runner)
 	if err != nil {
 		t.Fatalf("expected no error when all commits missing, got: %v", err)
+	}
+}
+
+func TestBackfillCommitMetadata_SkipsInvalidCommitSHAs(t *testing.T) {
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/analytics/organizations/my-org/suites/my-suite/commits":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("abc123\n--upload-pack=touch pwned\nHEAD~1\n"))
+		case "/v2/analytics/organizations/my-org/suites/my-suite":
+			writeSuiteJSON(w)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer svr.Close()
+
+	cfg := getBackfillConfig(svr.URL)
+	cfg.Output = t.TempDir() + "/output.tar.gz"
+
+	runner := newFakeGitRunner()
+	runner.StdinResponses["cat-file --batch-check"] = func(stdin string) string {
+		if stdin != "abc123" {
+			t.Errorf("cat-file stdin = %q, want %q", stdin, "abc123")
+		}
+		return "abc123 commit 271\n"
+	}
+
+	if err := BackfillCommitMetadata(context.Background(), cfg, runner); err != nil {
+		t.Fatalf("BackfillCommitMetadata error: %v", err)
 	}
 }
 
