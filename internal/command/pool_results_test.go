@@ -402,3 +402,33 @@ func TestPoolResultsPlaywrightRetryRunsEveryProject(t *testing.T) {
 		})
 	}
 }
+
+// buildkite-pytest keeps running a batch's other files when one fails to
+// collect, so only that file's attempt errors.
+func TestPoolResultsPytestCollectionError(t *testing.T) {
+	file := func(path string) plan.TestCase { return plan.TestCase{Format: "selector", Value: path} }
+	for _, tc := range []struct {
+		name, broken string
+		leased       plan.TestCase
+		want         string
+	}{
+		{"leased file", "spells/test_broken.py", file("spells/test_broken.py"), "passed"},
+		// A split-by-example pool leases a file's tests as examples.
+		{"leased example", "spells/test_broken.py", plan.TestCase{Format: "example", Identifier: "spells/test_broken.py::test_one", Path: "spells/test_broken.py::test_one", Scope: "spells/test_broken.py", Name: "test_one"}, "passed"},
+		// A package directory's error matches no leased file.
+		{"package directory", "spells", file("spells/test_broken.py"), "errored"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tests := []plan.TestCase{tc.leased, file("spells/test_ok.py"), file("test_sample.py")}
+			r := newPoolResults([]api.LeaseAttempt{{ID: "broken", Selector: tests[0]}, {ID: "ok", Selector: tests[1]}, {ID: "sample", Selector: tests[2]}}, nil)
+			r.absorb(tests, []int{0, 1, 2}, false, runnerexec.Result{Status: "completed", ReportFormat: "pytest-json", Report: json.RawMessage(fmt.Sprintf(`[
+				{"scope":"","name":%q,"result":"failed","tags":{"test.pytest_collection_error":"true"}},
+				{"scope":"spells/test_ok.py","name":"test_one","result":"passed"},
+				{"scope":"test_sample.py::TestGroup","name":"test_two","result":"passed"}]`, tc.broken))})
+			want := []api.AttemptResult{{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok", Result: tc.want}, {AttemptID: "sample", Result: tc.want}}
+			if got := r.final(); !reflect.DeepEqual(got, want) {
+				t.Fatalf("results=%v, want %v", got, want)
+			}
+		})
+	}
+}

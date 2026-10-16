@@ -91,8 +91,19 @@ func (c *Config) ValidateForPoolPlan() error {
 
 // ValidateForPoolExec only allows the runners that have a persistent runner.
 func (c *Config) ValidateForPoolExec() error {
-	if c.PoolID == "" && c.TestRunner != "rspec" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec; use pool consume for jest, playwright or pytest")
+	if c.PoolID == "" && c.TestRunner != "rspec" && c.TestRunner != "pytest" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec or pytest; use pool consume for jest or playwright")
+	}
+	c.PersistentRunner = true
+	// buildkite-pytest reports buildkite-test-collector's JSON, so pytest
+	// tests are planned with its scopes. A command with --junit-xml asks for
+	// JUnit scopes, which wouldn't match.
+	if c.TestRunner == "pytest" {
+		for field, command := range map[string]string{"BUILDKITE_TEST_ENGINE_TEST_CMD": c.TestCommand, "BUILDKITE_TEST_ENGINE_RETRY_CMD": c.RetryCommand} {
+			if strings.Contains(command, "--junit-xml") {
+				c.errs.appendFieldError(field, "pool exec runs pytest with buildkite-pytest, which reports JSON; remove --junit-xml")
+			}
+		}
 	}
 	return c.ValidateForPoolPlan()
 }

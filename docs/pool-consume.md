@@ -3,7 +3,7 @@
 `bktec pool consume` runs tests from a Test Scheduler pool, starting a new test
 runner command for each lease. Jest, Playwright and pytest are supported. Use
 [`bktec pool exec`](./pool-exec.md) for runners that provide a persistent
-runner, such as RSpec.
+runner, such as RSpec and pytest.
 
 Apart from how tests run, `pool consume` works like `pool exec`. Both commands
 share the same pool resolution, sizing with `bktec pool plan`, authentication,

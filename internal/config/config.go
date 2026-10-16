@@ -81,6 +81,9 @@ type Config struct {
 	Output string `json:"-"`
 	// Parallelism is the number of parallel tasks to run.
 	Parallelism int `json:"-"`
+	// PersistentRunner is set by pool exec, where a persistent runner such as
+	// buildkite-pytest runs the tests instead of the test commands.
+	PersistentRunner bool `json:"-"`
 	// PlanOut is the full test plan output path for run and plan. Only plan
 	// supports "-" for stdout. Run marks local fallback plans with fallback: true.
 	PlanOut string `json:"-"`

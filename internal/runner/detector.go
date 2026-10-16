@@ -20,6 +20,7 @@ func DetectRunner(cfg *config.Config) (TestRunnerWithTargetDiscovery, error) {
 		uploadToken:            cfg.UploadToken,
 		testProcessEnv:         cfg.TestProcessEnv,
 		SelectorListPath:       cfg.SelectorListPath,
+		persistentRunner:       cfg.PersistentRunner,
 	}
 
 	switch testRunner := cfg.TestRunner; testRunner {

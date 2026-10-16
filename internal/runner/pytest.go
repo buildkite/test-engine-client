@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
@@ -25,7 +26,10 @@ func (p Pytest) Name() string {
 }
 
 func NewPytest(c RunnerConfig) Pytest {
-	pluginInstalled := checkPythonPackageInstalled("buildkite_test_collector") // python import only uses underscore
+	// buildkite-pytest, pool exec's persistent runner, is part of
+	// buildkite-test-collector and reports its JSON, whether or not bktec's
+	// python can import it.
+	pluginInstalled := c.persistentRunner || checkPythonPackageInstalled("buildkite_test_collector") // python import only uses underscore
 
 	useJUnit := !pluginInstalled
 
@@ -202,10 +206,17 @@ func parsePytestJSONBatchReport(data []byte) (ParsedReport, error) {
 	var parsed ParsedReport
 	seen := map[string]int{}
 	for _, test := range *tests {
-		// pytest runs no tests after a collection error, unless
-		// --continue-on-collection-errors is set, so it errors every leased file.
+		// A file that fails to collect has no tests to report, so its attempt
+		// errors. Other files keep their results: buildkite-pytest and
+		// --continue-on-collection-errors run them anyway, and pool consume
+		// already errors the batch when pytest stops at a collection error.
 		if test.Tags[pytestCollectionErrorTag] == "true" {
-			parsed.ErrorsOutsideTests = true
+			// An error outside a leased file, such as a package directory's
+			// conftest.py, matches no dispatched file and errors the batch.
+			file, _, _ := strings.Cut(pytestPathFromTestEngineResult(test.Scope, test.Name), "::")
+			if !slices.Contains(parsed.ErroredFiles, file) {
+				parsed.ErroredFiles = append(parsed.ErroredFiles, file)
+			}
 			continue
 		}
 		path := pytestPathFromTestEngineResult(test.Scope, test.Name)

@@ -18,6 +18,10 @@ type RunnerConfig struct {
 
 	// SelectorListPath points at a file containing the selectors to run.
 	SelectorListPath string
+
+	// persistentRunner is set by pool exec, where a persistent runner runs
+	// the tests instead of the test commands.
+	persistentRunner bool
 }
 
 // splitBySelectorList reports whether the runner is splitting work using a

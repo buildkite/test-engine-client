@@ -101,6 +101,11 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, re
 			if dispatched.Format == plan.TestCaseFormatSelector {
 				target = dispatched.Value
 			}
+			// A pytest example's path is its node ID, so its file is the part
+			// before "::". Other runners' example paths don't contain "::".
+			if dispatched.Format == plan.TestCaseFormatExample {
+				target, _, _ = strings.Cut(target, "::")
+			}
 			if strings.TrimPrefix(target, "./") == file {
 				r.reportErrors[owners[i]] = true
 				erroredFile[i] = true
