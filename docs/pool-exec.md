@@ -6,10 +6,10 @@ runner process.
 RSpec and pytest are supported on Linux and macOS:
 
 - RSpec requires Test Collector Ruby, which provides the
-  [`buildkite-rspec`](https://github.com/bktest/test-collector-ruby) persistent
+  [`buildkite-rspec`](https://github.com/buildkite/bktest/tree/main/test-collector-ruby) persistent
   runner.
 - pytest requires a `buildkite-test-collector` release that provides the
-  [`buildkite-pytest`](https://github.com/bktest/test-collector-python)
+  [`buildkite-pytest`](https://github.com/buildkite/bktest/tree/main/test-collector-python)
   persistent runner. This release is not available yet; see
   [pytest](./pytest.md#run-tests-in-one-pytest-process-with-bktec-pool-exec).
 
