@@ -91,8 +91,8 @@ func (c *Config) ValidateForPoolPlan() error {
 
 // ValidateForPoolExec only allows the runners that have a persistent runner.
 func (c *Config) ValidateForPoolExec() error {
-	if c.PoolID == "" && c.TestRunner != "rspec" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec; use pool consume for jest, playwright or pytest")
+	if c.PoolID == "" && c.TestRunner != "rspec" && c.TestRunner != "pytest" {
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec or pytest; use pool consume for jest or playwright")
 	}
 	return c.ValidateForPoolPlan()
 }

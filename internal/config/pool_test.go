@@ -49,7 +49,8 @@ func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 		splitByExample                                       bool
 	}{
 		{name: "exec plans rspec", command: "exec", runner: "rspec"},
-		{name: "exec has no jest runner", command: "exec", runner: "jest", wantError: "pool exec requires rspec"},
+		{name: "exec plans pytest", command: "exec", runner: "pytest"},
+		{name: "exec has no jest runner", command: "exec", runner: "jest", wantError: "pool exec requires rspec or pytest"},
 		{name: "exec with pool ID", command: "exec", poolID: "pool-1"},
 		{name: "consume plans jest", command: "consume", runner: "jest", resultPath: "jest.json"},
 		{name: "consume plans playwright", command: "consume", runner: "playwright", resultPath: "results.json"},

@@ -3,11 +3,19 @@
 `bktec pool exec` runs tests from a Test Scheduler pool using one persistent
 runner process.
 
-RSpec support requires Test Collector Ruby, which provides the
-[`buildkite-rspec`](https://github.com/bktest/test-collector-ruby) persistent
-runner. Linux and macOS are supported. For Jest, Playwright and pytest, use
-[`bktec pool consume`](./pool-consume.md), which starts a new test runner
-command for each lease.
+RSpec and pytest are supported on Linux and macOS:
+
+- RSpec requires Test Collector Ruby, which provides the
+  [`buildkite-rspec`](https://github.com/bktest/test-collector-ruby) persistent
+  runner.
+- pytest requires a `buildkite-test-collector` release that provides the
+  [`buildkite-pytest`](https://github.com/bktest/test-collector-python)
+  persistent runner. This release is not available yet; see
+  [pytest](./pytest.md#run-tests-in-one-pytest-process-with-bktec-pool-exec).
+
+For Jest and Playwright, use [`bktec pool consume`](./pool-consume.md), which
+starts a new test runner command for each lease. pytest also supports
+`pool consume`.
 
 ## Run a pool worker
 
@@ -18,6 +26,16 @@ bktec pool exec \
   --suite-slug my-suite \
   --test-runner rspec \
   -- bundle exec buildkite-rspec
+```
+
+For pytest, set `--test-runner pytest` and start `buildkite-pytest`, followed
+by any pytest options:
+
+```shell
+bktec pool exec \
+  --suite-slug my-suite \
+  --test-runner pytest \
+  -- buildkite-pytest
 ```
 
 Everything after `--` is passed directly to the persistent runner, not
@@ -131,8 +149,8 @@ When `bktec` receives SIGINT or SIGTERM, it releases its active lease so another
 worker can acquire those attempts without waiting for the lease to expire.
 
 Test result uploads are the runner's responsibility. Configure them through
-Test Collector Ruby; `bktec pool exec` does not perform the normal bktec result
-upload.
+the runner's test collector, Test Collector Ruby or `buildkite-test-collector`;
+`bktec pool exec` does not perform the normal bktec result upload.
 
 ## Fallback when Test Scheduler is unavailable
 
@@ -182,4 +200,5 @@ If the runner does not start, check that:
 - the suite and pool belong to the current Buildkite organization and build;
 - OIDC is available, or a valid Scheduler OIDC token was supplied;
 - the existing pool was created through Test Scheduler planning;
-- `buildkite-rspec` is installed and the command after `--` starts it directly.
+- `buildkite-rspec` or `buildkite-pytest` is installed and the command after
+  `--` starts it directly.

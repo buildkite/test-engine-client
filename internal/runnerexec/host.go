@@ -129,6 +129,14 @@ func object(body []byte, target any) bool {
 	return len(bytes.TrimSpace(body)) > 0 && bytes.TrimSpace(body)[0] == '{' && json.Unmarshal(body, target) == nil
 }
 
+// nativeReport reports whether an already-decoded report is a JSON object, such
+// as rspec-json, or an array, such as pytest-json. The calling command
+// validates its contents.
+func nativeReport(report json.RawMessage) bool {
+	report = bytes.TrimSpace(report)
+	return len(report) > 0 && (report[0] == '{' || report[0] == '[')
+}
+
 // Keep network writes outside the state lock so slow/disconnected clients cannot
 // postpone the watchdog or serialize unrelated authenticated requests.
 type responseBuffer struct {
@@ -350,9 +358,8 @@ func (h *host) result(w http.ResponseWriter, id string, body []byte) {
 		return
 	}
 	var result Result
-	var report map[string]json.RawMessage
 	valid := object(body, &result) && result.ReportFormat != "" &&
-		(result.Status == "completed" && result.Error == nil && object(result.Report, &report) || result.Status == "errored" && len(result.Report) == 0 && result.Error != nil && result.Error.Kind != "" && result.Error.Message != "")
+		(result.Status == "completed" && result.Error == nil && nativeReport(result.Report) || result.Status == "errored" && len(result.Report) == 0 && result.Error != nil && result.Error.Kind != "" && result.Error.Message != "")
 	if !valid {
 		reject(w, 400, "invalid result envelope")
 		return

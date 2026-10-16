@@ -69,13 +69,20 @@ Send `POST /v1/batches/{id}/results` with one of these envelopes (RSpec examples
 {"status":"errored","report_format":"rspec-json","error":{"kind":"runner_error","message":"report file missing"}}
 ```
 
+pytest runners report the JSON array that `pytest --json` writes with
+buildkite-test-collector:
+
+```json
+{"status":"completed","report_format":"pytest-json","report":[{"scope":"tests/test_a.py","name":"test_one","result":"passed"}]}
+```
+
 `report_format` must be a nonempty string identifying the report encoding. The
 transport passes it through without choosing a parser or restricting the runner's
 name, framework or language. The calling command must support that format and
 validate its contents; transport acceptance does not imply parser support.
 An unsupported format or unusable report must fail the command, not be treated as
 passing because the HTTP request succeeded or the runner exited zero.
-Completed reports must be JSON objects; errored envelopes carry an error instead.
+Completed reports must be JSON objects or arrays; errored envelopes carry an error instead.
 
 `completed` means a native report was produced, not that tests passed: send the
 unchanged report including failures. Use `errored` when execution/report generation

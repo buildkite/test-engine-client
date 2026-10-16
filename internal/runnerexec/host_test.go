@@ -184,7 +184,7 @@ func TestSocketProtocol(t *testing.T) {
 }
 
 func TestResultFormatPassedThrough(t *testing.T) {
-	source := &testSource{batches: []Batch{{ID: "custom"}, {ID: "error"}}}
+	source := &testSource{batches: []Batch{{ID: "custom"}, {ID: "array"}, {ID: "error"}}}
 	h, err := newHost(source, Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -199,8 +199,11 @@ func TestResultFormatPassedThrough(t *testing.T) {
 		`{"status":"completed","report_format":"","report":{}}`,
 		`{"status":"completed","report_format":null,"report":{}}`,
 		`{"status":"completed","report_format":42,"report":{}}`,
-		`{"status":"completed","report_format":"custom-json","report":[]}`,
+		`{"status":"completed","report_format":"custom-json","report":42}`,
+		`{"status":"completed","report_format":"custom-json","report":"[]"}`,
+		`{"status":"completed","report_format":"custom-json","report":true}`,
 		`{"status":"errored","report_format":"","error":{"kind":"load_error","message":"fixture failed"}}`,
+		`{"status":"errored","report_format":"custom-json","report":[],"error":{"kind":"load_error","message":"fixture failed"}}`,
 	} {
 		request(t, client, "POST", "/v1/batches/custom/results", session, body, 400)
 	}
@@ -209,17 +212,24 @@ func TestResultFormatPassedThrough(t *testing.T) {
 	request(t, client, "POST", "/v1/batches/custom/results", session, body, 200)
 	request(t, client, "POST", "/v1/batches/custom/results", session, body, 200)
 	request(t, client, "POST", "/v1/batches/custom/results", session, body+" ", 409)
+	// Reports may also be arrays, such as pytest-json's list of tests.
+	request(t, client, "POST", "/v1/batches", session, `{}`, 200)
+	const arrayReport = `[{"name":"test_a","result":"passed"}]`
+	request(t, client, "POST", "/v1/batches/array/results", session, `{"status":"completed","report_format":"pytest-json","report":`+arrayReport+`}`, 200)
 	request(t, client, "POST", "/v1/batches", session, `{}`, 200)
 	request(t, client, "POST", "/v1/batches/error/results", session,
 		`{"status":"errored","report_format":"custom-json","error":{"kind":"load_error","message":"fixture failed"}}`, 200)
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if len(source.results) != 2 {
-		t.Fatalf("received %d results, want 2", len(source.results))
+	if len(source.results) != 3 {
+		t.Fatalf("received %d results, want 3", len(source.results))
 	}
-	completed, errored := source.results[0], source.results[1]
+	completed, array, errored := source.results[0], source.results[1], source.results[2]
 	if completed.ReportFormat != "custom-json" || completed.Status != "completed" || string(completed.Report) != report {
 		t.Fatalf("completed result changed: %+v", completed)
+	}
+	if array.ReportFormat != "pytest-json" || array.Status != "completed" || string(array.Report) != arrayReport {
+		t.Fatalf("array result changed: %+v", array)
 	}
 	if errored.ReportFormat != "custom-json" || errored.Status != "errored" || errored.Error == nil || *errored.Error != (RunnerError{Kind: "load_error", Message: "fixture failed"}) {
 		t.Fatalf("errored result changed: %+v", errored)
