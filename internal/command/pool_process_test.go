@@ -66,6 +66,18 @@ func TestPoolPersistentChild(t *testing.T) {
 	case "fallback":
 		formats = `["selector"]`
 	}
+	if mode == "stdin" {
+		// Record how much of bktec's stdin reached this runner process. Pool
+		// exec must start the runner with /dev/null stdin, so reading stdin
+		// returns EOF immediately even when bktec's own stdin has content.
+		n, err := io.Copy(io.Discard, os.Stdin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(os.Getenv("BKTEC_POOL_TEST_STDIN"), []byte(fmt.Sprint(n)), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	raw := request("POST", "/v1/sessions", []byte(`{"instance_id":"once","capabilities":{"selector_formats":`+formats+`}}`))
 	var registration runnerexec.SessionResponse
 	if err := json.Unmarshal(raw, &registration); err != nil {
@@ -334,6 +346,65 @@ func TestPoolExecSuppliedConsumingIDReusesSnapshot(t *testing.T) {
 	}
 	if gets != 1 {
 		t.Fatalf("GET count=%d, want one full snapshot for consuming pool ID", gets)
+	}
+}
+
+// TestPoolExecRunnerDoesNotInheritStdin checks that the persistent runner gets
+// /dev/null stdin, not bktec's. The runner runs in a background process group
+// (Setpgid), and a terminal stdin can stop it with SIGTTOU before it
+// handshakes, for example when Python's readline setup changes terminal
+// settings.
+func TestPoolExecRunnerDoesNotInheritStdin(t *testing.T) {
+	gets := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing":
+			gets++
+			_, _ = io.WriteString(w, `{"id":"existing","state":"consuming","parallelism":4,"muted_tests":[]}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/leases":
+			_, _ = io.WriteString(w, `{"lease":null,"pool":{"id":"existing","state":"consumed"}}`)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+
+	// Give bktec's process a non-empty stdin; the runner must still read
+	// nothing from it.
+	stdinFile := filepath.Join(t.TempDir(), "bktec-stdin")
+	if err := os.WriteFile(stdinFile, []byte("bktec stdin that the runner must not receive\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdin, err := os.Open(stdinFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdin.Close()
+	origStdin := os.Stdin
+	os.Stdin = stdin
+	defer func() { os.Stdin = origStdin }()
+
+	flush := filepath.Join(t.TempDir(), "flushed")
+	stdinRead := filepath.Join(t.TempDir(), "stdin-read")
+	t.Setenv("BKTEC_POOL_TEST_CHILD", "stdin")
+	t.Setenv("BKTEC_POOL_TEST_FLUSH", flush)
+	t.Setenv("BKTEC_POOL_TEST_STDIN", stdinRead)
+	cfg := config.New()
+	cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug = "existing", "org", "suite"
+	cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
+	if err := PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
+		t.Fatal(err)
+	}
+	if gets != 1 {
+		t.Fatalf("GET count=%d, want one full snapshot for consuming pool ID", gets)
+	}
+	raw, err := os.ReadFile(stdinRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(raw); got != "0" {
+		t.Fatalf("runner read %s bytes from stdin, want 0: bktec's stdin reached the runner", got)
 	}
 }
 
