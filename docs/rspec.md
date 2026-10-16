@@ -99,3 +99,14 @@ To enable split by example, set the following environment variable:
 ```sh
 export BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true
 ```
+
+## Run tests in one RSpec process with `bktec pool exec`
+
+To run RSpec tests from a Test Scheduler pool, use [`bktec pool exec`](./pool-exec.md), which starts `buildkite-rspec`, the persistent runner from [Test Collector Ruby](https://buildkite.com/docs/test-engine/test-collection/ruby-collectors). The runner starts RSpec once and runs each of the worker's leases in that process, so the worker pays RSpec's startup cost once instead of for each lease.
+
+```sh
+bktec pool exec --suite-slug my-suite --test-runner rspec --local-retry-count 1 -- bundle exec buildkite-rspec
+```
+
+Everything after `--` is passed to `buildkite-rspec`. `BUILDKITE_TEST_ENGINE_TEST_CMD` and `BUILDKITE_TEST_ENGINE_RETRY_CMD` don't apply, and bktec doesn't upload results; the test collector uploads them from the RSpec process.
+
