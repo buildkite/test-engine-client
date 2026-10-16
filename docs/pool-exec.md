@@ -107,7 +107,7 @@ When creating a pool, `pool exec` supports these test discovery options:
 | `--pool-lease-cost` | unset | Requested cost budget for each lease as `<dimension>=<budget>`; unset uses the Scheduler default. |
 | `--pool-lease-max-attempts` | `0` | Requested maximum attempts per lease; `0` uses the Scheduler default. |
 | `--local-retry-count` | `0` | Retry failed, unmuted examples locally before reporting the Scheduler attempt. |
-| `--runner-startup-timeout` | `5m` | Wait for the persistent runner to become ready. |
+| `--runner-startup-timeout` | `1m` | Wait for the persistent runner to become ready. |
 | `--runner-batch-timeout` | `10m` | Allow a batch to run and submit its report. |
 | `--runner-shutdown-timeout` | `1m30s` | Allow the runner to exit and flush the test collector. |
 

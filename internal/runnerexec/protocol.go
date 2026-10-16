@@ -81,6 +81,12 @@ type DispatchSource interface {
 	Undispatchable(Batch, error)
 }
 
+// ConnectionSource optionally observes the runner's first handshake, so the
+// source can wait to acquire work until a runner can execute it.
+type ConnectionSource interface {
+	Connected()
+}
+
 // TerminationSource optionally observes SIGINT or SIGTERM before runner
 // shutdown begins, including when no batch is currently outstanding.
 type TerminationSource interface {

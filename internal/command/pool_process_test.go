@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -647,5 +648,33 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 				}
 			}
 		})
+	}
+}
+
+// A runner that never connects mustn't hold a lease that other workers could
+// run, so pool exec only requests leases after the runner's handshake.
+func TestPoolExecRequestsNoLeaseBeforeRunnerConnects(t *testing.T) {
+	acquired := make(chan struct{}, 1)
+	f := &fakePoolScheduler{acquire: func(context.Context) (api.LeaseResponse, error) {
+		select {
+		case acquired <- struct{}{}:
+		default:
+		}
+		lease := testLease()
+		r := api.LeaseResponse{Lease: &lease}
+		r.Pool.State = "consuming"
+		return r, nil
+	}}
+	opts := runnerexec.Options{StartupTimeout: 500 * time.Millisecond, BatchTimeout: time.Second, ShutdownTimeout: time.Second}
+	err := runPool(context.Background(), f, api.Pool{ID: "pool", State: "consuming"}, 0, log.New(io.Discard, "", 0), func(ctx context.Context, source *poolSource) error {
+		return runnerexec.Run(ctx, exec.Command("sleep", "60"), source, opts)
+	})
+	if err == nil || !strings.Contains(err.Error(), "runner startup timeout") {
+		t.Fatalf("err=%v, want runner startup timeout", err)
+	}
+	select {
+	case <-acquired:
+		t.Fatalf("requested a lease before the runner connected: %v", f.recorded())
+	default:
 	}
 }

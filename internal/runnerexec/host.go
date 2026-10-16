@@ -51,7 +51,7 @@ func newHost(source Source, opts Options) (*host, error) {
 		return nil, errors.New("negative runner timeout")
 	}
 	if opts.StartupTimeout == 0 {
-		opts.StartupTimeout = 5 * time.Minute
+		opts.StartupTimeout = time.Minute
 	}
 	if opts.BatchTimeout == 0 {
 		opts.BatchTimeout = 10 * time.Minute
@@ -259,6 +259,9 @@ func (h *host) handshake(w http.ResponseWriter, body []byte) {
 		case <-h.ready:
 		default:
 			close(h.ready)
+			if source, ok := h.source.(ConnectionSource); ok {
+				source.Connected()
+			}
 		}
 		debug.Printf("Persistent runner connected")
 	}
