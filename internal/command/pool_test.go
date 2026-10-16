@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -342,4 +343,42 @@ func TestResolvePrecreatedPoolSnapshot(t *testing.T) {
 	require.Equal(t, "Fruit", ready.MutedTests[0].Scope)
 	require.Equal(t, "is yellow", ready.MutedTests[0].Name)
 	require.Equal(t, "banana_spec.rb:4", ready.MutedTests[0].Path)
+}
+
+// buildkite-pytest reports the collector's scopes, so pool exec plans pytest
+// examples with them even when bktec's python can't import the collector.
+func TestResolvePoolExecPytestExamplesUseCollectorScopes(t *testing.T) {
+	if err := exec.Command("pytest", "--version").Run(); err != nil {
+		t.Skip("pytest is not installed")
+	}
+	stub := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(stub, "python"), []byte("#!/bin/sh\necho False\n"), 0700))
+	t.Setenv("PATH", stub+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Chdir("../runner/testdata/pytest")
+	var accepted api.PoolPlanParams
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/filter_tests"):
+			io.WriteString(w, `{"tests":[{"path":"test_sample.py","reason":"slow file"}]}`)
+		case r.URL.Path == "/v2/organizations/buildkite/test-scheduler/pools/plan":
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&accepted))
+			w.WriteHeader(http.StatusAccepted)
+			io.WriteString(w, `{"id":"pool","state":"planning"}`)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	cfg := getConfig()
+	cfg.TestRunner, cfg.SuiteSlug, cfg.PipelineSlug, cfg.TestFilePattern = "pytest", "pytest", "pipeline", "test_sample.py"
+	cfg.AccessToken, cfg.ServerBaseURL, cfg.SplitByExample = "header.payload.signature", server.URL, true
+	require.NoError(t, cfg.ValidateForPoolExec())
+	client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "buildkite"})
+	_, err := ResolvePool(context.Background(), cfg, "", client, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, accepted.Plan.Tests.Examples)
+	for _, example := range accepted.Plan.Tests.Examples {
+		require.Equal(t, "test_sample.py", example.Scope, example.Identifier)
+	}
 }

@@ -26,7 +26,10 @@ func (p Pytest) Name() string {
 }
 
 func NewPytest(c RunnerConfig) Pytest {
-	pluginInstalled := checkPythonPackageInstalled("buildkite_test_collector") // python import only uses underscore
+	// buildkite-pytest, pool exec's persistent runner, is part of
+	// buildkite-test-collector and reports its JSON, whether or not bktec's
+	// python can import it.
+	pluginInstalled := c.persistentRunner || checkPythonPackageInstalled("buildkite_test_collector") // python import only uses underscore
 
 	useJUnit := !pluginInstalled
 

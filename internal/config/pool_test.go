@@ -50,6 +50,8 @@ func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 	}{
 		{name: "exec plans rspec", command: "exec", runner: "rspec"},
 		{name: "exec plans pytest", command: "exec", runner: "pytest"},
+		{name: "exec rejects a pytest JUnit command", command: "exec", runner: "pytest", testCommand: "pytest {{testExamples}} --junit-xml={{resultPath}}", wantError: "BUILDKITE_TEST_ENGINE_TEST_CMD pool exec runs pytest with buildkite-pytest, which reports JSON; remove --junit-xml"},
+		{name: "exec rejects a pytest JUnit retry command", command: "exec", runner: "pytest", retryCommand: "pytest --junit-xml=out.xml {{testExamples}}", wantError: "BUILDKITE_TEST_ENGINE_RETRY_CMD pool exec runs pytest"},
 		{name: "exec has no jest runner", command: "exec", runner: "jest", wantError: "pool exec requires rspec or pytest"},
 		{name: "exec with pool ID", command: "exec", poolID: "pool-1"},
 		{name: "consume plans jest", command: "consume", runner: "jest", resultPath: "jest.json"},

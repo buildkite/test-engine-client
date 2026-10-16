@@ -136,6 +136,6 @@ A lease's tests are reported as passed or failed from the pytest report. All of 
 bktec pool exec --suite-slug my-suite --test-runner pytest --local-retry-count 1 -- buildkite-pytest
 ```
 
-`BUILDKITE_TEST_ENGINE_TEST_CMD` and `BUILDKITE_TEST_ENGINE_RETRY_CMD` don't apply, and bktec doesn't upload results; `buildkite-test-collector` uploads them from the pytest process. Like with `pool consume`, run bktec from pytest's rootdir, and don't use pytest options that stop at a failure.
+`BUILDKITE_TEST_ENGINE_TEST_CMD` and `BUILDKITE_TEST_ENGINE_RETRY_CMD` don't apply, and bktec doesn't upload results; `buildkite-test-collector` uploads them from the pytest process. `buildkite-pytest` reports tests in the collector's JSON format, so `pool exec` rejects test commands with `--junit-xml`. If you create the pool with `bktec pool plan` instead, run it where `buildkite-test-collector` is installed and without `--junit-xml` in the test command, so it plans tests the same way. Like with `pool consume`, run bktec from pytest's rootdir, and don't use pytest options that stop at a failure.
 
 `buildkite-pytest` keeps running a lease's other files when one fails to collect, so only that file's attempt errors.
