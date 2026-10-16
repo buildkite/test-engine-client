@@ -259,6 +259,9 @@ func (h *host) handshake(w http.ResponseWriter, body []byte) {
 		case <-h.ready:
 		default:
 			close(h.ready)
+			if source, ok := h.source.(ConnectionSource); ok {
+				source.Connected()
+			}
 		}
 		debug.Printf("Persistent runner connected")
 	}

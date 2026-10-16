@@ -61,6 +61,8 @@ func consumeBatches(ctx context.Context, source *poolSource, run func(ctx contex
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
+	// Each batch starts its own test command, so leases can start at once.
+	source.Connected()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	interrupted := make(chan error, 1)

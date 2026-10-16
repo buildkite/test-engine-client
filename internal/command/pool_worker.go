@@ -54,6 +54,10 @@ type poolSource struct {
 	starts          chan batchStart
 	cancel          context.CancelFunc
 	leaseLog        *log.Logger
+	// connected is closed once a runner can take batches. Leases wait for it,
+	// so a runner that never starts doesn't hold tests other workers could
+	// run. Nil doesn't wait.
+	connected chan struct{}
 	// Worker goroutine only; inputs to leasePrefetch.schedule.
 	pace                float64       // actual runtime / duration estimate; 0 until observed
 	lastAcquireDuration time.Duration // how long the last lease request took
@@ -137,6 +141,18 @@ func (s *poolSource) Undispatchable(_ runnerexec.Batch, err error) {
 }
 func (s *poolSource) Accepted(_ runnerexec.Batch, result runnerexec.Result) { s.results <- result }
 func (s *poolSource) Unresolved(_ runnerexec.Batch, err error)              { s.stop(err) }
+func (s *poolSource) Connected() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.connected != nil {
+		select {
+		case <-s.connected:
+		default:
+			close(s.connected)
+		}
+	}
+}
+
 func (s *poolSource) Terminating() {
 	s.mu.Lock()
 	if s.err != nil {
@@ -224,6 +240,13 @@ func (s *poolSource) work(ctx context.Context, client poolScheduler, pool api.Po
 		s.reason = "pool_consumed"
 		s.mu.Unlock()
 		return
+	}
+	if s.connected != nil {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.connected:
+		}
 	}
 	// Deferred first so it runs last, after any release below.
 	defer s.releasing.Wait()

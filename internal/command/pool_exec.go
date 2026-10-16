@@ -185,6 +185,7 @@ func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries i
 	defer cancel()
 	source := newPoolSource(cancel)
 	source.leaseLog = leases
+	source.connected = make(chan struct{})
 	done := make(chan struct{})
 	go func() { defer close(done); source.work(ctx, client, pool, retries) }()
 	err := run(ctx, source)
