@@ -33,7 +33,10 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	return poolWork(ctx, cfg, files, retries, func(ctx context.Context, source *poolSource) error {
 		// #nosec G204 G702 -- the runner executable and arguments are explicitly supplied by the CLI user after --.
 		cmd := exec.Command(argv[0], argv[1:]...)
-		cmd.Stdin = os.Stdin
+		// Leave Stdin nil, like pool consume: exec.Cmd then gives the runner
+		// /dev/null. Setpgid puts the runner in a background process group, and
+		// a terminal stdin can stop it with SIGTTOU before it handshakes, for
+		// example when Python's readline setup changes the terminal settings.
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return runnerexec.Run(ctx, cmd, source, opts)
