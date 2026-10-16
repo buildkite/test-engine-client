@@ -402,3 +402,29 @@ func TestPoolResultsPlaywrightRetryRunsEveryProject(t *testing.T) {
 		})
 	}
 }
+
+// buildkite-pytest keeps running a batch's other files when one fails to
+// collect, so only that file's attempt errors.
+func TestPoolResultsPytestCollectionError(t *testing.T) {
+	for _, tc := range []struct{ name, broken string }{
+		{"leased file", "spells/test_broken.py"},
+		// A package directory's error matches no leased file.
+		{"package directory", "spells"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tests := []plan.TestCase{{Format: "selector", Value: "spells/test_broken.py"}, {Format: "selector", Value: "spells/test_ok.py"}, {Format: "selector", Value: "test_sample.py"}}
+			r := newPoolResults([]api.LeaseAttempt{{ID: "broken", Selector: tests[0]}, {ID: "ok", Selector: tests[1]}, {ID: "sample", Selector: tests[2]}}, nil)
+			r.absorb(tests, []int{0, 1, 2}, false, runnerexec.Result{Status: "completed", ReportFormat: "pytest-json", Report: json.RawMessage(fmt.Sprintf(`[
+				{"scope":"","name":%q,"result":"failed","tags":{"test.pytest_collection_error":"true"}},
+				{"scope":"spells/test_ok.py","name":"test_one","result":"passed"},
+				{"scope":"test_sample.py::TestGroup","name":"test_two","result":"passed"}]`, tc.broken))})
+			want := []api.AttemptResult{{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok", Result: "passed"}, {AttemptID: "sample", Result: "passed"}}
+			if tc.broken == "spells" {
+				want = []api.AttemptResult{{AttemptID: "broken", Result: "errored"}, {AttemptID: "ok", Result: "errored"}, {AttemptID: "sample", Result: "errored"}}
+			}
+			if got := r.final(); !reflect.DeepEqual(got, want) {
+				t.Fatalf("results=%v, want %v", got, want)
+			}
+		})
+	}
+}
