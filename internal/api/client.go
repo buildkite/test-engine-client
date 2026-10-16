@@ -76,6 +76,18 @@ func NewClient(cfg ClientConfig) *Client {
 			accessToken:   cfg.AccessToken,
 			tokenProvider: cfg.TokenProvider,
 		},
+		// authTransport adds the token to every request, including redirects, so
+		// a redirect to another host would receive it. Return the redirect
+		// response instead of following it.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Host != via[0].URL.Host {
+				return http.ErrUseLastResponse
+			}
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		},
 	}
 
 	return &Client{
