@@ -132,6 +132,13 @@ func (j Jest) Run(result *RunResult, testCases []plan.TestCase, retry bool) erro
 				Path:  testPath,
 			}
 
+			// Retries run by name, and Jest reports the tests the name pattern
+			// doesn't match as pending. Those weren't retried, so they keep their
+			// earlier result, as does a retried test the pattern missed.
+			if retry && status == TestStatusSkipped {
+				continue
+			}
+
 			result.RecordTestResult(testCase, status)
 		}
 	}
