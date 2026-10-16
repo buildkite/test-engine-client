@@ -293,6 +293,45 @@ func TestRunTestsWithRetry_TestPassedAfterRetry(t *testing.T) {
 	}
 }
 
+func TestRunTestsWithRetry_JestKeepsResultsOfTestsNotRetried(t *testing.T) {
+	jest, err := filepath.Abs("../runner/testdata/node_modules/.bin/jest")
+	require.NoError(t, err)
+	nodeModules, err := filepath.Abs("../runner/testdata/node_modules")
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	require.NoError(t, os.Symlink(nodeModules, filepath.Join(dir, "node_modules")))
+	// "flaky" fails on its first run only; the retry runs the whole file with
+	// a name pattern, so Jest reports "passes" as pending.
+	fixture := `const fs = require('fs');
+describe('a', () => {
+  test('passes', () => {});
+  test('flaky', () => {
+    if (!fs.existsSync('marker')) {
+      fs.writeFileSync('marker', '');
+      throw new Error('first run');
+    }
+  });
+});
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "flaky.test.js"), []byte(fixture), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0o644))
+	t.Chdir(dir)
+
+	testRunner := runner.NewJest(runner.RunnerConfig{
+		TestCommand:      jest + " --runTestsByPath {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}",
+		RetryTestCommand: jest + " --runTestsByPath {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}",
+		ResultPath:       "jest.json",
+	})
+	testCases := []plan.TestCase{{Path: "flaky.test.js"}}
+	timeline := []api.Timeline{}
+	testResult, err := runTestsWithRetry(context.Background(), nil, &config.Config{}, testRunner, &testCases, 1, []plan.TestCase{}, &timeline, true, false)
+	require.NoError(t, err)
+
+	assert.Equal(t, runner.RunStatusPassed, testResult.Status())
+	assert.Equal(t, runner.RunStatistics{Total: 2, PassedOnFirstRun: 1, PassedOnRetry: 1}, testResult.Statistics())
+}
+
 func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {
 	testRunner := runner.NewRspec(runner.RunnerConfig{
 		TestCommand:      "rspec --format json --out {{resultPath}}",
