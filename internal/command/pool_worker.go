@@ -608,6 +608,9 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		owners[i] = i
 	}
 	var started time.Time
+	// The lease's first batch starts its prefetch timer and timing. Running
+	// files again after others failed to load doesn't restart them.
+	var firstBatchID string
 	for round := 0; len(tests) > 0; {
 		s.mu.Lock()
 		s.sequence++
@@ -616,6 +619,9 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		s.pending = &runnerexec.Batch{ID: fmt.Sprintf("b_%d", s.sequence), Tests: tests}
 		batchID := s.pending.ID
 		s.mu.Unlock()
+		if firstBatchID == "" {
+			firstBatchID = batchID
+		}
 		if round > 0 {
 			debug.Printf("Offered local retry batch %s from lease %s (round=%d; %d tests)", batchID, lease.ID, round, len(tests))
 		} else {
@@ -633,7 +639,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 				}
 				return nil, ctx.Err()
 			case start := <-s.starts:
-				if start.id == batchID {
+				if start.id == firstBatchID {
 					started = start.at
 					prefetch.schedule(s, lease, started)
 				}
@@ -683,7 +689,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 			if started.IsZero() {
 				select {
 				case start := <-s.starts:
-					if start.id == batchID {
+					if start.id == firstBatchID {
 						started = start.at
 					}
 				default:
