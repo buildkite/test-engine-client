@@ -1,17 +1,20 @@
 # `bktec pool exec`
 
 `bktec pool exec` runs tests from a Test Scheduler pool using one persistent
-runner process.
+runner process. The runner starts once, and each of the worker's leases runs in
+that process, so startup costs such as loading the app or collecting tests are
+paid once instead of for each lease.
 
-RSpec and pytest are supported on Linux and macOS:
+`pool exec` requires a persistent runner from your test runner's Buildkite test
+collector. Each runner's guide describes its persistent runner and how to
+configure it:
 
-- RSpec requires Test Collector Ruby, which provides the
-  [`buildkite-rspec`](https://github.com/buildkite/bktest/tree/main/test-collector-ruby) persistent
-  runner.
-- pytest requires a `buildkite-test-collector` release that provides the
-  [`buildkite-pytest`](https://github.com/buildkite/bktest/tree/main/test-collector-python)
-  persistent runner. This release is not available yet; see
-  [pytest](./pytest.md#run-tests-in-one-pytest-process-with-bktec-pool-exec).
+- [RSpec](./rspec.md#run-tests-in-one-rspec-process-with-bktec-pool-exec) runs
+  with the [`buildkite-rspec`](https://github.com/buildkite/bktest/tree/main/test-collector-ruby)
+  persistent runner from Test Collector Ruby.
+- [pytest](./pytest.md#run-tests-in-one-pytest-process-with-bktec-pool-exec)
+  runs with the [`buildkite-pytest`](https://github.com/buildkite/bktest/tree/main/test-collector-python)
+  persistent runner from `buildkite-test-collector`.
 
 For Jest and Playwright, use [`bktec pool consume`](./pool-consume.md), which
 starts a new test runner command for each lease. pytest also supports
@@ -19,23 +22,14 @@ starts a new test runner command for each lease. pytest also supports
 
 ## Run a pool worker
 
-Create or reuse a pool automatically:
+Create or reuse a pool automatically, passing the persistent runner command
+after `--`. For example, an RSpec worker:
 
 ```shell
 bktec pool exec \
   --suite-slug my-suite \
   --test-runner rspec \
   -- bundle exec buildkite-rspec
-```
-
-For pytest, set `--test-runner pytest` and start `buildkite-pytest`, followed
-by any pytest options:
-
-```shell
-bktec pool exec \
-  --suite-slug my-suite \
-  --test-runner pytest \
-  -- buildkite-pytest
 ```
 
 Everything after `--` is passed directly to the persistent runner, not
@@ -106,7 +100,7 @@ When creating a pool, `pool exec` supports these test discovery options:
 | `--pool-key` | `BUILDKITE_STEP_ID` | Identify the pool for workers in this build. |
 | `--pool-lease-cost` | unset | Requested cost budget for each lease as `<dimension>=<budget>`; unset uses the Scheduler default. |
 | `--pool-lease-max-attempts` | `0` | Requested maximum attempts per lease; `0` uses the Scheduler default. |
-| `--local-retry-count` | `0` | Retry failed, unmuted examples locally before reporting the Scheduler attempt. |
+| `--local-retry-count` | `0` | Retry failed, unmuted tests locally before reporting the Scheduler attempt. |
 | `--runner-startup-timeout` | `1m` | Wait for the persistent runner to become ready. |
 | `--runner-batch-timeout` | `10m` | Allow a batch to run and submit its report. |
 | `--runner-shutdown-timeout` | `1m30s` | Allow the runner to exit and flush the test collector. |
@@ -117,7 +111,7 @@ supports `duration_p50_ms` and `duration_p90_ms`, the sum of the leased tests'
 median or p90 durations in milliseconds:
 
 ```shell
-bktec pool exec --pool-lease-cost duration_p90_ms=120000 -- bundle exec buildkite-rspec
+bktec pool exec --pool-lease-cost duration_p90_ms=120000 --suite-slug my-suite --test-runner rspec -- bundle exec buildkite-rspec
 ```
 
 The deprecated `--pool-lease-duration-ms <ms>` (env:
@@ -134,7 +128,7 @@ Test Scheduler. With `--no-oidc`, it must remain valid for the entire command.
 
 ## Retries and results
 
-`--local-retry-count` retries failed examples in the same worker. These retries
+`--local-retry-count` retries failed tests in the same worker. These retries
 do not create additional Scheduler attempts. Muted failures are not retried.
 
 Retrying a Buildkite job doesn't re-run its tests. A retried job that finds its
@@ -148,9 +142,9 @@ when available. Protocol, reporting, or accounting errors exit with status 16.
 When `bktec` receives SIGINT or SIGTERM, it releases its active lease so another
 worker can acquire those attempts without waiting for the lease to expire.
 
-Test result uploads are the runner's responsibility. Configure them through
-the runner's test collector, Test Collector Ruby or `buildkite-test-collector`;
-`bktec pool exec` does not perform the normal bktec result upload.
+Test result uploads are the runner's responsibility. Configure them through the
+runner's test collector, described in its guide; `bktec pool exec` does not
+perform the normal bktec result upload.
 
 ## Fallback when Test Scheduler is unavailable
 
@@ -200,5 +194,5 @@ If the runner does not start, check that:
 - the suite and pool belong to the current Buildkite organization and build;
 - OIDC is available, or a valid Scheduler OIDC token was supplied;
 - the existing pool was created through Test Scheduler planning;
-- `buildkite-rspec` or `buildkite-pytest` is installed and the command after
-  `--` starts it directly.
+- the persistent runner is installed and the command after `--` starts it
+  directly.
