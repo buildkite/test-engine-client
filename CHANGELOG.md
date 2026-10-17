@@ -11,6 +11,7 @@
 - Add `--pool-lease-cost <dimension>=<budget>` to choose how pool leases are budgeted, such as `duration_p50_ms=100000` for median test durations. Lease prefetching now also works for pools budgeted by p50 durations. See the [pool options](./docs/pool-exec.md#options). Requires Test Scheduler support on the server.
 - Deprecate `--pool-lease-duration-ms`. It now budgets median (p50) durations instead of p90, matching the Test Scheduler default; use `--pool-lease-cost duration_p90_ms=<ms>` to keep p90 budgets.
 - Retry `bktec pool exec` lease requests after network errors and `5xx` responses instead of failing the job, without leasing the same tests twice. Requires Test Scheduler support on the server.
+- Fix the [OTLP relay](./README.md#relay-opentelemetry-traces) dropping the header test collectors use to label test results and other spans, so Buildkite could not tell them apart for traces sent through bktec.
 
 ## 3.3.0 - 2026-10-08
 - [Manual test selection](./README.md#test-selection) can read its selectors from `BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS` instead of `--selection-param selectors=...`.

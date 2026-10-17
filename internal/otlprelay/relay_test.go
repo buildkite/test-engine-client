@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -86,6 +87,49 @@ func TestRelayForwardsOpaqueGzipRequestWithTrustedHeaders(t *testing.T) {
 	}
 	if got := tokenRequests.Load(); got != 1 {
 		t.Errorf("OIDC token requests = %d, want 1", got)
+	}
+}
+
+func TestRelayForwardsSpanStreamHeader(t *testing.T) {
+	tests := []struct {
+		name       string
+		spanStream []string
+		want       []string
+	}{
+		{name: "test", spanStream: []string{"test"}, want: []string{"test"}},
+		{name: "child", spanStream: []string{"child"}, want: []string{"child"}},
+		{name: "absent"},
+		{name: "empty", spanStream: []string{""}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			received := make(chan []string, 1)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				received <- req.Header.Values("Buildkite-Tests-Span-Stream")
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer upstream.Close()
+
+			relay := newTestRelay(t, Config{
+				UpstreamEndpoint: upstream.URL,
+				RunKey:           "build-id",
+				TokenSource:      staticToken("oidc-token"),
+			})
+			resp := postTracesWithSpanStream(t, relay, []byte("spans"), test.spanStream...)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("POST /v1/traces status = %d, want 200", resp.StatusCode)
+			}
+			_ = resp.Body.Close()
+
+			drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if report := relay.Drain(drainCtx); report.ForwardedRequests != 1 {
+				t.Fatalf("Drain report = %+v, want one forwarded request", report)
+			}
+			if got := <-received; !slices.Equal(got, test.want) {
+				t.Errorf("upstream Buildkite-Tests-Span-Stream = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 
@@ -279,8 +323,12 @@ func TestRelayAcknowledgesBeforeDeliveryAndReturns429WhenQueueIsFull(t *testing.
 
 func TestRelayRetriesRetryableResponses(t *testing.T) {
 	var requests atomic.Int32
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if requests.Add(1) == 1 {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requestNumber := requests.Add(1)
+		if got := req.Header.Get("Buildkite-Tests-Span-Stream"); got != "child" {
+			t.Errorf("attempt %d Buildkite-Tests-Span-Stream = %q, want child", requestNumber, got)
+		}
+		if requestNumber == 1 {
 			w.Header().Set("Retry-After", "0")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -294,7 +342,7 @@ func TestRelayRetriesRetryableResponses(t *testing.T) {
 		RunKey:           "build-id",
 		TokenSource:      staticToken("oidc-token"),
 	})
-	resp := postTraces(t, relay, []byte("request"), `Token token="`+relay.token+`"`, "")
+	resp := postTracesWithSpanStream(t, relay, []byte("request"), "child")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("POST status = %d, want 200", resp.StatusCode)
 	}
@@ -727,6 +775,26 @@ func postTraces(t *testing.T, relay *Relay, body []byte, authorization, contentE
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	if contentEncoding != "" {
 		req.Header.Set("Content-Encoding", contentEncoding)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST local OTLP request: %v", err)
+	}
+	return resp
+}
+
+// postTracesWithSpanStream posts with the Ruby collector's Token credential and
+// one Buildkite-Tests-Span-Stream header per value given.
+func postTracesWithSpanStream(t *testing.T, relay *Relay, body []byte, spanStream ...string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, relay.endpoint+"/v1/traces", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", `Token token="`+relay.token+`"`)
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	for _, value := range spanStream {
+		req.Header.Add("Buildkite-Tests-Span-Stream", value)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
