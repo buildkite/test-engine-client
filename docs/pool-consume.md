@@ -1,9 +1,9 @@
 # `bktec pool consume`
 
 `bktec pool consume` runs tests from a Test Scheduler pool, starting a new test
-runner command for each lease. Jest, Playwright and pytest are supported. Use
-[`bktec pool exec`](./pool-exec.md) for runners that provide a persistent
-runner, such as RSpec and pytest.
+runner command for each lease and each local retry round. Jest, Playwright and
+pytest are supported. Use [`bktec pool exec`](./pool-exec.md) for runners that
+provide a persistent runner, such as RSpec and pytest.
 
 Apart from how tests run, `pool consume` works like `pool exec`. Both commands
 share the same pool resolution, sizing with `bktec pool plan`, authentication,
@@ -25,7 +25,9 @@ bktec pool consume --suite-slug my-suite --local-retry-count 1
 For each lease, bktec runs the test command with the lease's tests in place of
 `{{testExamples}}`. Set `BUILDKITE_TEST_ENGINE_TEST_CMD` (`--test-command`) to
 customize it. The command must write the runner's report to the result path,
-because bktec reads that report to account for the lease.
+because bktec reads that report to account for the lease. bktec removes any
+earlier report before each command, so a command that doesn't write a new one
+errors the lease instead of reusing an old report.
 
 With `--local-retry-count`, bktec reruns a lease's failed tests with the retry
 command. Set `BUILDKITE_TEST_ENGINE_RETRY_CMD` (`--retry-command`) to customize

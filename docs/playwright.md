@@ -102,6 +102,8 @@ With `--local-retry-count`, bktec reruns a lease's failed tests by their `file:l
 
 Pools plan Playwright tests by file. `--split-by-example` (`BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE`) is not supported for Playwright pools.
 
+Playwright also starts and stops its [`webServer`](https://playwright.dev/docs/test-webserver) with every command, so it restarts for each lease and each local retry round.
+
 ### Setup projects
 
 Playwright runs a project's dependencies, such as a [setup project](https://playwright.dev/docs/test-global-setup-teardown#option-1-project-dependencies), with every command, whichever test files it runs. In a pool, setup runs for each lease and each local retry round, on every worker, and its tests are uploaded with each command's results. bktec doesn't count setup tests toward the lease unless one fails, which errors the lease's tests, because Playwright skips the tests that depend on it.
