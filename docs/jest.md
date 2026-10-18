@@ -130,6 +130,8 @@ npx jest --runTestsByPath {{testExamples}} --testNamePattern '{{testNamePattern}
 
 A lease's tests are reported as passed or failed from the Jest report. A test file that fails outside its tests, for example because it doesn't load, is reported as errored without affecting the lease's other files.
 
+Tests in the same file with the same `describe` titles and name, such as identical `test.each` cases, can't be told apart, so they're reported as one test, which fails if any of them fail. A local retry reruns all of them, and the retry's result replaces the earlier one.
+
 All of a lease's tests are reported as errored when:
 
 - the command doesn't write a usable report.

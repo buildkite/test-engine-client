@@ -85,6 +85,8 @@ bktec run
 > [!NOTE]
 > `execution_tag` is a custom marker added by Buildkite Test Collector for pytest. You can add multiple tags to a test, however the tag filters only support single `key:value` pairs.
 
+Tag filtering isn't supported for [Test Scheduler pools](#run-tests-from-a-test-scheduler-pool). bktec exits with an error if `--tag-filters` is set when it plans a pool.
+
 ## Selector-based test splitting
 
 pytest uses [selector-based test splitting](../README.md#selector-based-test-splitting) by default. Each test file path discovered with pytest's default `**/{*_test,test_*}.py` pattern becomes a selector. You can customize which files are discovered with `BUILDKITE_TEST_ENGINE_TEST_FILE_PATTERN` and `BUILDKITE_TEST_ENGINE_TEST_FILE_EXCLUDE_PATTERN`; the `{{testExamples}}` command placeholder works as before.
@@ -113,13 +115,13 @@ bktec pool consume --suite-slug my-suite --local-retry-count 1
 
 For each lease, bktec runs the test command with the lease's test files, or the node IDs of its tests. Like with `bktec run`, the command must include `--json=` or `--junit-xml`, and the result path defaults to a temporary file.
 
-Each command starts a new pytest session, so every lease pays pytest's startup cost, such as collecting tests and running `conftest.py` and session-scoped fixtures.
+Each command starts a new pytest session, so every lease pays pytest's startup cost, such as collecting tests and running `conftest.py` and session-scoped fixtures. For suites with expensive setup, we recommend [`bktec pool exec`](#run-tests-in-one-pytest-process-with-bktec-pool-exec) once it's available.
 
 With `--local-retry-count`, bktec reruns a lease's failed tests by node ID with the retry command, which defaults to the test command.
 
-pytest options that stop at a failure, such as `-x`, `--maxfail` and `--stepwise`, aren't supported. Each worker stops only its own lease while the others keep running the pool, and pytest doesn't report the tests it didn't run. bktec rejects these options in the test and retry commands, but can't see them in pytest's configuration, such as `addopts`, so don't set them there either.
+pytest options that stop at a failure, such as `-x`, `--maxfail`, `--stepwise` and `--stepwise-skip`, aren't supported. Each worker stops only its own lease while the others keep running the pool, and pytest doesn't report the tests it didn't run. bktec rejects these options in the test and retry commands, but can't see them in pytest's configuration, such as `addopts`, so don't set them there either.
 
-Run bktec from pytest's rootdir. pytest reports tests relative to its rootdir, and bktec matches them to the leased files, which are relative to the working directory.
+Run bktec from pytest's rootdir. pytest reports tests relative to its rootdir, and bktec matches them to the leased files, which are relative to the working directory. If a reported test doesn't match a leased file, all of the lease's tests are reported as errored.
 
 ### Pool results
 
