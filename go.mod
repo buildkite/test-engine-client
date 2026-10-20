@@ -1,6 +1,6 @@
 module github.com/buildkite/test-engine-client/v3
 
-go 1.27.1
+go 1.27.3
 
 require (
 	drjosh.dev/zzglob v0.4.3

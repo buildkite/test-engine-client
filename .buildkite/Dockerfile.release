@@ -1,7 +1,12 @@
+FROM golang:1.27.3-alpine AS golang
 FROM goreleaser/goreleaser:v2.18.2 AS goreleaser
 
-# Install AWS CLI
-RUN apk add aws-cli
+# Pin the compiler independently of the GoReleaser image's bundled Go version.
+COPY --from=golang /usr/local/go /usr/local/go
+ENV GOTOOLCHAIN=local
+
+# Refresh the release tools' trust store as well as the compiler's verifier.
+RUN apk upgrade --no-cache && apk add --no-cache aws-cli 'ca-certificates>=20261020-r0'
 RUN aws --version
 
 ENTRYPOINT []
