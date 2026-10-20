@@ -44,8 +44,8 @@ const (
 var ErrTerminalCredential = errors.New("terminal OTLP relay credential failure")
 
 // Config contains the trusted values that bktec adds when forwarding an OTLP
-// request. The test process supplies only the opaque protobuf body and its
-// content encoding.
+// request. The test process supplies only the opaque protobuf body, its
+// content encoding, and an optional span stream label.
 type Config struct {
 	UpstreamEndpoint string
 	RunKey           string
@@ -141,6 +141,7 @@ type Report struct {
 type request struct {
 	body            []byte
 	contentEncoding string
+	spanStream      string
 }
 
 type deliveryResult int
@@ -353,7 +354,10 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !r.enqueue(&request{body: body, contentEncoding: contentEncoding}) {
+	// Collectors send "test" or "child"; the receiver validates it.
+	spanStream := strings.TrimSpace(req.Header.Get("Buildkite-Tests-Span-Stream"))
+
+	if !r.enqueue(&request{body: body, contentEncoding: contentEncoding, spanStream: spanStream}) {
 		w.Header().Set("Retry-After", "1")
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
@@ -524,6 +528,9 @@ func (r *Relay) send(queued *request, token string) (int, time.Duration, bool, e
 	}
 	req.Header.Set("Authorization", `Token token="`+token+`"`)
 	req.Header.Set("Buildkite-Tests-Run-Key", r.config.RunKey)
+	if queued.spanStream != "" {
+		req.Header.Set("Buildkite-Tests-Span-Stream", queued.spanStream)
+	}
 
 	resp, err := r.client.Do(req)
 	if err != nil {
