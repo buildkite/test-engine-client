@@ -1,5 +1,7 @@
 # Changelog
 ## Unreleased
+
+## 3.3.1 - 2026-10-21
 - Fix trust in compromised eMudhra certificate authorities (CVE-2026-111943) by building with Go 1.27.3 and updating the Docker images' CA certificates. Upgrade bktec to receive the mitigation.
 
 ## 3.3.0 - 2026-10-08
