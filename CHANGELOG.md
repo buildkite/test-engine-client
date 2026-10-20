@@ -1,6 +1,5 @@
 # Changelog
 ## Unreleased
-- Fix trust in compromised eMudhra certificate authorities (CVE-2026-111943) by building with Go 1.27.3 and updating the Docker images' CA certificates. Upgrade bktec to receive the mitigation.
 - Add `bktec pool consume` for running Jest, Playwright and pytest tests from a [Test Scheduler pool](./docs/pool-consume.md), starting a new test runner command for each lease. `bktec pool plan` can now plan Jest, Playwright and pytest pools. Requires Test Scheduler support on the server.
 - Fix `bktec run` not running the other Playwright test files when one fails to load. A Jest or Playwright file that fails to load still fails the job, but no longer stops failed tests in other files from being retried.
 - Support pytest in [`bktec pool exec`](./docs/pytest.md#run-tests-in-one-pytest-process-with-bktec-pool-exec), which runs all of a worker's leases in one pytest process with `buildkite-pytest`. Requires a `buildkite-test-collector` release that includes `buildkite-pytest`.
@@ -13,6 +12,9 @@
 - Deprecate `--pool-lease-duration-ms`. It now budgets median (p50) durations instead of p90, matching the Test Scheduler default; use `--pool-lease-cost duration_p90_ms=<ms>` to keep p90 budgets.
 - Retry `bktec pool exec` lease requests after network errors and `5xx` responses instead of failing the job, without leasing the same tests twice. Requires Test Scheduler support on the server.
 - Fix the [OTLP relay](./README.md#relay-opentelemetry-traces) dropping the label that marks each trace request as test results or other spans, so Buildkite couldn't tell them apart for traces sent through bktec.
+
+## 3.3.1 - 2026-10-21
+- Fix trust in compromised eMudhra certificate authorities (CVE-2026-111943) by building with Go 1.27.3 and updating the Docker images' CA certificates. Upgrade bktec to receive the mitigation.
 
 ## 3.3.0 - 2026-10-08
 - [Manual test selection](./README.md#test-selection) can read its selectors from `BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS` instead of `--selection-param selectors=...`.
