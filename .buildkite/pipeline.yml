@@ -2,7 +2,7 @@ steps:
   - name: ":golangci-lint: Lint"
     plugins:
       - docker#v5.13.0:
-          image: golangci/golangci-lint:v2.13.2
+          image: golangci/golangci-lint:v2.15.0
           workdir: /go/src/github.com/your-org/your-repo
           command:
             - golangci-lint
@@ -42,6 +42,8 @@ steps:
             image: goreleaser/goreleaser:v2.18.2
             mount-buildkite-agent: true
             environment:
+              # Honor go.mod's minimum instead of the image's older bundled Go.
+              - GOTOOLCHAIN=auto
               - GOOS={{matrix.os}}
               - GOARCH={{matrix.arch}}
             command:
