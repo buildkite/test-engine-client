@@ -33,27 +33,66 @@ func TestRunAndForwardSignal_CommandExitsWithNonZero(t *testing.T) {
 }
 
 func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
-	cmd := exec.Command("sleep", "10")
+	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT} {
+		t.Run(sig.String(), func(t *testing.T) {
+			cmd := exec.Command("sleep", "10")
 
-	// Send a SIGTERM signal to the main process.
+			// Send the signal to the main process.
+			go func() {
+				pid := os.Getpid()
+				process, err := os.FindProcess(pid)
+				if err != nil {
+					t.Errorf("os.FindProcess(%d) error = %v", pid, err)
+				}
+				time.Sleep(300 * time.Millisecond)
+				process.Signal(sig)
+			}()
+
+			err := runAndForwardSignal(cmd)
+
+			signalError := new(ProcessSignaledError)
+			if !errors.As(err, &signalError) {
+				t.Errorf("runAndForwardSignal(cmd) error type = %T (%v), want *ErrProcessSignaled", err, err)
+			}
+			if signalError.Signal != sig {
+				t.Errorf("runAndForwardSignal(cmd) signal = %d, want  %d", signalError.Signal, sig)
+			}
+		})
+	}
+}
+
+func TestRunAndForwardSignal_BrokenPipeInMainProcess(t *testing.T) {
+	// Writing to a closed connection, such as when bktec closes an API
+	// connection that was reset, raises SIGPIPE in bktec. The command must
+	// keep running: like most commands, sleep is killed by SIGPIPE.
+	cmd := exec.Command("sleep", "1")
+
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	reader.Close()
+	defer writer.Close()
+
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		pid := os.Getpid()
-		process, err := os.FindProcess(pid)
-		if err != nil {
-			t.Errorf("os.FindProcess(%d) error = %v", pid, err)
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				// Each write fails with EPIPE and raises SIGPIPE in this process.
+				writer.Write([]byte("x"))
+			}
 		}
-		time.Sleep(300 * time.Millisecond)
-		process.Signal(syscall.SIGTERM)
 	}()
 
-	err := runAndForwardSignal(cmd)
-
-	signalError := new(ProcessSignaledError)
-	if !errors.As(err, &signalError) {
-		t.Errorf("runAndForwardSignal(cmd) error type = %T (%v), want *ErrProcessSignaled", err, err)
-	}
-	if signalError.Signal != syscall.SIGTERM {
-		t.Errorf("runAndForwardSignal(cmd) signal = %d, want  %d", syscall.SIGTERM, signalError.Signal)
+	err = runAndForwardSignal(cmd)
+	if err != nil {
+		t.Errorf("runAndForwardSignal(cmd) error = %v, want nil", err)
 	}
 }
 

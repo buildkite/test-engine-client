@@ -48,7 +48,7 @@ func environmentWithOverrides(environment []string, overrides map[string]string)
 	return result
 }
 
-// runAndForwardSignal runs the command and forwards any signals received to the command.
+// runAndForwardSignal runs the command and forwards termination signals received to the command.
 func runAndForwardSignal(cmd *exec.Cmd) error {
 	return runAndForwardSignalWithOutput(cmd, os.Stdout, os.Stderr)
 }
@@ -71,8 +71,14 @@ func runAndForwardSignalWithOutput(cmd *exec.Cmd, stdout io.Writer, stderr io.Wr
 	// Start a goroutine that waits for a signal or the command to finish.
 	go func() {
 		// Create another channel to receive the signals.
+		// Only listen for signals that ask the run to stop. Listening for every
+		// signal would also catch SIGPIPE, which the kernel raises when bktec
+		// writes to a closed connection, such as when it closes an API
+		// connection that was reset. bktec handles that write error itself,
+		// but forwarding SIGPIPE kills test commands that don't ignore it,
+		// such as shell scripts.
 		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh)
+		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 
 		// Wait for a signal to be received or the command to finish.
 		// Because a message can come through both channels asynchronously,
@@ -82,10 +88,6 @@ func runAndForwardSignalWithOutput(cmd *exec.Cmd, stdout io.Writer, stderr io.Wr
 		for {
 			select {
 			case sig := <-sigCh:
-				// Check if the signal should be ignored (e.g., SIGCHLD on Unix).
-				if isIgnoredSignal(sig) {
-					continue
-				}
 				// Ignore the error when sending the signal to the command.
 				_ = cmd.Process.Signal(sig)
 			case <-finishCh:
