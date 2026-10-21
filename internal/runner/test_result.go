@@ -8,6 +8,8 @@ const (
 	TestStatusPassed  TestStatus = "passed"
 	TestStatusFailed  TestStatus = "failed"
 	TestStatusSkipped TestStatus = "skipped"
+	// TestStatusNotRun indicates a test that was expected to run but did not.
+	TestStatusNotRun  TestStatus = "not_run"
 	TestStatusUnknown TestStatus = "unknown"
 )
 

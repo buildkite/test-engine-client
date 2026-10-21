@@ -76,13 +76,33 @@ Playwright uses [selector-based test splitting](../README.md#selector-based-test
 > [!NOTE]
 > If you upload results with the [JavaScript test collector](https://buildkite.com/docs/test-engine/test-collection/javascript-collectors), we recommend updating to `buildkite-test-collector` v1.10.0 or later so selectors are attributed directly. Older versions can still upload results, and Test Engine [attempts to match selectors using the file path](../README.md#how-selectors-are-matched). If no history matches, Test Engine uses default duration estimates and bktec prints a warning. Updating matters most if you use a [location prefix](#location-prefix), since the fallback only handles the prefix on a best-effort basis.
 
-## Automatically retry failed tests
-You can configure bktec to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable. When this variable is set to a number greater than `0`, bktec will retry each failed test up to the specified number of times, using either the default test command or the command specified in `BUILDKITE_TEST_ENGINE_TEST_CMD`.
+## Split slow files by individual test example
 
-To enable automatic retry, set the following environment variable:
+By default, bktec splits your test suite by file. To split slow files into individual tests across workers, enable:
+
+```sh
+export BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true
+```
+
+Example splitting does not support [serial groups](https://playwright.dev/docs/api/class-test#test-describe-serial). If you use them, please leave example splitting disabled so dependent tests stay on the same worker.
+
+## Automatically retry failed tests
+bktec can retry independent tests using `BUILDKITE_TEST_ENGINE_RETRY_COUNT`. For example, to retry failed tests up to two times:
+
 ```sh
 export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ```
+
+Retries use `BUILDKITE_TEST_ENGINE_RETRY_CMD` if set, or the main test command otherwise.
+
+bktec retries do not support serial groups because they retry failed tests without rerunning the rest of the group. If you use serial groups, please use [Playwright's native retries](https://playwright.dev/docs/test-retries#serial-mode) instead, which retry the whole group together:
+
+```sh
+export BUILDKITE_TEST_ENGINE_RETRY_COUNT=0
+export BUILDKITE_TEST_ENGINE_TEST_CMD="npx playwright test --retries=2 {{testExamples}}"
+```
+
+Tests skipped because of another failure are listed as **Failed to run** and fail the job, even if retried tests pass. Intentional skips do not fail the job.
 
 When a test file fails to load, Playwright runs no tests at all, so bktec runs the other test files again without it. The broken file fails the job, but failed tests in the other files are still retried. Errors that Playwright doesn't locate in one of the test files bktec ran, such as a failed `globalSetup` or an error in a helper file that a test file imports, error the whole job and stop retries.
 
@@ -99,6 +119,8 @@ bktec pool consume --suite-slug my-suite --local-retry-count 1
 For each lease, bktec runs the test command with the lease's test files. Each leased test file runs in every Playwright project, and its result counts once, across all projects: it fails if the file's tests fail in any project. Muted tests are muted in their own project only.
 
 With `--local-retry-count`, bktec reruns a lease's failed tests by their `file:line` with the retry command, which defaults to the test command. Each retried test runs in every project again, and its result in every project counts toward the file's attempt.
+
+For serial groups, use `--local-retry-count 0` and [Playwright's native retries](#automatically-retry-failed-tests) instead.
 
 Pools plan Playwright tests by file. `--split-by-example` (`BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE`) is not supported for Playwright pools.
 
