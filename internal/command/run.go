@@ -23,6 +23,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/olekukonko/tablewriter"
+	"github.com/urfave/cli/v3"
 )
 
 // newGitRunner constructs the git runner used for metadata auto-collection.
@@ -132,6 +133,10 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 			return nil
 		}
 		return fmt.Errorf("%s exited with error: %w", testRunner.Name(), runErr)
+	}
+
+	if runErr == nil && len(runResult.NotRunTests()) > 0 {
+		return cli.Exit("Some tests failed to run; see the report above.", 1)
 	}
 
 	return runErr
@@ -335,7 +340,11 @@ func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.Tes
 			fmt.Println("✅ All tests passed.")
 		}
 	case runner.RunStatusFailed:
-		fmt.Println("❌ Some tests failed.")
+		if len(runResult.FailedTests()) == 0 && len(runResult.NotRunTests()) > 0 {
+			fmt.Println("❌ Some tests failed to run.")
+		} else {
+			fmt.Println("❌ Some tests failed.")
+		}
 	case runner.RunStatusError:
 		fmt.Printf("🚨 %s\n", runResult.Error())
 	}
@@ -351,6 +360,9 @@ func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.Tes
 			{"Muted", "failed", strconv.Itoa(statistics.MutedFailed)},
 			{"Failed", "", strconv.Itoa(statistics.Failed)},
 			{"Skipped", "", strconv.Itoa(statistics.Skipped)},
+		}
+		if statistics.NotRun > 0 {
+			data = append(data, []string{"Failed to run", "", strconv.Itoa(statistics.NotRun)})
 		}
 		table := tablewriter.NewWriter(os.Stdout)
 		table.AppendBulk(data)
@@ -376,6 +388,15 @@ func printReport(runResult runner.RunResult, testsSkippedByTestEngine []plan.Tes
 			fmt.Println("+++ Failed Tests:")
 			for _, failedTests := range runResult.FailedTests() {
 				fmt.Printf("- %s %s\n", failedTests.Scope, failedTests.Name)
+			}
+		}
+
+		if tests := runResult.NotRunTests(); len(tests) > 0 {
+			fmt.Println("")
+			fmt.Println("+++ Failed to run:")
+			fmt.Printf("%s skipped these tests even though they were expected to run:\n", runnerName)
+			for _, test := range tests {
+				fmt.Printf("- %s %s (%s)\n", test.Scope, test.Name, test.Path)
 			}
 		}
 

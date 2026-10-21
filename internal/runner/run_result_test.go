@@ -263,6 +263,30 @@ func TestRunStatus_Error(t *testing.T) {
 	}
 }
 
+func TestRunStatus_NotRun(t *testing.T) {
+	muted := plan.TestCase{Scope: "group", Name: "muted failure"}
+	notRun := plan.TestCase{Scope: "group", Name: "not run"}
+	r := NewRunResult([]plan.TestCase{muted, notRun})
+	r.RecordTestResult(muted, TestStatusFailed)
+	r.RecordTestResult(notRun, TestStatusNotRun)
+
+	if r.Status() != RunStatusFailed || r.OnlyMutedFailures() {
+		t.Fatalf("a muted test that didn't run must still fail the run: status=%s onlyMuted=%t", r.Status(), r.OnlyMutedFailures())
+	}
+	if stats := r.Statistics(); stats.NotRun != 1 || stats.Skipped != 0 {
+		t.Errorf("Statistics() = %+v, want 1 not run and 0 skipped", stats)
+	}
+	if len(r.FailedTests()) != 0 || len(r.FailedMutedTests()) != 1 {
+		t.Error("tests that didn't run must not become individual retry candidates")
+	}
+
+	// A custom retry command can rerun the whole group and resolve the missing test.
+	r.RecordTestResult(notRun, TestStatusPassed)
+	if r.Status() != RunStatusPassed || len(r.NotRunTests()) != 0 || !r.OnlyMutedFailures() {
+		t.Error("a test that subsequently runs must no longer fail the run")
+	}
+}
+
 func TestRunStatus_Unknown(t *testing.T) {
 	r := NewRunResult([]plan.TestCase{})
 	// when there are no tests, the status should be "unknown"

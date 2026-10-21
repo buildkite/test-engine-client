@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/urfave/cli/v3"
 )
 
 func TestStartOTLPRelayWiresTestEnvironmentAndOIDCForwarding(t *testing.T) {
@@ -330,6 +331,111 @@ describe('a', () => {
 
 	assert.Equal(t, runner.RunStatusPassed, testResult.Status())
 	assert.Equal(t, runner.RunStatistics{Total: 2, PassedOnFirstRun: 1, PassedOnRetry: 1}, testResult.Statistics())
+}
+
+func TestRun_PlaywrightSkippedTests(t *testing.T) {
+	modules, err := filepath.Abs("../runner/testdata/node_modules")
+	require.NoError(t, err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"fallback":true,"tasks":{"0":{"node_number":0,"tests":[{"path":"serial.spec.js","format":"file"}]}}}`)
+	}))
+	defer server.Close()
+
+	for _, tc := range []struct {
+		name        string
+		retries     int
+		intentional bool
+		nativeRetry bool
+	}{
+		{name: "no retries"},
+		{name: "passing retry", retries: 1},
+		{name: "intentional skips", retries: 1, intentional: true},
+		{name: "native retry runs whole group", nativeRetry: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.Symlink(modules, filepath.Join(dir, "node_modules")))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "playwright.config.js"), []byte(`module.exports = {
+  reporter: [['json', { outputFile: './results.json' }]],
+}`), 0600))
+			fixture := `const { test } = require('@playwright/test');
+test.describe.serial('group', () => {
+  test('first', () => {
+    const fs = require('fs');
+    if (!fs.existsSync('ran')) {
+      fs.writeFileSync('ran', '');
+      throw new Error('flaky');
+    }
+  });
+  test('second', () => { throw new Error('always'); });
+  test('third', () => { throw new Error('also always'); });
+});
+test('independent', () => {});
+`
+			if tc.intentional {
+				fixture = strings.Replace(fixture, "test('second'", "test.skip('second'", 1)
+				fixture = strings.Replace(fixture, "test('third'", "test.skip('third'", 1)
+				fixture += "test.fixme('not ready', () => {});\n"
+			}
+			if tc.nativeRetry {
+				fixture = strings.Replace(fixture, "throw new Error('always');", "", 1)
+				fixture = strings.Replace(fixture, "throw new Error('also always');", "", 1)
+			}
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "serial.spec.js"), []byte(fixture), 0600))
+			t.Chdir(dir)
+
+			cfg := &config.Config{
+				TestRunner: "playwright", TestCommand: filepath.Join(modules, ".bin", "playwright") + " test",
+				ResultPath: "results.json", MaxRetries: tc.retries,
+				ServerBaseURL: server.URL, Identifier: "plan", OrganizationSlug: "org", SuiteSlug: "suite",
+				Parallelism: 1,
+			}
+			if tc.nativeRetry {
+				cfg.TestCommand += " --retries=1"
+			}
+			output, err := os.CreateTemp(t.TempDir(), "stdout")
+			require.NoError(t, err)
+			stdout := os.Stdout
+			os.Stdout = output
+			t.Cleanup(func() { os.Stdout = stdout; output.Close() })
+			err = Run(context.Background(), cfg, "")
+			os.Stdout = stdout
+			data, readErr := os.ReadFile(output.Name())
+			require.NoError(t, readErr)
+			report := string(data)
+
+			assert.NotContains(t, report, "Errored test files:")
+			if tc.intentional || tc.nativeRetry {
+				require.NoError(t, err)
+				assert.Contains(t, report, "✅ All tests passed.")
+				assert.NotContains(t, report, "+++ Failed to run:")
+				if tc.intentional {
+					assert.Contains(t, report, "+++ Skipped by Playwright:")
+				} else {
+					assert.NotContains(t, report, "+++ Skipped by Playwright:")
+				}
+			} else {
+				var coded cli.ExitCoder
+				require.ErrorAs(t, err, &coded)
+				assert.Equal(t, 1, coded.ExitCode())
+				assert.Contains(t, report, "+++ Failed to run:")
+				assert.Contains(t, report, "Playwright skipped these tests even though they were expected to run:")
+				assert.Contains(t, report, "second (serial.spec.js:10)")
+				assert.Contains(t, report, "third (serial.spec.js:11)")
+				assert.NotContains(t, report, "+++ Skipped by Playwright:")
+				assert.NotContains(t, report, "✅ All tests passed.")
+				assert.Regexp(t, `Failed to run\s+\|\s+\|\s+2`, report)
+				assert.Regexp(t, `first run\s+\|\s+1`, report)
+				if tc.retries > 0 {
+					assert.Contains(t, report, "❌ Some tests failed to run.")
+					assert.Regexp(t, `on retry\s+\|\s+1`, report)
+				} else {
+					assert.Contains(t, report, "❌ Some tests failed.")
+				}
+			}
+		})
+	}
 }
 
 func TestRunTestsWithRetry_TestFailedAfterRetry(t *testing.T) {

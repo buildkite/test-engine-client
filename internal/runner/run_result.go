@@ -118,6 +118,18 @@ func (r *RunResult) SkippedTests() []plan.TestCase {
 	return skippedTests
 }
 
+// NotRunTests returns tests that were expected to run but did not.
+// They are not retry candidates because they may depend on earlier tests.
+func (r *RunResult) NotRunTests() []plan.TestCase {
+	var tests []plan.TestCase
+	for _, test := range r.tests {
+		if test.Status == TestStatusNotRun {
+			tests = append(tests, test.TestCase)
+		}
+	}
+	return tests
+}
+
 func (r *RunResult) FailedMutedTests() []plan.TestCase {
 	var failedTests []plan.TestCase
 
@@ -149,8 +161,10 @@ func (r *RunResult) skippedTestsCount() int {
 	return count
 }
 
+// OnlyMutedFailures reports whether muted test failures are the only reason
+// the command failed. Errors and tests that did not run cannot be ignored.
 func (r *RunResult) OnlyMutedFailures() bool {
-	if r.Status() == RunStatusError || r.Status() == RunStatusUnknown {
+	if r.Status() == RunStatusError || r.Status() == RunStatusUnknown || len(r.NotRunTests()) > 0 {
 		return false
 	}
 
@@ -170,7 +184,7 @@ func (r *RunResult) OnlyMutedFailures() bool {
 
 // Status returns the overall status of the test run.
 // If there is an error, it returns RunStatusError.
-// If there are failed tests, it returns RunStatusFailed.
+// If there are failed tests or tests that did not run, it returns RunStatusFailed.
 // Otherwise, it returns RunStatusPassed.
 func (r *RunResult) Status() RunStatus {
 	if r.error != nil || len(r.erroredFiles) > 0 {
@@ -181,7 +195,7 @@ func (r *RunResult) Status() RunStatus {
 		return RunStatusUnknown
 	}
 
-	if len(r.FailedTests()) > 0 {
+	if len(r.FailedTests()) > 0 || len(r.NotRunTests()) > 0 {
 		return RunStatusFailed
 	}
 
@@ -229,6 +243,7 @@ type RunStatistics struct {
 	MutedFailed      int `json:"muted_failed"`
 	Failed           int `json:"failed"`
 	Skipped          int `json:"skipped"`
+	NotRun           int `json:"not_run,omitempty"`
 }
 
 func (r *RunResult) Statistics() RunStatistics {
@@ -236,6 +251,8 @@ func (r *RunResult) Statistics() RunStatistics {
 
 	for _, testResult := range r.tests {
 		switch {
+		case testResult.Status == TestStatusNotRun:
+			stat.NotRun++
 		case testResult.Muted:
 			switch testResult.Status {
 			case TestStatusPassed:

@@ -163,9 +163,7 @@ func playwrightErrorFiles(errors []PlaywrightError) ([]string, bool) {
 	return files, true
 }
 
-// getTestCasesFromSuite recursively traverses the Playwright report suite and returns all test cases.
-// Playwright's report format is a tree structure, where each suite can contain multiple specs and sub-suites.
-// The function traverses the tree and collects failed test cases from the leaf nodes.
+// getTestResultsFromSuite recursively collects test outcomes from the report.
 func (p Playwright) getTestResultsFromSuite(suite PlaywrightReportSuite, suiteName string) []TestResult {
 	var testResults []TestResult
 
@@ -177,6 +175,14 @@ func (p Playwright) getTestResultsFromSuite(suite PlaywrightReportSuite, suiteNa
 			status = TestStatusSkipped
 		} else {
 			status = TestStatusPassed
+		}
+		if spec.Ok {
+			for _, run := range spec.Tests {
+				// Failure-induced skips must not be hidden by a passing retry.
+				if run.Status == "skipped" && run.ExpectedStatus != "skipped" {
+					status = TestStatusNotRun
+				}
+			}
 		}
 
 		testResults = append(testResults, TestResult{

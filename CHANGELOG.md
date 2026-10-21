@@ -1,5 +1,6 @@
 # Changelog
 ## Unreleased
+- Fix `bktec run` passing after a Playwright retry when other tests never ran because of an earlier failure, such as in a [serial group](./docs/playwright.md#automatically-retry-failed-tests). List these tests as failed to run, separately from intentional skips.
 - Add `bktec pool consume` for running Jest, Playwright and pytest tests from a [Test Scheduler pool](./docs/pool-consume.md), starting a new test runner command for each lease. `bktec pool plan` can now plan Jest, Playwright and pytest pools. Requires Test Scheduler support on the server.
 - Fix `bktec run` not running the other Playwright test files when one fails to load. A Jest or Playwright file that fails to load still fails the job, but no longer stops failed tests in other files from being retried.
 - Support pytest in [`bktec pool exec`](./docs/pytest.md#run-tests-in-one-pytest-process-with-bktec-pool-exec), which runs all of a worker's leases in one pytest process with `buildkite-pytest`. Requires a `buildkite-test-collector` release that includes `buildkite-pytest`.
