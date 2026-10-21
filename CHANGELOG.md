@@ -13,6 +13,9 @@
 - Retry `bktec pool exec` lease requests after network errors and `5xx` responses instead of failing the job, without leasing the same tests twice. Requires Test Scheduler support on the server.
 - Fix the [OTLP relay](./README.md#relay-opentelemetry-traces) dropping the label that marks each trace request as test results or other spans, so Buildkite couldn't tell them apart for traces sent through bktec.
 
+## 3.3.1 - 2026-10-21
+- Fix trust in compromised eMudhra certificate authorities (CVE-2026-111943) by building with Go 1.27.3 and updating the Docker images' CA certificates. Upgrade bktec to receive the mitigation.
+
 ## 3.3.0 - 2026-10-08
 - [Manual test selection](./README.md#test-selection) can read its selectors from `BUILDKITE_TEST_ENGINE_SELECTION_SELECTORS` instead of `--selection-param selectors=...`.
 
