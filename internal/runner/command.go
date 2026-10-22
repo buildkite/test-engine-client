@@ -64,22 +64,32 @@ func runAndForwardSignalWithOutput(cmd *exec.Cmd, stdout io.Writer, stderr io.Wr
 	fmt.Println(cmd.String())
 	fmt.Println("")
 
+	// Create another channel to receive the signals.
+	// Only listen for signals that ask the run to stop. Listening for every
+	// signal would also catch SIGPIPE, which the kernel raises when bktec
+	// writes to a closed connection, such as when it closes an API
+	// connection that was reset. bktec handles that write error itself,
+	// but forwarding SIGPIPE kills test commands that don't ignore it,
+	// such as shell scripts.
+	//
+	// Listen before starting the command, so a signal that arrives as the
+	// command starts is forwarded instead of stopping bktec. Skip signals
+	// that bktec was started ignoring, such as SIGHUP under nohup: listening
+	// would stop the command from inheriting them as ignored.
+	sigCh := make(chan os.Signal, 1)
+	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT} {
+		if !signal.Ignored(sig) {
+			signal.Notify(sigCh, sig)
+		}
+	}
+	defer signal.Stop(sigCh)
+
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 
 	// Start a goroutine that waits for a signal or the command to finish.
 	go func() {
-		// Create another channel to receive the signals.
-		// Only listen for signals that ask the run to stop. Listening for every
-		// signal would also catch SIGPIPE, which the kernel raises when bktec
-		// writes to a closed connection, such as when it closes an API
-		// connection that was reset. bktec handles that write error itself,
-		// but forwarding SIGPIPE kills test commands that don't ignore it,
-		// such as shell scripts.
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
-
 		// Wait for a signal to be received or the command to finish.
 		// Because a message can come through both channels asynchronously,
 		// we use for loop to listen to both channels and select the one that has a message.
@@ -91,8 +101,8 @@ func runAndForwardSignalWithOutput(cmd *exec.Cmd, stdout io.Writer, stderr io.Wr
 				// Ignore the error when sending the signal to the command.
 				_ = cmd.Process.Signal(sig)
 			case <-finishCh:
-				// When the the command finishes, we stop listening for signals and return.
-				signal.Stop(sigCh)
+				// When the command finishes, we return. The deferred
+				// signal.Stop has already stopped listening for signals.
 				return
 			}
 		}

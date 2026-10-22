@@ -2,8 +2,10 @@ package runner
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"syscall"
 	"testing"
@@ -35,18 +37,14 @@ func TestRunAndForwardSignal_CommandExitsWithNonZero(t *testing.T) {
 func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
 	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT} {
 		t.Run(sig.String(), func(t *testing.T) {
-			cmd := exec.Command("sleep", "10")
+			if signal.Ignored(sig) {
+				t.Skipf("the test process was started with %v ignored, so it isn't forwarded", sig)
+			}
 
-			// Send the signal to the main process.
-			go func() {
-				pid := os.Getpid()
-				process, err := os.FindProcess(pid)
-				if err != nil {
-					t.Errorf("os.FindProcess(%d) error = %v", pid, err)
-				}
-				time.Sleep(300 * time.Millisecond)
-				process.Signal(sig)
-			}()
+			// The command sends the signal to the main process as soon as it
+			// starts. If the main process weren't listening yet, the signal
+			// would stop it instead of being forwarded.
+			cmd := exec.Command("sh", "-c", fmt.Sprintf("kill -%d $PPID; exec sleep 10", sig))
 
 			err := runAndForwardSignal(cmd)
 
@@ -58,6 +56,23 @@ func TestRunAndForwardSignal_SignalReceivedInMainProcess(t *testing.T) {
 				t.Errorf("runAndForwardSignal(cmd) signal = %d, want  %d", signalError.Signal, sig)
 			}
 		})
+	}
+}
+
+func TestRunAndForwardSignal_KeepsIgnoredSignalsIgnored(t *testing.T) {
+	if os.Getenv("BKTEC_TEST_IGNORED_SIGHUP") == "1" {
+		// This process was started with SIGHUP ignored. The command sends
+		// itself SIGHUP and must inherit the ignore to survive it.
+		err := runAndForwardSignal(exec.Command("sh", "-c", "kill -HUP $$"))
+		if err != nil {
+			t.Fatalf("runAndForwardSignal(cmd) error = %v, want nil", err)
+		}
+		return
+	}
+	cmd := exec.Command("nohup", os.Args[0], "-test.run=^TestRunAndForwardSignal_KeepsIgnoredSignalsIgnored$")
+	cmd.Env = append(os.Environ(), "BKTEC_TEST_IGNORED_SIGHUP=1")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("test process started with nohup: %v\n%s", err, output)
 	}
 }
 
