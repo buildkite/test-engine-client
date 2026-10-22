@@ -110,6 +110,7 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 	if !s.dispatchable || s.terminating || lease == nil || !lease.owned || !time.Now().Before(lease.expires) {
 		return errors.New("lease no longer owned at dispatch")
 	}
+	firstDispatch := !s.dispatched
 	s.dispatchable = false
 	s.dispatched = true
 	if s.retryRound > 0 {
@@ -122,6 +123,24 @@ func (s *poolSource) Dispatched(batch runnerexec.Batch) error {
 		}
 		s.starts <- batchStart{id: batch.ID, at: time.Now()}
 		debug.Printf("Dispatched pool batch %s to runner", batch.ID)
+	}
+	if firstDispatch {
+		// Log the lease's costs once, before the runner receives it. Local
+		// retries can run individual examples whose estimates we don't have.
+		unknown := 0
+		for _, a := range lease.Attempts {
+			duration, estimator := a.Costs.DurationP90MS, "p90"
+			if duration == 0 {
+				duration, estimator = a.Costs.DurationP50MS, "p50"
+			}
+			if duration == 0 {
+				unknown++
+				debug.Printf("Pool batch %s entry %s estimated duration: unknown", batch.ID, attemptSelector(a.Selector))
+			} else {
+				debug.Printf("Pool batch %s entry %s estimated duration: %s (%s)", batch.ID, attemptSelector(a.Selector), time.Duration(duration)*time.Millisecond, estimator)
+			}
+		}
+		s.leaseLog.Printf("Pool batch %s estimated duration (known total: %s; unknown: %d)", batch.ID, leaseEstimate(lease.Attempts), unknown)
 	}
 	return nil
 }
