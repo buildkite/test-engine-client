@@ -121,9 +121,10 @@ func TestPoolBatchDurationLogging(t *testing.T) {
 				if err := json.Unmarshal([]byte(body), &lease); err != nil {
 					t.Fatal(err)
 				}
-				if tc.name == "custom cost" {
+				switch tc.name {
+				case "custom cost":
 					lease.Attempts[1].Costs = api.AttemptCosts{}
-				} else if tc.name == "p90" {
+				case "p90":
 					lease.Attempts[1].Costs = api.AttemptCosts{DurationP90MS: 2500}
 				}
 				s := newPoolSource(func() {})
@@ -1146,8 +1147,11 @@ func TestPoolWorkerReleasesPrefetchedLeaseWaitingBehindRetries(t *testing.T) {
 }
 
 // Running a lease's other files again after one fails to load is part of the
-// lease's first round, so it must not prefetch another lease.
+// lease's first round, so it must not prefetch another lease or repeat estimates.
 func TestPoolWorkerPrefetchesOnceWhenFilesRunAgainAfterLoadError(t *testing.T) {
+	leases := setLeaseLog(t)
+	var details bytes.Buffer
+	setDebugEnabled(t, &details)
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -1176,6 +1180,9 @@ func TestPoolWorkerPrefetchesOnceWhenFilesRunAgainAfterLoadError(t *testing.T) {
 		if got := acquires(f); !slices.Equal(got, []string{"acquire one", "acquire two"}) {
 			t.Fatalf("acquires=%v", got)
 		}
+		if strings.Count(leases.String(), "estimated duration (") != 1 || strings.Count(details.String(), "estimated duration:") != 2 {
+			t.Fatalf("recovery batch repeated the original lease's estimates:\n%s\n%s", leases.String(), details.String())
+		}
 		s.Accepted(rerun, runnerexec.Result{Status: "completed", ReportFormat: "playwright-json", Report: json.RawMessage(`{"config":{"rootDir":"` + dir + `"},"suites":[{"title":"ok.spec.js","specs":[{"title":"works","file":"ok.spec.js","line":1,"tests":[{"projectName":"","status":"expected","expectedStatus":"passed"}]}]}],"errors":[]}`)})
 		two := dispatchOffered(t, s, "two")
 		passBatch(s, two)
@@ -1185,6 +1192,9 @@ func TestPoolWorkerPrefetchesOnceWhenFilesRunAgainAfterLoadError(t *testing.T) {
 		<-done
 		if got := f.recorded(); !slices.Contains(got, "complete one") || !slices.Contains(got, "complete two") || !slices.Contains(got, "complete three") {
 			t.Fatalf("calls=%v", got)
+		}
+		if strings.Count(leases.String(), "estimated duration (") != 3 {
+			t.Fatalf("expected one estimate for each of three leases:\n%s", leases.String())
 		}
 	})
 }
