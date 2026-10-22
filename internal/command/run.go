@@ -197,6 +197,22 @@ func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
 		report.DroppedDeadlineRequests,
 		formatBytes(report.DroppedBytes),
 	)
+	for _, refusal := range report.Refusals {
+		reason := fmt.Sprintf("HTTP %d", refusal.Status)
+		if refusal.Message != "" {
+			reason += ": " + refusal.Message
+		}
+		fmt.Fprintf(w, "bktec OTLP relay: Buildkite refused %d request(s) (%d test, %d child, %d unlabelled): %s\n",
+			refusal.Requests, refusal.TestRequests, refusal.ChildRequests, refusal.UnlabelledRequests, reason)
+		if refusal.TestRequests > 0 {
+			fmt.Fprintf(w, "TEST RESULTS MISSING: Buildkite refused %d test-result request(s): %s. Those test executions were not uploaded to Buildkite Test Engine.\n",
+				refusal.TestRequests, reason)
+		}
+		if refusal.UnlabelledRequests > 0 {
+			fmt.Fprintf(w, "TEST RESULTS MAY BE MISSING: Buildkite refused %d unlabelled request(s): %s. These requests may have carried test results that were not uploaded to Buildkite Test Engine.\n",
+				refusal.UnlabelledRequests, reason)
+		}
+	}
 	if report.ForwardedRequests == 0 {
 		return
 	}

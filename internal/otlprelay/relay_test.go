@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestRelayForwardsOpaqueGzipRequestWithTrustedHeaders(t *testing.T) {
@@ -65,7 +67,7 @@ func TestRelayForwardsOpaqueGzipRequestWithTrustedHeaders(t *testing.T) {
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	report := stripLatencyStats(t, relay.Drain(drainCtx))
-	if report != (Report{ForwardedRequests: 1, ForwardedBytes: int64(len(body)), ForwardedSize: singleStat(int64(len(body)))}) {
+	if !cmp.Equal(report, Report{ForwardedRequests: 1, ForwardedBytes: int64(len(body)), ForwardedSize: singleStat(int64(len(body)))}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 
@@ -185,7 +187,7 @@ func TestRelayStartsWithoutCredentialAndDeliversAfterRecovery(t *testing.T) {
 	drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	report := stripLatencyStats(t, relay.Drain(drainCtx))
-	if report != (Report{ForwardedRequests: 1, ForwardedBytes: 5, ForwardedSize: singleStat[int64](5)}) {
+	if !cmp.Equal(report, Report{ForwardedRequests: 1, ForwardedBytes: 5, ForwardedSize: singleStat[int64](5)}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 
@@ -229,7 +231,7 @@ func TestRelaySeededInitialTokenSkipsTokenSource(t *testing.T) {
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	report := stripLatencyStats(t, relay.Drain(drainCtx))
-	if report != (Report{ForwardedRequests: 1, ForwardedBytes: 5, ForwardedSize: singleStat[int64](5)}) {
+	if !cmp.Equal(report, Report{ForwardedRequests: 1, ForwardedBytes: 5, ForwardedSize: singleStat[int64](5)}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 
@@ -354,7 +356,7 @@ func TestRelayRetriesRetryableResponses(t *testing.T) {
 	if got := requests.Load(); got != 2 {
 		t.Errorf("upstream requests = %d, want 2", got)
 	}
-	if report != (Report{ForwardedRequests: 1, ForwardedBytes: 7, ForwardedSize: singleStat[int64](7)}) {
+	if !cmp.Equal(report, Report{ForwardedRequests: 1, ForwardedBytes: 7, ForwardedSize: singleStat[int64](7)}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 }
@@ -392,7 +394,7 @@ func TestRelayRefreshesExpiredOIDCTokenWhileRetrying(t *testing.T) {
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	report := stripLatencyStats(t, relay.Drain(drainCtx))
-	if report != (Report{ForwardedRequests: 1, ForwardedBytes: 7, ForwardedSize: singleStat[int64](7)}) {
+	if !cmp.Equal(report, Report{ForwardedRequests: 1, ForwardedBytes: 7, ForwardedSize: singleStat[int64](7)}) {
 		t.Errorf("Drain report = %+v, want one forwarded request", report)
 	}
 	if got := tokenRequests.Load(); got != 2 {
@@ -423,10 +425,86 @@ func TestRelayDropsPermanent4xx(t *testing.T) {
 	if got := requests.Load(); got != 1 {
 		t.Errorf("upstream requests = %d, want no retry", got)
 	}
-	want := Report{DroppedPermanentRequests: 1, DroppedBytes: int64(len(body))}
-	if report != want {
+	want := Report{DroppedPermanentRequests: 1, DroppedBytes: int64(len(body)), Refusals: []Refusal{{Status: 403, Requests: 1, UnlabelledRequests: 1}}}
+	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
+}
+
+func TestRelayReportsDistinctRefusals(t *testing.T) {
+	const planMessage = "OTel trace ingest is not available on your organization's plan"
+	const capMessage = "OTel trace ingest limit reached for this billing period"
+	// google.rpc.Status wire fixtures: code = PERMISSION_DENIED (7), message
+	// = field 2. Keep the fixtures independent of the production decoder.
+	planBody := append([]byte{0x08, 0x07, 0x12, byte(len(planMessage))}, planMessage...)
+	capBody := append([]byte{0x08, 0x07, 0x12, byte(len(capMessage))}, capMessage...)
+	cases := []struct {
+		body    []byte
+		status  int
+		streams []string
+		repeat  int
+		want    Refusal
+	}{
+		{planBody, 403, []string{"test", "child", "", "TEST", "unknown"}, 20,
+			Refusal{Status: 403, Message: planMessage, Requests: 100, TestRequests: 40, ChildRequests: 20, UnlabelledRequests: 40}},
+		{capBody, 403, []string{"child"}, 2,
+			Refusal{Status: 403, Message: capMessage, Requests: 2, ChildRequests: 2}},
+		{planBody, 401, []string{"test"}, 3,
+			Refusal{Status: 401, Message: planMessage, Requests: 3, TestRequests: 3}},
+		{[]byte("<html>forbidden</html>"), 403, []string{""}, 4,
+			Refusal{Status: 403, Requests: 4, UnlabelledRequests: 4}},
+	}
+	var requests atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requests.Add(1)
+		body, _ := io.ReadAll(req.Body)
+		index := int(body[0])
+		w.Header().Set("Content-Type", "application/x-protobuf")
+		w.WriteHeader(cases[index].status)
+		_, _ = w.Write(cases[index].body)
+	}))
+	defer upstream.Close()
+	var logs []string
+	relay := newTestRelay(t, Config{
+		UpstreamEndpoint: upstream.URL,
+		RunKey:           "build-id",
+		TokenSource:      staticToken("oidc-token"),
+		Logf: func(format string, args ...any) {
+			logs = append(logs, fmt.Sprintf(format, args...))
+		},
+	})
+	var wantRefusals []Refusal
+	for i, tc := range cases {
+		wantRefusals = append(wantRefusals, tc.want)
+		for range tc.repeat {
+			for _, stream := range tc.streams {
+				resp := postTraces(t, relay, []byte{byte(i)}, "Bearer "+relay.token, "", stream)
+				_ = resp.Body.Close()
+				if resp.StatusCode != http.StatusOK {
+					t.Fatalf("local response = %d, want accepted request", resp.StatusCode)
+				}
+			}
+		}
+	}
+	drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	report := relay.Drain(drainCtx)
+	if diff := cmp.Diff(wantRefusals, report.Refusals); diff != "" {
+		t.Errorf("refusals (-want +got):\n%s", diff)
+	}
+	if report.DroppedPermanentRequests != 109 || report.ForwardedRequests != 0 || requests.Load() != 109 {
+		t.Errorf("report = %+v, upstream requests = %d, want 109 permanent drops without retries", report, requests.Load())
+	}
+	wantLogs := []string{
+		"bktec OTLP relay: dropped a request after upstream returned HTTP 403: " + planMessage,
+		"bktec OTLP relay: dropped a request after upstream returned HTTP 403: " + capMessage,
+		"bktec OTLP relay: dropped a request after upstream returned HTTP 401: " + planMessage,
+		"bktec OTLP relay: dropped a request after upstream returned HTTP 403",
+	}
+	if diff := cmp.Diff(wantLogs, logs); diff != "" {
+		t.Errorf("logs (-want +got):\n%s", diff)
+	}
+	t.Logf("refusal output:\n%s", strings.Join(logs, "\n"))
 }
 
 func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
@@ -457,7 +535,7 @@ func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
 	report := relay.Drain(drainCtx)
 	close(release)
 	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
-	if report != want {
+	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
 }
@@ -509,7 +587,7 @@ func TestRelayDrainLimitsRetryAttempts(t *testing.T) {
 		t.Errorf("upstream requests during drain = %d, want at most 4", got)
 	}
 	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
-	if report != want {
+	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
 }
@@ -548,7 +626,7 @@ func TestRelayDrainInterruptsExistingRetryDelay(t *testing.T) {
 		t.Errorf("upstream requests = %d, want 2 to 4 after interrupting Retry-After", got)
 	}
 	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
-	if report != want {
+	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
 }
@@ -602,7 +680,7 @@ func TestRelayRejectsInvalidLocalRequestsSynchronously(t *testing.T) {
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if report := relay.Drain(drainCtx); report != (Report{}) {
+	if report := relay.Drain(drainCtx); !cmp.Equal(report, Report{}) {
 		t.Errorf("Drain report = %+v, want empty", report)
 	}
 }

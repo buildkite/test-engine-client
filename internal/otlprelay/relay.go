@@ -19,6 +19,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -136,6 +139,18 @@ type Report struct {
 	DroppedPermanentRequests int
 	DroppedDeadlineRequests  int
 	DroppedBytes             int64
+	Refusals                 []Refusal
+}
+
+// Refusal counts permanently refused requests with the same HTTP status and
+// server message. Requests without a recognized stream may include test results.
+type Refusal struct {
+	Status             int
+	Message            string
+	Requests           int
+	TestRequests       int
+	ChildRequests      int
+	UnlabelledRequests int
 }
 
 type request struct {
@@ -464,9 +479,25 @@ func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 		var retryAfter time.Duration
 		var hasRetryAfter bool
 		var sendLatency time.Duration
+		var message string
 		if err == nil {
 			sendStart := time.Now()
-			status, retryAfter, hasRetryAfter, err = r.send(queued, token)
+			var resp *http.Response
+			resp, err = r.send(queued, token)
+			if err == nil {
+				status = resp.StatusCode
+				retryAfter, hasRetryAfter = parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
+				body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4*1024+1))
+				_ = resp.Body.Close()
+				// The receiver returns a binary google.rpc.Status, matching our
+				// protobuf requests. Never print an undecodable or truncated body.
+				if readErr == nil && len(body) <= 4*1024 {
+					var refusal rpcstatus.Status
+					if proto.Unmarshal(body, &refusal) == nil {
+						message = refusal.GetMessage()
+					}
+				}
+			}
 			sendLatency = time.Since(sendStart)
 		}
 
@@ -475,7 +506,7 @@ func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 			case status >= 200 && status < 300:
 				return deliveryForwarded, sendLatency
 			case status != http.StatusRequestTimeout && status != http.StatusTooManyRequests && status < 500:
-				r.config.Logf("bktec OTLP relay: dropped a request after upstream returned HTTP %d", status)
+				r.recordRefusal(status, message, queued.spanStream)
 				return deliveryPermanentFailure, 0
 			}
 		}
@@ -491,6 +522,37 @@ func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 			return deliveryDeadline, 0
 		}
 		backoff = min(backoff*2, r.config.maxBackoff)
+	}
+}
+
+func (r *Relay) recordRefusal(status int, message, stream string) {
+	r.mu.Lock()
+	first := false
+	index := slices.IndexFunc(r.report.Refusals, func(refusal Refusal) bool {
+		return refusal.Status == status && refusal.Message == message
+	})
+	if index == -1 {
+		first = true
+		index = len(r.report.Refusals)
+		r.report.Refusals = append(r.report.Refusals, Refusal{Status: status, Message: message})
+	}
+	refusal := &r.report.Refusals[index]
+	refusal.Requests++
+	switch strings.ToLower(strings.TrimSpace(stream)) {
+	case "test":
+		refusal.TestRequests++
+	case "child":
+		refusal.ChildRequests++
+	default:
+		refusal.UnlabelledRequests++
+	}
+	r.mu.Unlock()
+	if first {
+		if message == "" {
+			r.config.Logf("bktec OTLP relay: dropped a request after upstream returned HTTP %d", status)
+		} else {
+			r.config.Logf("bktec OTLP relay: dropped a request after upstream returned HTTP %d: %s", status, message)
+		}
 	}
 }
 
@@ -517,10 +579,10 @@ func (r *Relay) waitForRetry(delay time.Duration) bool {
 	}
 }
 
-func (r *Relay) send(queued *request, token string) (int, time.Duration, bool, error) {
+func (r *Relay) send(queued *request, token string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(r.ctx, http.MethodPost, r.config.UpstreamEndpoint, bytes.NewReader(queued.body))
 	if err != nil {
-		return 0, 0, false, err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	if queued.contentEncoding != "" {
@@ -532,15 +594,7 @@ func (r *Relay) send(queued *request, token string) (int, time.Duration, bool, e
 		req.Header.Set("Buildkite-Tests-Span-Stream", queued.spanStream)
 	}
 
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return 0, 0, false, err
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
-	_ = resp.Body.Close()
-
-	retryAfter, hasRetryAfter := parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
-	return resp.StatusCode, retryAfter, hasRetryAfter, nil
+	return r.client.Do(req)
 }
 
 func (r *Relay) authorizationToken() (string, error) {
@@ -688,7 +742,9 @@ func (r *Relay) Drain(ctx context.Context) Report {
 	defer r.mu.Unlock()
 	r.report.ForwardedSize = r.sizeSampler.stats()
 	r.report.ForwardedLatency = r.latencySampler.stats()
-	return r.report
+	report := r.report
+	report.Refusals = slices.Clone(report.Refusals)
+	return report
 }
 
 func validRunKey(runKey string) bool {
