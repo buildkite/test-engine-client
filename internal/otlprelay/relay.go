@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/proto"
@@ -37,6 +38,10 @@ const (
 	defaultTokenLifetime      = 2 * time.Hour
 	defaultTokenRefreshLeeway = 5 * time.Minute
 )
+
+// Keep detailed reasons bounded even if a receiver includes a different request
+// ID in every message. Further reasons are counted together per HTTP status.
+const maxRefusalMessages = 32
 
 // ErrTerminalCredential marks a credential failure that will never succeed if
 // retried, such as the Buildkite API refusing to mint a token for a disallowed
@@ -143,7 +148,8 @@ type Report struct {
 }
 
 // Refusal counts permanently refused requests with the same HTTP status and
-// server message. Requests without a recognized stream may include test results.
+// printable server message, or an omission notice after the detail limit.
+// Requests without a recognized stream may include test results.
 type Refusal struct {
 	Status             int
 	Message            string
@@ -494,7 +500,14 @@ func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 				if readErr == nil && len(body) <= 4*1024 {
 					var refusal rpcstatus.Status
 					if proto.Unmarshal(body, &refusal) == nil {
-						message = refusal.GetMessage()
+						// Receiver text must not inject log lines, Buildkite group
+						// markers, or terminal controls into refusal diagnostics.
+						message = strings.Map(func(char rune) rune {
+							if !unicode.IsPrint(char) {
+								return ' '
+							}
+							return char
+						}, refusal.GetMessage())
 					}
 				}
 			}
@@ -531,6 +544,12 @@ func (r *Relay) recordRefusal(status int, message, stream string) {
 	index := slices.IndexFunc(r.report.Refusals, func(refusal Refusal) bool {
 		return refusal.Status == status && refusal.Message == message
 	})
+	if index == -1 && len(r.report.Refusals) >= maxRefusalMessages {
+		message = "further distinct refusal messages omitted"
+		index = slices.IndexFunc(r.report.Refusals, func(refusal Refusal) bool {
+			return refusal.Status == status && refusal.Message == message
+		})
+	}
 	if index == -1 {
 		first = true
 		index = len(r.report.Refusals)

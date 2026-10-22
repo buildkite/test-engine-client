@@ -434,10 +434,12 @@ func TestRelayDropsPermanent4xx(t *testing.T) {
 func TestRelayReportsDistinctRefusals(t *testing.T) {
 	const planMessage = "OTel trace ingest is not available on your organization's plan"
 	const capMessage = "OTel trace ingest limit reached for this billing period"
+	const multilineMessage = "refused\n+++ injected group\r\x1b[2K\ttry again"
 	// google.rpc.Status wire fixtures: code = PERMISSION_DENIED (7), message
 	// = field 2. Keep the fixtures independent of the production decoder.
 	planBody := append([]byte{0x08, 0x07, 0x12, byte(len(planMessage))}, planMessage...)
 	capBody := append([]byte{0x08, 0x07, 0x12, byte(len(capMessage))}, capMessage...)
+	multilineBody := append([]byte{0x08, 0x07, 0x12, byte(len(multilineMessage))}, multilineMessage...)
 	cases := []struct {
 		body    []byte
 		status  int
@@ -453,6 +455,8 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 			Refusal{Status: 401, Message: planMessage, Requests: 3, TestRequests: 3}},
 		{[]byte("<html>forbidden</html>"), 403, []string{""}, 4,
 			Refusal{Status: 403, Requests: 4, UnlabelledRequests: 4}},
+		{multilineBody, 403, []string{"test"}, 1,
+			Refusal{Status: 403, Message: "refused +++ injected group  [2K try again", Requests: 1, TestRequests: 1}},
 	}
 	var requests atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -492,19 +496,81 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 	if diff := cmp.Diff(wantRefusals, report.Refusals); diff != "" {
 		t.Errorf("refusals (-want +got):\n%s", diff)
 	}
-	if report.DroppedPermanentRequests != 109 || report.ForwardedRequests != 0 || requests.Load() != 109 {
-		t.Errorf("report = %+v, upstream requests = %d, want 109 permanent drops without retries", report, requests.Load())
+	if report.DroppedPermanentRequests != 110 || report.ForwardedRequests != 0 || requests.Load() != 110 {
+		t.Errorf("report = %+v, upstream requests = %d, want 110 permanent drops without retries", report, requests.Load())
 	}
 	wantLogs := []string{
 		"bktec OTLP relay: dropped a request after upstream returned HTTP 403: " + planMessage,
 		"bktec OTLP relay: dropped a request after upstream returned HTTP 403: " + capMessage,
 		"bktec OTLP relay: dropped a request after upstream returned HTTP 401: " + planMessage,
 		"bktec OTLP relay: dropped a request after upstream returned HTTP 403",
+		"bktec OTLP relay: dropped a request after upstream returned HTTP 403: refused +++ injected group  [2K try again",
 	}
 	if diff := cmp.Diff(wantLogs, logs); diff != "" {
 		t.Errorf("logs (-want +got):\n%s", diff)
 	}
 	t.Logf("refusal output:\n%s", strings.Join(logs, "\n"))
+}
+
+func TestRelayBoundsDistinctRefusals(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		status := http.StatusForbidden
+		if string(body) == "unauthorized" {
+			status = http.StatusUnauthorized
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write(append([]byte{0x08, 0x07, 0x12, byte(len(body))}, body...))
+	}))
+	defer upstream.Close()
+	var logs []string
+	relay := newTestRelay(t, Config{
+		UpstreamEndpoint: upstream.URL,
+		RunKey:           "build-id",
+		TokenSource:      staticToken("oidc-token"),
+		Logf: func(format string, args ...any) {
+			logs = append(logs, fmt.Sprintf(format, args...))
+		},
+	})
+	send := func(message, stream string) {
+		resp := postTraces(t, relay, []byte(message), "Bearer "+relay.token, "", stream)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("local response = %d, want accepted request", resp.StatusCode)
+		}
+	}
+	var want []Refusal
+	for i := range 32 {
+		message := fmt.Sprintf("refused batch %d", i)
+		send(message, "child")
+		want = append(want, Refusal{Status: 403, Message: message, Requests: 1, ChildRequests: 1})
+	}
+	for i := range 128 {
+		send(fmt.Sprintf("another refused batch %d", i), []string{"test", "child", "test", "unknown"}[i%4])
+	}
+	// A retained reason must still accumulate after the limit. A new HTTP
+	// status must keep its own counts rather than being merged with 403s.
+	send("refused batch 0", "test")
+	send("unauthorized", "unknown")
+	send("unauthorized", "unknown")
+	want[0].Requests++
+	want[0].TestRequests++
+	want = append(want,
+		Refusal{Status: 403, Message: "further distinct refusal messages omitted", Requests: 128, TestRequests: 64, ChildRequests: 32, UnlabelledRequests: 32},
+		Refusal{Status: 401, Message: "further distinct refusal messages omitted", Requests: 2, UnlabelledRequests: 2},
+	)
+	drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	report := relay.Drain(drainCtx)
+	if diff := cmp.Diff(want, report.Refusals); diff != "" {
+		t.Errorf("refusals (-want +got):\n%s", diff)
+	}
+	if report.DroppedPermanentRequests != 163 || report.ForwardedRequests != 0 || report.DroppedDeadlineRequests != 0 {
+		t.Errorf("report = %+v, want all 163 requests counted as permanent drops", report)
+	}
+	if len(logs) != 34 {
+		t.Errorf("logged %d refusals, want 32 detailed reasons and 2 overflow statuses", len(logs))
+	}
 }
 
 func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {

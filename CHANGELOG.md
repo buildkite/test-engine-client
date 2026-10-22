@@ -1,6 +1,6 @@
 # Changelog
 ## Unreleased
-- Show why Buildkite refused [OTLP relay](./README.md#relay-opentelemetry-traces) requests, with refusal counts by stream and a warning when test results were not uploaded or may be missing. Report each distinct refusal once during the run instead of repeating it for every request.
+- Show why Buildkite refused [OTLP relay](./README.md#relay-opentelemetry-traces) requests, with refusal counts by stream and a warning when test results were not uploaded or may be missing. Limit repeated diagnostics during the run.
 
 ## 3.4.0 - 2026-10-22
 - Fix `bktec run` passing after a Playwright retry when other tests never ran because of an earlier failure, such as in a [serial group](./docs/playwright.md#automatically-retry-failed-tests). List these tests as failed to run, separately from intentional skips.
