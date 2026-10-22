@@ -1,4 +1,7 @@
 # Changelog
+## Unreleased
+- Fix test commands that don't ignore SIGPIPE, such as shell wrapper scripts, sometimes being killed with "broken pipe" (exit status 141) during `bktec run` after a network reset. bktec now forwards only SIGINT, SIGTERM, SIGHUP and SIGQUIT to the test command.
+
 ## 3.4.0 - 2026-10-22
 - Fix `bktec run` passing after a Playwright retry when other tests never ran because of an earlier failure, such as in a [serial group](./docs/playwright.md#automatically-retry-failed-tests). List these tests as failed to run, separately from intentional skips.
 - Add `bktec pool consume` for running Jest, Playwright and pytest tests from a [Test Scheduler pool](./docs/pool-consume.md), starting a new test runner command for each lease. `bktec pool plan` can now plan Jest, Playwright and pytest pools. Requires Test Scheduler support on the server.
