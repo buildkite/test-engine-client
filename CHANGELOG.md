@@ -1,6 +1,8 @@
 # Changelog
 ## Unreleased
 - Fix test commands that don't ignore SIGPIPE, such as shell wrapper scripts, sometimes being killed with "broken pipe" (exit status 141) during `bktec run` after a network reset. bktec now forwards only SIGINT, SIGTERM, SIGHUP and SIGQUIT to the test command.
+
+## 3.4.0 - 2026-10-22
 - Fix `bktec run` passing after a Playwright retry when other tests never ran because of an earlier failure, such as in a [serial group](./docs/playwright.md#automatically-retry-failed-tests). List these tests as failed to run, separately from intentional skips.
 - Add `bktec pool consume` for running Jest, Playwright and pytest tests from a [Test Scheduler pool](./docs/pool-consume.md), starting a new test runner command for each lease. `bktec pool plan` can now plan Jest, Playwright and pytest pools. Requires Test Scheduler support on the server.
 - Fix `bktec run` not running the other Playwright test files when one fails to load. A Jest or Playwright file that fails to load still fails the job, but no longer stops failed tests in other files from being retried.
@@ -13,7 +15,7 @@
 - Add `--pool-lease-cost <dimension>=<budget>` to choose how pool leases are budgeted, such as `duration_p50_ms=100000` for median test durations. Lease prefetching now also works for pools budgeted by p50 durations. See the [pool options](./docs/pool-exec.md#options). Requires Test Scheduler support on the server.
 - Deprecate `--pool-lease-duration-ms`. It now budgets median (p50) durations instead of p90, matching the Test Scheduler default; use `--pool-lease-cost duration_p90_ms=<ms>` to keep p90 budgets.
 - Retry `bktec pool exec` lease requests after network errors and `5xx` responses instead of failing the job, without leasing the same tests twice. Requires Test Scheduler support on the server.
-- Fix the [OTLP relay](./README.md#relay-opentelemetry-traces) dropping the label that marks each trace request as test results or other spans, so Buildkite couldn't tell them apart for traces sent through bktec.
+- Fix the [OTLP relay](./README.md#relay-opentelemetry-traces) dropping `Buildkite-Tests-Span-Stream`. The relay now forwards the header so Buildkite can distinguish test results from child spans and apply plan limits to child spans.
 
 ## 3.3.1 - 2026-10-21
 - Fix trust in compromised eMudhra certificate authorities (CVE-2026-111943) by building with Go 1.27.3 and updating the Docker images' CA certificates. Upgrade bktec to receive the mitigation.
