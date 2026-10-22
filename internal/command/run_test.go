@@ -177,6 +177,50 @@ func TestPrintOTLPRelayReport(t *testing.T) {
 	t.Logf("output (nothing forwarded):\n%s", buf.String())
 }
 
+func TestPrintOTLPRelayRefusals(t *testing.T) {
+	const planMessage = "OTel trace ingest is not available on your organization's plan"
+	const capMessage = "OTel trace ingest limit reached for this billing period"
+	cases := []struct {
+		name    string
+		refusal otlprelay.Refusal
+		want    string
+	}{
+		{
+			name: "plan refuses all streams",
+			refusal: otlprelay.Refusal{Status: 403, Message: planMessage, Requests: 6,
+				TestRequests: 3, ChildRequests: 2, UnlabelledRequests: 1},
+			want: "bktec OTLP relay: Buildkite refused 6 request(s) (3 test, 2 child, 1 unlabelled): HTTP 403: " + planMessage + "\n" +
+				"TEST RESULTS MISSING: Buildkite refused 3 test-result request(s): HTTP 403: " + planMessage + ". Those test executions were not uploaded to Buildkite Test Engine.\n" +
+				"TEST RESULTS MAY BE MISSING: Buildkite refused 1 unlabelled request(s): HTTP 403: " + planMessage + ". These requests may have carried test results that were not uploaded to Buildkite Test Engine.\n",
+		},
+		{
+			name:    "child cap does not warn about test results",
+			refusal: otlprelay.Refusal{Status: 403, Message: capMessage, Requests: 2, ChildRequests: 2},
+			want:    "bktec OTLP relay: Buildkite refused 2 request(s) (0 test, 2 child, 0 unlabelled): HTTP 403: " + capMessage + "\n",
+		},
+		{
+			name:    "undecodable test refusal still warns",
+			refusal: otlprelay.Refusal{Status: 403, Requests: 1, TestRequests: 1},
+			want: "bktec OTLP relay: Buildkite refused 1 request(s) (1 test, 0 child, 0 unlabelled): HTTP 403\n" +
+				"TEST RESULTS MISSING: Buildkite refused 1 test-result request(s): HTTP 403. Those test executions were not uploaded to Buildkite Test Engine.\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			printOTLPRelayReport(&buf, otlprelay.Report{
+				DroppedPermanentRequests: tc.refusal.Requests,
+				Refusals:                 []otlprelay.Refusal{tc.refusal},
+			})
+			want := fmt.Sprintf("bktec OTLP relay: 0 request(s) (0B) forwarded, %d dropped permanently, 0 dropped at drain deadline, 0B dropped\n", tc.refusal.Requests) + tc.want
+			if buf.String() != want {
+				t.Errorf("refusal output = %q, want %q", buf.String(), want)
+			}
+			t.Logf("output:\n%s", buf.String())
+		})
+	}
+}
+
 func TestFormatBytes(t *testing.T) {
 	cases := map[int64]string{
 		0:         "0B",
