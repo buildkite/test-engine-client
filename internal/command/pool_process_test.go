@@ -456,6 +456,7 @@ func TestPoolExecIdempotentPlanAlreadyConsumingSkipsReadinessGet(t *testing.T) {
 func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 	var logs bytes.Buffer
 	setDebugEnabled(t, &logs)
+	leases := setLeaseLog(t)
 	gets, acquisitions, completions := 0, 0, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		base := "/v2/organizations/org/test-scheduler/pools/existing"
@@ -474,7 +475,7 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 			case 1:
 				_, _ = io.WriteString(w, `{"lease":null,"pool":{"state":"populating"}}`)
 			case 2:
-				fmt.Fprintf(w, `{"lease":{"id":%q,"expires_at":%q,"attempts":[{"id":"attempt","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"a"}}]},"pool":{"state":"populating"}}`, r.Header.Get("Idempotency-Key"), time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano))
+				fmt.Fprintf(w, `{"lease":{"id":%q,"expires_at":%q,"attempts":[{"id":"attempt","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"a","estimated_duration":9999},"costs":{"duration_p50_ms":1250}}]},"pool":{"state":"populating"}}`, r.Header.Get("Idempotency-Key"), time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano))
 			default:
 				_, _ = io.WriteString(w, `{"lease":null,"pool":{"state":"consumed"}}`)
 			}
@@ -510,6 +511,12 @@ func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 	// ordinary request that confirms the pool is consumed.
 	if gets != 1 || acquisitions != 4 || completions != 1 {
 		t.Fatalf("gets=%d acquisitions=%d completions=%d", gets, acquisitions, completions)
+	}
+	if want := "Pool batch b_1 estimated duration (known total: 1.25s; unknown: 0)"; !strings.Contains(leases.String(), want) {
+		t.Fatalf("lease duration estimates missing: %s", leases.String())
+	}
+	if !strings.Contains(logs.String(), "Pool batch b_1 entry a estimated duration: 1.25s (p50)") {
+		t.Fatalf("entry duration estimate missing from debug output: %s", logs.String())
 	}
 	if strings.Count(logs.String(), "existing") != 1 || !strings.Contains(logs.String(), "Fetching supplied pool with ID existing") || !strings.Contains(logs.String(), "Pool resolved (state=populating)") || !strings.Contains(logs.String(), "Received batch b_1 result") {
 		t.Fatalf("supplied pool ID should appear only at fetch: %s", logs.String())

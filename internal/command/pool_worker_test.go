@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
+	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runnerexec"
 )
@@ -90,6 +92,72 @@ func waitPoolBatch(t *testing.T, s *poolSource) *runnerexec.Batch {
 		case <-timeout:
 			t.Fatal("no batch")
 		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+func TestPoolBatchDurationLogging(t *testing.T) {
+	for _, tc := range []struct {
+		name, costs, duration, total string
+		unknown                      int
+	}{
+		{"p50", `{"duration_p50_ms":1250}`, "1.25s (p50)", "3.75s", 1},
+		{"p90", `{"duration_p90_ms":1250}`, "1.25s (p90)", "3.75s", 1},
+		{"custom cost", `{"tokens":42}`, "unknown", "0s", 3},
+	} {
+		for _, enabled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/debug=%t", tc.name, enabled), func(t *testing.T) {
+				logs := setLeaseLog(t)
+				var details bytes.Buffer
+				setDebugEnabled(t, &details)
+				debug.SetDebug(enabled)
+				var lease api.Lease
+				// A selector's separate estimated_duration is not the pool's cost.
+				body := `{"attempts":[
+				{"selector":{"format":"file","path":"a","estimated_duration":9999},"costs":` + tc.costs + `},
+				{"selector":{"format":"example","path":"b","identifier":"b[1]"},"costs":{"duration_p50_ms":2500}},
+				{"selector":{"format":"selector","value":"pkg/c"}}
+			]}`
+				if err := json.Unmarshal([]byte(body), &lease); err != nil {
+					t.Fatal(err)
+				}
+				if tc.name == "custom cost" {
+					lease.Attempts[1].Costs = api.AttemptCosts{}
+				} else if tc.name == "p90" {
+					lease.Attempts[1].Costs = api.AttemptCosts{DurationP90MS: 2500}
+				}
+				s := newPoolSource(func() {})
+				s.current = &poolLease{Lease: lease, owned: true, expires: time.Now().Add(time.Minute)}
+				s.dispatchable = true
+				if err := s.Dispatched(runnerexec.Batch{ID: "b_1"}); err != nil {
+					t.Fatal(err)
+				}
+				if want := fmt.Sprintf("Pool batch b_1 estimated duration (known total: %s; unknown: %d)\n", tc.total, tc.unknown); logs.String() != want {
+					t.Errorf("normal output = %q, want only batch summary %q", logs.String(), want)
+				}
+				wantExample := "entry b[1] estimated duration: 2.5s (" + tc.name + ")"
+				if tc.name == "custom cost" {
+					wantExample = "entry b[1] estimated duration: unknown"
+				}
+				if enabled {
+					for _, want := range []string{"entry a estimated duration: " + tc.duration, wantExample, "entry pkg/c estimated duration: unknown"} {
+						if !strings.Contains(details.String(), want) {
+							t.Errorf("missing %q in debug output:\n%s", want, details.String())
+						}
+					}
+				} else if details.Len() != 0 {
+					t.Errorf("debug output without --debug: %s", details.String())
+				}
+				before := logs.String()
+				beforeDetails := strings.Count(details.String(), "estimated duration:")
+				s.dispatchable, s.retryRound = true, 1
+				if err := s.Dispatched(runnerexec.Batch{ID: "b_2"}); err != nil {
+					t.Fatal(err)
+				}
+				if logs.String() != before || strings.Count(details.String(), "estimated duration:") != beforeDetails {
+					t.Fatal("local retry repeated the original lease estimates")
+				}
+			})
 		}
 	}
 }
