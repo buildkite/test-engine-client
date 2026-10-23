@@ -1,5 +1,5 @@
 # Changelog
-## Unreleased
+## 3.4.1 - 2026-10-23
 - Show why Buildkite refused [OTLP relay](./README.md#relay-opentelemetry-traces) requests, with refusal counts by stream and a warning when test results were not uploaded or may be missing. Limit repeated diagnostics during the run.
 - Fix test commands that don't ignore SIGPIPE, such as shell wrapper scripts, sometimes being killed with "broken pipe" (exit status 141) during `bktec run` after a network reset. bktec now forwards only SIGINT, SIGTERM, SIGHUP and SIGQUIT to the test command.
 
