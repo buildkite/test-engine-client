@@ -81,8 +81,19 @@ func (c *Client) AcquireLease(ctx context.Context, poolID string) (LeaseResponse
 	return result, err
 }
 
-func (c *Client) HeartbeatLease(ctx context.Context, poolID, leaseID string) (time.Time, error) {
+// LeaseHeartbeat distinguishes a renewal from terminal pool consumption, which
+// does not extend the lease or grant permission to continue work.
+type LeaseHeartbeat struct {
+	ExpiresAt    time.Time
+	PoolConsumed bool
+}
+
+func (c *Client) HeartbeatLease(ctx context.Context, poolID, leaseID string) (LeaseHeartbeat, error) {
 	var result struct {
+		Pool struct {
+			ID    string `json:"id"`
+			State string `json:"state"`
+		} `json:"pool"`
 		Leases []struct {
 			ID        string    `json:"lease_id"`
 			ExpiresAt time.Time `json:"expires_at"`
@@ -90,12 +101,18 @@ func (c *Client) HeartbeatLease(ctx context.Context, poolID, leaseID string) (ti
 	}
 	err := c.leaseRequest(ctx, poolID, "/heartbeat", nil, map[string]any{"lease_ids": []string{leaseID}, "lease_ttl_seconds": 600}, &result, true)
 	if err != nil {
-		return time.Time{}, err
+		return LeaseHeartbeat{}, err
+	}
+	if result.Pool.State == "consumed" {
+		if result.Pool.ID != poolID || result.Leases == nil || len(result.Leases) != 0 {
+			return LeaseHeartbeat{}, errors.New("invalid consumed heartbeat response")
+		}
+		return LeaseHeartbeat{PoolConsumed: true}, nil
 	}
 	if len(result.Leases) != 1 || result.Leases[0].ID != leaseID || !result.Leases[0].ExpiresAt.After(time.Now()) {
-		return time.Time{}, errors.New("invalid heartbeat response")
+		return LeaseHeartbeat{}, errors.New("invalid heartbeat response")
 	}
-	return result.Leases[0].ExpiresAt, nil
+	return LeaseHeartbeat{ExpiresAt: result.Leases[0].ExpiresAt}, nil
 }
 
 func (c *Client) CompleteLease(ctx context.Context, poolID, leaseID string, results []AttemptResult) error {

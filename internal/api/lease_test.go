@@ -424,6 +424,50 @@ func TestCompletionReplaysIdenticalBodyAfterAmbiguousFailure(t *testing.T) {
 	}
 }
 
+func TestHeartbeatResponseContract(t *testing.T) {
+	expires := time.Now().Add(7 * time.Minute).UTC().Truncate(time.Second)
+	active := fmt.Sprintf(`{"leases":[{"lease_id":"lease","expires_at":%q}]}`, expires.Format(time.RFC3339))
+	terminal := `{"pool":{"id":"pool","state":"consumed"},"leases":[]}`
+	for _, tc := range []struct {
+		name    string
+		status  int
+		body    string
+		want    LeaseHeartbeat
+		wantErr bool
+	}{
+		{name: "active renewal", status: 200, body: active, want: LeaseHeartbeat{ExpiresAt: expires}},
+		{name: "consumed", status: 200, body: terminal, want: LeaseHeartbeat{PoolConsumed: true}},
+		{name: "empty leases alone", status: 200, body: `{"leases":[]}`, wantErr: true},
+		{name: "empty active leases", status: 200, body: `{"pool":{"id":"pool","state":"consuming"},"leases":[]}`, wantErr: true},
+		{name: "wrong pool", status: 200, body: `{"pool":{"id":"other","state":"consumed"},"leases":[]}`, wantErr: true},
+		{name: "missing pool ID", status: 200, body: `{"pool":{"state":"consumed"},"leases":[]}`, wantErr: true},
+		{name: "missing leases", status: 200, body: `{"pool":{"id":"pool","state":"consumed"}}`, wantErr: true},
+		{name: "null leases", status: 200, body: `{"pool":{"id":"pool","state":"consumed"},"leases":null}`, wantErr: true},
+		{name: "consumed with renewal", status: 200, body: strings.Replace(active, `{`, `{"pool":{"id":"pool","state":"consumed"},`, 1), wantErr: true},
+		{name: "wrong active lease", status: 200, body: strings.Replace(active, `"lease"`, `"other"`, 1), wantErr: true},
+		{name: "expired renewal", status: 200, body: `{"leases":[{"lease_id":"lease","expires_at":"2000-01-01T00:00:00Z"}]}`, wantErr: true},
+		{name: "missing expiry", status: 200, body: `{"leases":[{"lease_id":"lease"}]}`, wantErr: true},
+		{name: "generic success", status: 204, wantErr: true},
+		{name: "non-200 terminal", status: 202, body: terminal, wantErr: true},
+		{name: "legacy consumed conflict", status: 409, body: `{"message":"test pool is not available for lease heartbeat"}`, wantErr: true},
+		{name: "authentication", status: 401, body: terminal, wantErr: true},
+		{name: "expired lease", status: 404, body: terminal, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})
+			calls := 0
+			c.httpClient.Transport = leaseTransport(func(*http.Request) (*http.Response, error) {
+				calls++
+				return &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body))}, nil
+			})
+			got, err := c.HeartbeatLease(context.Background(), "pool", "lease")
+			if (err != nil) != tc.wantErr || got != tc.want || calls != 1 {
+				t.Fatalf("heartbeat=%+v error=%v calls=%d, want %+v error=%t and one request", got, err, calls, tc.want, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestHeartbeatRetriesTransientFailureButNotOwnershipLoss(t *testing.T) {
 	calls := 0
 	c := NewClient(ClientConfig{ServerBaseURL: "http://scheduler"})

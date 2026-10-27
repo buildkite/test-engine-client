@@ -23,7 +23,7 @@ import (
 
 type fakePoolScheduler struct {
 	acquire   func(context.Context) (api.LeaseResponse, error)
-	heartbeat func(context.Context, string) (time.Time, error)
+	heartbeat func(context.Context, string) (api.LeaseHeartbeat, error)
 	complete  func(context.Context, []api.AttemptResult) error
 	release   func() error
 	mu        sync.Mutex
@@ -58,12 +58,12 @@ func (f *fakePoolScheduler) AcquireLease(ctx context.Context, _ string) (api.Lea
 	}
 	return r, err
 }
-func (f *fakePoolScheduler) HeartbeatLease(ctx context.Context, _, leaseID string) (time.Time, error) {
+func (f *fakePoolScheduler) HeartbeatLease(ctx context.Context, _, leaseID string) (api.LeaseHeartbeat, error) {
 	f.record("heartbeat " + leaseID)
 	if f.heartbeat != nil {
 		return f.heartbeat(ctx, leaseID)
 	}
-	return time.Now().Add(time.Minute), nil
+	return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(time.Minute)}, nil
 }
 func (f *fakePoolScheduler) CompleteLease(ctx context.Context, _, leaseID string, r []api.AttemptResult) error {
 	f.record("complete " + leaseID)
@@ -192,12 +192,12 @@ func TestPoolWorkerRetriesBeforeNextLeaseAndKeepsHeartbeatUntilComplete(t *testi
 			}
 			return r, nil
 		},
-		heartbeat: func(context.Context, string) (time.Time, error) {
+		heartbeat: func(context.Context, string) (api.LeaseHeartbeat, error) {
 			select {
 			case heartbeat <- struct{}{}:
 			default:
 			}
-			return time.Now().Add(time.Minute), nil
+			return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(time.Minute)}, nil
 		},
 		complete: func(ctx context.Context, r []api.AttemptResult) error {
 			if len(r) != 1 || r[0].AttemptID != "original" || r[0].Result != "passed" {
@@ -436,9 +436,9 @@ func TestPoolHeartbeatInterval(t *testing.T) {
 		lease := &poolLease{owned: true, expires: time.Now().Add(10 * time.Minute)}
 		s.current = lease
 		var calls atomic.Int32
-		f := &fakePoolScheduler{heartbeat: func(context.Context, string) (time.Time, error) {
+		f := &fakePoolScheduler{heartbeat: func(context.Context, string) (api.LeaseHeartbeat, error) {
 			calls.Add(1)
-			return time.Now().Add(10 * time.Minute), nil
+			return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(10 * time.Minute)}, nil
 		}}
 		done := make(chan struct{})
 		go func() { defer close(done); s.heartbeat(ctx, f, "pool", lease) }()
@@ -457,6 +457,76 @@ func TestPoolHeartbeatInterval(t *testing.T) {
 	})
 }
 
+func TestPoolConsumedHeartbeatDuringCompletion(t *testing.T) {
+	completionFailure := errors.New("completion failed")
+	for _, tc := range []struct {
+		name        string
+		testStatus  string
+		completeErr error
+	}{
+		{name: "successful completion", testStatus: "passed"},
+		{name: "failed tests stay failed", testStatus: "failed"},
+		{name: "completion error stays an error", testStatus: "passed", completeErr: completionFailure},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				s := newPoolSource(cancel)
+				lease := testLease()
+				finish := make(chan struct{})
+				var heartbeats, completes int
+				f := &fakePoolScheduler{
+					heartbeat: func(context.Context, string) (api.LeaseHeartbeat, error) {
+						heartbeats++
+						return api.LeaseHeartbeat{PoolConsumed: true}, nil
+					},
+					complete: func(accounting context.Context, results []api.AttemptResult) error {
+						completes++
+						if len(results) != 1 || results[0] != (api.AttemptResult{AttemptID: "original", Result: tc.testStatus}) {
+							t.Errorf("results=%v", results)
+						}
+						<-finish // Hold the completion response while heartbeat observes consumption.
+						if accounting.Err() != nil {
+							t.Errorf("completion canceled: %v", accounting.Err())
+						}
+						return tc.completeErr
+					},
+				}
+				tracked := s.track(f, "pool", lease, "consuming")
+				done := make(chan error, 1)
+				go func() {
+					_, err := s.executeLease(ctx, f, api.Pool{ID: "pool"}, tracked, 0)
+					done <- err
+				}()
+				synctest.Wait()
+				batch := waitPoolBatch(t, s)
+				if err := s.Dispatched(*batch); err != nil {
+					t.Fatal(err)
+				}
+				failed := 0
+				if tc.testStatus == "failed" {
+					failed = 1
+				}
+				s.Accepted(*batch, poolReport(fmt.Sprintf(`[{"id":"a[1]","file_path":"a","status":%q}]`, tc.testStatus), 1, 0))
+				synctest.Wait()
+				time.Sleep(50 * time.Second)
+				synctest.Wait()
+				if heartbeats != 1 || completes != 1 || ctx.Err() != nil || tracked.owned || !tracked.expires.Equal(lease.ExpiresAt) {
+					t.Errorf("heartbeats=%d completes=%d canceled=%v owned=%t expiry=%s", heartbeats, completes, ctx.Err(), tracked.owned, tracked.expires)
+				}
+				close(finish)
+				if err := <-done; !errors.Is(err, tc.completeErr) {
+					t.Fatalf("completion error=%v, want %v", err, tc.completeErr)
+				}
+				if tc.completeErr == nil && (s.passedAttempts != 1-failed || s.failedAttempts != failed || (s.outcome() != nil) != (failed > 0)) {
+					t.Fatalf("passed=%d failed=%d outcome=%v", s.passedAttempts, s.failedAttempts, s.outcome())
+				}
+			})
+		})
+	}
+}
+
 func TestPoolMaximumLifetimeHeartbeatAllowsTerminalAccountingBeforeExpiry(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -466,9 +536,9 @@ func TestPoolMaximumLifetimeHeartbeatAllowsTerminalAccountingBeforeExpiry(t *tes
 		lease.ExpiresAt = time.Now().Add(2 * time.Minute)
 		var heartbeats, completes atomic.Int32
 		f := &fakePoolScheduler{
-			heartbeat: func(context.Context, string) (time.Time, error) {
+			heartbeat: func(context.Context, string) (api.LeaseHeartbeat, error) {
 				heartbeats.Add(1)
-				return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
+				return api.LeaseHeartbeat{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
 			},
 			complete: func(ctx context.Context, results []api.AttemptResult) error {
 				completes.Add(1)
@@ -521,9 +591,9 @@ func TestPoolMaximumLifetimeHeartbeatCancelsRunningWorkAtExpiry(t *testing.T) {
 		lease.ExpiresAt = time.Now().Add(2 * time.Minute)
 		var heartbeats, accounted atomic.Int32
 		f := &fakePoolScheduler{
-			heartbeat: func(context.Context, string) (time.Time, error) {
+			heartbeat: func(context.Context, string) (api.LeaseHeartbeat, error) {
 				heartbeats.Add(1)
-				return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
+				return api.LeaseHeartbeat{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
 			},
 			complete: func(context.Context, []api.AttemptResult) error { accounted.Add(1); return nil },
 			release:  func() error { accounted.Add(1); return nil },
@@ -562,8 +632,12 @@ func TestPoolMaximumLifetimeHeartbeatCancelsRunningWorkAtExpiry(t *testing.T) {
 }
 
 func TestPoolHeartbeatLossStopsDispatchAndAccounting(t *testing.T) {
-	for _, loss := range []*api.LeaseHTTPError{{Status: 404}, {Status: 409}, {Status: 422, Code: "INVALID_LEASE_TTL"}} {
-		t.Run(loss.Error(), func(t *testing.T) {
+	for _, loss := range []*api.LeaseHTTPError{nil, {Status: 404}, {Status: 409}, {Status: 422, Code: "INVALID_LEASE_TTL"}} {
+		name := "pool consumed before completion"
+		if loss != nil {
+			name = loss.Error()
+		}
+		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -571,8 +645,11 @@ func TestPoolHeartbeatLossStopsDispatchAndAccounting(t *testing.T) {
 				lease := testLease()
 				lease.ExpiresAt = time.Now().Add(10 * time.Minute)
 				var accounted atomic.Int32
-				f := &fakePoolScheduler{heartbeat: func(context.Context, string) (time.Time, error) {
-					return time.Time{}, loss
+				f := &fakePoolScheduler{heartbeat: func(context.Context, string) (api.LeaseHeartbeat, error) {
+					if loss == nil {
+						return api.LeaseHeartbeat{PoolConsumed: true}, nil
+					}
+					return api.LeaseHeartbeat{}, loss
 				}, complete: func(context.Context, []api.AttemptResult) error { accounted.Add(1); return nil }, release: func() error { accounted.Add(1); return nil }}
 				done := make(chan error, 1)
 				go func() {
@@ -620,12 +697,12 @@ func TestPoolTransientHeartbeatFailuresRetainOwnership(t *testing.T) {
 		lease.ExpiresAt = time.Now().Add(2 * time.Minute)
 		var heartbeats, completes atomic.Int32
 		f := &fakePoolScheduler{
-			heartbeat: func(context.Context, string) (time.Time, error) {
+			heartbeat: func(context.Context, string) (api.LeaseHeartbeat, error) {
 				n := int(heartbeats.Add(1))
 				if n <= len(transient) {
-					return time.Time{}, transient[n-1]
+					return api.LeaseHeartbeat{}, transient[n-1]
 				}
-				return time.Now().Add(10 * time.Minute), nil
+				return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(10 * time.Minute)}, nil
 			},
 			complete: func(_ context.Context, results []api.AttemptResult) error {
 				completes.Add(1)
@@ -681,11 +758,11 @@ func TestPoolTransientHeartbeatOutageAllowsAccountingUntilExpiry(t *testing.T) {
 				lease.ExpiresAt = time.Now().Add(2 * time.Minute)
 				var heartbeats, completes, releases atomic.Int32
 				f := &fakePoolScheduler{
-					heartbeat: func(ctx context.Context, _ string) (time.Time, error) {
+					heartbeat: func(ctx context.Context, _ string) (api.LeaseHeartbeat, error) {
 						heartbeats.Add(1)
 						// Like the client, keep retrying until the request deadline.
 						<-ctx.Done()
-						return time.Time{}, ctx.Err()
+						return api.LeaseHeartbeat{}, ctx.Err()
 					},
 					complete: func(ctx context.Context, _ []api.AttemptResult) error {
 						completes.Add(1)
@@ -974,11 +1051,11 @@ func TestPoolWorkerDropsPrefetchedLeaseLostBeforeDispatch(t *testing.T) {
 		two.ExpiresAt = time.Now().Add(77 * time.Second)
 		f := &fakePoolScheduler{
 			acquire: leaseSequence(costLease("one", time.Minute), two, costLease("three", time.Minute)),
-			heartbeat: func(_ context.Context, id string) (time.Time, error) {
+			heartbeat: func(_ context.Context, id string) (api.LeaseHeartbeat, error) {
 				if id == "two" {
-					return time.Time{}, &api.LeaseHTTPError{Status: 404}
+					return api.LeaseHeartbeat{}, &api.LeaseHTTPError{Status: 404}
 				}
-				return time.Now().Add(10 * time.Minute), nil
+				return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(10 * time.Minute)}, nil
 			},
 			complete: func(context.Context, []api.AttemptResult) error { return nil },
 			release:  func() error { t.Error("released a lease"); return nil },
@@ -1209,11 +1286,11 @@ func TestPoolWorkerSlowIdleReleaseDoesNotBlockCurrentLease(t *testing.T) {
 		one.ExpiresAt = time.Now().Add(100 * time.Second)
 		f := &fakePoolScheduler{
 			acquire: leaseSequence(one, costLease("two", time.Minute)),
-			heartbeat: func(_ context.Context, id string) (time.Time, error) {
+			heartbeat: func(_ context.Context, id string) (api.LeaseHeartbeat, error) {
 				if id == "one" {
-					return time.Time{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
+					return api.LeaseHeartbeat{}, &api.LeaseHTTPError{Status: 422, Code: api.LeaseErrorCodeMaximumLifetime}
 				}
-				return time.Now().Add(10 * time.Minute), nil
+				return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(10 * time.Minute)}, nil
 			},
 			complete: func(context.Context, []api.AttemptResult) error { return nil },
 			// Like a release retrying a rate limit until its deadline.

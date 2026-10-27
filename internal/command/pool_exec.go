@@ -172,8 +172,8 @@ func (f *fallbackScheduler) AcquireLease(context.Context, string) (api.LeaseResp
 	return response, nil
 }
 
-func (f *fallbackScheduler) HeartbeatLease(context.Context, string, string) (time.Time, error) {
-	return time.Now().Add(fallbackLeaseTTL), nil
+func (f *fallbackScheduler) HeartbeatLease(context.Context, string, string) (api.LeaseHeartbeat, error) {
+	return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(fallbackLeaseTTL)}, nil
 }
 
 func (f *fallbackScheduler) CompleteLease(context.Context, string, string, []api.AttemptResult) error {
