@@ -22,7 +22,7 @@ import (
 
 type poolScheduler interface {
 	AcquireLease(context.Context, string) (api.LeaseResponse, error)
-	HeartbeatLease(context.Context, string, string) (time.Time, error)
+	HeartbeatLease(context.Context, string, string) (api.LeaseHeartbeat, error)
 	CompleteLease(context.Context, string, string, []api.AttemptResult) error
 	ReleaseLease(context.Context, string, string) error
 }
@@ -73,6 +73,8 @@ type poolLease struct {
 	owned   bool
 	expires time.Time
 	stop    func()
+	// A consumed heartbeat may arrive while CompleteLease is returning success.
+	completing bool
 }
 
 type batchStart struct {
@@ -581,6 +583,7 @@ func (s *poolSource) executeLease(ctx context.Context, client poolScheduler, poo
 		undispatchable := s.undispatchable
 		s.dispatchable = false
 		s.pending = nil
+		lease.completing = owned && !terminating && (dispatched || undispatchable)
 		s.mu.Unlock()
 		if !owned {
 			err = errors.Join(err, errors.New("lease ownership lost before accounting"))
@@ -813,10 +816,23 @@ func (s *poolSource) heartbeat(ctx context.Context, client poolScheduler, poolID
 			s.lose(lease, fmt.Errorf("lease heartbeat: %w", err))
 			return
 		}
+		if next.PoolConsumed {
+			s.mu.Lock()
+			lease.owned = false
+			active := s.current == lease && !lease.completing
+			s.mu.Unlock()
+			// Let in-flight completion report its own result. Outside that
+			// window, consumption cannot authorize further dispatch or accounting.
+			if active {
+				s.stop(errors.New("pool consumed before lease completion"))
+			}
+			debug.Printf("Stopped lease %s heartbeat: pool consumed", lease.ID)
+			return
+		}
 		s.mu.Lock()
-		lease.expires = next
+		lease.expires = next.ExpiresAt
 		s.mu.Unlock()
-		debug.Printf("Renewed lease %s (expires=%s)", lease.ID, next.Format(time.RFC3339))
+		debug.Printf("Renewed lease %s (expires=%s)", lease.ID, next.ExpiresAt.Format(time.RFC3339))
 	}
 }
 
