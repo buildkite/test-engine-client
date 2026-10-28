@@ -1,10 +1,13 @@
 package runner
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"testing"
 
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
@@ -115,7 +118,7 @@ func TestVitestRetryCommandNameAndArgs_HappyPath(t *testing.T) {
 	}
 
 	wantName := "vitest"
-	wantArgs := []string{"run", "--testNamePattern", "(this will fail|this other one will fail)", "--reporter=json", "--outputFile", "vitest.json"}
+	wantArgs := []string{"run", "--testNamePattern", "^(this will fail|this other one will fail)$", "--reporter=json", "--outputFile", "vitest.json"}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
 		t.Errorf("CommandNameAndArgs(%v, %q) diff (-got +want):\n%s", testCases, retryTestCommand, diff)
@@ -310,5 +313,126 @@ func TestVitestRun_RetryIgnoresSkippedResultsForTestsNotRetried(t *testing.T) {
 	}
 	if failedTest.ExecutionCount != 2 {
 		t.Errorf("Vitest.Run(%v, retry=true) failed test execution count = %d, want 2", failedTests, failedTest.ExecutionCount)
+	}
+}
+
+func TestVitestRun_RetryNamePattern(t *testing.T) {
+	testFile, err := filepath.Abs("multi.spec.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name      string
+		ancestors []string
+		title     string
+		scope     string
+		matches   []string
+		misses    []string
+	}{
+		{
+			name:      "nested suites with spaces and regex characters",
+			ancestors: []string{"outer suite [1]", "inner suite (2)"},
+			title:     "works with a+b?", scope: "outer suite [1] inner suite (2)",
+			matches: []string{"outer suite [1] inner suite (2) works with a+b?", "outer suite [1] > inner suite (2) > works with a+b?"},
+			misses:  []string{"outer > suite [1] > inner > suite (2) > works with a+b?", "outer suite 1 > inner suite 2 > works with ab"},
+		},
+		{
+			name: "no scope", title: "works [1]", matches: []string{"works [1]"},
+			misses: []string{" works [1]", " > works [1]", "works 1"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			reportPath := filepath.Join(dir, "vitest.json")
+			// fullName stays space-separated even when Vitest 5 matches names with " > ".
+			report := map[string]any{"testResults": []any{map[string]any{
+				"name": testFile, "assertionResults": []any{map[string]any{
+					"status": "failed", "title": tc.title, "ancestorTitles": tc.ancestors, "fullName": tc.matches[0],
+				}},
+			}}}
+			data, err := json.Marshal(report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(reportPath, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			vitest := NewVitest(RunnerConfig{TestCommand: "true {{resultPath}}", ResultPath: reportPath})
+			result := NewRunResult(nil)
+			if err := vitest.Run(result, []plan.TestCase{{Path: "multi.spec.js"}}, false); err != nil {
+				t.Fatal(err)
+			}
+			failed := result.FailedTests()
+			want := []plan.TestCase{{Scope: tc.scope, Name: tc.title, Path: "multi.spec.js"}}
+			if diff := cmp.Diff(want, failed); diff != "" {
+				t.Fatalf("collector identities changed (-want +got):\n%s", diff)
+			}
+			_, args, err := vitest.CommandNameAndArgs(failed, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pattern := regexp.MustCompile(args[slices.Index(args, "--testNamePattern")+1])
+			for _, name := range tc.matches {
+				if !pattern.MatchString(name) {
+					t.Errorf("pattern %q does not match %q", pattern, name)
+				}
+				for _, unrelated := range []string{"prefix " + name, name + " suffix"} {
+					if pattern.MatchString(unrelated) {
+						t.Errorf("pattern %q matches unrelated test %q", pattern, unrelated)
+					}
+				}
+			}
+			for _, name := range tc.misses {
+				if pattern.MatchString(name) {
+					t.Errorf("pattern %q matches unrelated test %q", pattern, name)
+				}
+			}
+		})
+	}
+}
+
+func TestVitestRun_RetryMustPassToClearFailure(t *testing.T) {
+	testFile, err := filepath.Abs("multi.spec.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []string{"skipped", "pending", "todo", "omitted", "passed"} {
+		t.Run(status, func(t *testing.T) {
+			reportPath := filepath.Join(t.TempDir(), "vitest.json")
+			vitest := NewVitest(RunnerConfig{
+				TestCommand: "true {{resultPath}}", RetryTestCommand: "true {{resultPath}} {{testNamePattern}}",
+				ResultPath: reportPath,
+			})
+			result := NewRunResult(nil)
+			testCase := plan.TestCase{Scope: "suite", Name: "fails", Path: "multi.spec.js"}
+			for _, attempt := range []struct {
+				status string
+				retry  bool
+			}{{"failed", false}, {status, true}} {
+				assertions := fmt.Sprintf(`[{"status":%q,"title":"fails","ancestorTitles":["suite"]}]`, attempt.status)
+				if attempt.status == "omitted" {
+					assertions = "[]"
+				}
+				report := fmt.Sprintf(`{"testResults":[{"name":%q,"assertionResults":%s}]}`, testFile, assertions)
+				if err := os.WriteFile(reportPath, []byte(report), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := vitest.Run(result, []plan.TestCase{testCase}, attempt.retry); err != nil {
+					t.Fatal(err)
+				}
+			}
+			wantStatus := RunStatusFailed
+			wantFailedTests := []plan.TestCase{testCase}
+			if status == "passed" {
+				wantStatus = RunStatusPassed
+				wantFailedTests = nil
+			}
+			if got := result.Status(); got != wantStatus {
+				t.Errorf("retry %s: status = %s, want %s", status, got, wantStatus)
+			}
+			if diff := cmp.Diff(wantFailedTests, result.FailedTests()); diff != "" {
+				t.Errorf("retry %s: FailedTests() diff (-want +got):\n%s", status, diff)
+			}
+		})
 	}
 }

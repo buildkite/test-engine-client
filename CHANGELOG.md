@@ -1,5 +1,6 @@
 # Changelog
 ## Unreleased
+- Fix Vitest retries to match exact failed test names in Vitest 4 and 5, and keep the run failing when a retry skips or omits a failed test instead of passing it.
 - Support Test Scheduler acknowledging heartbeats after a pool is consumed, so a heartbeat racing successful final completion does not fail the job. Requires Test Scheduler support on the server.
 
 ## 3.4.1 - 2026-10-23

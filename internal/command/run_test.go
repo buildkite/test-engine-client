@@ -24,6 +24,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/buildkite/test-engine-client/v3/internal/version"
 	"github.com/google/go-cmp/cmp"
+	"github.com/kballard/go-shellquote"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -375,6 +376,56 @@ describe('a', () => {
 
 	assert.Equal(t, runner.RunStatusPassed, testResult.Status())
 	assert.Equal(t, runner.RunStatistics{Total: 2, PassedOnFirstRun: 1, PassedOnRetry: 1}, testResult.Statistics())
+}
+
+func TestRun_VitestRetryExitZeroWithRemainingFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status string
+		muted  bool
+	}{
+		{name: "failed retry", status: "failed"},
+		{name: "skipped retry", status: "skipped"},
+		{name: "omitted retry", status: "omitted"},
+		{name: "passing retry", status: "passed"},
+		{name: "muted failure", status: "failed", muted: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Chdir(dir)
+			require.NoError(t, os.WriteFile("multi.spec.js", nil, 0600))
+			first := fmt.Sprintf(`{"testResults":[{"name":%q,"assertionResults":[{"status":"failed","title":"fails","ancestorTitles":["suite"]}]}]}`, filepath.Join(dir, "multi.spec.js"))
+			retry := strings.Replace(first, `"status":"failed"`, `"status":"`+tc.status+`"`, 1)
+			if tc.status == "omitted" {
+				retry = `{"testResults":[]}`
+			}
+			require.NoError(t, os.WriteFile("first.json", []byte(first), 0600))
+			require.NoError(t, os.WriteFile("retry.json", []byte(retry), 0600))
+			muted := "[]"
+			if tc.muted {
+				muted = `[{"scope":"suite","name":"fails","path":"multi.spec.js"}]`
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprintf(w, `{"fallback":true,"muted_tests":%s,"tasks":{"0":{"node_number":0,"tests":[{"path":"multi.spec.js","format":"file"}]}}}`, muted)
+			}))
+			defer server.Close()
+			cfg := &config.Config{
+				TestRunner: "vitest", ResultPath: "vitest.json", MaxRetries: 1, RetryForMutedTest: true,
+				TestCommand:   shellquote.Join("sh", "-c", `cp first.json "$1"; exit 1`, "sh", "{{resultPath}}"),
+				RetryCommand:  shellquote.Join("sh", "-c", `cp retry.json "$1"`, "sh", "{{resultPath}}", "{{testNamePattern}}"),
+				ServerBaseURL: server.URL, Identifier: "plan", OrganizationSlug: "org", SuiteSlug: "suite", Parallelism: 1,
+			}
+			err := Run(context.Background(), cfg, "")
+			// A retry that exits zero is not proof that a failed test passed.
+			if tc.status == "passed" || tc.muted {
+				require.NoError(t, err)
+			} else {
+				var coded cli.ExitCoder
+				require.ErrorAs(t, err, &coded)
+				assert.Equal(t, 1, coded.ExitCode())
+			}
+		})
+	}
 }
 
 func TestRun_PlaywrightSkippedTests(t *testing.T) {
