@@ -24,7 +24,7 @@ bktec run
 ```
 
 > [!IMPORTANT]
-> Due to Go's package-oriented design, file-level or example-level test splitting (like that available for RSpec or Pytest) is not supported. This means test splitting is less granular, and automatic retries operate on the entire package rather than individual tests.
+> Go splitting uses packages by default. Individual-test splitting supports top-level tests, runnable examples, and fuzz seed tests, not arbitrary dynamically generated subtests. See [individual-test splitting](#individual-test-splitting) for the supported scope.
 
 ## Configure test command
 
@@ -65,7 +65,7 @@ export BUILDKITE_TEST_ENGINE_TEST_CMD="go test -json {{packages}}"
 ```
 
 > [!IMPORTANT]
-> Go JSONL output contains both test-level events and package-level events. `bktec` still runs and retries Go tests by package, but reports individual tests when Go includes a test name in the JSON event stream.
+> Go JSONL output contains both test-level events and package-level events. `bktec` preserves individual test and subtest results, including the parent test's inclusive duration. Parent and child durations should not be summed to estimate wall-clock time.
 
 ## Use JUnit XML output
 
@@ -83,6 +83,29 @@ go test supports [selector-based test splitting](../README.md#selector-based-tes
 Go suites must use [Go JSONL output](#use-go-jsonl-output) so the package import path is reported for selector attribution. Configure `gotestsum --jsonfile={{resultPath}}` or `go test -json` as described above.
 
 If `--selector-file` isn't set, `bktec` discovers packages itself using `go list`. You can instead provide a fixed list of package import paths with `--selector-file` (or `BUILDKITE_TEST_ENGINE_SELECTOR_FILE`).
+
+## Individual-test splitting
+
+Set `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true` to distribute individual top-level tests across nodes instead of whole packages:
+
+```sh
+export BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true
+bktec run
+```
+
+Unlike the slow-file expansion used by other runners, this opt-in expands **all discovered Go packages** (or every package in `--selector-file`), not just slow ones, before server-side test selection. The server's slow-file filter uses file-name timings, while native Go JSONL reports package selectors. No server change is required: `bktec` sends discovered tests through the existing example-planning API. Without the opt-in, package-level splitting and retries are unchanged.
+
+Listing every package compiles its test binary and runs package initialization and `TestMain` before planning. This adds discovery time for the full suite, even for packages that are already fast. Packages with no listable tests stay as package assignments. If Test Engine is unavailable, the normal fallback still splits whole packages.
+
+Individual-test assignments use the package import path as both `scope` and `path`, and the exact Go test name as `name`. This matches Go JSONL's `(Package, Test)` result identity, so existing top-level test timings can be used without renaming tests.
+
+Discovery runs the configured `go test` or `gotestsum` command with `-list=.`. Build flags such as `-tags` and `GOFLAGS` apply during discovery too. Test bodies are not executed, but package initialization and `TestMain` still run and must permit listing tests.
+
+Supported units are top-level `Test…` functions, runnable `Example…` functions, and `Fuzz…` seed tests. Benchmarks and active fuzzing are not supported. Go's `-list` cannot enumerate `t.Run` children, including table-driven, nested, or duplicate-name subtests: they execute together with their top-level parent. A single slow top-level test cannot be divided further.
+
+`bktec` runs each assigned package separately with an anchored, escaped `-run` expression. This avoids both partial-name matches and running identically named tests in another package. JSONL or JUnit reports from those commands are combined before upload. Each invocation repeats package initialization and `TestMain`, so suites with expensive package setup may benefit less from splitting.
+
+Use the documented `go test` or `gotestsum` command forms with `{{packages}}`; do not add fixed packages, `-run`, benchmark, or active-fuzzing flags. Shell wrappers are not supported for individual-test discovery or execution. Custom retry commands must use the same result format as the main command.
 
 ## Filter packages
 
@@ -110,7 +133,9 @@ Using `bktec` allows you to manage test states, such as muting flaky tests, dire
 ## Automatically retry failed tests
 
 You can configure `bktec` to automatically retry failed tests using the `BUILDKITE_TEST_ENGINE_RETRY_COUNT` environment variable.
-When this variable is set to a number greater than `0`, `bktec` will retry each failed packages up to the specified number of times.
+When this variable is set to a number greater than `0`, `bktec` retries failed packages up to the specified number of times by default.
+
+With `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true`, it retries failed top-level tests instead. A failed subtest retries its entire top-level parent, including sibling subtests, rather than trying to rediscover or isolate dynamic children. Passing unrelated top-level tests are not retried. Package-level failures may still require a whole-package retry; compilation failures remain terminal errors.
 
 To enable automatic retry, set the following environment variable:
 

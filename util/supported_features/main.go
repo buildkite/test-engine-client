@@ -71,7 +71,7 @@ func main() {
 
 	printRow(
 		runners,
-		"[Split slow files by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)",
+		"[Split by individual test example](https://github.com/buildkite/test-engine-client/blob/main/docs/rspec.md#split-slow-files-by-individual-test-example)",
 		func(r runner.TestRunner) bool { return r.SupportedFeatures().SplitByExample },
 	)
 

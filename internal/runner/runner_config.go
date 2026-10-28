@@ -9,6 +9,7 @@ type RunnerConfig struct {
 	// In playwright, for example, it can only be configured via a config file, therefore it's mandatory for user to set.
 	ResultPath             string
 	RetryTestCommand       string
+	SplitByExample         bool
 	TagFilters             string
 	TestCommand            string
 	TestFileExcludePattern string

@@ -11,7 +11,146 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestGotestGetExamples(t *testing.T) {
+	changeCwd(t, "./testdata/go-examples")
+	g := NewGoTest(RunnerConfig{})
+	examples, err := g.GetExamples([]string{"example.com/splitting/one", "example.com/splitting/two"})
+	require.NoError(t, err)
+	var identities []string
+	for _, example := range examples {
+		assert.Equal(t, plan.TestCaseFormatExample, example.Format)
+		assert.Equal(t, example.Scope, example.Path)
+		identities = append(identities, example.Scope+"/"+example.Name)
+	}
+	assert.ElementsMatch(t, []string{
+		"example.com/splitting/one/TestAlpha",
+		"example.com/splitting/one/TestAlphaExtra",
+		"example.com/splitting/one/TestShared",
+		"example.com/splitting/one/TestDynamic",
+		"example.com/splitting/one/TestFlaky",
+		"example.com/splitting/one/Example",
+		"example.com/splitting/one/FuzzSeed",
+		"example.com/splitting/two/TestShared",
+		"example.com/splitting/two/TestAlpha",
+	}, identities)
+	_, err = g.GetExamples([]string{"example.com/splitting/missing"})
+	require.Error(t, err)
+}
+
+func TestGotestDiscoveryUsesBuildFlags(t *testing.T) {
+	changeCwd(t, "./testdata/go-examples")
+	for _, command := range []string{
+		"go test -json -tags=splitfixture {{packages}}",
+		"gotestsum --junitfile={{resultPath}} -- -tags=splitfixture {{packages}}",
+	} {
+		g := NewGoTest(RunnerConfig{TestCommand: command})
+		examples, err := g.GetExamples([]string{"example.com/splitting/one"})
+		require.NoError(t, err)
+		assert.Contains(t, examples, plan.TestCase{
+			Format: plan.TestCaseFormatExample, Scope: "example.com/splitting/one",
+			Path: "example.com/splitting/one", Name: "TestTagged",
+		})
+	}
+}
+
+func TestGotestMixedAssignments(t *testing.T) {
+	changeCwd(t, "./testdata/go-examples")
+	g := NewGoTest(RunnerConfig{TestCommand: "go test -json {{packages}}", ResultPath: filepath.Join(t.TempDir(), "report")})
+	result := NewRunResult(nil)
+	require.Error(t, g.Run(result, []plan.TestCase{
+		{Format: plan.TestCaseFormatExample, Path: "example.com/splitting/one", Scope: "example.com/splitting/one", Name: "TestAlpha"},
+		{Format: plan.TestCaseFormatSelector, Value: "example.com/splitting/two"},
+	}, false))
+	assert.Equal(t, RunStatistics{Total: 3, PassedOnFirstRun: 2, Failed: 1}, result.Statistics())
+	assert.Equal(t, "example.com/splitting/two", result.FailedTests()[0].Scope)
+}
+
+func TestGotestRejectsUnsafeExampleCommands(t *testing.T) {
+	for _, command := range []string{
+		"go test -json -run=Other {{packages}}",
+		"go test -json -fuzz=FuzzSeed {{packages}}",
+		"gotestsum -- -bench=. {{packages}}",
+		"test-wrapper {{packages}}",
+	} {
+		g := NewGoTest(RunnerConfig{TestCommand: command})
+		_, _, err := g.CommandNameAndArgs([]plan.TestCase{
+			{Format: plan.TestCaseFormatExample, Path: "example.com/splitting/one", Name: "TestAlpha"},
+		}, false)
+		require.Error(t, err, command)
+	}
+}
+
+func TestGotestMissingAssignedTestFails(t *testing.T) {
+	changeCwd(t, "./testdata/go-examples")
+	g := NewGoTest(RunnerConfig{TestCommand: "go test -json {{packages}}", ResultPath: filepath.Join(t.TempDir(), "report")})
+	result := NewRunResult(nil)
+	err := g.Run(result, []plan.TestCase{
+		{Format: plan.TestCaseFormatExample, Path: "example.com/splitting/one", Name: "TestRemoved"},
+		{Format: plan.TestCaseFormatExample, Path: "example.com/splitting/two", Name: "TestShared"},
+	}, false)
+	require.ErrorContains(t, err, "did not report assigned test TestRemoved")
+	assert.Equal(t, RunStatusError, result.Status(), "another package passing must not hide an omitted test")
+	assert.False(t, result.Retryable())
+}
+
+func TestGotestRetriesWholePackageWithoutOptIn(t *testing.T) {
+	changeCwd(t, "./testdata/go-examples")
+	t.Setenv("GO_SPLIT_FLAKY_MARKER", filepath.Join(t.TempDir(), "flaky"))
+	g := NewGoTest(RunnerConfig{TestCommand: "go test -json {{packages}}", ResultPath: filepath.Join(t.TempDir(), "report")})
+	result := NewRunResult(nil)
+	require.Error(t, g.Run(result, []plan.TestCase{{Path: "example.com/splitting/one"}}, false))
+	require.Error(t, g.Run(result, result.FailedTests(), true))
+	assert.Equal(t, 2, result.tests["example.com/splitting/one/TestAlpha/example.com/splitting/one"].ExecutionCount)
+}
+
+func TestGotestExampleSubsetsAndRetries(t *testing.T) {
+	for _, command := range []string{
+		"go test -json {{packages}}",
+		"gotestsum --jsonfile={{resultPath}} {{packages}}",
+		"gotestsum --junitfile={{resultPath}} -- -count=1 {{packages}}",
+	} {
+		t.Run(command, func(t *testing.T) {
+			changeCwd(t, "./testdata/go-examples")
+			t.Setenv("GO_SPLIT_FLAKY_MARKER", filepath.Join(t.TempDir(), "flaky"))
+			g := NewGoTest(RunnerConfig{TestCommand: command, SplitByExample: true, ResultPath: filepath.Join(t.TempDir(), "report")})
+			result := NewRunResult(nil)
+			example := func(pkg, name string) plan.TestCase {
+				return plan.TestCase{Format: plan.TestCaseFormatExample, Path: pkg, Scope: pkg, Name: name}
+			}
+			cases := []plan.TestCase{
+				example("example.com/splitting/one", "TestAlpha"),
+				example("example.com/splitting/one", "TestDynamic"),
+				example("example.com/splitting/one", "TestFlaky"),
+				example("example.com/splitting/one", "Example"),
+				example("example.com/splitting/one", "FuzzSeed"),
+				example("example.com/splitting/two", "TestShared"),
+			}
+			require.Error(t, g.Run(result, cases, false))
+			assert.Equal(t, RunStatusFailed, result.Status())
+			// Reparse the upload report: it must retain both packages, not just
+			// the last invocation, including nested/duplicate subtest results.
+			uploaded := NewRunResult(nil)
+			require.NoError(t, g.parseResults(uploaded))
+			assert.Equal(t, result.Statistics(), uploaded.Statistics())
+			for _, tc := range cases {
+				assert.Contains(t, uploaded.tests, testIdentifier(tc))
+			}
+			assert.Contains(t, uploaded.tests, "example.com/splitting/one/TestDynamic/duplicate#01/example.com/splitting/one")
+			for _, test := range uploaded.tests {
+				assert.NotEqual(t, "TestAlphaExtra", test.Name)
+				assert.False(t, test.Scope == "example.com/splitting/one" && test.Name == "TestShared")
+				assert.False(t, test.Scope == "example.com/splitting/two" && test.Name == "TestAlpha")
+			}
+			require.NoError(t, g.Run(result, result.FailedTests(), true))
+			assert.Equal(t, RunStatusPassed, result.Status())
+			assert.Equal(t, 1, result.tests[testIdentifier(cases[0])].ExecutionCount, "passing tests must not be retried")
+			assert.Equal(t, 2, result.tests["example.com/splitting/one/TestFlaky/child/example.com/splitting/one"].ExecutionCount)
+		})
+	}
+}
 
 func TestGotestRun(t *testing.T) {
 	changeCwd(t, "./testdata/go")
