@@ -378,6 +378,31 @@ describe('a', () => {
 	assert.Equal(t, runner.RunStatistics{Total: 2, PassedOnFirstRun: 1, PassedOnRetry: 1}, testResult.Statistics())
 }
 
+func TestRun_GotestsumNativeRetryExitZero(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("packages.txt", []byte("example.com/hello\n"), 0600))
+	// gotestsum retains both attempts in its JSONL report, but exits zero
+	// when its native retry passes. The Go parser intentionally retains failures.
+	report := `{"Action":"start","Package":"example.com/hello"}
+{"Action":"fail","Package":"example.com/hello","Test":"TestFlaky"}
+{"Action":"fail","Package":"example.com/hello"}
+{"Action":"start","Package":"example.com/hello"}
+{"Action":"pass","Package":"example.com/hello","Test":"TestFlaky"}
+{"Action":"pass","Package":"example.com/hello"}
+`
+	require.NoError(t, os.WriteFile("native-retry.jsonl", []byte(report), 0600))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"fallback":true,"tasks":{"0":{"node_number":0,"tests":[{"format":"selector","value":"example.com/hello"}]}}}`)
+	}))
+	defer server.Close()
+	cfg := &config.Config{
+		TestRunner: "gotest", ResultPath: "gotest.jsonl", MaxRetries: 0,
+		TestCommand:   shellquote.Join("sh", "-c", `cp native-retry.jsonl "$1"`, "sh", "gotest.jsonl", "--jsonfile=gotest.jsonl"),
+		ServerBaseURL: server.URL, Identifier: "plan", OrganizationSlug: "org", SuiteSlug: "suite", Parallelism: 1,
+	}
+	require.NoError(t, Run(context.Background(), cfg, "packages.txt"))
+}
+
 func TestRun_VitestRetryExitZeroWithRemainingFailures(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -387,8 +412,12 @@ func TestRun_VitestRetryExitZeroWithRemainingFailures(t *testing.T) {
 		{name: "failed retry", status: "failed"},
 		{name: "skipped retry", status: "skipped"},
 		{name: "omitted retry", status: "omitted"},
+		{name: "missing retry report", status: "missing"},
+		{name: "invalid retry report", status: "invalid"},
 		{name: "passing retry", status: "passed"},
 		{name: "muted failure", status: "failed", muted: true},
+		{name: "muted missing retry report", status: "missing", muted: true},
+		{name: "muted invalid retry report", status: "invalid", muted: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -401,6 +430,13 @@ func TestRun_VitestRetryExitZeroWithRemainingFailures(t *testing.T) {
 			}
 			require.NoError(t, os.WriteFile("first.json", []byte(first), 0600))
 			require.NoError(t, os.WriteFile("retry.json", []byte(retry), 0600))
+			retryScript := `cp retry.json "$1"`
+			switch tc.status {
+			case "missing":
+				retryScript = `rm "$1"`
+			case "invalid":
+				retryScript = `printf 'invalid JSON' > "$1"`
+			}
 			muted := "[]"
 			if tc.muted {
 				muted = `[{"scope":"suite","name":"fails","path":"multi.spec.js"}]`
@@ -412,7 +448,7 @@ func TestRun_VitestRetryExitZeroWithRemainingFailures(t *testing.T) {
 			cfg := &config.Config{
 				TestRunner: "vitest", ResultPath: "vitest.json", MaxRetries: 1, RetryForMutedTest: true,
 				TestCommand:   shellquote.Join("sh", "-c", `cp first.json "$1"; exit 1`, "sh", "{{resultPath}}"),
-				RetryCommand:  shellquote.Join("sh", "-c", `cp retry.json "$1"`, "sh", "{{resultPath}}", "{{testNamePattern}}"),
+				RetryCommand:  shellquote.Join("sh", "-c", retryScript, "sh", "{{resultPath}}", "{{testNamePattern}}"),
 				ServerBaseURL: server.URL, Identifier: "plan", OrganizationSlug: "org", SuiteSlug: "suite", Parallelism: 1,
 			}
 			err := Run(context.Background(), cfg, "")
@@ -420,6 +456,7 @@ func TestRun_VitestRetryExitZeroWithRemainingFailures(t *testing.T) {
 			if tc.status == "passed" || tc.muted {
 				require.NoError(t, err)
 			} else {
+				require.ErrorContains(t, err, "Vitest finished with failed tests")
 				var coded cli.ExitCoder
 				require.ErrorAs(t, err, &coded)
 				assert.Equal(t, 1, coded.ExitCode())

@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/kballard/go-shellquote"
+	"github.com/urfave/cli/v3"
 )
 
 // Vitest is a first-class runner for the Vitest test framework.
@@ -94,6 +95,9 @@ func (v Vitest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	report, parseErr := ParseJestReport(v.ResultPath)
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read Vitest output, tests will not be retried: %v\n", parseErr)
+		if cmdErr == nil && len(result.FailedTests()) > 0 {
+			return cli.Exit("Vitest finished with failed tests; see the report above", 1)
+		}
 		// We don't want to fail the build if we fail to parse the report,
 		// therefore we return the command error (which can be nil), instead of the parse error.
 		return cmdErr
@@ -157,6 +161,10 @@ func (v Vitest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 			})
 			result.RecordTestResult(testCase, status)
 		}
+	}
+
+	if cmdErr == nil && len(result.FailedTests()) > 0 {
+		return cli.Exit("Vitest finished with failed tests; see the report above", 1)
 	}
 
 	return cmdErr

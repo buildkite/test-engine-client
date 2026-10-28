@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewVitest(t *testing.T) {
@@ -285,9 +287,7 @@ func TestVitestRun_RetryIgnoresSkippedResultsForTestsNotRetried(t *testing.T) {
 
 	result := NewRunResult([]plan.TestCase{})
 	testCases := []plan.TestCase{{Path: "multi.spec.js"}}
-	if err := vitest.Run(result, testCases, false); err != nil {
-		t.Fatalf("Vitest.Run(%v, retry=false) error = %v", testCases, err)
-	}
+	require.ErrorContains(t, vitest.Run(result, testCases, false), "Vitest finished with failed tests")
 
 	failedTests := result.FailedTests()
 	wantFailedTests := []plan.TestCase{{Scope: "multi", Name: "fails", Path: "multi.spec.js"}}
@@ -295,9 +295,7 @@ func TestVitestRun_RetryIgnoresSkippedResultsForTestsNotRetried(t *testing.T) {
 		t.Fatalf("Vitest.Run(%v, retry=false) FailedTests() diff (-got +want):\n%s", testCases, diff)
 	}
 
-	if err := vitest.Run(result, failedTests, true); err != nil {
-		t.Fatalf("Vitest.Run(%v, retry=true) error = %v", failedTests, err)
-	}
+	require.ErrorContains(t, vitest.Run(result, failedTests, true), "Vitest finished with failed tests")
 
 	passedTest := result.tests[testIdentifier(plan.TestCase{Scope: "multi", Name: "passes", Path: "multi.spec.js"})]
 	if passedTest.Status != TestStatusPassed {
@@ -359,9 +357,7 @@ func TestVitestRun_RetryNamePattern(t *testing.T) {
 			}
 			vitest := NewVitest(RunnerConfig{TestCommand: "true {{resultPath}}", ResultPath: reportPath})
 			result := NewRunResult(nil)
-			if err := vitest.Run(result, []plan.TestCase{{Path: "multi.spec.js"}}, false); err != nil {
-				t.Fatal(err)
-			}
+			require.ErrorContains(t, vitest.Run(result, []plan.TestCase{{Path: "multi.spec.js"}}, false), "Vitest finished with failed tests")
 			failed := result.FailedTests()
 			want := []plan.TestCase{{Scope: tc.scope, Name: tc.title, Path: "multi.spec.js"}}
 			if diff := cmp.Diff(want, failed); diff != "" {
@@ -391,6 +387,35 @@ func TestVitestRun_RetryNamePattern(t *testing.T) {
 	}
 }
 
+func TestVitestRun_UnreadableFirstReportPreservesCommandResult(t *testing.T) {
+	for _, report := range []string{"missing", "invalid"} {
+		for _, exitCode := range []int{0, 7} {
+			t.Run(fmt.Sprintf("%s/exit%d", report, exitCode), func(t *testing.T) {
+				reportPath := filepath.Join(t.TempDir(), "vitest.json")
+				script := `rm -f "$1"`
+				if report == "invalid" {
+					script = `printf 'invalid JSON' > "$1"`
+				}
+				script += fmt.Sprintf("; exit %d", exitCode)
+				vitest := NewVitest(RunnerConfig{
+					TestCommand: shellquote.Join("sh", "-c", script, "sh", "{{resultPath}}"),
+					ResultPath:  reportPath,
+				})
+				result := NewRunResult(nil)
+				err := vitest.Run(result, []plan.TestCase{{Path: "multi.spec.js"}}, false)
+				if exitCode == 0 {
+					require.NoError(t, err)
+				} else {
+					var exitErr *exec.ExitError
+					require.ErrorAs(t, err, &exitErr)
+					require.Equal(t, exitCode, exitErr.ExitCode())
+				}
+				require.Empty(t, result.FailedTests())
+			})
+		}
+	}
+}
+
 func TestVitestRun_RetryMustPassToClearFailure(t *testing.T) {
 	testFile, err := filepath.Abs("multi.spec.js")
 	if err != nil {
@@ -417,8 +442,11 @@ func TestVitestRun_RetryMustPassToClearFailure(t *testing.T) {
 				if err := os.WriteFile(reportPath, []byte(report), 0600); err != nil {
 					t.Fatal(err)
 				}
-				if err := vitest.Run(result, []plan.TestCase{testCase}, attempt.retry); err != nil {
-					t.Fatal(err)
+				err := vitest.Run(result, []plan.TestCase{testCase}, attempt.retry)
+				if attempt.status == "passed" {
+					require.NoError(t, err)
+				} else {
+					require.ErrorContains(t, err, "Vitest finished with failed tests")
 				}
 			}
 			wantStatus := RunStatusFailed

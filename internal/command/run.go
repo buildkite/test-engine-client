@@ -138,9 +138,6 @@ func Run(ctx context.Context, cfg *config.Config, testListFilename string) error
 	if runErr == nil && len(runResult.NotRunTests()) > 0 {
 		return cli.Exit("Some tests failed to run; see the report above.", 1)
 	}
-	if runErr == nil && len(runResult.FailedTests()) > 0 {
-		return cli.Exit("Some tests failed; see the report above.", 1)
-	}
 
 	return runErr
 }
