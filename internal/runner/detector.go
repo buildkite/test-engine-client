@@ -13,6 +13,7 @@ func DetectRunner(cfg *config.Config) (TestRunnerWithTargetDiscovery, error) {
 		locationPrefix:         cfg.LocationPrefix,
 		ResultPath:             cfg.ResultPath,
 		RetryTestCommand:       cfg.RetryCommand,
+		SplitByExample:         cfg.SplitByExample,
 		TagFilters:             cfg.TagFilters,
 		TestCommand:            cfg.TestCommand,
 		TestFileExcludePattern: cfg.TestFileExcludePattern,

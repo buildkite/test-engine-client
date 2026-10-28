@@ -148,6 +148,12 @@ func requestTestParams(ctx context.Context, cfg *config.Config, client api.Clien
 		return expandAllTargets(targets, runner)
 	}
 
+	// Go ingestion attributes packages as selectors, not file names. The slow
+	// file filter cannot find them, so opt-in Go splitting expands every package.
+	if cfg.SplitByExample && runner.Name() == "gotest" {
+		return expandAllTargets(targets, runner)
+	}
+
 	if !shouldFilterAndSplitSelectorFiles(cfg, runner) {
 		return encodeRequestTargets(targets), nil
 	}
@@ -269,7 +275,7 @@ func getExamplesWithPrefix(filePaths []string, testRunner runner.TestRunner) ([]
 	return examples, nil
 }
 
-// expandAllTargets splits every target into examples to support tag filtering.
+// expandAllTargets splits every target into examples for tag filtering or Go.
 func expandAllTargets(targets []requestTarget, runner runner.TestRunner) (api.TestPlanParamsTest, error) {
 	debug.Printf("Splitting all %d files", len(targets))
 	filePaths := make([]string, 0, len(targets))
@@ -284,9 +290,23 @@ func expandAllTargets(targets []requestTarget, runner runner.TestRunner) (api.Te
 
 	debug.Printf("Got %d examples from all files", len(examples))
 
-	return api.TestPlanParamsTest{
+	params := api.TestPlanParamsTest{
 		Examples: exampleParamsFromTestCases(examples),
-	}, nil
+	}
+	if runner.Name() == "gotest" {
+		// Retain packages with no listable tests (for example benchmark-only
+		// packages), so their normal package/TestMain execution is not lost.
+		expanded := make(map[string]bool, len(examples))
+		for _, example := range examples {
+			expanded[example.Path] = true
+		}
+		for _, target := range targets {
+			if !expanded[target.file.Path] {
+				params.Selectors = append(params.Selectors, api.TestPlanParamsSelector{Value: target.value})
+			}
+		}
+	}
+	return params, nil
 }
 
 // filterAndExpandTargets filters targets through the Test Engine API, expands filtered targets

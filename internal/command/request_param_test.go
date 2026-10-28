@@ -16,6 +16,8 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/buildkite/test-engine-client/v3/internal/runner"
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPrintPlanningRequest(t *testing.T) {
@@ -274,6 +276,52 @@ func TestCreateRequestParams_GoTestSelectorSplitting(t *testing.T) {
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("createRequestParam() diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestCreateRequestParams_GoIndividualTests(t *testing.T) {
+	t.Chdir("../runner/testdata/go-examples")
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("Go expansion must not call the file-based filter API: %s", r.URL.Path)
+		fmt.Fprint(w, `{"tests":[]}`)
+	}))
+	defer svr.Close()
+	client := api.NewClient(api.ClientConfig{ServerBaseURL: svr.URL})
+	for _, prefix := range []string{"", "monorepo/go"} {
+		t.Run(prefix, func(t *testing.T) {
+			cfg := config.Config{
+				TestRunner: "gotest", SplitByExample: true, LocationPrefix: prefix,
+				TestCommand: "go test -json {{packages}}", ResultPath: t.TempDir() + "/report",
+			}
+			testRunner, err := runner.DetectRunner(&cfg)
+			require.NoError(t, err)
+			params, err := createRequestParam(context.Background(), &cfg, []string{
+				"example.com/splitting/one", "example.com/splitting/two", "example.com/splitting/empty",
+			}, *client, testRunner)
+			require.NoError(t, err)
+			require.Len(t, params.Tests.Examples, 9)
+			assert.Equal(t, []api.TestPlanParamsSelector{{Value: "example.com/splitting/empty"}}, params.Tests.Selectors)
+			var task plan.Task
+			for _, example := range params.Tests.Examples {
+				wantPath := example.Scope
+				if prefix != "" {
+					wantPath = prefix + "/" + wantPath
+				}
+				assert.Equal(t, wantPath, example.Path)
+				assert.Equal(t, plan.TestCaseFormatExample, example.Format)
+				if example.Scope == "example.com/splitting/one" && example.Name == "TestAlpha" ||
+					example.Scope == "example.com/splitting/two" && example.Name == "TestShared" {
+					task.Tests = append(task.Tests, plan.TestCase{
+						Format: example.Format, Path: example.Path, Scope: example.Scope, Name: example.Name,
+					})
+				}
+			}
+			require.Len(t, task.Tests, 2)
+			require.NoError(t, trimTaskLocationPrefix(&task, prefix))
+			result := runner.NewRunResult(nil)
+			require.NoError(t, testRunner.Run(result, task.Tests, false))
+			assert.Equal(t, runner.RunStatistics{Total: 2, PassedOnFirstRun: 2}, result.Statistics())
+		})
 	}
 }
 

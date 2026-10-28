@@ -1,5 +1,6 @@
 # Changelog
 ## Unreleased
+- Add opt-in [individual-test splitting for Go](./docs/gotest.md#individual-test-splitting) with `BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true`. It discovers tests in every package; dynamic subtests stay with their top-level parent.
 - Support Test Scheduler acknowledging heartbeats after a pool is consumed, so a heartbeat racing successful final completion does not fail the job. Requires Test Scheduler support on the server.
 
 ## 3.4.1 - 2026-10-23

@@ -42,6 +42,7 @@ var (
 	_ TestTargetDiscoverer = (*Vitest)(nil)
 
 	_ ExampleDiscoverer = (*Cucumber)(nil)
+	_ ExampleDiscoverer = (*GoTest)(nil)
 	_ ExampleDiscoverer = (*Playwright)(nil)
 	_ ExampleDiscoverer = (*Pytest)(nil)
 	_ ExampleDiscoverer = (*Rspec)(nil)
