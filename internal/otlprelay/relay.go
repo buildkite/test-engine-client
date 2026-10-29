@@ -525,8 +525,13 @@ func (r *Relay) nextBatch() (*batch, bool) {
 	if len(pending.members) > 1 {
 		// ExportTraceServiceRequest contains repeated resource_spans. Protobuf
 		// concatenation merges those fields without decoding/re-encoding spans.
-		pending.body = body
-		pending.contentEncoding = ""
+		var compressed bytes.Buffer
+		writer := gzip.NewWriter(&compressed)
+		// bytes.Buffer writes cannot fail.
+		_, _ = writer.Write(body)
+		_ = writer.Close()
+		pending.body = compressed.Bytes()
+		pending.contentEncoding = "gzip"
 	}
 	return &pending, true
 }
