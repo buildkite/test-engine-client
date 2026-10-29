@@ -2,6 +2,7 @@ package otlprelay
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -32,6 +33,9 @@ const (
 	maxRequestBytes           = 900 * 1024
 	defaultQueueCapacity      = 64 * 1024 * 1024
 	queueRequestOverhead      = 1024 // Account for object and slice overhead, even with an empty body.
+	maxBatchBytes             = 512 * 1024
+	maxBatchRequests          = 100
+	defaultBatchWindow        = time.Second
 	defaultRequestTimeout     = 30 * time.Second
 	defaultInitialBackoff     = 250 * time.Millisecond
 	defaultMaxBackoff         = 5 * time.Second
@@ -71,6 +75,7 @@ type Config struct {
 
 	initialBackoff time.Duration
 	maxBackoff     time.Duration
+	batchWindow    time.Duration
 }
 
 // Stats summarizes the distribution of a per-request measurement.
@@ -132,10 +137,9 @@ func (s *sampler[T]) stats() Stats[T] {
 	return stats
 }
 
-// Report summarizes requests delivered or dropped by a relay. ForwardedSize
-// and ForwardedLatency cover forwarded requests only; latency is the duration
-// of each request's successful upstream POST, excluding failed attempts and
-// retry backoff.
+// Report counts original accepted requests and bytes delivered or dropped.
+// ForwardedSize and ForwardedLatency measure successful upstream batches;
+// latency excludes failed attempts and retry backoff.
 type Report struct {
 	ForwardedRequests        int
 	ForwardedBytes           int64
@@ -163,6 +167,12 @@ type request struct {
 	body            []byte
 	contentEncoding string
 	spanStream      string
+	queuedAt        time.Time
+}
+
+type batch struct {
+	request
+	members []*request
 }
 
 type deliveryResult int
@@ -174,7 +184,7 @@ const (
 )
 
 // Relay accepts authenticated OTLP/HTTP protobuf requests on loopback and
-// forwards their byte-exact bodies to Buildkite from one background worker.
+// batches them by span stream for delivery from one background worker.
 type Relay struct {
 	config Config
 
@@ -240,6 +250,9 @@ func New(config Config) (*Relay, error) {
 	}
 	if config.maxBackoff <= 0 {
 		config.maxBackoff = defaultMaxBackoff
+	}
+	if config.batchWindow <= 0 {
+		config.batchWindow = defaultBatchWindow
 	}
 	if config.Logf == nil {
 		config.Logf = func(string, ...any) {}
@@ -408,6 +421,7 @@ func (r *Relay) enqueue(req *request) bool {
 	if !r.accepting || r.queuedSize+size > r.config.QueueCapacity {
 		return false
 	}
+	req.queuedAt = time.Now()
 	r.queue = append(r.queue, req)
 	r.queuedSize += size
 	r.signal()
@@ -425,7 +439,7 @@ func (r *Relay) forward() {
 	defer close(r.done)
 
 	for {
-		req, ok := r.nextRequest()
+		req, ok := r.nextBatch()
 		if !ok {
 			if r.ctx.Err() != nil {
 				r.dropRemainingAtDeadline()
@@ -433,7 +447,7 @@ func (r *Relay) forward() {
 			return
 		}
 
-		result, latency := r.deliver(req)
+		result, latency := r.deliver(&req.request, len(req.members))
 		switch result {
 		case deliveryForwarded:
 			r.complete(req, true, latency)
@@ -446,31 +460,95 @@ func (r *Relay) forward() {
 	}
 }
 
-func (r *Relay) nextRequest() (*request, bool) {
+func (r *Relay) nextBatch() (*batch, bool) {
+	var pending batch
+	var body []byte
+	index := 0
 	for {
-		r.mu.Lock()
-		if len(r.queue) > 0 {
-			req := r.queue[0]
-			r.mu.Unlock()
-			return req, true
-		}
-		if r.draining {
-			r.mu.Unlock()
+		if r.ctx.Err() != nil {
 			return nil, false
 		}
+		r.mu.Lock()
+		if index < len(r.queue) {
+			req := r.queue[index]
+			index++
+			r.mu.Unlock()
+			if len(pending.members) > 0 && req.spanStream != pending.spanStream {
+				continue
+			}
+			decoded, ok := batchBody(req)
+			if !ok || len(body)+len(decoded) > maxBatchBytes {
+				if len(pending.members) == 0 {
+					// Preserve oversized or invalid gzip requests as-is.
+					return &batch{request: *req, members: []*request{req}}, true
+				}
+				break
+			}
+			if len(pending.members) == 0 {
+				pending.request = *req
+			}
+			pending.members = append(pending.members, req)
+			body = append(body, decoded...)
+			if len(body) >= maxBatchBytes || len(pending.members) >= maxBatchRequests {
+				break
+			}
+			continue
+		}
+		draining := r.draining
 		r.mu.Unlock()
+		if draining {
+			break
+		}
 
+		var timeout <-chan time.Time
+		var timer *time.Timer
+		if len(pending.members) > 0 {
+			remaining := time.Until(pending.queuedAt.Add(r.config.batchWindow))
+			if remaining <= 0 {
+				break
+			}
+			timer = time.NewTimer(remaining)
+			timeout = timer.C
+		}
 		select {
 		case <-r.wake:
+		case <-timeout:
 		case <-r.ctx.Done():
-			return nil, false
+		}
+		if timer != nil {
+			timer.Stop()
 		}
 	}
+	if len(pending.members) == 0 {
+		return nil, false
+	}
+	if len(pending.members) > 1 {
+		// ExportTraceServiceRequest contains repeated resource_spans. Protobuf
+		// concatenation merges those fields without decoding/re-encoding spans.
+		pending.body = body
+		pending.contentEncoding = ""
+	}
+	return &pending, true
+}
+
+// Bound decompression as well as batch size. Requests that cannot fit in a
+// batch are forwarded alone, retaining their original encoding and bytes.
+func batchBody(req *request) ([]byte, bool) {
+	if req.contentEncoding != "gzip" {
+		return req.body, len(req.body) <= maxBatchBytes
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(req.body))
+	if err != nil {
+		return nil, false
+	}
+	defer reader.Close()
+	body, err := io.ReadAll(io.LimitReader(reader, maxBatchBytes+1))
+	return body, err == nil && len(body) <= maxBatchBytes
 }
 
 // deliver returns the delivery result and, for a forwarded request, the
 // duration of the successful upstream POST.
-func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
+func (r *Relay) deliver(queued *request, count int) (deliveryResult, time.Duration) {
 	backoff := r.config.initialBackoff
 	for {
 		token, err := r.authorizationToken()
@@ -519,7 +597,7 @@ func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 			case status >= 200 && status < 300:
 				return deliveryForwarded, sendLatency
 			case status != http.StatusRequestTimeout && status != http.StatusTooManyRequests && status < 500:
-				r.recordRefusal(status, message, queued.spanStream)
+				r.recordRefusal(status, message, queued.spanStream, count)
 				return deliveryPermanentFailure, 0
 			}
 		}
@@ -538,7 +616,7 @@ func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 	}
 }
 
-func (r *Relay) recordRefusal(status int, message, stream string) {
+func (r *Relay) recordRefusal(status int, message, stream string, count int) {
 	r.mu.Lock()
 	first := false
 	index := slices.IndexFunc(r.report.Refusals, func(refusal Refusal) bool {
@@ -556,14 +634,14 @@ func (r *Relay) recordRefusal(status int, message, stream string) {
 		r.report.Refusals = append(r.report.Refusals, Refusal{Status: status, Message: message})
 	}
 	refusal := &r.report.Refusals[index]
-	refusal.Requests++
+	refusal.Requests += count
 	switch strings.ToLower(strings.TrimSpace(stream)) {
 	case "test":
-		refusal.TestRequests++
+		refusal.TestRequests += count
 	case "child":
-		refusal.ChildRequests++
+		refusal.ChildRequests += count
 	default:
-		refusal.UnlabelledRequests++
+		refusal.UnlabelledRequests += count
 	}
 	r.mu.Unlock()
 	if first {
@@ -691,24 +769,29 @@ func (r *Relay) clampRetryDelay(delay time.Duration) time.Duration {
 	return min(drainDelay, remaining)
 }
 
-func (r *Relay) complete(req *request, forwarded bool, latency time.Duration) {
+func (r *Relay) complete(req *batch, forwarded bool, latency time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if len(r.queue) == 0 || r.queue[0] != req {
-		return
-	}
-	r.queue[0] = nil
-	r.queue = r.queue[1:]
-	r.queuedSize -= len(req.body) + queueRequestOverhead
+	member := 0
+	r.queue = slices.DeleteFunc(r.queue, func(queued *request) bool {
+		if member >= len(req.members) || queued != req.members[member] {
+			return false
+		}
+		member++
+		r.queuedSize -= len(queued.body) + queueRequestOverhead
+		if forwarded {
+			r.report.ForwardedRequests++
+			r.report.ForwardedBytes += int64(len(queued.body))
+		} else {
+			r.report.DroppedPermanentRequests++
+			r.report.DroppedBytes += int64(len(queued.body))
+		}
+		return true
+	})
 	if forwarded {
-		r.report.ForwardedRequests++
-		r.report.ForwardedBytes += int64(len(req.body))
 		r.sizeSampler.observe(int64(len(req.body)))
 		r.latencySampler.observe(latency)
-	} else {
-		r.report.DroppedPermanentRequests++
-		r.report.DroppedBytes += int64(len(req.body))
 	}
 }
 
