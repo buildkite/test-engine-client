@@ -671,7 +671,12 @@ func (r *Relay) waitForRetry(delay time.Duration) bool {
 		}
 		select {
 		case <-timer.C:
-			return true
+			// An expired deadline clamps the delay to zero. Do not retry in a
+			// tight loop while Drain's goroutine is still waking up to cancel.
+			r.mu.Lock()
+			deadline := r.drainDeadline
+			r.mu.Unlock()
+			return r.ctx.Err() == nil && (deadline.IsZero() || time.Now().Before(deadline))
 		case <-drainStarted:
 			timer.Stop()
 		case <-r.ctx.Done():
