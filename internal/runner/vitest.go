@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
 	"github.com/kballard/go-shellquote"
+	"github.com/urfave/cli/v3"
 )
 
 // Vitest is a first-class runner for the Vitest test framework.
@@ -20,6 +21,8 @@ import (
 // the default test/retry commands and the result format identifier.
 type Vitest struct {
 	RunnerConfig
+	// Keep original suite boundaries for retry matching without changing collector identities.
+	retryNames map[string][]string
 }
 
 func NewVitest(v RunnerConfig) Vitest {
@@ -37,6 +40,7 @@ func NewVitest(v RunnerConfig) Vitest {
 
 	return Vitest{
 		RunnerConfig: v,
+		retryNames:   make(map[string][]string),
 	}
 }
 
@@ -91,16 +95,12 @@ func (v Vitest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 	report, parseErr := ParseJestReport(v.ResultPath)
 	if parseErr != nil {
 		fmt.Printf("Buildkite Test Engine Client: Failed to read Vitest output, tests will not be retried: %v\n", parseErr)
+		if cmdErr == nil && len(result.FailedTests()) > 0 {
+			return cli.Exit("Vitest finished with failed tests; see the report above", 1)
+		}
 		// We don't want to fail the build if we fail to parse the report,
 		// therefore we return the command error (which can be nil), instead of the parse error.
 		return cmdErr
-	}
-
-	retryTestLookup := map[string]bool{}
-	if retry {
-		for _, testCase := range testCases {
-			retryTestLookup[testIdentifier(testCase)] = true
-		}
 	}
 
 	for _, testResult := range report.TestResults {
@@ -146,12 +146,25 @@ func (v Vitest) Run(result *RunResult, testCases []plan.TestCase, retry bool) er
 				Scope: strings.Join(example.AncestorTitles, " "),
 				Path:  testPath,
 			}
-			if retry && status == TestStatusSkipped && !retryTestLookup[testIdentifier(testCase)] {
+			// A skipped assertion on a name-filtered retry didn't run, even if it
+			// was requested. Keep its earlier result rather than clearing a failure.
+			if retry && status == TestStatusSkipped {
 				continue
 			}
 
+			// Vitest 4 matches space-separated names; Vitest 5 uses " > ".
+			// JSON fullName still uses spaces in both, so derive both from titles.
+			titles := append(slices.Clone(example.AncestorTitles), example.Title)
+			v.retryNames[testIdentifier(testCase)] = slices.Compact([]string{
+				strings.Join(titles, " "),
+				strings.Join(titles, " > "),
+			})
 			result.RecordTestResult(testCase, status)
 		}
+	}
+
+	if cmdErr == nil && len(result.FailedTests()) > 0 {
+		return cli.Exit("Vitest finished with failed tests; see the report above", 1)
 	}
 
 	return cmdErr
@@ -178,16 +191,25 @@ func (v Vitest) CommandNameAndArgs(testCases []plan.TestCase, retry bool) (strin
 			return "", []string{}, fmt.Errorf("couldn't find '{{testNamePattern}}' sentinel in retry command")
 		}
 
-		escapedTestCases := make([]string, len(testCases))
-		for i, testCase := range testCases {
-			fullName := testCase.Name
-			if testCase.Scope != "" {
-				fullName = fmt.Sprintf("%s %s", testCase.Scope, testCase.Name)
+		var escapedTestCases []string
+		for _, testCase := range testCases {
+			names := v.retryNames[testIdentifier(testCase)]
+			if len(names) == 0 {
+				// Direct callers may not have parsed a report. Preserve the existing
+				// space-separated name; suite boundaries cannot be recovered from Scope.
+				fullName := testCase.Name
+				if testCase.Scope != "" {
+					fullName = testCase.Scope + " " + testCase.Name
+				}
+				names = []string{fullName}
 			}
-			escapedTestCases[i] = regexp.QuoteMeta(fullName)
+			for _, name := range names {
+				escapedTestCases = append(escapedTestCases, regexp.QuoteMeta(name))
+			}
 		}
 
-		testNamePattern := fmt.Sprintf("(%s)", strings.Join(escapedTestCases, "|"))
+		// Match whole names, not tests whose names merely contain a failed name.
+		testNamePattern := fmt.Sprintf("^(%s)$", strings.Join(escapedTestCases, "|"))
 		words = slices.Replace(words, idx, idx+1, testNamePattern)
 
 		testExamplesIdx := slices.Index(words, "{{testExamples}}")

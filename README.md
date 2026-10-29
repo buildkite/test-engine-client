@@ -555,6 +555,8 @@ bktec may exit with a variety of exit statuses, outlined below:
 - If the test runner (e.g. RSpec) exits cleanly, the exit status of
   the runner is returned. This will likely be 0 for successful test runs, 1 for
   failing test runs, but may be any other error status returned by the runner.
+  If Vitest exits with status 0 but non-muted test failures remain from an
+  earlier attempt, bktec exits with status 1.
 - If the test runner is terminated by an OS level signal, such as SIGSEGV or
   SIGABRT, the exit status returned will be equal to 128 plus the signal number.
   For example, if the runner raises a SIGSEGV, the exit status will be (128 +
