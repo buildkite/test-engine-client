@@ -45,6 +45,7 @@ func TestRelayBatchesRequests(t *testing.T) {
 		wantStream   []string
 		wantEncoding []string
 		wait         bool
+		maxRequests  int
 	}{
 		{name: "window", bodies: [][]byte{a, b, c}, wantBodies: [][]byte{join(a, b, c)}, wait: true},
 		{name: "drain", bodies: [][]byte{a, b, c}, wantBodies: [][]byte{join(a, b, c)}},
@@ -56,7 +57,8 @@ func TestRelayBatchesRequests(t *testing.T) {
 		{name: "streams", bodies: [][]byte{a, b, c}, gzip: true, streams: []string{"test", "child", "test"}, wantBodies: [][]byte{join(a, c), b}, wantStream: []string{"test", "child"}},
 		{name: "retry whole batch", bodies: [][]byte{a, b, c}, statuses: []int{429, 503, 200}, wantBodies: [][]byte{join(a, b, c), join(a, b, c), join(a, b, c)}},
 		{name: "refuse whole batch", bodies: [][]byte{a, b, c}, statuses: []int{403}, wantBodies: [][]byte{join(a, b, c)}},
-		{name: "request cap", bodies: slices.Repeat([][]byte{a}, 101), wantBodies: [][]byte{bytes.Repeat(a, 100), a}, wantEncoding: []string{"gzip", ""}, wait: true},
+		{name: "many small requests", bodies: slices.Repeat([][]byte{a}, 101), wantBodies: [][]byte{bytes.Repeat(a, 101)}},
+		{name: "request cap", maxRequests: 3, bodies: slices.Repeat([][]byte{a}, 4), wantBodies: [][]byte{bytes.Repeat(a, 3), a}, wantEncoding: []string{"gzip", ""}, wait: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,6 +110,7 @@ func TestRelayBatchesRequests(t *testing.T) {
 				RunKey:           "build-id",
 				TokenSource:      staticToken("oidc-token"),
 				batchWindow:      time.Second,
+				maxBatchRequests: tc.maxRequests,
 			})
 			if tc.name == "window" {
 				time.Sleep(200 * time.Millisecond) // Idle time must not consume the batch window.

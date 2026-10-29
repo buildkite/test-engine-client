@@ -264,12 +264,12 @@ requests and prints the number of forwarded and dropped requests. Requests over
 
 Accepted requests remain in memory only. The relay batches requests with the
 same span stream for up to one second from the first request's acceptance,
-flushing sooner at 512 KiB of decompressed protobuf or 100 requests. A request
-larger than the batch limit is forwarded alone. Shutdown flushes pending batches
-without waiting for that window. Retries and permanent refusals apply to the
-whole batch, so one malformed payload can cause other requests in its batch to
-be refused too. Forwarded and dropped counts refer to original requests; size
-and upstream-latency distributions describe upstream uploads.
+flushing sooner at 512 KiB of decompressed protobuf (about 300 test results).
+A request larger than the batch limit is forwarded alone. Shutdown flushes
+pending batches without waiting for that window. Retries and permanent refusals
+apply to the whole batch, so one malformed payload can cause other requests in
+its batch to be refused too. Forwarded and dropped counts refer to original
+requests; size and upstream-latency distributions describe upstream uploads.
 
 The child resource also receives
 `buildkite.otlp.endpoint=<loopback URL>` through

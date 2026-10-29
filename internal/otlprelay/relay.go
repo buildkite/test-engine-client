@@ -33,8 +33,7 @@ const (
 	maxRequestBytes           = 900 * 1024
 	defaultQueueCapacity      = 64 * 1024 * 1024
 	queueRequestOverhead      = 1024 // Account for object and slice overhead, even with an empty body.
-	maxBatchBytes             = 512 * 1024
-	maxBatchRequests          = 100
+	defaultMaxBatchRequests   = 5000 // Bounds tiny or empty requests; real spans reach maxBatchBytes first.
 	defaultBatchWindow        = time.Second
 	defaultRequestTimeout     = 30 * time.Second
 	defaultInitialBackoff     = 250 * time.Millisecond
@@ -42,6 +41,13 @@ const (
 	defaultTokenLifetime      = 2 * time.Hour
 	defaultTokenRefreshLeeway = 5 * time.Minute
 )
+
+// Batches are capped by decompressed size, which also bounds them on the wire:
+// gzip cannot grow 512 KiB past the receiver's 900 KiB limit. Larger batches
+// risk Test Engine ingestion's per-request limits (8 MiB decoded, 1 MiB of
+// backtraces), which drop data after the receiver has accepted it. Passing
+// test spans reach this cap at about 300 per upload.
+const maxBatchBytes = 512 * 1024
 
 // Keep detailed reasons bounded even if a receiver includes a different request
 // ID in every message. Further reasons are counted together per HTTP status.
@@ -73,9 +79,10 @@ type Config struct {
 	HTTPClient   *http.Client
 	Logf         func(string, ...any)
 
-	initialBackoff time.Duration
-	maxBackoff     time.Duration
-	batchWindow    time.Duration
+	initialBackoff   time.Duration
+	maxBackoff       time.Duration
+	batchWindow      time.Duration
+	maxBatchRequests int
 }
 
 // Stats summarizes the distribution of a per-request measurement.
@@ -253,6 +260,9 @@ func New(config Config) (*Relay, error) {
 	}
 	if config.batchWindow <= 0 {
 		config.batchWindow = defaultBatchWindow
+	}
+	if config.maxBatchRequests <= 0 {
+		config.maxBatchRequests = defaultMaxBatchRequests
 	}
 	if config.Logf == nil {
 		config.Logf = func(string, ...any) {}
@@ -489,7 +499,7 @@ func (r *Relay) nextBatch() (*batch, bool) {
 			}
 			pending.members = append(pending.members, req)
 			body = append(body, decoded...)
-			if len(body) >= maxBatchBytes || len(pending.members) >= maxBatchRequests {
+			if len(body) >= maxBatchBytes || len(pending.members) >= r.config.maxBatchRequests {
 				break
 			}
 			continue
