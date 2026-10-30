@@ -74,11 +74,27 @@ func poolWork(ctx context.Context, cfg *config.Config, files string, retries int
 	if cfg.PoolID == "" && cfg.MaxParallelism > 0 && pool.Parallelism != nil {
 		fmt.Fprintf(os.Stderr, "  Parallelism: %d (recommended)\n", *pool.Parallelism)
 	}
+	var checkJob func(context.Context) (bool, error)
+	if cfg.JobID != "" {
+		checkJob = func(ctx context.Context) (bool, error) {
+			return client.WaitForPoolJob(ctx, pool.ID, cfg.JobID)
+		}
+	}
 	if pool.State == "consumed" {
-		// A job retry can't re-run a consumed pool's tests, so passing would hide
-		// the failures that made the job red. A pool without failures is fine: its
-		// entries finished on other workers, e.g. after a spot termination.
-		if cfg.JobRetryCount > 0 {
+		legacy := checkJob == nil
+		if checkJob != nil {
+			failed, err := checkJob(ctx)
+			var unavailable *api.NotFoundError
+			if err != nil && !errors.As(err, &unavailable) {
+				return err
+			}
+			if failed {
+				return cli.Exit("This job participated in a terminal Test Scheduler failure.", 1)
+			}
+			legacy = unavailable != nil
+		}
+		// Keep the previous retry behavior without a job ID or job API support.
+		if legacy && cfg.JobRetryCount > 0 {
 			results, err := client.WaitForPoolResults(ctx, pool.ID)
 			if err != nil {
 				return err
@@ -98,7 +114,7 @@ func poolWork(ctx context.Context, cfg *config.Config, files string, retries int
 		return fmt.Errorf("test pool %s is missing its muted tests snapshot", pool.ID)
 	}
 	debug.Printf("Pool ready (state=%s); starting runner", pool.State)
-	return runPool(ctx, client, pool, retries, leaseLog, run)
+	return runPool(ctx, client, pool, retries, leaseLog, run, checkJob)
 }
 
 // poolExecFallback runs this job's share of a static split when Test Scheduler
@@ -143,7 +159,7 @@ func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files 
 	}
 	// Local leases are an implementation detail; like bktec run, show only the
 	// runner's output and the final result.
-	return runPool(ctx, scheduler, api.Pool{ID: "fallback", State: "consuming"}, retries, log.New(io.Discard, "", 0), run)
+	return runPool(ctx, scheduler, api.Pool{ID: "fallback", State: "consuming"}, retries, log.New(io.Discard, "", 0), run, nil)
 }
 
 // fallbackLeaseTTL is how long a local fallback lease stays owned between
@@ -182,16 +198,16 @@ func (f *fallbackScheduler) CompleteLease(context.Context, string, string, []api
 
 func (f *fallbackScheduler) ReleaseLease(context.Context, string, string) error { return nil }
 
-func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries int, leases *log.Logger, run poolRunner) error {
+func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries int, leases *log.Logger, run poolRunner, checkJob func(context.Context) (bool, error)) error {
 	fmt.Println("+++ Buildkite Test Engine Client: Running tests")
-	ctx, cancel := context.WithCancel(ctx)
+	workCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	source := newPoolSource(cancel)
 	source.leaseLog = leases
 	source.connected = make(chan struct{})
 	done := make(chan struct{})
-	go func() { defer close(done); source.work(ctx, client, pool, retries) }()
-	err := run(ctx, source)
+	go func() { defer close(done); source.work(workCtx, client, pool, retries) }()
+	err := run(workCtx, source)
 	cancel()
 	<-done
 	outcome := source.outcome()
@@ -199,6 +215,22 @@ func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries i
 	debug.Printf("Pool runner stopped (runner error=%v, worker error=%v)", err, outcome)
 	if err == nil && outcome == nil {
 		fmt.Fprintf(os.Stdout, "pool execution: passed attempts: %d; failed attempts: 0; errored attempts: 0\n", source.passedAttempts)
+	}
+	// Execution and accounting failures must not be masked by a successful
+	// Scheduler outcome. Attempt failures alone defer to the job's contribution.
+	if err == nil && source.err == nil && checkJob != nil {
+		failed, checkErr := checkJob(ctx)
+		var unavailable *api.NotFoundError
+		if !errors.As(checkErr, &unavailable) {
+			if checkErr != nil {
+				return checkErr
+			}
+			if failed {
+				return cli.Exit("This job participated in a terminal Test Scheduler failure.", 1)
+			}
+			return nil
+		}
+		debug.Printf("Job failure API unavailable; using local attempt results")
 	}
 	if err == nil && source.err == nil && source.erroredAttempts == 0 && source.failedAttempts > 0 {
 		return cli.Exit(outcome, 1)
