@@ -279,15 +279,21 @@ func TestPoolExecSuppliedConsumedIDSkipsRunnerAndPlanning(t *testing.T) {
 	}
 }
 
-func TestPoolExecRetriedJobConsumedPoolFailsOnlyWithPoolFailures(t *testing.T) {
+func TestPoolExecRetriedJobConsumedPool(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		results string
-		wantErr string
+		name         string
+		results      string
+		wantErr      string
+		jobID        string
+		jobStatus    int
+		participated bool
 	}{
-		{"no failures", `{"passed":3,"failed":0,"errored":0}`, ""},
-		{"failed attempts", `{"passed":3,"failed":2,"errored":0}`, "already finished with 2 failed and 0 errored attempts"},
-		{"errored attempts", `{"passed":3,"failed":0,"errored":1}`, "already finished with 0 failed and 1 errored attempts"},
+		{name: "no job ID no failures", results: `{"passed":3,"failed":0,"errored":0}`},
+		{name: "no job ID failed attempts", results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
+		{name: "no job ID errored attempts", results: `{"passed":3,"failed":0,"errored":1}`, wantErr: "already finished with 0 failed and 1 errored attempts"},
+		{name: "unrelated failures", jobID: "job", jobStatus: 200},
+		{name: "participated", jobID: "job", jobStatus: 200, participated: true, wantErr: "participated in a terminal"},
+		{name: "job API unavailable", jobID: "job", jobStatus: 404, results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -295,7 +301,13 @@ func TestPoolExecRetriedJobConsumedPoolFailsOnlyWithPoolFailures(t *testing.T) {
 				case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing":
 					_, _ = io.WriteString(w, `{"id":"existing","state":"consumed","muted_tests":[]}`)
 				case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/metrics":
+					if tc.jobStatus == 200 {
+						t.Error("job outcome must not depend on pool-wide metrics")
+					}
 					_, _ = io.WriteString(w, `{"pool":{"id":"existing","state":"consumed","drained":true},"attempts":{"total":5,"results":`+tc.results+`}}`)
+				case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/jobs/job":
+					w.WriteHeader(tc.jobStatus)
+					fmt.Fprintf(w, `{"pool":{"id":"existing","state":"consumed"},"job":{"id":"job","participated_in_terminal_failure":%t}}`, tc.participated)
 				default:
 					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 					http.Error(w, "unexpected request", http.StatusBadRequest)
@@ -304,6 +316,7 @@ func TestPoolExecRetriedJobConsumedPoolFailsOnlyWithPoolFailures(t *testing.T) {
 			defer server.Close()
 			cfg := config.New()
 			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.JobRetryCount = "existing", "org", "suite", 1
+			cfg.JobID = tc.jobID
 			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
 			err := PoolExec(context.Background(), &cfg, "", []string{filepath.Join(t.TempDir(), "nonexistent-runner")}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
 			if tc.wantErr == "" {
@@ -662,20 +675,37 @@ func TestPoolExecFallsBackToStaticSplitWhenSchedulerUnavailable(t *testing.T) {
 
 func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing.T) {
 	for _, tc := range []struct {
+		name         string
 		mode, result string
 		wantCode     int
+		jobStatus    int
+		participated bool
+		wantError    string
 	}{
-		{mode: "failure", result: "failed", wantCode: 1},
-		{mode: "unmapped", result: "errored", wantCode: 16},
-		{mode: "crash", result: "errored", wantCode: 19},
+		{name: "no job ID failed", mode: "failure", result: "failed", wantCode: 1},
+		{name: "no job ID errored", mode: "unmapped", result: "errored", wantCode: 16, wantError: "errored attempts: 1"},
+		{name: "no job ID crash", mode: "crash", result: "errored", wantCode: 19},
+		{name: "failed then recovered elsewhere", mode: "failure", result: "failed", jobStatus: 200},
+		{name: "errored then recovered elsewhere", mode: "unmapped", result: "errored", jobStatus: 200},
+		{name: "terminal failure", mode: "failure", result: "failed", jobStatus: 200, participated: true, wantCode: 1},
+		{name: "terminal error", mode: "unmapped", result: "errored", jobStatus: 200, participated: true, wantCode: 1},
+		{name: "crash still fails", mode: "crash", result: "errored", jobStatus: 200, wantCode: 19},
+		{name: "job API unavailable", mode: "failure", result: "failed", jobStatus: 404, wantCode: 1},
+		{name: "job API forbidden", mode: "pass", result: "passed", jobStatus: 403, wantCode: 16, wantError: "forbidden"},
 	} {
-		t.Run(tc.mode, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			acquisitions, completions := 0, 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				base := "/v2/organizations/org/test-scheduler/pools/existing"
 				switch {
 				case r.Method == http.MethodGet && r.URL.Path == base:
 					fmt.Fprint(w, `{"id":"existing","state":"consuming","muted_tests":[]}`)
+				case r.Method == http.MethodGet && r.URL.Path == base+"/jobs/job":
+					if completions != 1 {
+						t.Error("checked job outcome before completing its attempts")
+					}
+					w.WriteHeader(tc.jobStatus)
+					fmt.Fprintf(w, `{"pool":{"id":"existing","state":"consumed"},"job":{"id":"job","participated_in_terminal_failure":%t},"message":"forbidden"}`, tc.participated)
 				case r.Method == http.MethodPost && r.URL.Path == base+"/leases":
 					acquisitions++
 					if acquisitions == 1 {
@@ -704,6 +734,9 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 			t.Setenv("BKTEC_POOL_TEST_FLUSH", filepath.Join(t.TempDir(), "flushed"))
 			cfg := config.New()
 			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug = "existing", "org", "suite"
+			if tc.jobStatus != 0 {
+				cfg.JobID = "job"
+			}
 			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
 			err := PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
 			if completions != 1 {
@@ -711,16 +744,20 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 			}
 			var coded cli.ExitCoder
 			var child *exec.ExitError
-			switch tc.mode {
-			case "failure":
+			switch tc.wantCode {
+			case 0:
+				if err != nil {
+					t.Fatalf("job should pass after recovery elsewhere: %v", err)
+				}
+			case 1:
 				if !errors.As(err, &coded) || coded.ExitCode() != tc.wantCode {
 					t.Fatalf("failed attempts should exit 1: %v", err)
 				}
-			case "unmapped":
-				if err == nil || errors.As(err, &coded) || errors.As(err, &child) || !strings.Contains(err.Error(), "errored attempts: 1") {
-					t.Fatalf("unresolved report should remain an internal error (16): %v", err)
+			case 16:
+				if err == nil || errors.As(err, &coded) || errors.As(err, &child) || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("expected internal error (16): %v", err)
 				}
-			case "crash":
+			case 19:
 				if !errors.As(err, &child) || child.ExitCode() != tc.wantCode {
 					t.Fatalf("runner exit status should be preserved: %v", err)
 				}
@@ -746,7 +783,7 @@ func TestPoolExecRequestsNoLeaseBeforeRunnerConnects(t *testing.T) {
 	opts := runnerexec.Options{StartupTimeout: 500 * time.Millisecond, BatchTimeout: time.Second, ShutdownTimeout: time.Second}
 	err := runPool(context.Background(), f, api.Pool{ID: "pool", State: "consuming"}, 0, log.New(io.Discard, "", 0), func(ctx context.Context, source *poolSource) error {
 		return runnerexec.Run(ctx, exec.Command("sleep", "60"), source, opts)
-	})
+	}, nil)
 	if err == nil || !strings.Contains(err.Error(), "runner startup timeout") {
 		t.Fatalf("err=%v, want runner startup timeout", err)
 	}
