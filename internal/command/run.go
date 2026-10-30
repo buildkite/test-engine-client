@@ -161,11 +161,12 @@ func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
 	}
 
 	relay, err := otlprelay.New(otlprelay.Config{
-		UpstreamEndpoint: cfg.OTLPRelayUpstreamEndpoint,
-		RunKey:           runKey,
-		TokenLifetime:    cfg.OIDCLifetime,
-		CollectorToken:   cfg.UploadToken,
-		InitialToken:     initialToken,
+		UpstreamEndpoint:     cfg.OTLPRelayUpstreamEndpoint,
+		ExperimentalBatching: cfg.OTLPRelayBatching,
+		RunKey:               runKey,
+		TokenLifetime:        cfg.OIDCLifetime,
+		CollectorToken:       cfg.UploadToken,
+		InitialToken:         initialToken,
 		TokenSource: func(ctx context.Context) (string, error) {
 			token, err := cfg.RequestOIDCToken(ctx)
 			// The Buildkite API positively refused (non-retryable 4xx); mark it
@@ -189,10 +190,15 @@ func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
 }
 
 func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
+	var uploads string
+	if report.Batching {
+		uploads = fmt.Sprintf(", %d upstream upload attempt(s)", report.UpstreamUploads)
+	}
 	fmt.Fprintf(w,
-		"bktec OTLP relay: %d request(s) (%s) forwarded, %d dropped permanently, %d dropped at drain deadline, %s dropped\n",
+		"bktec OTLP relay: %d request(s) (%s) forwarded%s, %d dropped permanently, %d dropped at drain deadline, %s dropped\n",
 		report.ForwardedRequests,
 		formatBytes(report.ForwardedBytes),
+		uploads,
 		report.DroppedPermanentRequests,
 		report.DroppedDeadlineRequests,
 		formatBytes(report.DroppedBytes),

@@ -176,6 +176,13 @@ func TestPrintOTLPRelayReport(t *testing.T) {
 		t.Errorf("printOTLPRelayReport output = %q, want no distribution lines: %q", buf.String(), want)
 	}
 	t.Logf("output (nothing forwarded):\n%s", buf.String())
+
+	buf.Reset()
+	printOTLPRelayReport(&buf, otlprelay.Report{Batching: true, UpstreamUploads: 3})
+	want = "bktec OTLP relay: 0 request(s) (0B) forwarded, 3 upstream upload attempt(s), 0 dropped permanently, 0 dropped at drain deadline, 0B dropped\n"
+	if buf.String() != want {
+		t.Errorf("printOTLPRelayReport output = %q, want batch attempts even without success: %q", buf.String(), want)
+	}
 }
 
 func TestPrintOTLPRelayRefusals(t *testing.T) {

@@ -262,6 +262,26 @@ requests and prints the number of forwarded and dropped requests. Requests over
 900 KiB are rejected synchronously, and a full 64 MiB byte queue returns HTTP
 429 so the SDK can apply backpressure.
 
+Opt in to experimental opaque batching with
+`BUILDKITE_TESTS_OTLP_RELAY_BATCHING=true` (or `--otlp-relay-batching`).
+The relay packs requests unchanged, preserving each request's compression and
+grouping only requests of the same span stream. It sends envelopes to the same
+upstream `/v1/traces` endpoint with
+`Content-Type: application/x-buildkite-otlp-batch+protobuf`; it does not
+decompress or merge spans.
+
+This is a comparison experiment, not ready for use: today's receiver accepts
+only `application/x-protobuf` on `/v1/traces`, so batching-enabled runs would be
+refused. The receiver would need to pass envelopes through and ta-ingestion
+would need to unpack them; neither is built. Leave batching off.
+
+Batches contain at most 32 requests and 750 KiB including framing, and wait up
+to 25 ms from the oldest request's arrival. Drain skips that wait. A request too
+large to fit an envelope goes to the original endpoint unchanged. Envelopes
+retry as a whole; a permanent refusal drops every member. The summary still
+counts original requests and bytes, and adds upstream upload attempts (including
+retries and refusals). Batching is off by default.
+
 The child resource also receives
 `buildkite.otlp.endpoint=<loopback URL>` through
 `OTEL_RESOURCE_ATTRIBUTES`. This is a Buildkite-specific attribute—OpenTelemetry
