@@ -45,7 +45,7 @@ const (
 )
 
 // With batching enabled, queued requests are packed byte-for-byte into this
-// envelope and POSTed to the upstream traces endpoint plus "/batch" with
+// envelope and POSTed to the upstream traces endpoint with
 // batchContentType. The receiver publishes each member as its own Kafka record.
 //
 //	package buildkite.test_engine.otlp.v1;
@@ -58,7 +58,7 @@ const (
 //	  string content_encoding = 2; // "" (identity) or "gzip"
 //	}
 const (
-	batchContentType                 = "application/x-buildkite-otlp-batch+protobuf"
+	batchContentType                 = "application/vnd.buildkite.otlp-trace-batch.v1+protobuf"
 	batchRequestsField               = protowire.Number(1)
 	traceRequestBodyField            = protowire.Number(1)
 	traceRequestContentEncodingField = protowire.Number(2)
@@ -94,7 +94,7 @@ type Config struct {
 	HTTPClient   *http.Client
 	Logf         func(string, ...any)
 	// ExperimentalBatching opts in to opaque envelopes of one span stream.
-	// Requires the upstream /batch endpoint to be deployed before enabling.
+	// An envelope refused with HTTP 415 disables batching for the run.
 	ExperimentalBatching bool
 
 	initialBackoff time.Duration
@@ -225,6 +225,7 @@ type request struct {
 	contentEncoding string
 	spanStream      string
 	enqueuedAt      time.Time
+	started         bool
 }
 
 // upload is one upstream POST: a single request forwarded as-is, or a batch
@@ -233,7 +234,6 @@ type upload struct {
 	request
 	members  []*request
 	envelope bool
-	started  bool
 }
 
 // Queues share the total admission budget, including in-flight members.
@@ -250,6 +250,7 @@ const (
 	deliveryForwarded deliveryResult = iota
 	deliveryPermanentFailure
 	deliveryDeadline
+	deliveryBatchUnsupported
 )
 
 // Relay accepts authenticated OTLP/HTTP protobuf requests on loopback and
@@ -269,19 +270,20 @@ type Relay struct {
 	drainStarted chan struct{}
 	done         chan struct{}
 
-	mu              sync.Mutex
-	results         requestQueue
-	children        requestQueue
-	queuedSize      int
-	accepting       bool
-	draining        bool
-	drainDeadline   time.Time
-	drainRetryDelay time.Duration
-	report          Report
-	sizeSampler     sampler[int64]
-	latencySampler  sampler[time.Duration]
-	streams         [3]streamMetrics
-	drainStart      time.Time
+	mu               sync.Mutex
+	results          requestQueue
+	children         requestQueue
+	queuedSize       int
+	accepting        bool
+	draining         bool
+	drainDeadline    time.Time
+	drainRetryDelay  time.Duration
+	report           Report
+	sizeSampler      sampler[int64]
+	latencySampler   sampler[time.Duration]
+	streams          [3]streamMetrics
+	drainStart       time.Time
+	batchingDisabled bool
 
 	// Serialize credential refreshes and terminal-error logging across workers.
 	credentialMu        sync.Mutex
@@ -553,6 +555,9 @@ func (r *Relay) forwardQueue(queue *requestQueue) {
 			r.complete(queue, next, false, 0)
 		case deliveryDeadline:
 			return
+		case deliveryBatchUnsupported:
+			// Members remain queued. The next iteration sends them through the
+			// normal single-request path, without recording a refusal or drop.
 		}
 	}
 }
@@ -586,6 +591,14 @@ func (r *Relay) nextBatch(queue *requestQueue) (*upload, bool) {
 			return nil, false
 		}
 		r.mu.Lock()
+		if r.batchingDisabled {
+			r.mu.Unlock()
+			req, ok := r.nextRequest(queue)
+			if !ok {
+				return nil, false
+			}
+			return singleUpload(req), true
+		}
 		if index < len(queue.requests) {
 			req := queue.requests[index]
 			index++
@@ -706,6 +719,14 @@ func (r *Relay) nextRequest(queue *requestQueue) (*request, bool) {
 func (r *Relay) deliver(queued *upload) (deliveryResult, time.Duration) {
 	backoff := r.config.initialBackoff
 	for {
+		if queued.envelope {
+			r.mu.Lock()
+			disabled := r.batchingDisabled
+			r.mu.Unlock()
+			if disabled {
+				return deliveryBatchUnsupported, 0
+			}
+		}
 		token, err := r.authorizationToken()
 		if err != nil && errors.Is(err, ErrTerminalCredential) {
 			r.credentialMu.Lock()
@@ -753,6 +774,17 @@ func (r *Relay) deliver(queued *upload) (deliveryResult, time.Duration) {
 			switch {
 			case status >= 200 && status < 300:
 				return deliveryForwarded, sendLatency
+			case status == http.StatusUnsupportedMediaType && queued.envelope:
+				r.mu.Lock()
+				first := !r.batchingDisabled
+				r.batchingDisabled = true
+				r.mu.Unlock()
+				if first {
+					r.config.Logf("bktec OTLP relay: upstream does not support trace batches (HTTP 415); disabling batching for this run and resending requests individually")
+					r.results.signal()
+					r.children.signal()
+				}
+				return deliveryBatchUnsupported, 0
 			case status != http.StatusRequestTimeout && status != http.StatusTooManyRequests && status < 500:
 				r.recordRefusal(status, message, queued.spanStream, len(queued.members))
 				return deliveryPermanentFailure, 0
@@ -842,13 +874,11 @@ func (r *Relay) waitForRetry(delay time.Duration) bool {
 }
 
 func (r *Relay) send(queued *upload, token string) (*http.Response, error) {
-	endpoint := r.config.UpstreamEndpoint
 	contentType := "application/x-protobuf"
 	if queued.envelope {
-		endpoint += "/batch"
 		contentType = batchContentType
 	}
-	req, err := http.NewRequestWithContext(r.ctx, http.MethodPost, endpoint, bytes.NewReader(queued.body))
+	req, err := http.NewRequestWithContext(r.ctx, http.MethodPost, r.config.UpstreamEndpoint, bytes.NewReader(queued.body))
 	if err != nil {
 		return nil, err
 	}
@@ -868,11 +898,11 @@ func (r *Relay) send(queued *upload, token string) (*http.Response, error) {
 		metrics := &r.streams[streamIndex(queued.spanStream)]
 		metrics.UploadsOut++
 		metrics.items.observe(int64(len(queued.members)))
-		if !queued.started {
-			for _, member := range queued.members {
+		for _, member := range queued.members {
+			if !member.started {
 				metrics.wait.observe(time.Since(member.enqueuedAt))
+				member.started = true
 			}
-			queued.started = true
 		}
 		r.mu.Unlock()
 	}

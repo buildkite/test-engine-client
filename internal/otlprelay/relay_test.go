@@ -1130,10 +1130,10 @@ func TestRelayBatchingPacksRequestsByteExactInOrder(t *testing.T) {
 		t.Fatalf("upstream uploads = %d, want 1", len(got))
 	}
 	upload := got[0]
-	if upload.path != "/v1/traces/batch" {
-		t.Errorf("upstream path = %q, want /v1/traces/batch", upload.path)
+	if upload.path != "/v1/traces" {
+		t.Errorf("upstream path = %q, want /v1/traces", upload.path)
 	}
-	if upload.contentType != "application/x-buildkite-otlp-batch+protobuf" {
+	if upload.contentType != "application/vnd.buildkite.otlp-trace-batch.v1+protobuf" {
 		t.Errorf("upstream Content-Type = %q", upload.contentType)
 	}
 	if upload.contentEncoding != nil {
@@ -1279,8 +1279,8 @@ func TestRelayBatchingCapsRequestsAndEncodedBytes(t *testing.T) {
 			var gotItems []int
 			var gotBodies []string
 			for _, upload := range receivedUploads(uploads) {
-				if upload.path != "/v1/traces/batch" {
-					t.Errorf("upstream path = %q, want /v1/traces/batch", upload.path)
+				if upload.path != "/v1/traces" {
+					t.Errorf("upstream path = %q, want /v1/traces", upload.path)
 				}
 				items := decodeEnvelope(t, upload.body)
 				if len(upload.body) != len(items)*encodedItemBytes {
@@ -1328,7 +1328,7 @@ func TestRelayBatchingSendsOversizedRequestAlone(t *testing.T) {
 	}
 	for i, want := range []string{"before-01", "after-001"} {
 		upload := got[2*i]
-		if upload.path != "/v1/traces/batch" || upload.contentType != "application/x-buildkite-otlp-batch+protobuf" || !slices.Equal(itemBodies(decodeEnvelope(t, upload.body)), []string{want}) {
+		if upload.path != "/v1/traces" || upload.contentType != "application/vnd.buildkite.otlp-trace-batch.v1+protobuf" || !slices.Equal(itemBodies(decodeEnvelope(t, upload.body)), []string{want}) {
 			t.Errorf("upload %d = %s %q, want an envelope with %q", 2*i, upload.path, upload.body, want)
 		}
 	}
@@ -1391,7 +1391,7 @@ func TestRelayBatchingSendsLoneRequestAfterDefaultLinger(t *testing.T) {
 			if elapsed := upload.at.Sub(start); elapsed < linger || elapsed > linger+500*time.Millisecond {
 				t.Errorf("lone %q request sent after %s, want about %s", stream, elapsed, linger)
 			}
-			if upload.path != "/v1/traces/batch" || strings.Join(upload.spanStream, "") != stream {
+			if upload.path != "/v1/traces" || strings.Join(upload.spanStream, "") != stream {
 				t.Errorf("lone upload = %s with stream %q", upload.path, upload.spanStream)
 			}
 			want := []envelopeItem{{body: "lone", contentEncoding: "gzip"}}
@@ -1591,56 +1591,182 @@ func TestRelayBatchingDeadlineCountsInFlightAndQueuedMembers(t *testing.T) {
 	}
 }
 
-func TestRelayBatchingRefusalDropsEveryMemberPerStream(t *testing.T) {
-	const message = "OTel trace ingest is not available on your organization's plan"
-	endpoint, uploads := recordingUpstream(t, func(w http.ResponseWriter, _ int) {
-		w.Header().Set("Content-Type", "application/x-protobuf")
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write(append([]byte{0x08, 0x07, 0x12, byte(len(message))}, message...))
-	})
-	var logMu sync.Mutex
-	var logs []string
+func TestRelayBatching415FallsBackForBothWorkersAndLaterRequests(t *testing.T) {
+	type item struct{ body, encoding, stream string }
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	_, _ = writer.Write([]byte("opaque\x00gzip spans"))
+	_ = writer.Close()
+	initial := []item{
+		{compressed.String(), "gzip", "test"}, {"\x00plain\xff", "", "test"},
+		{"child gzip bytes", "gzip", "child"}, {"", "", "child"},
+	}
+	later := []item{{"later test", "", "test"}, {"later child", "gzip", "child"}, {"unlabelled", "", ""}, {"unknown", "gzip", "unknown"}}
+	singles := make(chan item, 16)
+	batchStarted := make(chan struct{}, 2)
+	release := make(chan struct{})
+	var envelopes atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		if req.URL.Path != "/v1/traces" || req.Header.Get("Authorization") != `Token token="oidc-token"` || req.Header.Get("Buildkite-Tests-Run-Key") != "build-id" {
+			t.Errorf("unexpected upstream path/headers: %s %v", req.URL.Path, req.Header)
+		}
+		switch req.Header.Get("Content-Type") {
+		case "application/vnd.buildkite.otlp-trace-batch.v1+protobuf":
+			if req.Header.Get("Content-Encoding") != "" {
+				t.Error("envelope has an outer encoding")
+			}
+			if envelopes.Add(1) <= 2 {
+				batchStarted <- struct{}{}
+				<-release // Both workers have an envelope in flight before either sees 415.
+			}
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+		case "application/x-protobuf":
+			singles <- item{string(body), req.Header.Get("Content-Encoding"), req.Header.Get("Buildkite-Tests-Span-Stream")}
+			w.WriteHeader(http.StatusOK)
+		default:
+			t.Errorf("unexpected content type: %q", req.Header.Get("Content-Type"))
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	defer upstream.Close()
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(release) })
+	logs := make(chan string, 8)
 	relay := newTestRelay(t, Config{
-		UpstreamEndpoint:     endpoint,
-		RunKey:               "build-id",
-		TokenSource:          staticToken("oidc-token"),
-		ExperimentalBatching: true,
-		maxLinger:            time.Hour,
-		Logf: func(format string, args ...any) {
-			logMu.Lock()
-			defer logMu.Unlock()
-			logs = append(logs, fmt.Sprintf(format, args...))
-		},
+		UpstreamEndpoint: upstream.URL + "/v1/traces", RunKey: "build-id", TokenSource: staticToken("oidc-token"),
+		ExperimentalBatching: true, maxBatchRequests: 2,
+		Logf: func(format string, args ...any) { logs <- fmt.Sprintf(format, args...) },
 	})
 	var acceptedBytes int64
-	for _, post := range []struct{ body, stream string }{
-		{"test 1", "test"}, {"child 1", "child"}, {"test 2", "test"},
-		{"unlabelled 1", ""}, {"child 2", "child"}, {"test 3", "test"},
-	} {
-		mustPostTraces(t, relay, []byte(post.body), "", post.stream)
+	for _, post := range initial {
+		mustPostTraces(t, relay, []byte(post.body), post.encoding, post.stream)
 		acceptedBytes += int64(len(post.body))
 	}
-
-	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	for range 2 {
+		select {
+		case <-batchStarted:
+		case <-time.After(3 * time.Second):
+			t.Fatal("both envelope uploads did not start")
+		}
+	}
+	releaseOnce.Do(func() { close(release) })
+	collect := func(want []item) {
+		t.Helper()
+		var got []item
+		for range want {
+			select {
+			case post := <-singles:
+				got = append(got, post)
+			case <-time.After(time.Second):
+				t.Fatal("single request did not arrive")
+			}
+		}
+		// Only cross-worker ordering is unspecified; preserve order within a stream.
+		less := func(a, b item) int { return strings.Compare(a.stream, b.stream) }
+		slices.SortStableFunc(got, less)
+		want = slices.Clone(want)
+		slices.SortStableFunc(want, less)
+		if diff := cmp.Diff(want, got, cmp.AllowUnexported(item{})); diff != "" {
+			t.Errorf("single requests (-want +got):\n%s", diff)
+		}
+	}
+	collect(initial)
+	for _, post := range later {
+		mustPostTraces(t, relay, []byte(post.body), post.encoding, post.stream)
+		acceptedBytes += int64(len(post.body))
+	}
+	collect(later) // No linger or new envelope attempts after fallback.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	report := relay.Drain(drainCtx)
-	// Stream metrics are asserted separately; timing depends on worker scheduling.
-	report.Streams = nil
-	want := Report{
-		Batching:                 true,
-		UpstreamUploads:          3,
-		DroppedPermanentRequests: 6,
-		DroppedBytes:             acceptedBytes,
-		Refusals:                 []Refusal{{Status: 403, Message: message, Requests: 6, TestRequests: 3, ChildRequests: 2, UnlabelledRequests: 1}},
+	report := relay.Drain(ctx)
+	if report.ForwardedRequests != 8 || report.ForwardedBytes != acceptedBytes || report.UpstreamUploads != 10 ||
+		report.DroppedPermanentRequests != 0 || report.DroppedDeadlineRequests != 0 || report.DroppedBytes != 0 || len(report.Refusals) != 0 {
+		t.Errorf("report = %+v, want 8 forwarded requests and 10 attempts without refusals/drops", report)
 	}
-	if diff := cmp.Diff(want, report); diff != "" {
-		t.Errorf("Drain report (-want +got):\n%s", diff)
+	if got := envelopes.Load(); got != 2 {
+		t.Errorf("envelopes = %d, want only the initial two", got)
 	}
-	if got := receivedUploads(uploads); len(got) != 3 {
-		t.Errorf("upstream attempts = %d, want one per stream without retries", len(got))
+	if len(singles) != 0 {
+		t.Errorf("unexpected duplicate singles: %d", len(singles))
 	}
-	if len(logs) != 1 || !strings.HasSuffix(logs[0], "after upstream returned HTTP 403: "+message) {
-		t.Errorf("logs = %q, want one diagnostic for the refusal reason", logs)
+	if len(logs) != 1 {
+		t.Fatalf("log messages = %d, want one", len(logs))
+	}
+	if log := <-logs; !strings.Contains(log, "HTTP 415") || !strings.Contains(log, "disabling batching for this run") {
+		t.Errorf("fallback log = %q", log)
+	}
+	if len(report.Streams) != 3 {
+		t.Fatalf("streams = %+v", report.Streams)
+	}
+	for i, want := range []struct {
+		in, out int
+		max     int64
+	}{{3, 4, 2}, {3, 4, 2}, {2, 2, 1}} {
+		stream := report.Streams[i]
+		if stream.RequestsIn != want.in || stream.UploadsOut != want.out || stream.ItemsPerUpload.P50 != 1 || stream.ItemsPerUpload.Max != want.max {
+			t.Errorf("fallback stream report = %+v, want %+v", stream, want)
+		}
+	}
+}
+
+func TestRelayBatchingRefusalDropsEveryMemberPerStream(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestEntityTooLarge} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			const message = "OTel trace ingest is not available on your organization's plan"
+			endpoint, uploads := recordingUpstream(t, func(w http.ResponseWriter, _ int) {
+				w.Header().Set("Content-Type", "application/x-protobuf")
+				w.WriteHeader(status)
+				_, _ = w.Write(append([]byte{0x08, 0x07, 0x12, byte(len(message))}, message...))
+			})
+			var logMu sync.Mutex
+			var logs []string
+			relay := newTestRelay(t, Config{
+				UpstreamEndpoint:     endpoint,
+				RunKey:               "build-id",
+				TokenSource:          staticToken("oidc-token"),
+				ExperimentalBatching: true,
+				maxLinger:            time.Hour,
+				Logf: func(format string, args ...any) {
+					logMu.Lock()
+					defer logMu.Unlock()
+					logs = append(logs, fmt.Sprintf(format, args...))
+				},
+			})
+			var acceptedBytes int64
+			for _, post := range []struct{ body, stream string }{
+				{"test 1", "test"}, {"child 1", "child"}, {"test 2", "test"},
+				{"unlabelled 1", ""}, {"child 2", "child"}, {"test 3", "test"},
+			} {
+				mustPostTraces(t, relay, []byte(post.body), "", post.stream)
+				acceptedBytes += int64(len(post.body))
+			}
+
+			drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			report := relay.Drain(drainCtx)
+			// Stream metrics are asserted separately; timing depends on worker scheduling.
+			report.Streams = nil
+			want := Report{
+				Batching:                 true,
+				UpstreamUploads:          3,
+				DroppedPermanentRequests: 6,
+				DroppedBytes:             acceptedBytes,
+				Refusals:                 []Refusal{{Status: status, Message: message, Requests: 6, TestRequests: 3, ChildRequests: 2, UnlabelledRequests: 1}},
+			}
+			if diff := cmp.Diff(want, report); diff != "" {
+				t.Errorf("Drain report (-want +got):\n%s", diff)
+			}
+			if got := receivedUploads(uploads); len(got) != 3 {
+				t.Errorf("upstream attempts = %d, want one per stream without retries", len(got))
+			}
+			if len(logs) != 1 || !strings.HasSuffix(logs[0], fmt.Sprintf("after upstream returned HTTP %d: %s", status, message)) {
+				t.Errorf("logs = %q, want one diagnostic for the refusal reason", logs)
+			}
+		})
 	}
 }
 

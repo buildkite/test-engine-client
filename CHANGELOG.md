@@ -1,6 +1,6 @@
 # Changelog
 ## Unreleased
-- Add opt-in [OTLP relay batching](./README.md#relay-opentelemetry-traces) that packs requests unchanged into fewer uploads, with per-stream batching and queue statistics. Requires the Rails batch endpoint to be deployed before enabling.
+- Add opt-in [OTLP relay batching](./README.md#relay-opentelemetry-traces) on `/v1/traces` using `application/vnd.buildkite.otlp-trace-batch.v1+protobuf`, with per-stream batching and queue statistics. Fall back to individual uploads when a receiver does not support envelopes.
 - Keep throttled child traces from blocking test-result uploads, and limit children to half the relay's shared queue budget.
 - Fix the OTLP relay continuing to retry uploads after its shutdown drain deadline, and warn when queued test results are dropped at that deadline.
 

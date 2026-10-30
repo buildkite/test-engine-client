@@ -275,15 +275,19 @@ Opt in to opaque envelope batching with
 `BUILDKITE_TESTS_OTLP_RELAY_BATCHING=true` (or `--otlp-relay-batching`).
 The relay packs requests unchanged, preserving each request's compression and
 grouping only requests of the same span stream. It sends envelopes to
-`/v1/traces/batch` (the configured upstream traces endpoint plus `/batch`) with
-`Content-Type: application/x-buildkite-otlp-batch+protobuf`; it does not
+`/v1/traces` (the configured upstream traces endpoint) with
+`Content-Type: application/vnd.buildkite.otlp-trace-batch.v1+protobuf`; it does not
 decompress or merge spans. The receiver publishes each member as its own Kafka
 record, using the envelope's span-stream header.
 
-The Rails batch endpoint in
+Receiver support for envelopes is provided by
 [buildkite/buildkite#37677](https://github.com/buildkite/buildkite/pull/37677)
-must be deployed before enabling batching. Batching is off by default; without
-it, requests still go unchanged to the original `/v1/traces` endpoint.
+on the same endpoint. If an envelope receives HTTP 415 Unsupported Media Type,
+the relay logs once, disables batching for the rest of the run, and resends the
+queued members individually with their original bodies, encodings and stream
+headers. That envelope's 415 is not counted as a refusal or drop. Batching is
+off by default; without it, requests still go unchanged to `/v1/traces` with
+`Content-Type: application/x-protobuf`.
 
 Batches contain at most 1,000 requests and 750 KiB including framing. Test,
 unlabelled and unknown-stream batches linger up to 250 ms from the oldest
@@ -294,10 +298,11 @@ acknowledgement or partial publication followed by a retry may duplicate items.
 
 With batching enabled, the summary adds per-stream requests in, uploads out,
 items per upload (p50 and max), queue wait (p50 and max), and drain time.
-Uploads out and items per upload count HTTP attempts, including retries and
-refusals. Queue wait measures accepted requests until their first HTTP attempt,
-not subsequent retry backoff. Drain time runs from shutdown until the stream's
-last pending request completes or is dropped (zero if none were pending).
+Uploads out and items per upload count HTTP attempts, including retries,
+refusals and a rejected envelope before fallback. Queue wait measures accepted
+requests until their first HTTP attempt, not subsequent retry backoff. Drain
+time runs from shutdown until the stream's last pending request completes or
+is dropped (zero if none were pending).
 Unknown streams are included in unlabelled statistics. Percentiles use bounded
 reservoir samples; maxima and counters are exact.
 
