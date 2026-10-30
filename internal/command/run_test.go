@@ -153,15 +153,19 @@ func TestStartOTLPRelaySeedsUpstreamCredentialFromOIDCUploadToken(t *testing.T) 
 func TestPrintOTLPRelayReport(t *testing.T) {
 	var buf bytes.Buffer
 	printOTLPRelayReport(&buf, otlprelay.Report{
-		ForwardedRequests:        495,
-		ForwardedBytes:           2381932,
-		ForwardedSize:            otlprelay.Stats[int64]{P50: 4812, P90: 14206, Max: 88410},
-		ForwardedLatency:         otlprelay.Stats[time.Duration]{P50: 38123456, P90: 91400000, Max: 412871900},
-		DroppedPermanentRequests: 3,
-		DroppedDeadlineRequests:  2,
-		DroppedBytes:             10240,
+		ForwardedRequests:                 495,
+		ForwardedBytes:                    2381932,
+		ForwardedSize:                     otlprelay.Stats[int64]{P50: 4812, P90: 14206, Max: 88410},
+		ForwardedLatency:                  otlprelay.Stats[time.Duration]{P50: 38123456, P90: 91400000, Max: 412871900},
+		DroppedPermanentRequests:          3,
+		DroppedDeadlineRequests:           4,
+		DroppedDeadlineTestRequests:       2,
+		DroppedDeadlineUnlabelledRequests: 1,
+		DroppedBytes:                      10240,
 	})
-	want := "bktec OTLP relay: 495 request(s) (2.3MiB) forwarded, 3 dropped permanently, 2 dropped at drain deadline, 10KiB dropped\n" +
+	want := "bktec OTLP relay: 495 request(s) (2.3MiB) forwarded, 3 dropped permanently, 4 dropped at drain deadline, 10KiB dropped\n" +
+		"TEST RESULTS MISSING: bktec OTLP relay dropped 2 test-result request(s) still queued at the drain deadline. Those test executions were not uploaded to Buildkite Test Engine.\n" +
+		"TEST RESULTS MAY BE MISSING: bktec OTLP relay dropped 1 unlabelled request(s) still queued at the drain deadline. These requests may have carried test results that were not uploaded to Buildkite Test Engine.\n" +
 		"bktec OTLP relay: request size: p50 4.7KiB, p90 13.9KiB, max 86.3KiB\n" +
 		"bktec OTLP relay: upstream latency: p50 38.12ms, p90 91.4ms, max 412.87ms\n"
 	if buf.String() != want {
@@ -178,8 +182,15 @@ func TestPrintOTLPRelayReport(t *testing.T) {
 	t.Logf("output (nothing forwarded):\n%s", buf.String())
 
 	buf.Reset()
-	printOTLPRelayReport(&buf, otlprelay.Report{Batching: true, UpstreamUploads: 3})
-	want = "bktec OTLP relay: 0 request(s) (0B) forwarded, 3 upstream upload attempt(s), 0 dropped permanently, 0 dropped at drain deadline, 0B dropped\n"
+	printOTLPRelayReport(&buf, otlprelay.Report{Batching: true, UpstreamUploads: 3, Streams: []otlprelay.StreamReport{
+		{Stream: "test", RequestsIn: 7, UploadsOut: 2, ItemsPerUpload: otlprelay.Stats[int64]{P50: 3, Max: 4}, QueueWait: otlprelay.Stats[time.Duration]{P50: 250 * time.Millisecond, Max: 300 * time.Millisecond}, DrainTime: 20 * time.Millisecond},
+		{Stream: "child", RequestsIn: 5, UploadsOut: 1, ItemsPerUpload: otlprelay.Stats[int64]{P50: 5, Max: 5}, QueueWait: otlprelay.Stats[time.Duration]{P50: time.Second, Max: 1100 * time.Millisecond}, DrainTime: 120 * time.Millisecond},
+		{Stream: "unlabelled"},
+	}})
+	want = "bktec OTLP relay: 0 request(s) (0B) forwarded, 3 upstream upload attempt(s), 0 dropped permanently, 0 dropped at drain deadline, 0B dropped\n" +
+		"bktec OTLP relay: test: 7 requests in, 2 uploads out (attempts), items per upload: p50 3, max 4; queue wait: p50 250ms, max 300ms; drain time: 20ms\n" +
+		"bktec OTLP relay: child: 5 requests in, 1 uploads out (attempts), items per upload: p50 5, max 5; queue wait: p50 1s, max 1.1s; drain time: 120ms\n" +
+		"bktec OTLP relay: unlabelled: 0 requests in, 0 uploads out (attempts), items per upload: p50 0, max 0; queue wait: p50 0s, max 0s; drain time: 0s\n"
 	if buf.String() != want {
 		t.Errorf("printOTLPRelayReport output = %q, want batch attempts even without success: %q", buf.String(), want)
 	}

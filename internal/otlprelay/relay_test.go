@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
@@ -262,8 +263,8 @@ func TestRelayStopsMintingAfterTerminalCredentialFailure(t *testing.T) {
 		},
 	})
 
-	for range 2 {
-		resp := postTraces(t, relay, []byte("spans"), "Bearer "+relay.token, "")
+	for _, stream := range []string{"test", "child"} {
+		resp := postTraces(t, relay, []byte("spans"), "Bearer "+relay.token, "", stream)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("POST /v1/traces status = %d, want 200", resp.StatusCode)
 		}
@@ -470,12 +471,15 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 		_, _ = w.Write(cases[index].body)
 	}))
 	defer upstream.Close()
+	var logMu sync.Mutex
 	var logs []string
 	relay := newTestRelay(t, Config{
 		UpstreamEndpoint: upstream.URL,
 		RunKey:           "build-id",
 		TokenSource:      staticToken("oidc-token"),
 		Logf: func(format string, args ...any) {
+			logMu.Lock()
+			defer logMu.Unlock()
 			logs = append(logs, fmt.Sprintf(format, args...))
 		},
 	})
@@ -495,7 +499,12 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 	drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	report := relay.Drain(drainCtx)
-	if diff := cmp.Diff(wantRefusals, report.Refusals); diff != "" {
+	if diff := cmp.Diff(wantRefusals, report.Refusals, cmpopts.SortSlices(func(a, b Refusal) bool {
+		if a.Status != b.Status {
+			return a.Status < b.Status
+		}
+		return a.Message < b.Message
+	})); diff != "" {
 		t.Errorf("refusals (-want +got):\n%s", diff)
 	}
 	if report.DroppedPermanentRequests != 110 || report.ForwardedRequests != 0 || requests.Load() != 110 {
@@ -508,7 +517,7 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 		"bktec OTLP relay: dropped a request after upstream returned HTTP 403",
 		"bktec OTLP relay: dropped a request after upstream returned HTTP 403: refused +++ injected group  [2K try again",
 	}
-	if diff := cmp.Diff(wantLogs, logs); diff != "" {
+	if diff := cmp.Diff(wantLogs, logs, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
 		t.Errorf("logs (-want +got):\n%s", diff)
 	}
 	t.Logf("refusal output:\n%s", strings.Join(logs, "\n"))
@@ -525,13 +534,18 @@ func TestRelayBoundsDistinctRefusals(t *testing.T) {
 		_, _ = w.Write(append([]byte{0x08, 0x07, 0x12, byte(len(body))}, body...))
 	}))
 	defer upstream.Close()
+	var logMu sync.Mutex
 	var logs []string
+	logged := make(chan struct{}, 163)
 	relay := newTestRelay(t, Config{
 		UpstreamEndpoint: upstream.URL,
 		RunKey:           "build-id",
 		TokenSource:      staticToken("oidc-token"),
 		Logf: func(format string, args ...any) {
+			logMu.Lock()
+			defer logMu.Unlock()
 			logs = append(logs, fmt.Sprintf(format, args...))
+			logged <- struct{}{}
 		},
 	})
 	send := func(message, stream string) {
@@ -546,6 +560,14 @@ func TestRelayBoundsDistinctRefusals(t *testing.T) {
 		message := fmt.Sprintf("refused batch %d", i)
 		send(message, "child")
 		want = append(want, Refusal{Status: 403, Message: message, Requests: 1, ChildRequests: 1})
+	}
+	// Fill the reason budget before the independent results worker can overtake.
+	for range 32 {
+		select {
+		case <-logged:
+		case <-time.After(time.Second):
+			t.Fatal("initial refusal reasons were not recorded")
+		}
 	}
 	for i := range 128 {
 		send(fmt.Sprintf("another refused batch %d", i), []string{"test", "child", "test", "unknown"}[i%4])
@@ -576,13 +598,14 @@ func TestRelayBoundsDistinctRefusals(t *testing.T) {
 }
 
 func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
-	started := make(chan struct{})
+	started := make(chan struct{}, 2)
 	release := make(chan struct{})
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		close(started)
+		started <- struct{}{}
 		<-release
 	}))
 	defer upstream.Close()
+	defer close(release)
 
 	body := []byte("request")
 	relay := newTestRelay(t, Config{
@@ -590,21 +613,38 @@ func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
 		RunKey:           "build-id",
 		TokenSource:      staticToken("oidc-token"),
 	})
-	resp := postTraces(t, relay, body, "Bearer "+relay.token, "")
-	_ = resp.Body.Close()
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("upstream delivery did not start")
+	for _, stream := range []string{"test", "test", "child"} {
+		mustPostTraces(t, relay, body, "", stream)
+	}
+	for range 2 {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("both workers' upstream deliveries did not start")
+		}
+	}
+	for _, stream := range []string{"", "unknown"} {
+		mustPostTraces(t, relay, body, "", stream)
 	}
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	report := relay.Drain(drainCtx)
-	close(release)
-	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
+	want := Report{DroppedDeadlineRequests: 5, DroppedDeadlineTestRequests: 2, DroppedDeadlineChildRequests: 1, DroppedDeadlineUnlabelledRequests: 2, DroppedBytes: int64(5 * len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
+	}
+}
+
+func TestRelayRetryTimerHonorsDrainDeadlineBeforeCancellation(t *testing.T) {
+	// Reproduce the interval fixed in #713: the recorded drain deadline has
+	// expired, but Drain's goroutine has not yet cancelled the relay context.
+	relay := &Relay{
+		ctx: context.Background(), draining: true,
+		drainDeadline: time.Now().Add(-time.Millisecond),
+	}
+	if relay.waitForRetry(time.Second) {
+		t.Fatal("retry allowed after the drain deadline without context cancellation")
 	}
 }
 
@@ -654,7 +694,7 @@ func TestRelayDrainLimitsRetryAttempts(t *testing.T) {
 	if got := requests.Load(); got > 4 {
 		t.Errorf("upstream requests during drain = %d, want at most 4", got)
 	}
-	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
+	want := Report{DroppedDeadlineRequests: 1, DroppedDeadlineUnlabelledRequests: 1, DroppedBytes: int64(len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
@@ -693,9 +733,131 @@ func TestRelayDrainInterruptsExistingRetryDelay(t *testing.T) {
 	if got := requests.Load(); got < 2 || got > 4 {
 		t.Errorf("upstream requests = %d, want 2 to 4 after interrupting Retry-After", got)
 	}
-	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
+	want := Report{DroppedDeadlineRequests: 1, DroppedDeadlineUnlabelledRequests: 1, DroppedBytes: int64(len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
+	}
+}
+
+// Adapted from the child-isolation regression on #713. Exercise both delivery
+// modes: batching is optional, but a child's backoff must never strand results.
+func TestRelayChildRetriesDoNotStrandTestResults(t *testing.T) {
+	for _, batching := range []bool{false, true} {
+		for _, tc := range []struct {
+			name   string
+			status int
+		}{
+			{"429", http.StatusTooManyRequests}, {"408", http.StatusRequestTimeout},
+			{"503", http.StatusServiceUnavailable}, {"connection failure", 0}, {"in-flight child", -1},
+		} {
+			t.Run(fmt.Sprintf("batching=%t/%s", batching, tc.name), func(t *testing.T) {
+				childStarted := make(chan struct{}, 1)
+				results := make(chan string, 4)
+				release := make(chan struct{})
+				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					_, _ = io.Copy(io.Discard, req.Body)
+					if req.Header.Get("Buildkite-Tests-Span-Stream") == "child" {
+						select {
+						case childStarted <- struct{}{}:
+						default:
+						}
+						if tc.status == -1 {
+							<-release
+							return
+						}
+						if tc.status == 0 {
+							conn, _, err := w.(http.Hijacker).Hijack()
+							if err != nil {
+								t.Error(err)
+								return
+							}
+							_ = conn.Close()
+							return
+						}
+						w.Header().Set("Retry-After", "60")
+						w.WriteHeader(tc.status)
+						return
+					}
+					results <- req.Header.Get("Buildkite-Tests-Span-Stream")
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer upstream.Close()
+				defer close(release)
+				relay := newTestRelay(t, Config{
+					UpstreamEndpoint: upstream.URL, RunKey: "build-id", TokenSource: staticToken("oidc-token"),
+					ExperimentalBatching: batching, maxBatchRequests: 1,
+				})
+				mustPostTraces(t, relay, []byte("child-one"), "", "child")
+				select {
+				case <-childStarted:
+				case <-time.After(time.Second):
+					t.Fatal("child delivery did not start")
+				}
+				mustPostTraces(t, relay, []byte("child-two"), "", "child")
+				for _, stream := range []string{"test", "", "unknown"} {
+					mustPostTraces(t, relay, []byte("result"), "", stream)
+				}
+				var got []string
+				promptCtx, cancelPrompt := context.WithTimeout(context.Background(), time.Second)
+				defer cancelPrompt()
+			collect:
+				for len(got) < 3 {
+					select {
+					case stream := <-results:
+						got = append(got, stream)
+					case <-promptCtx.Done():
+						break collect
+					}
+				}
+				if diff := cmp.Diff([]string{"test", "", "unknown"}, got); diff != "" {
+					t.Errorf("prompt results (-want +got):\n%s", diff)
+				}
+				mustPostTraces(t, relay, []byte("result"), "", "test")
+				drainCtx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+				defer cancel()
+				report := stripLatencyStats(t, relay.Drain(drainCtx))
+				if report.ForwardedRequests != 4 || report.ForwardedBytes != 24 || report.DroppedDeadlineRequests != 2 ||
+					report.DroppedDeadlineChildRequests != 2 || report.DroppedDeadlineTestRequests != 0 || report.DroppedDeadlineUnlabelledRequests != 0 ||
+					report.DroppedBytes != 18 || report.DroppedPermanentRequests != 0 || len(report.Refusals) != 0 {
+					t.Errorf("Drain report = %+v, want all 4 results delivered and only 2 children dropped", report)
+				}
+			})
+		}
+	}
+}
+
+func TestRelayChildQueueLeavesHalfBudgetForResults(t *testing.T) {
+	endpoint, uploads := recordingUpstream(t, func(w http.ResponseWriter, _ int) {
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	const body = "payload"
+	relay := newTestRelay(t, Config{
+		UpstreamEndpoint: endpoint, RunKey: "build-id", TokenSource: staticToken("token"),
+		QueueCapacity: 4 * (len(body) + queueRequestOverhead),
+	})
+	for range 2 {
+		mustPostTraces(t, relay, []byte(body), "", "child")
+	}
+	nextUpload(t, uploads) // In-flight children must still consume child capacity.
+	resp := postTraces(t, relay, []byte(body), "Bearer "+relay.token, "", " CHILD ")
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("third child status = %d, want 429", resp.StatusCode)
+	}
+	for _, stream := range []string{"test", "unknown"} {
+		mustPostTraces(t, relay, []byte(body), "", stream)
+	}
+	resp = postTraces(t, relay, nil, "Bearer "+relay.token, "", "test")
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Errorf("full shared budget status = %d, want 429", resp.StatusCode)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	report := relay.Drain(ctx)
+	if report.DroppedDeadlineRequests != 4 || report.DroppedDeadlineChildRequests != 2 || report.DroppedDeadlineTestRequests != 1 || report.DroppedDeadlineUnlabelledRequests != 1 {
+		t.Errorf("deadline report = %+v", report)
 	}
 }
 
@@ -968,8 +1130,8 @@ func TestRelayBatchingPacksRequestsByteExactInOrder(t *testing.T) {
 		t.Fatalf("upstream uploads = %d, want 1", len(got))
 	}
 	upload := got[0]
-	if upload.path != "/v1/traces" {
-		t.Errorf("upstream path = %q, want /v1/traces", upload.path)
+	if upload.path != "/v1/traces/batch" {
+		t.Errorf("upstream path = %q, want /v1/traces/batch", upload.path)
 	}
 	if upload.contentType != "application/x-buildkite-otlp-batch+protobuf" {
 		t.Errorf("upstream Content-Type = %q", upload.contentType)
@@ -1017,8 +1179,19 @@ func TestRelayBatchingKeepsSpanStreamsInSeparateEnvelopes(t *testing.T) {
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if report := relay.Drain(drainCtx); report.ForwardedRequests != 6 || report.UpstreamUploads != 3 {
+	report := relay.Drain(drainCtx)
+	if report.ForwardedRequests != 6 || report.UpstreamUploads != 3 {
 		t.Errorf("Drain report = %+v, want 6 requests forwarded in 3 uploads", report)
+	}
+	if len(report.Streams) != 3 {
+		t.Fatalf("stream reports = %+v", report.Streams)
+	}
+	for i, count := range []int{3, 2, 1} {
+		stream := report.Streams[i]
+		if stream.RequestsIn != count || stream.UploadsOut != 1 || stream.ItemsPerUpload != singleStat(int64(count)) ||
+			stream.QueueWait.P50 <= 0 || stream.QueueWait.Max < stream.QueueWait.P50 || stream.DrainTime <= 0 {
+			t.Errorf("stream report = %+v, want %d requests in one upload with queue and drain timings", stream, count)
+		}
 	}
 	want := []struct {
 		stream []string
@@ -1032,6 +1205,10 @@ func TestRelayBatchingKeepsSpanStreamsInSeparateEnvelopes(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("upstream uploads = %d, want %d", len(got), len(want))
 	}
+	// Results and children are independent; only within-stream order matters.
+	slices.SortFunc(got, func(a, b upstreamUpload) int {
+		return strings.Compare(strings.Join(b.spanStream, ""), strings.Join(a.spanStream, ""))
+	})
 	for i, upload := range got {
 		if !slices.Equal(upload.spanStream, want[i].stream) {
 			t.Errorf("upload %d Buildkite-Tests-Span-Stream = %q, want %q", i, upload.spanStream, want[i].stream)
@@ -1055,6 +1232,8 @@ func TestRelayBatchingCapsRequestsAndEncodedBytes(t *testing.T) {
 		posts       int
 		wantItems   []int
 	}{
+		{name: "default request cap", bodyBytes: 12, itemBytes: 22, posts: 1001, wantItems: []int{1000, 1}},
+		{name: "default byte cap", bodyBytes: 200000, itemBytes: 200014, posts: 5, wantItems: []int{3, 2}},
 		{name: "request cap", maxRequests: 3, posts: 7, wantItems: []int{3, 3, 1}},
 		{name: "bytes reach the cap exactly", maxBytes: 2 * itemBytes, posts: 3, wantItems: []int{2, 1}},
 		{name: "one more item would cross the cap", maxBytes: 2*itemBytes - 1, posts: 3, wantItems: []int{1, 1, 1}},
@@ -1100,8 +1279,8 @@ func TestRelayBatchingCapsRequestsAndEncodedBytes(t *testing.T) {
 			var gotItems []int
 			var gotBodies []string
 			for _, upload := range receivedUploads(uploads) {
-				if upload.path != "/v1/traces" {
-					t.Errorf("upstream path = %q, want /v1/traces", upload.path)
+				if upload.path != "/v1/traces/batch" {
+					t.Errorf("upstream path = %q, want /v1/traces/batch", upload.path)
 				}
 				items := decodeEnvelope(t, upload.body)
 				if len(upload.body) != len(items)*encodedItemBytes {
@@ -1149,7 +1328,7 @@ func TestRelayBatchingSendsOversizedRequestAlone(t *testing.T) {
 	}
 	for i, want := range []string{"before-01", "after-001"} {
 		upload := got[2*i]
-		if upload.path != "/v1/traces" || upload.contentType != "application/x-buildkite-otlp-batch+protobuf" || !slices.Equal(itemBodies(decodeEnvelope(t, upload.body)), []string{want}) {
+		if upload.path != "/v1/traces/batch" || upload.contentType != "application/x-buildkite-otlp-batch+protobuf" || !slices.Equal(itemBodies(decodeEnvelope(t, upload.body)), []string{want}) {
 			t.Errorf("upload %d = %s %q, want an envelope with %q", 2*i, upload.path, upload.body, want)
 		}
 	}
@@ -1196,31 +1375,34 @@ func TestRelayBatchingLingersForMoreRequests(t *testing.T) {
 }
 
 func TestRelayBatchingSendsLoneRequestAfterDefaultLinger(t *testing.T) {
-	endpoint, uploads := recordingUpstream(t, nil)
-	relay := newTestRelay(t, Config{
-		UpstreamEndpoint:     endpoint,
-		RunKey:               "build-id",
-		TokenSource:          staticToken("oidc-token"),
-		ExperimentalBatching: true,
-	})
-	start := time.Now()
-	mustPostTraces(t, relay, []byte("lone"), "gzip", "child")
-
-	upload := nextUpload(t, uploads)
-	if elapsed := upload.at.Sub(start); elapsed < 25*time.Millisecond || elapsed > 500*time.Millisecond {
-		t.Errorf("lone request sent after %s, want about the 25ms linger", elapsed)
+	for _, stream := range []string{"test", "", "unknown", "child"} {
+		t.Run(stream, func(t *testing.T) {
+			endpoint, uploads := recordingUpstream(t, nil)
+			relay := newTestRelay(t, Config{
+				UpstreamEndpoint: endpoint, RunKey: "build-id", TokenSource: staticToken("oidc-token"), ExperimentalBatching: true,
+			})
+			start := time.Now()
+			mustPostTraces(t, relay, []byte("lone"), "gzip", stream)
+			upload := nextUpload(t, uploads)
+			linger := 250 * time.Millisecond
+			if stream == "child" {
+				linger = time.Second
+			}
+			if elapsed := upload.at.Sub(start); elapsed < linger || elapsed > linger+500*time.Millisecond {
+				t.Errorf("lone %q request sent after %s, want about %s", stream, elapsed, linger)
+			}
+			if upload.path != "/v1/traces/batch" || strings.Join(upload.spanStream, "") != stream {
+				t.Errorf("lone upload = %s with stream %q", upload.path, upload.spanStream)
+			}
+			want := []envelopeItem{{body: "lone", contentEncoding: "gzip"}}
+			if diff := cmp.Diff(want, decodeEnvelope(t, upload.body), cmp.AllowUnexported(envelopeItem{})); diff != "" {
+				t.Errorf("envelope items (-want +got):\n%s", diff)
+			}
+			drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			relay.Drain(drainCtx)
+		})
 	}
-	if upload.path != "/v1/traces" || !slices.Equal(upload.spanStream, []string{"child"}) {
-		t.Errorf("lone request upload = %s with stream %q, want a child envelope", upload.path, upload.spanStream)
-	}
-	want := []envelopeItem{{body: "lone", contentEncoding: "gzip"}}
-	if diff := cmp.Diff(want, decodeEnvelope(t, upload.body), cmp.AllowUnexported(envelopeItem{})); diff != "" {
-		t.Errorf("envelope items (-want +got):\n%s", diff)
-	}
-
-	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	relay.Drain(drainCtx)
 }
 
 func TestRelayBatchingDoesNotLingerAgainAfterInFlightUpload(t *testing.T) {
@@ -1320,6 +1502,8 @@ func TestRelayBatchingRetriesIdenticalEnvelopeAndHoldsCapacity(t *testing.T) {
 		maxBatchRequests:     2,
 	})
 	mustPostTraces(t, relay, body, "gzip", "test")
+	const queueGap = 100 * time.Millisecond
+	time.Sleep(queueGap)
 	mustPostTraces(t, relay, body, "", "test")
 	select {
 	case <-started:
@@ -1332,6 +1516,10 @@ func TestRelayBatchingRetriesIdenticalEnvelopeAndHoldsCapacity(t *testing.T) {
 	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("POST during delivery status = %d, want 429", resp.StatusCode)
 	}
+	// Queue wait must be sampled before this blocked attempt, not again for
+	// retries. Re-sampling would inflate the max beyond this hold duration.
+	const responseHold = 300 * time.Millisecond
+	time.Sleep(responseHold)
 	close(release)
 
 	deadline := time.Now().Add(time.Second)
@@ -1352,6 +1540,16 @@ func TestRelayBatchingRetriesIdenticalEnvelopeAndHoldsCapacity(t *testing.T) {
 	report := relay.Drain(drainCtx)
 	if report.ForwardedRequests != 3 || report.UpstreamUploads != 4 || report.DroppedBytes != 0 {
 		t.Errorf("Drain report = %+v, want 3 requests forwarded with 4 upload attempts", report)
+	}
+	if len(report.Streams) != 3 {
+		t.Fatalf("stream reports = %+v", report.Streams)
+	}
+	metrics := report.Streams[0]
+	if metrics.RequestsIn != 3 || metrics.UploadsOut != 4 || metrics.ItemsPerUpload.P50 != 2 || metrics.ItemsPerUpload.Max != 2 {
+		t.Errorf("retry metrics = %+v, want 3 accepted requests and items [2, 2, 2, 1] over 4 attempts", metrics)
+	}
+	if metrics.QueueWait.Max < queueGap || metrics.QueueWait.Max >= responseHold || metrics.QueueWait.P50 >= queueGap {
+		t.Errorf("queue wait = %+v, want one ~100ms wait and two short waits, excluding retries", metrics.QueueWait)
 	}
 	got := receivedUploads(uploads)
 	if len(got) != 4 {
@@ -1400,6 +1598,7 @@ func TestRelayBatchingRefusalDropsEveryMemberPerStream(t *testing.T) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write(append([]byte{0x08, 0x07, 0x12, byte(len(message))}, message...))
 	})
+	var logMu sync.Mutex
 	var logs []string
 	relay := newTestRelay(t, Config{
 		UpstreamEndpoint:     endpoint,
@@ -1408,6 +1607,8 @@ func TestRelayBatchingRefusalDropsEveryMemberPerStream(t *testing.T) {
 		ExperimentalBatching: true,
 		maxLinger:            time.Hour,
 		Logf: func(format string, args ...any) {
+			logMu.Lock()
+			defer logMu.Unlock()
 			logs = append(logs, fmt.Sprintf(format, args...))
 		},
 	})
@@ -1423,6 +1624,8 @@ func TestRelayBatchingRefusalDropsEveryMemberPerStream(t *testing.T) {
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	report := relay.Drain(drainCtx)
+	// Stream metrics are asserted separately; timing depends on worker scheduling.
+	report.Streams = nil
 	want := Report{
 		Batching:                 true,
 		UpstreamUploads:          3,
@@ -1436,9 +1639,8 @@ func TestRelayBatchingRefusalDropsEveryMemberPerStream(t *testing.T) {
 	if got := receivedUploads(uploads); len(got) != 3 {
 		t.Errorf("upstream attempts = %d, want one per stream without retries", len(got))
 	}
-	wantLogs := []string{"bktec OTLP relay: dropped 3 requests after upstream returned HTTP 403: " + message}
-	if diff := cmp.Diff(wantLogs, logs); diff != "" {
-		t.Errorf("logs (-want +got):\n%s", diff)
+	if len(logs) != 1 || !strings.HasSuffix(logs[0], "after upstream returned HTTP 403: "+message) {
+		t.Errorf("logs = %q, want one diagnostic for the refusal reason", logs)
 	}
 }
 
@@ -1465,6 +1667,9 @@ func TestRelayWithoutBatchingForwardsEachRequestAlone(t *testing.T) {
 	if len(got) != len(posts) {
 		t.Fatalf("upstream uploads = %d, want %d", len(got), len(posts))
 	}
+	slices.SortStableFunc(got, func(a, b upstreamUpload) int {
+		return strings.Compare(strings.Join(b.spanStream, ""), strings.Join(a.spanStream, ""))
+	})
 	for i, post := range posts {
 		upload := got[i]
 		var wantEncoding []string

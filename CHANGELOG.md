@@ -1,6 +1,8 @@
 # Changelog
 ## Unreleased
-- Add opt-in experimental [OTLP relay batching](./README.md#relay-opentelemetry-traces) that packs requests unchanged into fewer uploads on `/v1/traces`. Keep it off: today's receiver refuses envelopes, and receiver pass-through and ta-ingestion unpacking are not built.
+- Add opt-in [OTLP relay batching](./README.md#relay-opentelemetry-traces) that packs requests unchanged into fewer uploads, with per-stream batching and queue statistics. Requires the Rails batch endpoint to be deployed before enabling.
+- Keep throttled child traces from blocking test-result uploads, and limit children to half the relay's shared queue budget.
+- Fix the OTLP relay continuing to retry uploads after its shutdown drain deadline, and warn when queued test results are dropped at that deadline.
 
 ## 3.4.2 - 2026-10-29
 - Fix Vitest retries to match exact failed test names in Vitest 4 and 5, and keep the run failing when a retry skips or omits a failed test instead of passing it.

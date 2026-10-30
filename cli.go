@@ -206,7 +206,7 @@ var otlpRelayFlag = &cli.BoolFlag{
 var otlpRelayBatchingFlag = &cli.BoolFlag{
 	Name:        "otlp-relay-batching",
 	Category:    "TEST ENGINE",
-	Usage:       "Experimentally pack OTLP relay requests into opaque batches (requires server support)",
+	Usage:       "Pack OTLP relay requests into opaque envelopes (requires the server batch endpoint)",
 	Sources:     cli.EnvVars("BUILDKITE_TESTS_OTLP_RELAY_BATCHING"),
 	Destination: &cfg.OTLPRelayBatching,
 }
