@@ -47,7 +47,6 @@ func TestRelayBatchesRequests(t *testing.T) {
 		wait         bool
 		maxRequests  int
 	}{
-		{name: "window", bodies: [][]byte{a, b, c}, wantBodies: [][]byte{join(a, b, c)}, wait: true},
 		{name: "drain", bodies: [][]byte{a, b, c}, wantBodies: [][]byte{join(a, b, c)}},
 		{name: "mixed encoding", bodies: [][]byte{a, b, c}, gzip: true, wantBodies: [][]byte{join(a, b, c)}},
 		{name: "size cap", bodies: [][]byte{large, large, c}, gzip: true, wantBodies: [][]byte{large, join(large, c)}, wantEncoding: []string{"", "gzip"}, wait: true},
@@ -55,6 +54,8 @@ func TestRelayBatchesRequests(t *testing.T) {
 		{name: "oversized alone", bodies: [][]byte{a, oversized, c}, wantBodies: [][]byte{a, oversized, c}, wantEncoding: []string{"", "", ""}},
 		{name: "gzip oversized alone", bodies: [][]byte{a, oversized, c}, gzip: true, wantBodies: [][]byte{a, oversized, c}, wantEncoding: []string{"", "gzip", ""}},
 		{name: "streams", bodies: [][]byte{a, b, c}, gzip: true, streams: []string{"test", "child", "test"}, wantBodies: [][]byte{join(a, c), b}, wantStream: []string{"test", "child"}},
+		{name: "child unmerged", bodies: [][]byte{a, b}, streams: []string{"child", "child"}, wantBodies: [][]byte{a, b}, wantStream: []string{"child", "child"}, wantEncoding: []string{"", ""}},
+		{name: "unlabelled unmerged", bodies: [][]byte{a, b}, streams: []string{"", ""}, wantBodies: [][]byte{a, b}, wantStream: []string{"", ""}, wantEncoding: []string{"", ""}},
 		{name: "retry whole batch", bodies: [][]byte{a, b, c}, statuses: []int{429, 503, 200}, wantBodies: [][]byte{join(a, b, c), join(a, b, c), join(a, b, c)}},
 		{name: "refuse whole batch", bodies: [][]byte{a, b, c}, statuses: []int{403}, wantBodies: [][]byte{join(a, b, c)}},
 		{name: "many small requests", bodies: slices.Repeat([][]byte{a}, 101), wantBodies: [][]byte{bytes.Repeat(a, 101)}},
@@ -112,9 +113,6 @@ func TestRelayBatchesRequests(t *testing.T) {
 				batchWindow:      time.Second,
 				maxBatchRequests: tc.maxRequests,
 			})
-			if tc.name == "window" {
-				time.Sleep(200 * time.Millisecond) // Idle time must not consume the batch window.
-			}
 			start := time.Now()
 			var acceptedBytes int64
 			for i, body := range tc.bodies {
@@ -137,20 +135,13 @@ func TestRelayBatchesRequests(t *testing.T) {
 					t.Fatalf("local status = %d, want 200", resp.StatusCode)
 				}
 				acceptedBytes += int64(len(body))
-				if tc.name == "window" && i == 0 {
-					time.Sleep(500 * time.Millisecond) // A later burst must not restart the timer.
-				}
 			}
 			var got []receivedBatch
 			if tc.wait {
 				select {
 				case first := <-received:
 					got = append(got, first)
-					elapsed := first.at.Sub(start)
-					if tc.name == "window" && (elapsed < 900*time.Millisecond || elapsed > 1300*time.Millisecond) {
-						t.Errorf("batch sent after %s, want about one second", elapsed)
-					}
-					if tc.name != "window" && elapsed >= 900*time.Millisecond {
+					if elapsed := first.at.Sub(start); elapsed >= 900*time.Millisecond {
 						t.Errorf("full batch waited %s instead of sending immediately", elapsed)
 					}
 				case <-time.After(3 * time.Second):
@@ -195,6 +186,82 @@ func TestRelayBatchesRequests(t *testing.T) {
 				t.Errorf("report = %+v, want all %d original requests (%d bytes) forwarded", report, len(tc.bodies), acceptedBytes)
 			}
 		})
+	}
+}
+
+func TestRelayForwardsIdleTestRequestsImmediately(t *testing.T) {
+	type upload struct {
+		body     []byte
+		encoding string
+		at       time.Time
+	}
+	received := make(chan upload, 4)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		received <- upload{body, req.Header.Get("Content-Encoding"), time.Now()}
+	}))
+	defer upstream.Close()
+	const window = 500 * time.Millisecond
+	relay := newTestRelay(t, Config{UpstreamEndpoint: upstream.URL, RunKey: "build-id", TokenSource: staticToken("token"), batchWindow: window})
+	relay.mu.Lock()
+	relay.lastTestUpload = time.Time{}
+	relay.mu.Unlock()
+
+	post := func(body string) time.Time {
+		t.Helper()
+		resp := postTraces(t, relay, []byte(body), "Bearer "+relay.token, "", "test")
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST status = %d, want 200", resp.StatusCode)
+		}
+		return time.Now()
+	}
+	next := func() upload {
+		t.Helper()
+		select {
+		case item := <-received:
+			return item
+		case <-time.After(3 * time.Second):
+			t.Fatal("upload did not arrive")
+			return upload{}
+		}
+	}
+
+	posted := post("a")
+	first := next()
+	if string(first.body) != "a" || first.encoding != "" || first.at.Sub(posted) > 200*time.Millisecond {
+		t.Errorf("idle request uploaded as %q (%q) after %s, want it forwarded unchanged and immediately", first.body, first.encoding, first.at.Sub(posted))
+	}
+
+	// Requests arriving within the window after an upload wait for it and merge.
+	post("b")
+	time.Sleep(window / 2)
+	post("c")
+	second := next()
+	if gap := second.at.Sub(first.at); gap < window-100*time.Millisecond || gap > window+400*time.Millisecond {
+		t.Errorf("busy batch sent %s after the previous upload, want about %s", gap, window)
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(second.body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, _ := io.ReadAll(reader)
+	if string(merged) != "bc" {
+		t.Errorf("busy batch = %q, want bc", merged)
+	}
+
+	// Once a window passes without an upload, requests go immediately again.
+	time.Sleep(window + 200*time.Millisecond)
+	posted = post("d")
+	third := next()
+	if string(third.body) != "d" || third.at.Sub(posted) > 200*time.Millisecond {
+		t.Errorf("request after idle window uploaded as %q after %s, want it immediately", third.body, third.at.Sub(posted))
+	}
+
+	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if report := relay.Drain(drainCtx); report.ForwardedRequests != 4 {
+		t.Errorf("forwarded %d requests, want 4", report.ForwardedRequests)
 	}
 }
 
@@ -577,7 +644,7 @@ func TestRelayAcknowledgesBeforeDeliveryAndReturns429WhenQueueIsFull(t *testing.
 	})
 
 	for range 2 {
-		resp := postTraces(t, relay, body, "Bearer "+relay.token, "")
+		resp := postTraces(t, relay, body, "Bearer "+relay.token, "", "test")
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("POST status = %d, want 200 before upstream delivery completes", resp.StatusCode)
 		}
@@ -630,8 +697,8 @@ func TestRelayRetriesRetryableResponses(t *testing.T) {
 	attempts := make(chan attempt, 3)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		requestNumber := requests.Add(1)
-		if got := req.Header.Get("Buildkite-Tests-Span-Stream"); got != "child" {
-			t.Errorf("attempt %d Buildkite-Tests-Span-Stream = %q, want child", requestNumber, got)
+		if got := req.Header.Get("Buildkite-Tests-Span-Stream"); got != "test" {
+			t.Errorf("attempt %d Buildkite-Tests-Span-Stream = %q, want test", requestNumber, got)
 		}
 		if req.Header.Get("Content-Encoding") != "gzip" {
 			t.Error("merged retry must retain gzip encoding")
@@ -660,7 +727,7 @@ func TestRelayRetriesRetryableResponses(t *testing.T) {
 		batchWindow:      100 * time.Millisecond,
 	})
 	for range 2 {
-		resp := postTraces(t, relay, []byte("request"), `Token token="`+relay.token+`"`, "", "child")
+		resp := postTraces(t, relay, []byte("request"), `Token token="`+relay.token+`"`, "", "test")
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("POST status = %d, want 200", resp.StatusCode)
 		}
@@ -1265,6 +1332,12 @@ func newTestRelay(t *testing.T, config Config) *Relay {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
+	// Start as if a test upload just happened, so test requests posted together
+	// wait for the window and merge deterministically. Tests of idle forwarding
+	// reset this.
+	relay.mu.Lock()
+	relay.lastTestUpload = time.Now()
+	relay.mu.Unlock()
 	return relay
 }
 

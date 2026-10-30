@@ -49,6 +49,11 @@ const (
 // test spans reach this cap at about 300 per upload.
 const maxBatchBytes = 512 * 1024
 
+// Only test-result requests are merged. Child and unlabelled requests carry
+// arbitrary instrumentation, where one invalid span makes ingestion reject the
+// whole request, so merging them would lose their neighbours too.
+const testSpanStream = "test"
+
 // Keep detailed reasons bounded even if a receiver includes a different request
 // ID in every message. Further reasons are counted together per HTTP status.
 const maxRefusalMessages = 32
@@ -174,7 +179,6 @@ type request struct {
 	body            []byte
 	contentEncoding string
 	spanStream      string
-	queuedAt        time.Time
 }
 
 type batch struct {
@@ -217,6 +221,11 @@ type Relay struct {
 	report          Report
 	sizeSampler     sampler[int64]
 	latencySampler  sampler[time.Duration]
+	// lastTestUpload is when the latest test-result upload started. A test
+	// request is forwarded immediately once batchWindow has passed since then,
+	// so sparse traffic isn't delayed and busy traffic uploads about once per
+	// window.
+	lastTestUpload time.Time
 
 	// upstreamToken, tokenRefreshAt, and credentialErr are only touched by New
 	// (before the worker goroutine starts) and by the single forward worker, so
@@ -431,7 +440,6 @@ func (r *Relay) enqueue(req *request) bool {
 	if !r.accepting || r.queuedSize+size > r.config.QueueCapacity {
 		return false
 	}
-	req.queuedAt = time.Now()
 	r.queue = append(r.queue, req)
 	r.queuedSize += size
 	r.signal()
@@ -483,14 +491,17 @@ func (r *Relay) nextBatch() (*batch, bool) {
 			req := r.queue[index]
 			index++
 			r.mu.Unlock()
-			if len(pending.members) > 0 && req.spanStream != pending.spanStream {
+			if req.spanStream != testSpanStream {
+				if len(pending.members) == 0 {
+					return &batch{request: *req, members: []*request{req}}, true
+				}
 				continue
 			}
 			decoded, ok := batchBody(req)
 			if !ok || len(body)+len(decoded) > maxBatchBytes {
 				if len(pending.members) == 0 {
 					// Preserve oversized or invalid gzip requests as-is.
-					return &batch{request: *req, members: []*request{req}}, true
+					return r.startTestUpload(&batch{request: *req, members: []*request{req}}), true
 				}
 				break
 			}
@@ -505,6 +516,7 @@ func (r *Relay) nextBatch() (*batch, bool) {
 			continue
 		}
 		draining := r.draining
+		sendAt := r.lastTestUpload.Add(r.config.batchWindow)
 		r.mu.Unlock()
 		if draining {
 			break
@@ -513,7 +525,7 @@ func (r *Relay) nextBatch() (*batch, bool) {
 		var timeout <-chan time.Time
 		var timer *time.Timer
 		if len(pending.members) > 0 {
-			remaining := time.Until(pending.queuedAt.Add(r.config.batchWindow))
+			remaining := time.Until(sendAt)
 			if remaining <= 0 {
 				break
 			}
@@ -543,7 +555,14 @@ func (r *Relay) nextBatch() (*batch, bool) {
 		pending.body = compressed.Bytes()
 		pending.contentEncoding = "gzip"
 	}
-	return &pending, true
+	return r.startTestUpload(&pending), true
+}
+
+func (r *Relay) startTestUpload(b *batch) *batch {
+	r.mu.Lock()
+	r.lastTestUpload = time.Now()
+	r.mu.Unlock()
+	return b
 }
 
 // Bound decompression as well as batch size. Requests that cannot fit in a

@@ -1,6 +1,6 @@
 # Changelog
 ## Unreleased
-- Batch [OTLP relay](./README.md#relay-opentelemetry-traces) uploads so per-test requests share an upstream upload instead of each waiting for a separate one.
+- Batch [OTLP relay](./README.md#relay-opentelemetry-traces) test-result uploads so per-test requests share an upstream upload instead of each waiting for a separate one. A request is still forwarded immediately when no test results were uploaded in the last second, so sparse traffic isn't delayed. Child-span requests are forwarded one for one as before.
 - Fix the OTLP relay continuing to retry uploads after its shutdown drain deadline.
 
 ## 3.4.2 - 2026-10-29
