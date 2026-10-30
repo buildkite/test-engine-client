@@ -161,11 +161,12 @@ func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
 	}
 
 	relay, err := otlprelay.New(otlprelay.Config{
-		UpstreamEndpoint: cfg.OTLPRelayUpstreamEndpoint,
-		RunKey:           runKey,
-		TokenLifetime:    cfg.OIDCLifetime,
-		CollectorToken:   cfg.UploadToken,
-		InitialToken:     initialToken,
+		UpstreamEndpoint:     cfg.OTLPRelayUpstreamEndpoint,
+		ExperimentalBatching: cfg.OTLPRelayBatching,
+		RunKey:               runKey,
+		TokenLifetime:        cfg.OIDCLifetime,
+		CollectorToken:       cfg.UploadToken,
+		InitialToken:         initialToken,
 		TokenSource: func(ctx context.Context) (string, error) {
 			token, err := cfg.RequestOIDCToken(ctx)
 			// The Buildkite API positively refused (non-retryable 4xx); mark it
@@ -189,14 +190,35 @@ func startOTLPRelay(cfg *config.Config) (*otlprelay.Relay, error) {
 }
 
 func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
+	var uploads string
+	if report.Batching {
+		uploads = fmt.Sprintf(", %d upstream upload attempt(s)", report.UpstreamUploads)
+	}
 	fmt.Fprintf(w,
-		"bktec OTLP relay: %d request(s) (%s) forwarded, %d dropped permanently, %d dropped at drain deadline, %s dropped\n",
+		"bktec OTLP relay: %d request(s) (%s) forwarded%s, %d dropped permanently, %d dropped at drain deadline, %s dropped\n",
 		report.ForwardedRequests,
 		formatBytes(report.ForwardedBytes),
+		uploads,
 		report.DroppedPermanentRequests,
 		report.DroppedDeadlineRequests,
 		formatBytes(report.DroppedBytes),
 	)
+	if report.DroppedDeadlineTestRequests > 0 {
+		fmt.Fprintf(w, "TEST RESULTS MISSING: bktec OTLP relay dropped %d test-result request(s) still queued at the drain deadline. Those test executions were not uploaded to Buildkite Test Engine.\n",
+			report.DroppedDeadlineTestRequests)
+	}
+	if report.DroppedDeadlineUnlabelledRequests > 0 {
+		fmt.Fprintf(w, "TEST RESULTS MAY BE MISSING: bktec OTLP relay dropped %d unlabelled request(s) still queued at the drain deadline. These requests may have carried test results that were not uploaded to Buildkite Test Engine.\n",
+			report.DroppedDeadlineUnlabelledRequests)
+	}
+	if report.Batching {
+		for _, stream := range report.Streams {
+			fmt.Fprintf(w, "bktec OTLP relay: %s: %d requests in, %d uploads out (attempts), items per upload: p50 %d, max %d; queue wait: p50 %s, max %s; drain time: %s\n",
+				stream.Stream, stream.RequestsIn, stream.UploadsOut,
+				stream.ItemsPerUpload.P50, stream.ItemsPerUpload.Max,
+				roundLatency(stream.QueueWait.P50), roundLatency(stream.QueueWait.Max), roundLatency(stream.DrainTime))
+		}
+	}
 	for _, refusal := range report.Refusals {
 		reason := fmt.Sprintf("HTTP %d", refusal.Status)
 		if refusal.Message != "" {

@@ -1,4 +1,9 @@
 # Changelog
+## Unreleased
+- Add opt-in [OTLP relay batching](./README.md#relay-opentelemetry-traces) on `/v1/traces` using `application/vnd.buildkite.otlp-trace-batch.v1+protobuf`, with per-stream batching and queue statistics. Fall back to individual uploads when a receiver does not support envelopes.
+- Keep throttled child traces from blocking test-result uploads, and limit children to half the relay's shared queue budget.
+- Fix the OTLP relay continuing to retry uploads after its shutdown drain deadline, and warn when queued test results are dropped at that deadline.
+
 ## 3.4.2 - 2026-10-29
 - Fix Vitest retries to match exact failed test names in Vitest 4 and 5, and keep the run failing when a retry skips or omits a failed test instead of passing it.
 - Support Test Scheduler acknowledging heartbeats after a pool is consumed, so a heartbeat racing successful final completion does not fail the job. Requires Test Scheduler support on the server.

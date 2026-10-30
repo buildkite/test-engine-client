@@ -203,6 +203,14 @@ var otlpRelayFlag = &cli.BoolFlag{
 	Destination: &cfg.OTLPRelay,
 }
 
+var otlpRelayBatchingFlag = &cli.BoolFlag{
+	Name:        "otlp-relay-batching",
+	Category:    "TEST ENGINE",
+	Usage:       "Pack OTLP relay requests into opaque envelopes (falls back if unsupported)",
+	Sources:     cli.EnvVars("BUILDKITE_TESTS_OTLP_RELAY_BATCHING"),
+	Destination: &cfg.OTLPRelayBatching,
+}
+
 var otlpRelayUpstreamEndpointFlag = &cli.StringFlag{
 	Name:        "otlp-relay-upstream-endpoint",
 	Category:    "TEST ENGINE",
@@ -718,7 +726,7 @@ func runCommandFlags() []cli.Flag {
 	}
 	flags = append(flags, buildEnvironmentFlags...)
 	flags = append(flags, testEngineFlags...)
-	flags = append(flags, otlpRelayFlag, otlpRelayUpstreamEndpointFlag)
+	flags = append(flags, otlpRelayFlag, otlpRelayBatchingFlag, otlpRelayUpstreamEndpointFlag)
 	flags = append(flags, runnerEnvironmentFlags...)
 	flags = append(flags, parallelismFlag)
 	flags = append(flags, failOnNoTestsFlag)
