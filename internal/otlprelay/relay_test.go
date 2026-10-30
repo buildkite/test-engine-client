@@ -643,7 +643,7 @@ func TestRelayRetryTimerHonorsDrainDeadlineBeforeCancellation(t *testing.T) {
 		ctx: context.Background(), draining: true,
 		drainDeadline: time.Now().Add(-time.Millisecond),
 	}
-	if relay.waitForRetry(time.Second) {
+	if relay.waitForRetry(time.Second, false) {
 		t.Fatal("retry allowed after the drain deadline without context cancellation")
 	}
 }
@@ -1588,6 +1588,146 @@ func TestRelayBatchingDeadlineCountsInFlightAndQueuedMembers(t *testing.T) {
 	report := relay.Drain(ctx)
 	if report.ForwardedRequests != 0 || report.DroppedPermanentRequests != 0 || report.DroppedDeadlineRequests != 4 || report.DroppedBytes != 24 {
 		t.Errorf("Drain report = %+v, want all 4 original requests (24 bytes) dropped at deadline", report)
+	}
+}
+
+func TestRelayBatching415WakesOtherWorkerEnvelopeRetry(t *testing.T) {
+	for _, retryStream := range []string{"test", "child"} {
+		t.Run(retryStream, func(t *testing.T) {
+			refusingStream := "child"
+			if retryStream == "child" {
+				refusingStream = "test"
+			}
+			retrying := make(chan struct{}, 1)
+			release415 := make(chan struct{})
+			var release sync.Once
+			type item struct{ stream, body string }
+			singles := make(chan item, 8)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				stream := req.Header.Get("Buildkite-Tests-Span-Stream")
+				if req.Header.Get("Content-Type") == batchContentType {
+					if stream == retryStream {
+						w.Header().Set("Retry-After", "3600")
+						w.WriteHeader(http.StatusServiceUnavailable)
+						select {
+						case retrying <- struct{}{}:
+						default:
+						}
+					} else {
+						<-release415
+						w.WriteHeader(http.StatusUnsupportedMediaType)
+					}
+					return
+				}
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Error(err)
+				}
+				singles <- item{stream, string(body)}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer upstream.Close()
+			defer release.Do(func() { close(release415) })
+			relay := newTestRelay(t, Config{
+				UpstreamEndpoint: upstream.URL, RunKey: "build-id", TokenSource: staticToken("oidc-token"),
+				ExperimentalBatching: true, maxBatchRequests: 2,
+			})
+			want := []item{{retryStream, "retry-1"}, {retryStream, "retry-2"}, {refusingStream, "refused-1"}, {refusingStream, "refused-2"}}
+			for _, post := range want[:2] {
+				mustPostTraces(t, relay, []byte(post.body), "", post.stream)
+			}
+			select {
+			case <-retrying:
+			case <-time.After(time.Second):
+				t.Fatal("retrying envelope did not reach upstream")
+			}
+			for _, post := range want[2:] {
+				mustPostTraces(t, relay, []byte(post.body), "", post.stream)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			drained := make(chan Report, 1)
+			go func() { drained <- relay.Drain(ctx) }()
+			<-relay.drainStarted
+			release.Do(func() { close(release415) })
+
+			// The drain-clamped retry is 1 s. A 415 must bypass that wait,
+			// leaving the deadline available to deliver the individual members.
+			timer := time.NewTimer(500 * time.Millisecond)
+			defer timer.Stop()
+			var got []item
+		collect:
+			for range want {
+				select {
+				case post := <-singles:
+					got = append(got, post)
+				case <-timer.C:
+					t.Errorf("only %d/4 singles arrived promptly after 415; envelope retry stayed asleep", len(got))
+					break collect
+				}
+			}
+			less := func(a, b item) int { return strings.Compare(a.stream, b.stream) }
+			slices.SortStableFunc(want, less)
+			slices.SortStableFunc(got, less)
+			if diff := cmp.Diff(want, got, cmp.AllowUnexported(item{})); diff != "" {
+				t.Errorf("fallback requests (-want +got):\n%s", diff)
+			}
+			if report := <-drained; report.ForwardedRequests != 4 || report.DroppedDeadlineRequests != 0 || report.DroppedPermanentRequests != 0 || len(report.Refusals) != 0 {
+				t.Errorf("report = %+v, want all four requests forwarded without drops/refusals", report)
+			}
+		})
+	}
+}
+
+func TestRelayBatching415KeepsSingleRequestBackoff(t *testing.T) {
+	started := make(chan time.Time, 1)
+	retried := make(chan time.Time, 1)
+	var attempts atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("Content-Type") == batchContentType {
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
+		}
+		if req.Header.Get("Buildkite-Tests-Span-Stream") == "test" {
+			if attempts.Add(1) == 1 {
+				started <- time.Now()
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			retried <- time.Now()
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	relay := newTestRelay(t, Config{
+		UpstreamEndpoint: upstream.URL, RunKey: "build-id", TokenSource: staticToken("oidc-token"),
+		ExperimentalBatching: true, maxBatchRequests: 2, maxBatchBytes: 16,
+	})
+	// This request cannot fit in an envelope, so its 503 must retain the
+	// normal Retry-After even when the child envelope disables batching.
+	mustPostTraces(t, relay, bytes.Repeat([]byte("x"), 32), "", "test")
+	var first time.Time
+	select {
+	case first = <-started:
+	case <-time.After(time.Second):
+		t.Fatal("single request did not reach upstream")
+	}
+	for range 2 {
+		mustPostTraces(t, relay, []byte("c"), "", "child")
+	}
+	select {
+	case at := <-retried:
+		if elapsed := at.Sub(first); elapsed < 900*time.Millisecond {
+			t.Errorf("single retried after %s, want its 1 s Retry-After preserved", elapsed)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("single request did not retry")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if report := relay.Drain(ctx); report.ForwardedRequests != 3 || report.DroppedDeadlineRequests != 0 || report.DroppedPermanentRequests != 0 || len(report.Refusals) != 0 {
+		t.Errorf("report = %+v, want all three requests forwarded without drops/refusals", report)
 	}
 }
 

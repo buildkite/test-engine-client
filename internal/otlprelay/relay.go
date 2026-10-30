@@ -265,10 +265,11 @@ type Relay struct {
 	server *http.Server
 	client *http.Client
 
-	ctx          context.Context
-	cancel       context.CancelFunc
-	drainStarted chan struct{}
-	done         chan struct{}
+	ctx             context.Context
+	cancel          context.CancelFunc
+	drainStarted    chan struct{}
+	batchingStopped chan struct{}
+	done            chan struct{}
 
 	mu               sync.Mutex
 	results          requestQueue
@@ -358,18 +359,19 @@ func New(config Config) (*Relay, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	relay := &Relay{
-		config:       config,
-		endpoint:     "http://" + listener.Addr().String(),
-		token:        base64.RawURLEncoding.EncodeToString(localTokenBytes),
-		client:       client,
-		ctx:          ctx,
-		cancel:       cancel,
-		results:      requestQueue{wake: make(chan struct{}, 1)},
-		children:     requestQueue{wake: make(chan struct{}, 1)},
-		drainStarted: make(chan struct{}),
-		done:         make(chan struct{}),
-		accepting:    true,
-		report:       Report{Batching: config.ExperimentalBatching},
+		config:          config,
+		endpoint:        "http://" + listener.Addr().String(),
+		token:           base64.RawURLEncoding.EncodeToString(localTokenBytes),
+		client:          client,
+		ctx:             ctx,
+		cancel:          cancel,
+		results:         requestQueue{wake: make(chan struct{}, 1)},
+		children:        requestQueue{wake: make(chan struct{}, 1)},
+		drainStarted:    make(chan struct{}),
+		batchingStopped: make(chan struct{}),
+		done:            make(chan struct{}),
+		accepting:       true,
+		report:          Report{Batching: config.ExperimentalBatching},
 	}
 	// A missing upstream credential must not fail the job: unless the failure
 	// is known-terminal, start anyway and let the forward worker keep retrying
@@ -778,6 +780,9 @@ func (r *Relay) deliver(queued *upload) (deliveryResult, time.Duration) {
 				r.mu.Lock()
 				first := !r.batchingDisabled
 				r.batchingDisabled = true
+				if first {
+					close(r.batchingStopped)
+				}
 				r.mu.Unlock()
 				if first {
 					r.config.Logf("bktec OTLP relay: upstream does not support trace batches (HTTP 415); disabling batching for this run and resending requests individually")
@@ -798,7 +803,7 @@ func (r *Relay) deliver(queued *upload) (deliveryResult, time.Duration) {
 		if hasRetryAfter {
 			delay = retryAfter
 		}
-		if !r.waitForRetry(delay) {
+		if !r.waitForRetry(delay, queued.envelope) {
 			return deliveryDeadline, 0
 		}
 		backoff = min(backoff*2, r.config.maxBackoff)
@@ -846,7 +851,11 @@ func (r *Relay) recordRefusal(status int, message, stream string, count int) {
 	}
 }
 
-func (r *Relay) waitForRetry(delay time.Duration) bool {
+func (r *Relay) waitForRetry(delay time.Duration, envelope bool) bool {
+	var batchingStopped <-chan struct{}
+	if envelope {
+		batchingStopped = r.batchingStopped
+	}
 	for {
 		r.mu.Lock()
 		draining := r.draining
@@ -866,6 +875,11 @@ func (r *Relay) waitForRetry(delay time.Duration) bool {
 			return r.ctx.Err() == nil && (deadline.IsZero() || time.Now().Before(deadline))
 		case <-drainStarted:
 			timer.Stop()
+		case <-batchingStopped:
+			timer.Stop()
+			// deliver rechecks batchingDisabled before another attempt, so
+			// these members go single without waiting for envelope backoff.
+			return true
 		case <-r.ctx.Done():
 			timer.Stop()
 			return false
