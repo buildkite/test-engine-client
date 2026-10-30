@@ -1,4 +1,9 @@
 # Changelog
+## Unreleased
+- Batch [OTLP relay](./README.md#relay-opentelemetry-traces) test-result uploads so per-test requests share an upstream upload instead of each waiting for a separate one. A request is still forwarded immediately when no test results were uploaded in the last second, so sparse traffic isn't delayed. Child-span requests are forwarded one for one as before.
+- Fix the OTLP relay continuing to retry uploads after its shutdown drain deadline.
+- Warn `TEST RESULTS MISSING` when the OTLP relay drops test results still queued at its drain deadline, which it previously only counted.
+
 ## 3.4.2 - 2026-10-29
 - Fix Vitest retries to match exact failed test names in Vitest 4 and 5, and keep the run failing when a retry skips or omits a failed test instead of passing it.
 - Support Test Scheduler acknowledging heartbeats after a pool is consumed, so a heartbeat racing successful final completion does not fail the job. Requires Test Scheduler support on the server.

@@ -2,6 +2,7 @@ package otlprelay
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -32,12 +33,26 @@ const (
 	maxRequestBytes           = 900 * 1024
 	defaultQueueCapacity      = 64 * 1024 * 1024
 	queueRequestOverhead      = 1024 // Account for object and slice overhead, even with an empty body.
+	defaultMaxBatchRequests   = 5000 // Bounds tiny or empty requests; real spans reach maxBatchBytes first.
+	defaultBatchWindow        = time.Second
 	defaultRequestTimeout     = 30 * time.Second
 	defaultInitialBackoff     = 250 * time.Millisecond
 	defaultMaxBackoff         = 5 * time.Second
 	defaultTokenLifetime      = 2 * time.Hour
 	defaultTokenRefreshLeeway = 5 * time.Minute
 )
+
+// Batches are capped by decompressed size, which also bounds them on the wire:
+// gzip cannot grow 512 KiB past the receiver's 900 KiB limit. Larger batches
+// risk Test Engine ingestion's per-request limits (8 MiB decoded, 1 MiB of
+// backtraces), which drop data after the receiver has accepted it. Passing
+// test spans reach this cap at about 300 per upload.
+const maxBatchBytes = 512 * 1024
+
+// Only test-result requests are merged. Child and unlabelled requests carry
+// arbitrary instrumentation, where one invalid span makes ingestion reject the
+// whole request, so merging them would lose their neighbours too.
+const testSpanStream = "test"
 
 // Keep detailed reasons bounded even if a receiver includes a different request
 // ID in every message. Further reasons are counted together per HTTP status.
@@ -69,8 +84,10 @@ type Config struct {
 	HTTPClient   *http.Client
 	Logf         func(string, ...any)
 
-	initialBackoff time.Duration
-	maxBackoff     time.Duration
+	initialBackoff   time.Duration
+	maxBackoff       time.Duration
+	batchWindow      time.Duration
+	maxBatchRequests int
 }
 
 // Stats summarizes the distribution of a per-request measurement.
@@ -132,10 +149,9 @@ func (s *sampler[T]) stats() Stats[T] {
 	return stats
 }
 
-// Report summarizes requests delivered or dropped by a relay. ForwardedSize
-// and ForwardedLatency cover forwarded requests only; latency is the duration
-// of each request's successful upstream POST, excluding failed attempts and
-// retry backoff.
+// Report counts original accepted requests and bytes delivered or dropped.
+// ForwardedSize and ForwardedLatency measure successful upstream batches;
+// latency excludes failed attempts and retry backoff.
 type Report struct {
 	ForwardedRequests        int
 	ForwardedBytes           int64
@@ -143,8 +159,12 @@ type Report struct {
 	ForwardedLatency         Stats[time.Duration]
 	DroppedPermanentRequests int
 	DroppedDeadlineRequests  int
-	DroppedBytes             int64
-	Refusals                 []Refusal
+	// Test and unlabelled requests among DroppedDeadlineRequests; unlabelled
+	// requests may carry test results.
+	DroppedDeadlineTestRequests       int
+	DroppedDeadlineUnlabelledRequests int
+	DroppedBytes                      int64
+	Refusals                          []Refusal
 }
 
 // Refusal counts permanently refused requests with the same HTTP status and
@@ -165,6 +185,11 @@ type request struct {
 	spanStream      string
 }
 
+type batch struct {
+	request
+	members []*request
+}
+
 type deliveryResult int
 
 const (
@@ -174,7 +199,7 @@ const (
 )
 
 // Relay accepts authenticated OTLP/HTTP protobuf requests on loopback and
-// forwards their byte-exact bodies to Buildkite from one background worker.
+// batches them by span stream for delivery from one background worker.
 type Relay struct {
 	config Config
 
@@ -200,6 +225,11 @@ type Relay struct {
 	report          Report
 	sizeSampler     sampler[int64]
 	latencySampler  sampler[time.Duration]
+	// lastTestUpload is when the latest test-result upload started. A test
+	// request is forwarded immediately once batchWindow has passed since then,
+	// so sparse traffic isn't delayed and busy traffic uploads about once per
+	// window.
+	lastTestUpload time.Time
 
 	// upstreamToken, tokenRefreshAt, and credentialErr are only touched by New
 	// (before the worker goroutine starts) and by the single forward worker, so
@@ -240,6 +270,12 @@ func New(config Config) (*Relay, error) {
 	}
 	if config.maxBackoff <= 0 {
 		config.maxBackoff = defaultMaxBackoff
+	}
+	if config.batchWindow <= 0 {
+		config.batchWindow = defaultBatchWindow
+	}
+	if config.maxBatchRequests <= 0 {
+		config.maxBatchRequests = defaultMaxBatchRequests
 	}
 	if config.Logf == nil {
 		config.Logf = func(string, ...any) {}
@@ -425,7 +461,7 @@ func (r *Relay) forward() {
 	defer close(r.done)
 
 	for {
-		req, ok := r.nextRequest()
+		req, ok := r.nextBatch()
 		if !ok {
 			if r.ctx.Err() != nil {
 				r.dropRemainingAtDeadline()
@@ -433,7 +469,7 @@ func (r *Relay) forward() {
 			return
 		}
 
-		result, latency := r.deliver(req)
+		result, latency := r.deliver(&req.request, len(req.members))
 		switch result {
 		case deliveryForwarded:
 			r.complete(req, true, latency)
@@ -446,31 +482,111 @@ func (r *Relay) forward() {
 	}
 }
 
-func (r *Relay) nextRequest() (*request, bool) {
+func (r *Relay) nextBatch() (*batch, bool) {
+	var pending batch
+	var body []byte
+	index := 0
 	for {
-		r.mu.Lock()
-		if len(r.queue) > 0 {
-			req := r.queue[0]
-			r.mu.Unlock()
-			return req, true
-		}
-		if r.draining {
-			r.mu.Unlock()
+		if r.ctx.Err() != nil {
 			return nil, false
 		}
+		r.mu.Lock()
+		if index < len(r.queue) {
+			req := r.queue[index]
+			index++
+			r.mu.Unlock()
+			if req.spanStream != testSpanStream {
+				if len(pending.members) == 0 {
+					return &batch{request: *req, members: []*request{req}}, true
+				}
+				continue
+			}
+			decoded, ok := batchBody(req)
+			if !ok || len(body)+len(decoded) > maxBatchBytes {
+				if len(pending.members) == 0 {
+					// Preserve oversized or invalid gzip requests as-is.
+					return r.startTestUpload(&batch{request: *req, members: []*request{req}}), true
+				}
+				break
+			}
+			if len(pending.members) == 0 {
+				pending.request = *req
+			}
+			pending.members = append(pending.members, req)
+			body = append(body, decoded...)
+			if len(body) >= maxBatchBytes || len(pending.members) >= r.config.maxBatchRequests {
+				break
+			}
+			continue
+		}
+		draining := r.draining
+		sendAt := r.lastTestUpload.Add(r.config.batchWindow)
 		r.mu.Unlock()
+		if draining {
+			break
+		}
 
+		var timeout <-chan time.Time
+		var timer *time.Timer
+		if len(pending.members) > 0 {
+			remaining := time.Until(sendAt)
+			if remaining <= 0 {
+				break
+			}
+			timer = time.NewTimer(remaining)
+			timeout = timer.C
+		}
 		select {
 		case <-r.wake:
+		case <-timeout:
 		case <-r.ctx.Done():
-			return nil, false
+		}
+		if timer != nil {
+			timer.Stop()
 		}
 	}
+	if len(pending.members) == 0 {
+		return nil, false
+	}
+	if len(pending.members) > 1 {
+		// ExportTraceServiceRequest contains repeated resource_spans. Protobuf
+		// concatenation merges those fields without decoding/re-encoding spans.
+		var compressed bytes.Buffer
+		writer := gzip.NewWriter(&compressed)
+		// bytes.Buffer writes cannot fail.
+		_, _ = writer.Write(body)
+		_ = writer.Close()
+		pending.body = compressed.Bytes()
+		pending.contentEncoding = "gzip"
+	}
+	return r.startTestUpload(&pending), true
+}
+
+func (r *Relay) startTestUpload(b *batch) *batch {
+	r.mu.Lock()
+	r.lastTestUpload = time.Now()
+	r.mu.Unlock()
+	return b
+}
+
+// Bound decompression as well as batch size. Requests that cannot fit in a
+// batch are forwarded alone, retaining their original encoding and bytes.
+func batchBody(req *request) ([]byte, bool) {
+	if req.contentEncoding != "gzip" {
+		return req.body, len(req.body) <= maxBatchBytes
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(req.body))
+	if err != nil {
+		return nil, false
+	}
+	defer reader.Close()
+	body, err := io.ReadAll(io.LimitReader(reader, maxBatchBytes+1))
+	return body, err == nil && len(body) <= maxBatchBytes
 }
 
 // deliver returns the delivery result and, for a forwarded request, the
 // duration of the successful upstream POST.
-func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
+func (r *Relay) deliver(queued *request, count int) (deliveryResult, time.Duration) {
 	backoff := r.config.initialBackoff
 	for {
 		token, err := r.authorizationToken()
@@ -519,7 +635,7 @@ func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 			case status >= 200 && status < 300:
 				return deliveryForwarded, sendLatency
 			case status != http.StatusRequestTimeout && status != http.StatusTooManyRequests && status < 500:
-				r.recordRefusal(status, message, queued.spanStream)
+				r.recordRefusal(status, message, queued.spanStream, count)
 				return deliveryPermanentFailure, 0
 			}
 		}
@@ -538,7 +654,7 @@ func (r *Relay) deliver(queued *request) (deliveryResult, time.Duration) {
 	}
 }
 
-func (r *Relay) recordRefusal(status int, message, stream string) {
+func (r *Relay) recordRefusal(status int, message, stream string, count int) {
 	r.mu.Lock()
 	first := false
 	index := slices.IndexFunc(r.report.Refusals, func(refusal Refusal) bool {
@@ -556,14 +672,14 @@ func (r *Relay) recordRefusal(status int, message, stream string) {
 		r.report.Refusals = append(r.report.Refusals, Refusal{Status: status, Message: message})
 	}
 	refusal := &r.report.Refusals[index]
-	refusal.Requests++
-	switch strings.ToLower(strings.TrimSpace(stream)) {
+	refusal.Requests += count
+	switch streamKind(stream) {
 	case "test":
-		refusal.TestRequests++
+		refusal.TestRequests += count
 	case "child":
-		refusal.ChildRequests++
+		refusal.ChildRequests += count
 	default:
-		refusal.UnlabelledRequests++
+		refusal.UnlabelledRequests += count
 	}
 	r.mu.Unlock()
 	if first {
@@ -588,7 +704,12 @@ func (r *Relay) waitForRetry(delay time.Duration) bool {
 		}
 		select {
 		case <-timer.C:
-			return true
+			// An expired deadline clamps the delay to zero. Do not retry in a
+			// tight loop while Drain's goroutine is still waking up to cancel.
+			r.mu.Lock()
+			deadline := r.drainDeadline
+			r.mu.Unlock()
+			return r.ctx.Err() == nil && (deadline.IsZero() || time.Now().Before(deadline))
 		case <-drainStarted:
 			timer.Stop()
 		case <-r.ctx.Done():
@@ -691,24 +812,40 @@ func (r *Relay) clampRetryDelay(delay time.Duration) time.Duration {
 	return min(drainDelay, remaining)
 }
 
-func (r *Relay) complete(req *request, forwarded bool, latency time.Duration) {
+func (r *Relay) complete(req *batch, forwarded bool, latency time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if len(r.queue) == 0 || r.queue[0] != req {
-		return
-	}
-	r.queue[0] = nil
-	r.queue = r.queue[1:]
-	r.queuedSize -= len(req.body) + queueRequestOverhead
+	member := 0
+	r.queue = slices.DeleteFunc(r.queue, func(queued *request) bool {
+		if member >= len(req.members) || queued != req.members[member] {
+			return false
+		}
+		member++
+		r.queuedSize -= len(queued.body) + queueRequestOverhead
+		if forwarded {
+			r.report.ForwardedRequests++
+			r.report.ForwardedBytes += int64(len(queued.body))
+		} else {
+			r.report.DroppedPermanentRequests++
+			r.report.DroppedBytes += int64(len(queued.body))
+		}
+		return true
+	})
 	if forwarded {
-		r.report.ForwardedRequests++
-		r.report.ForwardedBytes += int64(len(req.body))
 		r.sizeSampler.observe(int64(len(req.body)))
 		r.latencySampler.observe(latency)
-	} else {
-		r.report.DroppedPermanentRequests++
-		r.report.DroppedBytes += int64(len(req.body))
+	}
+}
+
+// streamKind returns "test" or "child" for a recognized span stream, and ""
+// for an unlabelled request, which may carry test results.
+func streamKind(stream string) string {
+	switch kind := strings.ToLower(strings.TrimSpace(stream)); kind {
+	case "test", "child":
+		return kind
+	default:
+		return ""
 	}
 }
 
@@ -719,6 +856,12 @@ func (r *Relay) dropRemainingAtDeadline() {
 	r.report.DroppedDeadlineRequests += len(r.queue)
 	for _, req := range r.queue {
 		r.report.DroppedBytes += int64(len(req.body))
+		switch streamKind(req.spanStream) {
+		case "test":
+			r.report.DroppedDeadlineTestRequests++
+		case "":
+			r.report.DroppedDeadlineUnlabelledRequests++
+		}
 	}
 	r.queue = nil
 	r.queuedSize = 0

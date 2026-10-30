@@ -2,6 +2,7 @@ package otlprelay
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -16,7 +17,337 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/encoding/protowire"
 )
+
+func TestRelayBatchesRequests(t *testing.T) {
+	// ExportTraceServiceRequest.resource_spans -> ResourceSpans.scope_spans
+	// -> ScopeSpans.spans -> Span.name. Each request has a distinct test span.
+	trace := func(name string) []byte {
+		field := func(number protowire.Number, value []byte) []byte {
+			return protowire.AppendBytes(protowire.AppendTag(nil, number, protowire.BytesType), value)
+		}
+		return field(1, field(2, field(2, field(5, []byte(name)))))
+	}
+	a, b, c := trace("first test"), trace("second test"), trace("third test")
+	join := func(parts ...[]byte) []byte { return bytes.Join(parts, nil) }
+	large := trace(strings.Repeat("x", 300*1024))
+	// Four length-delimited fields contribute 16 bytes at this size.
+	half := trace(strings.Repeat("z", 256*1024-16))
+	oversized := trace(strings.Repeat("y", 600*1024))
+	tests := []struct {
+		name         string
+		bodies       [][]byte
+		streams      []string
+		gzip         bool
+		statuses     []int
+		wantBodies   [][]byte
+		wantStream   []string
+		wantEncoding []string
+		wait         bool
+		maxRequests  int
+	}{
+		{name: "drain", bodies: [][]byte{a, b, c}, wantBodies: [][]byte{join(a, b, c)}},
+		{name: "mixed encoding", bodies: [][]byte{a, b, c}, gzip: true, wantBodies: [][]byte{join(a, b, c)}},
+		{name: "size cap", bodies: [][]byte{large, large, c}, gzip: true, wantBodies: [][]byte{large, join(large, c)}, wantEncoding: []string{"", "gzip"}, wait: true},
+		{name: "exact size cap", bodies: [][]byte{half, half, c}, wantBodies: [][]byte{join(half, half), c}, wantEncoding: []string{"gzip", ""}, wait: true},
+		{name: "oversized alone", bodies: [][]byte{a, oversized, c}, wantBodies: [][]byte{a, oversized, c}, wantEncoding: []string{"", "", ""}},
+		{name: "gzip oversized alone", bodies: [][]byte{a, oversized, c}, gzip: true, wantBodies: [][]byte{a, oversized, c}, wantEncoding: []string{"", "gzip", ""}},
+		{name: "streams", bodies: [][]byte{a, b, c}, gzip: true, streams: []string{"test", "child", "test"}, wantBodies: [][]byte{join(a, c), b}, wantStream: []string{"test", "child"}},
+		{name: "child unmerged", bodies: [][]byte{a, b}, streams: []string{"child", "child"}, wantBodies: [][]byte{a, b}, wantStream: []string{"child", "child"}, wantEncoding: []string{"", ""}},
+		{name: "unlabelled unmerged", bodies: [][]byte{a, b}, streams: []string{"", ""}, wantBodies: [][]byte{a, b}, wantStream: []string{"", ""}, wantEncoding: []string{"", ""}},
+		{name: "retry whole batch", bodies: [][]byte{a, b, c}, statuses: []int{429, 503, 200}, wantBodies: [][]byte{join(a, b, c), join(a, b, c), join(a, b, c)}},
+		{name: "refuse whole batch", bodies: [][]byte{a, b, c}, statuses: []int{403}, wantBodies: [][]byte{join(a, b, c)}},
+		{name: "many small requests", bodies: slices.Repeat([][]byte{a}, 101), wantBodies: [][]byte{bytes.Repeat(a, 101)}},
+		{name: "request cap", maxRequests: 3, bodies: slices.Repeat([][]byte{a}, 4), wantBodies: [][]byte{bytes.Repeat(a, 3), a}, wantEncoding: []string{"gzip", ""}, wait: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			type receivedBatch struct {
+				body     []byte
+				stream   string
+				encoding string
+				at       time.Time
+			}
+			received := make(chan receivedBatch, 200)
+			var attempts atomic.Int32
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				wireBody, _ := io.ReadAll(req.Body)
+				wireReader := bytes.NewReader(wireBody)
+				var reader io.Reader = wireReader
+				if req.Header.Get("Content-Encoding") == "gzip" {
+					gz, err := gzip.NewReader(wireReader)
+					if err != nil {
+						t.Error(err)
+						w.WriteHeader(400)
+						return
+					}
+					defer gz.Close()
+					gz.Multistream(false)
+					reader = gz
+				}
+				body, err := io.ReadAll(reader)
+				if err != nil {
+					t.Error(err)
+				}
+				if wireReader.Len() != 0 {
+					t.Error("upstream body has trailing bytes or multiple gzip members")
+				}
+				if len(wireBody) > maxRequestBytes {
+					t.Errorf("upstream body is %d bytes, exceeds receiver limit", len(wireBody))
+				}
+				received <- receivedBatch{body, req.Header.Get("Buildkite-Tests-Span-Stream"), req.Header.Get("Content-Encoding"), time.Now()}
+				attempt := int(attempts.Add(1)) - 1
+				status := http.StatusOK
+				if attempt < len(tc.statuses) {
+					status = tc.statuses[attempt]
+				}
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(status)
+			}))
+			defer upstream.Close()
+			relay := newTestRelay(t, Config{
+				UpstreamEndpoint: upstream.URL,
+				RunKey:           "build-id",
+				TokenSource:      staticToken("oidc-token"),
+				batchWindow:      time.Second,
+				maxBatchRequests: tc.maxRequests,
+			})
+			start := time.Now()
+			var acceptedBytes int64
+			for i, body := range tc.bodies {
+				encoding := ""
+				if tc.gzip && i%2 == 1 {
+					var compressed bytes.Buffer
+					writer := gzip.NewWriter(&compressed)
+					_, _ = writer.Write(body)
+					_ = writer.Close()
+					body = compressed.Bytes()
+					encoding = "gzip"
+				}
+				stream := "test"
+				if len(tc.streams) > 0 {
+					stream = tc.streams[i]
+				}
+				resp := postTraces(t, relay, body, "Bearer "+relay.token, encoding, stream)
+				_ = resp.Body.Close()
+				if resp.StatusCode != 200 {
+					t.Fatalf("local status = %d, want 200", resp.StatusCode)
+				}
+				acceptedBytes += int64(len(body))
+			}
+			var got []receivedBatch
+			if tc.wait {
+				select {
+				case first := <-received:
+					got = append(got, first)
+					if elapsed := first.at.Sub(start); elapsed >= 900*time.Millisecond {
+						t.Errorf("full batch waited %s instead of sending immediately", elapsed)
+					}
+				case <-time.After(3 * time.Second):
+					t.Error("batch did not flush without drain")
+				}
+			}
+			drainCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			report := relay.Drain(drainCtx)
+			close(received)
+			for item := range received {
+				got = append(got, item)
+			}
+			if len(got) != len(tc.wantBodies) {
+				t.Fatalf("upstream attempts = %d, want %d", len(got), len(tc.wantBodies))
+			}
+			for i, item := range got {
+				if !bytes.Equal(item.body, tc.wantBodies[i]) {
+					t.Errorf("batch %d body differs: got %d bytes, want %d", i, len(item.body), len(tc.wantBodies[i]))
+				}
+				encoding := "gzip"
+				if len(tc.wantEncoding) > 0 {
+					encoding = tc.wantEncoding[i]
+				}
+				if item.encoding != encoding {
+					t.Errorf("batch %d encoding = %q, want %q", i, item.encoding, encoding)
+				}
+				stream := "test"
+				if len(tc.wantStream) > 0 {
+					stream = tc.wantStream[i]
+				}
+				if item.stream != stream {
+					t.Errorf("batch %d stream = %q, want %q", i, item.stream, stream)
+				}
+			}
+			if slices.Contains(tc.statuses, 403) {
+				want := Report{DroppedPermanentRequests: 3, DroppedBytes: acceptedBytes, Refusals: []Refusal{{Status: 403, Requests: 3, TestRequests: 3}}}
+				if diff := cmp.Diff(want, report); diff != "" {
+					t.Errorf("refused batch report (-want +got):\n%s", diff)
+				}
+			} else if report.ForwardedRequests != len(tc.bodies) || report.ForwardedBytes != acceptedBytes || report.DroppedBytes != 0 {
+				t.Errorf("report = %+v, want all %d original requests (%d bytes) forwarded", report, len(tc.bodies), acceptedBytes)
+			}
+		})
+	}
+}
+
+func TestRelayForwardsIdleTestRequestsImmediately(t *testing.T) {
+	type upload struct {
+		body     []byte
+		encoding string
+		at       time.Time
+	}
+	received := make(chan upload, 4)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		received <- upload{body, req.Header.Get("Content-Encoding"), time.Now()}
+	}))
+	defer upstream.Close()
+	const window = 500 * time.Millisecond
+	relay := newTestRelay(t, Config{UpstreamEndpoint: upstream.URL, RunKey: "build-id", TokenSource: staticToken("token"), batchWindow: window})
+	relay.mu.Lock()
+	relay.lastTestUpload = time.Time{}
+	relay.mu.Unlock()
+
+	post := func(body string) time.Time {
+		t.Helper()
+		resp := postTraces(t, relay, []byte(body), "Bearer "+relay.token, "", "test")
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST status = %d, want 200", resp.StatusCode)
+		}
+		return time.Now()
+	}
+	next := func() upload {
+		t.Helper()
+		select {
+		case item := <-received:
+			return item
+		case <-time.After(3 * time.Second):
+			t.Fatal("upload did not arrive")
+			return upload{}
+		}
+	}
+
+	posted := post("a")
+	first := next()
+	if string(first.body) != "a" || first.encoding != "" || first.at.Sub(posted) > 200*time.Millisecond {
+		t.Errorf("idle request uploaded as %q (%q) after %s, want it forwarded unchanged and immediately", first.body, first.encoding, first.at.Sub(posted))
+	}
+
+	// Requests arriving within the window after an upload wait for it and merge.
+	post("b")
+	time.Sleep(window / 2)
+	post("c")
+	second := next()
+	if gap := second.at.Sub(first.at); gap < window-100*time.Millisecond || gap > window+400*time.Millisecond {
+		t.Errorf("busy batch sent %s after the previous upload, want about %s", gap, window)
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(second.body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, _ := io.ReadAll(reader)
+	if string(merged) != "bc" {
+		t.Errorf("busy batch = %q, want bc", merged)
+	}
+
+	// Once a window passes without an upload, requests go immediately again.
+	time.Sleep(window + 200*time.Millisecond)
+	posted = post("d")
+	third := next()
+	if string(third.body) != "d" || third.at.Sub(posted) > 200*time.Millisecond {
+		t.Errorf("request after idle window uploaded as %q after %s, want it immediately", third.body, third.at.Sub(posted))
+	}
+
+	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if report := relay.Drain(drainCtx); report.ForwardedRequests != 4 {
+		t.Errorf("forwarded %d requests, want 4", report.ForwardedRequests)
+	}
+}
+
+func TestRelayKeepsStandaloneGzipBodiesUnchanged(t *testing.T) {
+	compress := func(body []byte) []byte {
+		var buffer bytes.Buffer
+		writer := gzip.NewWriter(&buffer)
+		writer.Name = "collector-original-header"
+		_, _ = writer.Write(body)
+		_ = writer.Close()
+		return buffer.Bytes()
+	}
+	valid := compress([]byte("standalone child spans"))
+	badChecksum := bytes.Clone(valid)
+	badChecksum[len(badChecksum)-8] ^= 0xff
+	for _, tc := range []struct {
+		name   string
+		body   []byte
+		stream string
+	}{
+		{"valid isolated stream", valid, "child"},
+		{"invalid header", []byte("not gzip"), "test"},
+		{"truncated", valid[:len(valid)-4], "test"},
+		{"invalid checksum", badChecksum, "test"},
+		{"oversized decompressed body", compress(bytes.Repeat([]byte("x"), 600*1024)), "test"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			type upload struct {
+				body     []byte
+				encoding string
+			}
+			received := make(chan upload, 3)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				body, _ := io.ReadAll(req.Body)
+				received <- upload{body, req.Header.Get("Content-Encoding")}
+			}))
+			defer upstream.Close()
+			relay := newTestRelay(t, Config{UpstreamEndpoint: upstream.URL, RunKey: "build-id", TokenSource: staticToken("token"), batchWindow: time.Second})
+			for i, body := range [][]byte{[]byte("before"), tc.body, []byte("after")} {
+				encoding, stream := "", "test"
+				if i == 1 {
+					encoding, stream = "gzip", tc.stream
+				}
+				resp := postTraces(t, relay, body, "Bearer "+relay.token, encoding, stream)
+				_ = resp.Body.Close()
+				if resp.StatusCode != http.StatusOK {
+					t.Fatalf("POST status = %d, want accepted", resp.StatusCode)
+				}
+			}
+			drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			report := relay.Drain(drainCtx)
+			if report.ForwardedRequests != 3 || report.ForwardedBytes != int64(11+len(tc.body)) || report.DroppedBytes != 0 {
+				t.Errorf("report = %+v, want all three original requests forwarded", report)
+			}
+			close(received)
+			var uploads []upload
+			for item := range received {
+				uploads = append(uploads, item)
+			}
+			if tc.stream == "child" {
+				if len(uploads) != 2 {
+					t.Fatalf("uploads = %d, want test batch and standalone child", len(uploads))
+				}
+				reader, err := gzip.NewReader(bytes.NewReader(uploads[0].body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer reader.Close()
+				body, _ := io.ReadAll(reader)
+				if string(body) != "beforeafter" {
+					t.Errorf("merged test body = %q, want beforeafter", body)
+				}
+				uploads = uploads[1:]
+			} else {
+				if len(uploads) != 3 || string(uploads[0].body) != "before" || string(uploads[2].body) != "after" {
+					t.Fatal("unbatchable gzip did not remain between its neighbouring requests")
+				}
+				uploads = uploads[1:2]
+			}
+			if uploads[0].encoding != "gzip" || !bytes.Equal(uploads[0].body, tc.body) {
+				t.Error("standalone gzip request changed its bytes or encoding")
+			}
+		})
+	}
+}
 
 func TestRelayForwardsOpaqueGzipRequestWithTrustedHeaders(t *testing.T) {
 	body := []byte("opaque compressed protobuf bytes")
@@ -282,26 +613,43 @@ func TestRelayStopsMintingAfterTerminalCredentialFailure(t *testing.T) {
 func TestRelayAcknowledgesBeforeDeliveryAndReturns429WhenQueueIsFull(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		close(started)
-		<-release
+	body := bytes.Repeat([]byte("full"), 1024)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		var reader io.Reader = req.Body
+		if req.Header.Get("Content-Encoding") == "gzip" {
+			gz, err := gzip.NewReader(req.Body)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer gz.Close()
+			reader = gz
+			close(started)
+			<-release
+		}
+		got, _ := io.ReadAll(reader)
+		if !bytes.Equal(got, bytes.Repeat(body, 2)) {
+			t.Error("upstream did not receive the full payload")
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer upstream.Close()
 
-	body := []byte("full")
 	relay := newTestRelay(t, Config{
 		UpstreamEndpoint: upstream.URL,
 		RunKey:           "build-id",
-		QueueCapacity:    len(body) + queueRequestOverhead,
+		QueueCapacity:    2 * (len(body) + queueRequestOverhead),
 		TokenSource:      staticToken("oidc-token"),
+		batchWindow:      100 * time.Millisecond,
 	})
 
-	first := postTraces(t, relay, body, "Bearer "+relay.token, "")
-	if first.StatusCode != http.StatusOK {
-		t.Fatalf("first POST status = %d, want 200", first.StatusCode)
+	for range 2 {
+		resp := postTraces(t, relay, body, "Bearer "+relay.token, "", "test")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST status = %d, want 200 before upstream delivery completes", resp.StatusCode)
+		}
+		_ = resp.Body.Close()
 	}
-	_ = first.Body.Close()
 	select {
 	case <-started:
 	case <-time.After(time.Second):
@@ -312,25 +660,57 @@ func TestRelayAcknowledgesBeforeDeliveryAndReturns429WhenQueueIsFull(t *testing.
 	if second.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("second POST status = %d, want 429", second.StatusCode)
 	}
+	if second.Header.Get("Retry-After") != "1" {
+		t.Error("full queue did not return Retry-After: 1")
+	}
 	_ = second.Body.Close()
 
 	close(release)
+	// Reuse almost the entire queue. Releasing only the compressed batch size
+	// instead of both original bodies would leave this request returning 429.
+	deadline := time.Now().Add(time.Second)
+	for {
+		resp := postTraces(t, relay, bytes.Repeat(body, 2), "Bearer "+relay.token, "")
+		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+		if resp.StatusCode != http.StatusTooManyRequests || time.Now().After(deadline) {
+			t.Fatalf("queue capacity was not released: status %d", resp.StatusCode)
+		}
+		time.Sleep(time.Millisecond)
+	}
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	report := relay.Drain(drainCtx)
-	if report.ForwardedRequests != 1 || report.DroppedBytes != 0 {
-		t.Errorf("Drain report = %+v, want one forwarded request and no silent drop", report)
+	if report.ForwardedRequests != 3 || report.ForwardedBytes != int64(4*len(body)) || report.DroppedBytes != 0 {
+		t.Errorf("Drain report = %+v, want three forwarded requests and no silent drop", report)
 	}
 }
 
 func TestRelayRetriesRetryableResponses(t *testing.T) {
 	var requests atomic.Int32
+	type attempt struct {
+		body []byte
+		at   time.Time
+	}
+	attempts := make(chan attempt, 3)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		requestNumber := requests.Add(1)
-		if got := req.Header.Get("Buildkite-Tests-Span-Stream"); got != "child" {
-			t.Errorf("attempt %d Buildkite-Tests-Span-Stream = %q, want child", requestNumber, got)
+		if got := req.Header.Get("Buildkite-Tests-Span-Stream"); got != "test" {
+			t.Errorf("attempt %d Buildkite-Tests-Span-Stream = %q, want test", requestNumber, got)
 		}
+		if req.Header.Get("Content-Encoding") != "gzip" {
+			t.Error("merged retry must retain gzip encoding")
+		}
+		body, _ := io.ReadAll(req.Body)
+		attempts <- attempt{body, time.Now()}
 		if requestNumber == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		if requestNumber == 2 {
 			w.Header().Set("Retry-After", "0")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -343,21 +723,56 @@ func TestRelayRetriesRetryableResponses(t *testing.T) {
 		UpstreamEndpoint: upstream.URL,
 		RunKey:           "build-id",
 		TokenSource:      staticToken("oidc-token"),
+		QueueCapacity:    2 * (7 + queueRequestOverhead),
+		batchWindow:      100 * time.Millisecond,
 	})
-	resp := postTraces(t, relay, []byte("request"), `Token token="`+relay.token+`"`, "", "child")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST status = %d, want 200", resp.StatusCode)
+	for range 2 {
+		resp := postTraces(t, relay, []byte("request"), `Token token="`+relay.token+`"`, "", "test")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST status = %d, want 200", resp.StatusCode)
+		}
+		_ = resp.Body.Close()
 	}
-	_ = resp.Body.Close()
+	var got []attempt
+	for range 3 {
+		select {
+		case item := <-attempts:
+			got = append(got, item)
+			if len(got) == 1 {
+				resp := postTraces(t, relay, nil, "Bearer "+relay.token, "")
+				_ = resp.Body.Close()
+				if resp.StatusCode != http.StatusTooManyRequests {
+					t.Errorf("queue status during retry = %d, want 429", resp.StatusCode)
+				}
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("merged batch retry did not arrive")
+		}
+	}
+	if delay := got[1].at.Sub(got[0].at); delay < time.Second {
+		t.Errorf("retry delay = %s, ignored Retry-After: 1", delay)
+	}
+	if !bytes.Equal(got[0].body, got[1].body) || !bytes.Equal(got[0].body, got[2].body) {
+		t.Error("retry changed the merged gzip body")
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(got[0].body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	decoded, _ := io.ReadAll(reader)
+	if string(decoded) != "requestrequest" {
+		t.Errorf("retried body = %q, want both original requests", decoded)
+	}
 
 	drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	report := stripLatencyStats(t, relay.Drain(drainCtx))
-	if got := requests.Load(); got != 2 {
-		t.Errorf("upstream requests = %d, want 2", got)
+	if got := requests.Load(); got != 3 {
+		t.Errorf("upstream requests = %d, want 3", got)
 	}
-	if !cmp.Equal(report, Report{ForwardedRequests: 1, ForwardedBytes: 7, ForwardedSize: singleStat[int64](7)}) {
-		t.Errorf("Drain report = %+v, want one forwarded request", report)
+	if !cmp.Equal(report, Report{ForwardedRequests: 2, ForwardedBytes: 14, ForwardedSize: singleStat(int64(len(got[0].body)))}) {
+		t.Errorf("Drain report = %+v, want two original requests in one upstream upload", report)
 	}
 }
 
@@ -459,6 +874,7 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 			Refusal{Status: 403, Message: "refused +++ injected group  [2K try again", Requests: 1, TestRequests: 1}},
 	}
 	var requests atomic.Int32
+	received := make(chan struct{}, 1)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		requests.Add(1)
 		body, _ := io.ReadAll(req.Body)
@@ -466,6 +882,7 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 		w.Header().Set("Content-Type", "application/x-protobuf")
 		w.WriteHeader(cases[index].status)
 		_, _ = w.Write(cases[index].body)
+		received <- struct{}{}
 	}))
 	defer upstream.Close()
 	var logs []string
@@ -487,6 +904,7 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 				if resp.StatusCode != http.StatusOK {
 					t.Fatalf("local response = %d, want accepted request", resp.StatusCode)
 				}
+				<-received // Each fixture needs its own upstream refusal reason.
 			}
 		}
 	}
@@ -513,6 +931,7 @@ func TestRelayReportsDistinctRefusals(t *testing.T) {
 }
 
 func TestRelayBoundsDistinctRefusals(t *testing.T) {
+	received := make(chan struct{}, 1)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		body, _ := io.ReadAll(req.Body)
 		status := http.StatusForbidden
@@ -521,6 +940,7 @@ func TestRelayBoundsDistinctRefusals(t *testing.T) {
 		}
 		w.WriteHeader(status)
 		_, _ = w.Write(append([]byte{0x08, 0x07, 0x12, byte(len(body))}, body...))
+		received <- struct{}{}
 	}))
 	defer upstream.Close()
 	var logs []string
@@ -538,6 +958,7 @@ func TestRelayBoundsDistinctRefusals(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("local response = %d, want accepted request", resp.StatusCode)
 		}
+		<-received // Keep distinct-message fixtures in separate batches.
 	}
 	var want []Refusal
 	for i := range 32 {
@@ -576,7 +997,10 @@ func TestRelayBoundsDistinctRefusals(t *testing.T) {
 func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("Content-Encoding") != "gzip" || req.Header.Get("Buildkite-Tests-Span-Stream") != "test" {
+			t.Error("expected a merged test batch in flight at the drain deadline")
+		}
 		close(started)
 		<-release
 	}))
@@ -587,12 +1011,15 @@ func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
 		UpstreamEndpoint: upstream.URL,
 		RunKey:           "build-id",
 		TokenSource:      staticToken("oidc-token"),
+		batchWindow:      500 * time.Millisecond,
 	})
-	resp := postTraces(t, relay, body, "Bearer "+relay.token, "")
-	_ = resp.Body.Close()
+	for _, stream := range []string{"test", "child", "test"} {
+		resp := postTraces(t, relay, body, "Bearer "+relay.token, "", stream)
+		_ = resp.Body.Close()
+	}
 	select {
 	case <-started:
-	case <-time.After(time.Second):
+	case <-time.After(3 * time.Second):
 		t.Fatal("upstream delivery did not start")
 	}
 
@@ -600,7 +1027,7 @@ func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
 	defer cancel()
 	report := relay.Drain(drainCtx)
 	close(release)
-	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
+	want := Report{DroppedDeadlineRequests: 3, DroppedDeadlineTestRequests: 2, DroppedBytes: int64(3 * len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
@@ -652,7 +1079,7 @@ func TestRelayDrainLimitsRetryAttempts(t *testing.T) {
 	if got := requests.Load(); got > 4 {
 		t.Errorf("upstream requests during drain = %d, want at most 4", got)
 	}
-	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
+	want := Report{DroppedDeadlineRequests: 1, DroppedDeadlineUnlabelledRequests: 1, DroppedBytes: int64(len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
@@ -691,7 +1118,7 @@ func TestRelayDrainInterruptsExistingRetryDelay(t *testing.T) {
 	if got := requests.Load(); got < 2 || got > 4 {
 		t.Errorf("upstream requests = %d, want 2 to 4 after interrupting Retry-After", got)
 	}
-	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
+	want := Report{DroppedDeadlineRequests: 1, DroppedDeadlineUnlabelledRequests: 1, DroppedBytes: int64(len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
@@ -898,10 +1325,19 @@ func newTestRelay(t *testing.T, config Config) *Relay {
 	t.Helper()
 	config.initialBackoff = time.Millisecond
 	config.maxBackoff = 5 * time.Millisecond
+	if config.batchWindow == 0 {
+		config.batchWindow = 10 * time.Millisecond
+	}
 	relay, err := New(config)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
+	// Start as if a test upload just happened, so test requests posted together
+	// wait for the window and merge deterministically. Tests of idle forwarding
+	// reset this.
+	relay.mu.Lock()
+	relay.lastTestUpload = time.Now()
+	relay.mu.Unlock()
 	return relay
 }
 

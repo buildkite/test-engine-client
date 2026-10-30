@@ -153,15 +153,19 @@ func TestStartOTLPRelaySeedsUpstreamCredentialFromOIDCUploadToken(t *testing.T) 
 func TestPrintOTLPRelayReport(t *testing.T) {
 	var buf bytes.Buffer
 	printOTLPRelayReport(&buf, otlprelay.Report{
-		ForwardedRequests:        495,
-		ForwardedBytes:           2381932,
-		ForwardedSize:            otlprelay.Stats[int64]{P50: 4812, P90: 14206, Max: 88410},
-		ForwardedLatency:         otlprelay.Stats[time.Duration]{P50: 38123456, P90: 91400000, Max: 412871900},
-		DroppedPermanentRequests: 3,
-		DroppedDeadlineRequests:  2,
-		DroppedBytes:             10240,
+		ForwardedRequests:                 495,
+		ForwardedBytes:                    2381932,
+		ForwardedSize:                     otlprelay.Stats[int64]{P50: 4812, P90: 14206, Max: 88410},
+		ForwardedLatency:                  otlprelay.Stats[time.Duration]{P50: 38123456, P90: 91400000, Max: 412871900},
+		DroppedPermanentRequests:          3,
+		DroppedDeadlineRequests:           4,
+		DroppedDeadlineTestRequests:       2,
+		DroppedDeadlineUnlabelledRequests: 1,
+		DroppedBytes:                      10240,
 	})
-	want := "bktec OTLP relay: 495 request(s) (2.3MiB) forwarded, 3 dropped permanently, 2 dropped at drain deadline, 10KiB dropped\n" +
+	want := "bktec OTLP relay: 495 request(s) (2.3MiB) forwarded, 3 dropped permanently, 4 dropped at drain deadline, 10KiB dropped\n" +
+		"TEST RESULTS MISSING: bktec OTLP relay dropped 2 test-result request(s) still queued at the drain deadline. Those test executions were not uploaded to Buildkite Test Engine.\n" +
+		"TEST RESULTS MAY BE MISSING: bktec OTLP relay dropped 1 unlabelled request(s) still queued at the drain deadline. These requests may have carried test results that were not uploaded to Buildkite Test Engine.\n" +
 		"bktec OTLP relay: request size: p50 4.7KiB, p90 13.9KiB, max 86.3KiB\n" +
 		"bktec OTLP relay: upstream latency: p50 38.12ms, p90 91.4ms, max 412.87ms\n"
 	if buf.String() != want {
