@@ -1027,7 +1027,7 @@ func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
 	defer cancel()
 	report := relay.Drain(drainCtx)
 	close(release)
-	want := Report{DroppedDeadlineRequests: 3, DroppedBytes: int64(3 * len(body))}
+	want := Report{DroppedDeadlineRequests: 3, DroppedDeadlineTestRequests: 2, DroppedBytes: int64(3 * len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
@@ -1079,7 +1079,7 @@ func TestRelayDrainLimitsRetryAttempts(t *testing.T) {
 	if got := requests.Load(); got > 4 {
 		t.Errorf("upstream requests during drain = %d, want at most 4", got)
 	}
-	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
+	want := Report{DroppedDeadlineRequests: 1, DroppedDeadlineUnlabelledRequests: 1, DroppedBytes: int64(len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}
@@ -1118,7 +1118,7 @@ func TestRelayDrainInterruptsExistingRetryDelay(t *testing.T) {
 	if got := requests.Load(); got < 2 || got > 4 {
 		t.Errorf("upstream requests = %d, want 2 to 4 after interrupting Retry-After", got)
 	}
-	want := Report{DroppedDeadlineRequests: 1, DroppedBytes: int64(len(body))}
+	want := Report{DroppedDeadlineRequests: 1, DroppedDeadlineUnlabelledRequests: 1, DroppedBytes: int64(len(body))}
 	if !cmp.Equal(report, want) {
 		t.Errorf("Drain report = %+v, want %+v", report, want)
 	}

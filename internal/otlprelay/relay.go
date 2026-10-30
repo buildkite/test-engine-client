@@ -159,8 +159,12 @@ type Report struct {
 	ForwardedLatency         Stats[time.Duration]
 	DroppedPermanentRequests int
 	DroppedDeadlineRequests  int
-	DroppedBytes             int64
-	Refusals                 []Refusal
+	// Test and unlabelled requests among DroppedDeadlineRequests; unlabelled
+	// requests may carry test results.
+	DroppedDeadlineTestRequests       int
+	DroppedDeadlineUnlabelledRequests int
+	DroppedBytes                      int64
+	Refusals                          []Refusal
 }
 
 // Refusal counts permanently refused requests with the same HTTP status and
@@ -669,7 +673,7 @@ func (r *Relay) recordRefusal(status int, message, stream string, count int) {
 	}
 	refusal := &r.report.Refusals[index]
 	refusal.Requests += count
-	switch strings.ToLower(strings.TrimSpace(stream)) {
+	switch streamKind(stream) {
 	case "test":
 		refusal.TestRequests += count
 	case "child":
@@ -834,6 +838,17 @@ func (r *Relay) complete(req *batch, forwarded bool, latency time.Duration) {
 	}
 }
 
+// streamKind returns "test" or "child" for a recognized span stream, and ""
+// for an unlabelled request, which may carry test results.
+func streamKind(stream string) string {
+	switch kind := strings.ToLower(strings.TrimSpace(stream)); kind {
+	case "test", "child":
+		return kind
+	default:
+		return ""
+	}
+}
+
 func (r *Relay) dropRemainingAtDeadline() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -841,6 +856,12 @@ func (r *Relay) dropRemainingAtDeadline() {
 	r.report.DroppedDeadlineRequests += len(r.queue)
 	for _, req := range r.queue {
 		r.report.DroppedBytes += int64(len(req.body))
+		switch streamKind(req.spanStream) {
+		case "test":
+			r.report.DroppedDeadlineTestRequests++
+		case "":
+			r.report.DroppedDeadlineUnlabelledRequests++
+		}
 	}
 	r.queue = nil
 	r.queuedSize = 0

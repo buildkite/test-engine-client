@@ -258,9 +258,10 @@ exit status 77, e.g. a disallowed audience), since that cannot succeed by
 retrying.
 
 After the final test attempt, bktec spends at most 10 seconds draining queued
-requests and prints the number of forwarded and dropped requests. Requests over
-900 KiB are rejected synchronously, and a full 64 MiB byte queue returns HTTP
-429 so the SDK can apply backpressure.
+requests and prints the number of forwarded and dropped requests, with a
+`TEST RESULTS MISSING` warning if test results were still queued at that
+deadline. Requests over 900 KiB are rejected synchronously, and a full 64 MiB
+byte queue returns HTTP 429 so the SDK can apply backpressure.
 
 Accepted requests remain in memory only. The relay merges test-result requests
 into shared uploads: a request is forwarded immediately if no test results were

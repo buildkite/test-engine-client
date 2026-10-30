@@ -197,6 +197,14 @@ func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
 		report.DroppedDeadlineRequests,
 		formatBytes(report.DroppedBytes),
 	)
+	if report.DroppedDeadlineTestRequests > 0 {
+		fmt.Fprintf(w, "TEST RESULTS MISSING: bktec OTLP relay dropped %d test-result request(s) still queued at the drain deadline. Those test executions were not uploaded to Buildkite Test Engine.\n",
+			report.DroppedDeadlineTestRequests)
+	}
+	if report.DroppedDeadlineUnlabelledRequests > 0 {
+		fmt.Fprintf(w, "TEST RESULTS MAY BE MISSING: bktec OTLP relay dropped %d unlabelled request(s) still queued at the drain deadline. These requests may have carried test results that were not uploaded to Buildkite Test Engine.\n",
+			report.DroppedDeadlineUnlabelledRequests)
+	}
 	for _, refusal := range report.Refusals {
 		reason := fmt.Sprintf("HTTP %d", refusal.Status)
 		if refusal.Message != "" {
