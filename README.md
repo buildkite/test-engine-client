@@ -267,44 +267,63 @@ Child requests have their own queue and forwarding worker, so a slow or
 throttled child upload cannot block accepted test results. Test, unlabelled and
 unknown streams share the results worker. Both queues share a 64 MiB budget
 (including in-flight requests and per-request overhead), with children limited
-to 32 MiB to leave room for test handoffs. A full shared budget or child queue
+to 32 MiB to leave room for test results. A full shared budget or child queue
 returns HTTP 429 so the SDK can apply backpressure. Accepted requests remain
 in memory only.
 
-Opt in to opaque envelope batching with
-`BUILDKITE_TESTS_OTLP_RELAY_BATCHING=true` (or `--otlp-relay-batching`).
-The relay packs requests unchanged, preserving each request's compression and
-grouping only requests of the same span stream. It sends envelopes to
-`/v1/traces` (the configured upstream traces endpoint) with
-`Content-Type: application/vnd.buildkite.otlp-trace-batch.v1+protobuf`; it does not
-decompress or merge spans. The receiver publishes each member as its own Kafka
-record, using the envelope's span-stream header.
+#### Batch relay requests
 
-Receiver support for envelopes is provided by
-[buildkite/buildkite#37677](https://github.com/buildkite/buildkite/pull/37677)
-on the same endpoint. If an envelope receives HTTP 415 Unsupported Media Type,
-the relay logs once, disables batching for the rest of the run, and resends the
-queued members individually with their original bodies, encodings and stream
-headers. That envelope's 415 is not counted as a refusal or drop. Batching is
-off by default; without it, requests still go unchanged to `/v1/traces` with
-`Content-Type: application/x-protobuf`.
+Without batching, each worker forwards one request at a time. Fast suites can
+queue more requests than the relay can deliver before the 10-second drain
+deadline. To reduce HTTP uploads, opt in with
+`BUILDKITE_TESTS_OTLP_RELAY_BATCHING=true` or `--otlp-relay-batching` alongside
+the relay setting above. Batching is off by default.
 
-Batches contain at most 1,000 requests and 750 KiB including framing. Test,
-unlabelled and unknown-stream batches linger up to 250 ms from the oldest
-request's arrival; child batches linger up to 1 s. Drain skips the wait. A
-request too large to fit an envelope goes to the original endpoint unchanged.
-Envelopes retry as a whole; a permanent refusal drops every member. An ambiguous
-acknowledgement or partial publication followed by a retry may duplicate items.
+A **request** is one OTLP/HTTP export exactly as a collector sent it, possibly
+gzipped. A **batch** is a `TraceRequestBatch` protobuf holding those requests
+byte for byte, grouped by **span stream**: `test`, `child` or unlabelled, from
+the `Buildkite-Tests-Span-Stream` header. The relay sends batches to the same
+`POST /v1/traces` endpoint with
+`Content-Type: application/vnd.buildkite.otlp-trace-batch.v1+protobuf`.
+The receiver checks the whole batch, then publishes each request as its own
+Kafka record. Keeping requests unchanged leaves ingestion and the Kafka
+contract unchanged.
+
+Batches contain at most 750 KiB including framing and 1,000 requests. The relay
+waits up to 250 ms from the oldest test or unlabelled request, or 1 s for child
+requests, and sends immediately when draining. A request too large for a batch
+goes on its own. Unknown span-stream labels are kept separate when batching
+and use the unlabelled wait time.
+
+If the receiver returns HTTP 415 Unsupported Media Type for a batch, the relay
+logs once, turns batching off for the rest of the run, and resends those requests
+one at a time. Their bodies, compression and span-stream headers stay unchanged;
+the 415 itself does not count as a refusal or drop.
+
+Deploy child rate limiting
+([buildkite/buildkite#37675](https://github.com/buildkite/buildkite/pull/37675)),
+then receiver batch support
+([buildkite/buildkite#37677](https://github.com/buildkite/buildkite/pull/37677)),
+then a bktec release with batching support, before enabling it per pipeline.
+The receiver counts a child batch as N requests against the child rate limit;
+child HTTP 429 responses cannot delay test results in the separate worker.
+
+Batches retry as a whole. A partial Kafka publish or a lost response can cause
+up to N duplicate records when a batch of N requests is retried; stable request
+IDs are planned to address this. A permanent refusal drops every request in
+the batch.
 
 With batching enabled, the summary adds per-stream requests in, uploads out,
-items per upload (p50 and max), queue wait (p50 and max), and drain time.
-Uploads out and items per upload count HTTP attempts, including retries,
-refusals and a rejected envelope before fallback. Queue wait measures accepted
+requests per upload (p50 and max), queue wait (p50 and max), and drain time.
+Uploads out and requests per upload count HTTP attempts, including retries,
+refusals and a rejected batch before fallback. Queue wait measures accepted
 requests until their first HTTP attempt, not subsequent retry backoff. Drain
 time runs from shutdown until the stream's last pending request completes or
 is dropped (zero if none were pending).
 Unknown streams are included in unlabelled statistics. Percentiles use bounded
 reservoir samples; maxima and counters are exact.
+
+#### Relay resource attribute
 
 The child resource also receives
 `buildkite.otlp.endpoint=<loopback URL>` through

@@ -188,9 +188,9 @@ func TestPrintOTLPRelayReport(t *testing.T) {
 		{Stream: "unlabelled"},
 	}})
 	want = "bktec OTLP relay: 0 request(s) (0B) forwarded, 3 upstream upload attempt(s), 0 dropped permanently, 0 dropped at drain deadline, 0B dropped\n" +
-		"bktec OTLP relay: test: 7 requests in, 2 uploads out (attempts), items per upload: p50 3, max 4; queue wait: p50 250ms, max 300ms; drain time: 20ms\n" +
-		"bktec OTLP relay: child: 5 requests in, 1 uploads out (attempts), items per upload: p50 5, max 5; queue wait: p50 1s, max 1.1s; drain time: 120ms\n" +
-		"bktec OTLP relay: unlabelled: 0 requests in, 0 uploads out (attempts), items per upload: p50 0, max 0; queue wait: p50 0s, max 0s; drain time: 0s\n"
+		"bktec OTLP relay: test: 7 requests in, 2 uploads out (attempts), requests per upload: p50 3, max 4; queue wait: p50 250ms, max 300ms; drain time: 20ms\n" +
+		"bktec OTLP relay: child: 5 requests in, 1 uploads out (attempts), requests per upload: p50 5, max 5; queue wait: p50 1s, max 1.1s; drain time: 120ms\n" +
+		"bktec OTLP relay: unlabelled: 0 requests in, 0 uploads out (attempts), requests per upload: p50 0, max 0; queue wait: p50 0s, max 0s; drain time: 0s\n"
 	if buf.String() != want {
 		t.Errorf("printOTLPRelayReport output = %q, want batch attempts even without success: %q", buf.String(), want)
 	}

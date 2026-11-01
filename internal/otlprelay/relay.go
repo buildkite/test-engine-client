@@ -44,9 +44,8 @@ const (
 	defaultMaxBatchBytes      = 750 * 1024
 )
 
-// With batching enabled, queued requests are packed byte-for-byte into this
-// envelope and POSTed to the upstream traces endpoint with
-// batchContentType. The receiver publishes each member as its own Kafka record.
+// This wire format preserves each request byte for byte so the receiver can
+// publish it as a separate Kafka record without changing ingestion.
 //
 //	package buildkite.test_engine.otlp.v1;
 //
@@ -93,15 +92,12 @@ type Config struct {
 	TokenSource  func(context.Context) (string, error)
 	HTTPClient   *http.Client
 	Logf         func(string, ...any)
-	// ExperimentalBatching opts in to opaque envelopes of one span stream.
-	// An envelope refused with HTTP 415 disables batching for the run.
+	// HTTP 415 disables batching for the run so older receivers still work.
 	ExperimentalBatching bool
 
 	initialBackoff time.Duration
 	maxBackoff     time.Duration
-	// A batch waits up to maxLinger after its oldest request was queued for
-	// more requests, unless it reaches maxBatchRequests or the encoded
-	// envelope reaches maxBatchBytes first.
+	// Measure the wait from the oldest request so time in the queue counts.
 	maxLinger        time.Duration
 	maxBatchRequests int
 	maxBatchBytes    int
@@ -188,10 +184,8 @@ type Report struct {
 	Streams                           []StreamReport
 }
 
-// StreamReport measures accepted requests and upstream HTTP attempts. Unknown
-// streams are included in unlabelled. ItemsPerUpload includes retries; QueueWait
-// measures each member once, at its first HTTP attempt (excluding retry backoff).
-// DrainTime ends when the stream's last pending request completes or is dropped.
+// Unknown span streams count as unlabelled; upload counts include retries.
+// QueueWait excludes retry backoff, and DrainTime ends with the last pending request.
 type StreamReport struct {
 	Stream         string
 	RequestsIn     int
@@ -228,15 +222,13 @@ type request struct {
 	started         bool
 }
 
-// upload is one upstream POST: a single request forwarded as-is, or a batch
-// envelope whose body packs its members.
 type upload struct {
 	request
 	members  []*request
 	envelope bool
 }
 
-// Queues share the total admission budget, including in-flight members.
+// Queues share the total admission budget, including in-flight requests.
 // Children additionally have a half-budget cap to leave room for results.
 type requestQueue struct {
 	requests []*request
@@ -558,8 +550,7 @@ func (r *Relay) forwardQueue(queue *requestQueue) {
 		case deliveryDeadline:
 			return
 		case deliveryBatchUnsupported:
-			// Members remain queued. The next iteration sends them through the
-			// normal single-request path, without recording a refusal or drop.
+			// Keep requests queued for individual retries; 415 is not a drop.
 		}
 	}
 }
@@ -579,11 +570,8 @@ func singleUpload(req *request) *upload {
 	return &upload{request: *req, members: []*request{req}}
 }
 
-// nextBatch collects the queue head and later queued requests of the same
-// span stream, in order, so per-stream order is preserved. It waits for more
-// requests until the batch is full or maxLinger has passed since the head was
-// queued; draining sends immediately. A request too large for any envelope is
-// sent alone, unchanged.
+// Batches may skip requests from other span streams, but must preserve order
+// within each stream. Oversized requests go alone to avoid delaying the queue.
 func (r *Relay) nextBatch(queue *requestQueue) (*upload, bool) {
 	var members []*request
 	envelopeSize := 0
@@ -675,14 +663,12 @@ func (r *Relay) nextBatch(queue *requestQueue) (*upload, bool) {
 	}, true
 }
 
-// envelopeItemSize is the exact number of bytes req adds to a batch envelope,
-// including its field tag and length prefix.
+// Count framing too, so the encoded batch cannot exceed the byte cap.
 func envelopeItemSize(req *request) int {
 	return protowire.SizeTag(batchRequestsField) + protowire.SizeBytes(traceRequestSize(req))
 }
 
-// traceRequestSize is the encoded size of req as a TraceRequest. As in proto3,
-// empty fields are omitted.
+// Proto3 omits empty fields, so they must not count toward the encoded size.
 func traceRequestSize(req *request) int {
 	size := 0
 	if len(req.body) > 0 {
@@ -877,8 +863,7 @@ func (r *Relay) waitForRetry(delay time.Duration, envelope bool) bool {
 			timer.Stop()
 		case <-batchingStopped:
 			timer.Stop()
-			// deliver rechecks batchingDisabled before another attempt, so
-			// these members go single without waiting for envelope backoff.
+			// Let deliver switch to individual requests without waiting for batch backoff.
 			return true
 		case <-r.ctx.Done():
 			timer.Stop()
@@ -1031,9 +1016,8 @@ func (r *Relay) complete(queue *requestQueue, done *upload, forwarded bool, late
 	}
 }
 
-// dequeue removes members, an in-order subsequence of the queue, and reports
-// whether all were found. Requests skipped between members shift back into
-// the gaps, so the rest of the queue never moves.
+// A batch can skip other span streams; shift skipped requests into the gaps
+// so removing the batch does not move the rest of the queue.
 func (q *requestQueue) dequeue(members []*request) bool {
 	last, found := -1, 0
 	for i := 0; i < len(q.requests) && found < len(members); i++ {

@@ -213,7 +213,7 @@ func printOTLPRelayReport(w io.Writer, report otlprelay.Report) {
 	}
 	if report.Batching {
 		for _, stream := range report.Streams {
-			fmt.Fprintf(w, "bktec OTLP relay: %s: %d requests in, %d uploads out (attempts), items per upload: p50 %d, max %d; queue wait: p50 %s, max %s; drain time: %s\n",
+			fmt.Fprintf(w, "bktec OTLP relay: %s: %d requests in, %d uploads out (attempts), requests per upload: p50 %d, max %d; queue wait: p50 %s, max %s; drain time: %s\n",
 				stream.Stream, stream.RequestsIn, stream.UploadsOut,
 				stream.ItemsPerUpload.P50, stream.ItemsPerUpload.Max,
 				roundLatency(stream.QueueWait.P50), roundLatency(stream.QueueWait.Max), roundLatency(stream.DrainTime))

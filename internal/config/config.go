@@ -61,8 +61,7 @@ type Config struct {
 	// Lifetime of OIDC tokens
 	OIDCLifetime time.Duration `json:"-"`
 	// OTLPRelay enables the local OTLP/HTTP trace relay for the test process.
-	OTLPRelay bool `json:"-"`
-	// OTLPRelayBatching opts in to opaque upstream envelopes.
+	OTLPRelay         bool `json:"-"`
 	OTLPRelayBatching bool `json:"-"`
 	// OTLPRelayUpstreamEndpoint is the Buildkite OTLP/HTTP traces endpoint.
 	OTLPRelayUpstreamEndpoint string `json:"-"`

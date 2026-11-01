@@ -637,8 +637,7 @@ func TestRelayDrainDeadlineCancelsDeliveryAndReportsDrops(t *testing.T) {
 }
 
 func TestRelayRetryTimerHonorsDrainDeadlineBeforeCancellation(t *testing.T) {
-	// Reproduce the interval fixed in #713: the recorded drain deadline has
-	// expired, but Drain's goroutine has not yet cancelled the relay context.
+	// The drain deadline can expire before Drain cancels the relay context.
 	relay := &Relay{
 		ctx: context.Background(), draining: true,
 		drainDeadline: time.Now().Add(-time.Millisecond),
@@ -739,8 +738,6 @@ func TestRelayDrainInterruptsExistingRetryDelay(t *testing.T) {
 	}
 }
 
-// Adapted from the child-isolation regression on #713. Exercise both delivery
-// modes: batching is optional, but a child's backoff must never strand results.
 func TestRelayChildRetriesDoNotStrandTestResults(t *testing.T) {
 	for _, batching := range []bool{false, true} {
 		for _, tc := range []struct {
@@ -1148,8 +1145,8 @@ func TestRelayBatchingPacksRequestsByteExactInOrder(t *testing.T) {
 	if diff := cmp.Diff(posts, decodeEnvelope(t, upload.body), cmp.AllowUnexported(envelopeItem{})); diff != "" {
 		t.Errorf("envelope items (-want +got):\n%s", diff)
 	}
-	// As in proto3, empty fields are omitted: the identity item has no
-	// content_encoding and the empty item is an empty TraceRequest.
+	// Proto3 omits empty fields: an uncompressed request has no content_encoding,
+	// and an empty request encodes as an empty TraceRequest.
 	want := []byte{0x0a, byte(compressed.Len() + 8), 0x0a, byte(compressed.Len())}
 	want = append(want, compressed.Bytes()...)
 	want = append(want, 0x12, 4, 'g', 'z', 'i', 'p')
@@ -1220,7 +1217,7 @@ func TestRelayBatchingKeepsSpanStreamsInSeparateEnvelopes(t *testing.T) {
 }
 
 func TestRelayBatchingCapsRequestsAndEncodedBytes(t *testing.T) {
-	// A 9-byte gzip item encodes as 19 envelope bytes: a 2-byte requests
+	// A 9-byte gzip request takes 19 batch bytes: a 2-byte requests
 	// field header around an 11-byte body field and a 6-byte encoding field.
 	const itemBytes = 19
 	tests := []struct {
@@ -1239,10 +1236,10 @@ func TestRelayBatchingCapsRequestsAndEncodedBytes(t *testing.T) {
 		{name: "one more item would cross the cap", maxBytes: 2*itemBytes - 1, posts: 3, wantItems: []int{1, 1, 1}},
 		{name: "one item fills the cap", maxBytes: itemBytes, posts: 2, wantItems: []int{1, 1}},
 		// A 120-byte gzip body has a 128-byte inner message, so its outer
-		// length needs two bytes: 1 + 2 + 128 = 131 bytes per item.
+		// length needs two bytes: 1 + 2 + 128 = 131 bytes per request.
 		{name: "two-byte message length", bodyBytes: 120, itemBytes: 131, maxBytes: 261, posts: 3, wantItems: []int{1, 1, 1}},
 		// At 128 body bytes both length prefixes need two bytes:
-		// 1 + 2 + (1 + 2 + 128 + 6) = 140 bytes per item.
+		// 1 + 2 + (1 + 2 + 128 + 6) = 140 bytes per request.
 		{name: "two-byte body length at exact cap", bodyBytes: 128, itemBytes: 140, maxBytes: 280, posts: 3, wantItems: []int{2, 1}},
 	}
 	for _, test := range tests {
@@ -1310,7 +1307,7 @@ func TestRelayBatchingSendsOversizedRequestAlone(t *testing.T) {
 		TokenSource:          staticToken("oidc-token"),
 		ExperimentalBatching: true,
 		maxLinger:            time.Hour,
-		// Fits a 9-byte gzip item (19 envelope bytes) but not a 10-byte one.
+		// Fits a 9-byte gzip request (19 batch bytes) but not a 10-byte one.
 		maxBatchBytes: 19,
 	})
 	mustPostTraces(t, relay, []byte("before-01"), "gzip", "test")
@@ -1510,7 +1507,7 @@ func TestRelayBatchingRetriesIdenticalEnvelopeAndHoldsCapacity(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("full batch was not sent")
 	}
-	// Members keep their queue capacity until the envelope succeeds.
+	// In-flight requests must still count toward the queue's memory cap.
 	resp := postTraces(t, relay, body, "Bearer "+relay.token, "", "test")
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusTooManyRequests {
@@ -1652,7 +1649,7 @@ func TestRelayBatching415WakesOtherWorkerEnvelopeRetry(t *testing.T) {
 			release.Do(func() { close(release415) })
 
 			// The drain-clamped retry is 1 s. A 415 must bypass that wait,
-			// leaving the deadline available to deliver the individual members.
+			// leaving time to deliver the individual requests before the deadline.
 			timer := time.NewTimer(500 * time.Millisecond)
 			defer timer.Stop()
 			var got []item
@@ -1704,8 +1701,8 @@ func TestRelayBatching415KeepsSingleRequestBackoff(t *testing.T) {
 		UpstreamEndpoint: upstream.URL, RunKey: "build-id", TokenSource: staticToken("oidc-token"),
 		ExperimentalBatching: true, maxBatchRequests: 2, maxBatchBytes: 16,
 	})
-	// This request cannot fit in an envelope, so its 503 must retain the
-	// normal Retry-After even when the child envelope disables batching.
+	// This request cannot fit in a batch, so its 503 must retain the
+	// normal Retry-After even when the child batch disables batching.
 	mustPostTraces(t, relay, bytes.Repeat([]byte("x"), 32), "", "test")
 	var first time.Time
 	select {
@@ -1761,7 +1758,7 @@ func TestRelayBatching415FallsBackForBothWorkersAndLaterRequests(t *testing.T) {
 			}
 			if envelopes.Add(1) <= 2 {
 				batchStarted <- struct{}{}
-				<-release // Both workers have an envelope in flight before either sees 415.
+				<-release // Both workers must have a batch in flight before either sees 415.
 			}
 			w.WriteHeader(http.StatusUnsupportedMediaType)
 		case "application/x-protobuf":
@@ -1819,7 +1816,7 @@ func TestRelayBatching415FallsBackForBothWorkersAndLaterRequests(t *testing.T) {
 		mustPostTraces(t, relay, []byte(post.body), post.encoding, post.stream)
 		acceptedBytes += int64(len(post.body))
 	}
-	collect(later) // No linger or new envelope attempts after fallback.
+	collect(later)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	report := relay.Drain(ctx)
@@ -1961,9 +1958,6 @@ type upstreamUpload struct {
 	at              time.Time
 }
 
-// recordingUpstream starts a fake upstream that records each POST, then lets
-// respond write the response for that attempt (counted from 1), or returns
-// 200 when respond is nil. It returns the upstream OTLP traces endpoint.
 func recordingUpstream(t *testing.T, respond func(w http.ResponseWriter, attempt int)) (string, chan upstreamUpload) {
 	t.Helper()
 	uploads := make(chan upstreamUpload, 100)
@@ -1994,7 +1988,6 @@ func recordingUpstream(t *testing.T, respond func(w http.ResponseWriter, attempt
 	return upstream.URL + "/v1/traces", uploads
 }
 
-// receivedUploads returns the uploads recorded so far.
 func receivedUploads(uploads chan upstreamUpload) []upstreamUpload {
 	var got []upstreamUpload
 	for {
@@ -2023,8 +2016,6 @@ type envelopeItem struct {
 	contentEncoding string
 }
 
-// decodeEnvelope decodes a TraceRequestBatch: repeated TraceRequest requests
-// = 1, where TraceRequest has bytes body = 1 and string content_encoding = 2.
 func decodeEnvelope(t *testing.T, envelope []byte) []envelopeItem {
 	t.Helper()
 	consumeBytesField := func(b []byte) (protowire.Number, []byte, int) {
