@@ -93,7 +93,7 @@ type Config struct {
 	HTTPClient   *http.Client
 	Logf         func(string, ...any)
 	// HTTP 415 disables batching for the run so older receivers still work.
-	ExperimentalBatching bool
+	Batching bool
 
 	initialBackoff time.Duration
 	maxBackoff     time.Duration
@@ -177,7 +177,6 @@ type Report struct {
 	DroppedPermanentRequests          int
 	DroppedDeadlineRequests           int
 	DroppedDeadlineTestRequests       int
-	DroppedDeadlineChildRequests      int
 	DroppedDeadlineUnlabelledRequests int
 	DroppedBytes                      int64
 	Refusals                          []Refusal
@@ -187,12 +186,12 @@ type Report struct {
 // Unknown span streams count as unlabelled; upload counts include retries.
 // QueueWait excludes retry backoff, and DrainTime ends with the last pending request.
 type StreamReport struct {
-	Stream         string
-	RequestsIn     int
-	UploadsOut     int
-	ItemsPerUpload Stats[int64]
-	QueueWait      Stats[time.Duration]
-	DrainTime      time.Duration
+	Stream            string
+	RequestsIn        int
+	UploadsOut        int
+	RequestsPerUpload Stats[int64]
+	QueueWait         Stats[time.Duration]
+	DrainTime         time.Duration
 }
 
 type streamMetrics struct {
@@ -224,8 +223,8 @@ type request struct {
 
 type upload struct {
 	request
-	members  []*request
-	envelope bool
+	members []*request
+	batch   bool
 }
 
 // Queues share the total admission budget, including in-flight requests.
@@ -257,33 +256,32 @@ type Relay struct {
 	server *http.Server
 	client *http.Client
 
-	ctx             context.Context
-	cancel          context.CancelFunc
-	drainStarted    chan struct{}
-	batchingStopped chan struct{}
-	done            chan struct{}
+	ctx              context.Context
+	cancel           context.CancelFunc
+	drainStarted     chan struct{}
+	batchingStop     chan struct{}
+	stopBatchingOnce sync.Once
+	done             chan struct{}
 
-	mu               sync.Mutex
-	results          requestQueue
-	children         requestQueue
-	queuedSize       int
-	accepting        bool
-	draining         bool
-	drainDeadline    time.Time
-	drainRetryDelay  time.Duration
-	report           Report
-	sizeSampler      sampler[int64]
-	latencySampler   sampler[time.Duration]
-	streams          [3]streamMetrics
-	drainStart       time.Time
-	batchingDisabled bool
+	mu              sync.Mutex
+	results         requestQueue
+	children        requestQueue
+	accepting       bool
+	draining        bool
+	drainDeadline   time.Time
+	drainRetryDelay time.Duration
+	report          Report
+	sizeSampler     sampler[int64]
+	latencySampler  sampler[time.Duration]
+	streams         [3]streamMetrics
+	drainStart      time.Time
 
-	// Serialize credential refreshes and terminal-error logging across workers.
-	credentialMu        sync.Mutex
-	upstreamToken       string
-	tokenRefreshAt      time.Time
-	credentialErr       error
-	credentialErrLogged bool
+	// Serialize credential refreshes across workers.
+	credentialMu         sync.Mutex
+	upstreamToken        string
+	tokenRefreshAt       time.Time
+	credentialErr        error
+	logCredentialErrOnce sync.Once
 }
 
 // New starts a relay on a random 127.0.0.1 TCP port.
@@ -351,19 +349,19 @@ func New(config Config) (*Relay, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	relay := &Relay{
-		config:          config,
-		endpoint:        "http://" + listener.Addr().String(),
-		token:           base64.RawURLEncoding.EncodeToString(localTokenBytes),
-		client:          client,
-		ctx:             ctx,
-		cancel:          cancel,
-		results:         requestQueue{wake: make(chan struct{}, 1)},
-		children:        requestQueue{wake: make(chan struct{}, 1)},
-		drainStarted:    make(chan struct{}),
-		batchingStopped: make(chan struct{}),
-		done:            make(chan struct{}),
-		accepting:       true,
-		report:          Report{Batching: config.ExperimentalBatching},
+		config:       config,
+		endpoint:     "http://" + listener.Addr().String(),
+		token:        base64.RawURLEncoding.EncodeToString(localTokenBytes),
+		client:       client,
+		ctx:          ctx,
+		cancel:       cancel,
+		results:      requestQueue{wake: make(chan struct{}, 1)},
+		children:     requestQueue{wake: make(chan struct{}, 1)},
+		drainStarted: make(chan struct{}),
+		batchingStop: make(chan struct{}),
+		done:         make(chan struct{}),
+		accepting:    true,
+		report:       Report{Batching: config.Batching},
 	}
 	// A missing upstream credential must not fail the job: unless the failure
 	// is known-terminal, start anyway and let the forward worker keep retrying
@@ -492,11 +490,11 @@ func (r *Relay) enqueue(req *request) bool {
 	defer r.mu.Unlock()
 
 	size := len(req.body) + queueRequestOverhead
-	if !r.accepting || r.queuedSize+size > r.config.QueueCapacity {
+	if !r.accepting || r.results.size+r.children.size+size > r.config.QueueCapacity {
 		return false
 	}
 	queue := &r.results
-	if streamKind(req.spanStream) == "child" {
+	if classifyStream(req.spanStream) == streamChild {
 		queue = &r.children
 		if queue.size+size > r.config.QueueCapacity/2 {
 			return false
@@ -505,9 +503,8 @@ func (r *Relay) enqueue(req *request) bool {
 	req.enqueuedAt = time.Now()
 	queue.requests = append(queue.requests, req)
 	queue.size += size
-	r.queuedSize += size
-	if r.config.ExperimentalBatching {
-		metrics := &r.streams[streamIndex(req.spanStream)]
+	if r.config.Batching {
+		metrics := &r.streams[classifyStream(req.spanStream)]
 		metrics.RequestsIn++
 		metrics.pending++
 	}
@@ -556,14 +553,10 @@ func (r *Relay) forwardQueue(queue *requestQueue) {
 }
 
 func (r *Relay) nextUpload(queue *requestQueue) (*upload, bool) {
-	if r.config.ExperimentalBatching {
+	if r.config.Batching {
 		return r.nextBatch(queue)
 	}
-	req, ok := r.nextRequest(queue)
-	if !ok {
-		return nil, false
-	}
-	return singleUpload(req), true
+	return r.nextRequest(queue)
 }
 
 func singleUpload(req *request) *upload {
@@ -574,21 +567,16 @@ func singleUpload(req *request) *upload {
 // within each stream. Oversized requests go alone to avoid delaying the queue.
 func (r *Relay) nextBatch(queue *requestQueue) (*upload, bool) {
 	var members []*request
-	envelopeSize := 0
+	batchSize := 0
 	index := 0
 	for {
 		if r.ctx.Err() != nil {
 			return nil, false
 		}
-		r.mu.Lock()
-		if r.batchingDisabled {
-			r.mu.Unlock()
-			req, ok := r.nextRequest(queue)
-			if !ok {
-				return nil, false
-			}
-			return singleUpload(req), true
+		if r.batchingStopped() {
+			return r.nextRequest(queue)
 		}
+		r.mu.Lock()
 		if index < len(queue.requests) {
 			req := queue.requests[index]
 			index++
@@ -596,16 +584,16 @@ func (r *Relay) nextBatch(queue *requestQueue) (*upload, bool) {
 			if len(members) > 0 && req.spanStream != members[0].spanStream {
 				continue
 			}
-			itemSize := envelopeItemSize(req)
+			itemSize := batchRequestSize(req)
 			if len(members) == 0 && itemSize > r.config.maxBatchBytes {
 				return singleUpload(req), true
 			}
-			if envelopeSize+itemSize > r.config.maxBatchBytes {
+			if batchSize+itemSize > r.config.maxBatchBytes {
 				break
 			}
 			members = append(members, req)
-			envelopeSize += itemSize
-			if len(members) >= r.config.maxBatchRequests || envelopeSize == r.config.maxBatchBytes {
+			batchSize += itemSize
+			if len(members) >= r.config.maxBatchRequests || batchSize == r.config.maxBatchBytes {
 				break
 			}
 			continue
@@ -617,32 +605,27 @@ func (r *Relay) nextBatch(queue *requestQueue) (*upload, bool) {
 		}
 
 		var timeout <-chan time.Time
-		var timer *time.Timer
 		if len(members) > 0 {
 			linger := r.config.maxLinger
-			if streamKind(members[0].spanStream) == "child" {
+			if classifyStream(members[0].spanStream) == streamChild {
 				linger = defaultChildLinger
 			}
 			remaining := time.Until(members[0].enqueuedAt.Add(linger))
 			if remaining <= 0 {
 				break
 			}
-			timer = time.NewTimer(remaining)
-			timeout = timer.C
+			timeout = time.After(remaining)
 		}
 		select {
 		case <-queue.wake:
 		case <-timeout:
 		case <-r.ctx.Done():
 		}
-		if timer != nil {
-			timer.Stop()
-		}
 	}
 	if len(members) == 0 {
 		return nil, false
 	}
-	body := make([]byte, 0, envelopeSize)
+	body := make([]byte, 0, batchSize)
 	for _, req := range members {
 		body = protowire.AppendTag(body, batchRequestsField, protowire.BytesType)
 		//nolint:gosec // Size is non-negative and bounded by the accepted 900 KiB body plus framing.
@@ -657,14 +640,14 @@ func (r *Relay) nextBatch(queue *requestQueue) (*upload, bool) {
 		}
 	}
 	return &upload{
-		request:  request{body: body, spanStream: members[0].spanStream},
-		members:  members,
-		envelope: true,
+		request: request{body: body, spanStream: members[0].spanStream},
+		members: members,
+		batch:   true,
 	}, true
 }
 
 // Count framing too, so the encoded batch cannot exceed the byte cap.
-func envelopeItemSize(req *request) int {
+func batchRequestSize(req *request) int {
 	return protowire.SizeTag(batchRequestsField) + protowire.SizeBytes(traceRequestSize(req))
 }
 
@@ -680,13 +663,13 @@ func traceRequestSize(req *request) int {
 	return size
 }
 
-func (r *Relay) nextRequest(queue *requestQueue) (*request, bool) {
+func (r *Relay) nextRequest(queue *requestQueue) (*upload, bool) {
 	for {
 		r.mu.Lock()
 		if len(queue.requests) > 0 {
 			req := queue.requests[0]
 			r.mu.Unlock()
-			return req, true
+			return singleUpload(req), true
 		}
 		if r.draining {
 			r.mu.Unlock()
@@ -702,27 +685,28 @@ func (r *Relay) nextRequest(queue *requestQueue) (*request, bool) {
 	}
 }
 
+func (r *Relay) batchingStopped() bool {
+	select {
+	case <-r.batchingStop:
+		return true
+	default:
+		return false
+	}
+}
+
 // deliver returns the delivery result and, for a forwarded upload, the
 // duration of the successful upstream POST.
 func (r *Relay) deliver(queued *upload) (deliveryResult, time.Duration) {
 	backoff := r.config.initialBackoff
 	for {
-		if queued.envelope {
-			r.mu.Lock()
-			disabled := r.batchingDisabled
-			r.mu.Unlock()
-			if disabled {
-				return deliveryBatchUnsupported, 0
-			}
+		if queued.batch && r.batchingStopped() {
+			return deliveryBatchUnsupported, 0
 		}
 		token, err := r.authorizationToken()
 		if err != nil && errors.Is(err, ErrTerminalCredential) {
-			r.credentialMu.Lock()
-			if !r.credentialErrLogged {
-				r.credentialErrLogged = true
+			r.logCredentialErrOnce.Do(func() {
 				r.config.Logf("bktec OTLP relay: credential was refused and will not be retried; dropping OTLP requests: %v", err)
-			}
-			r.credentialMu.Unlock()
+			})
 			return deliveryPermanentFailure, 0
 		}
 		var status int
@@ -762,19 +746,13 @@ func (r *Relay) deliver(queued *upload) (deliveryResult, time.Duration) {
 			switch {
 			case status >= 200 && status < 300:
 				return deliveryForwarded, sendLatency
-			case status == http.StatusUnsupportedMediaType && queued.envelope:
-				r.mu.Lock()
-				first := !r.batchingDisabled
-				r.batchingDisabled = true
-				if first {
-					close(r.batchingStopped)
-				}
-				r.mu.Unlock()
-				if first {
+			case status == http.StatusUnsupportedMediaType && queued.batch:
+				r.stopBatchingOnce.Do(func() {
+					close(r.batchingStop)
 					r.config.Logf("bktec OTLP relay: upstream does not support trace batches (HTTP 415); disabling batching for this run and resending requests individually")
 					r.results.signal()
 					r.children.signal()
-				}
+				})
 				return deliveryBatchUnsupported, 0
 			case status != http.StatusRequestTimeout && status != http.StatusTooManyRequests && status < 500:
 				r.recordRefusal(status, message, queued.spanStream, len(queued.members))
@@ -789,7 +767,7 @@ func (r *Relay) deliver(queued *upload) (deliveryResult, time.Duration) {
 		if hasRetryAfter {
 			delay = retryAfter
 		}
-		if !r.waitForRetry(delay, queued.envelope) {
+		if !r.waitForRetry(delay, queued.batch) {
 			return deliveryDeadline, 0
 		}
 		backoff = min(backoff*2, r.config.maxBackoff)
@@ -815,10 +793,10 @@ func (r *Relay) recordRefusal(status int, message, stream string, count int) {
 	}
 	refusal := &r.report.Refusals[index]
 	refusal.Requests += count
-	switch streamKind(stream) {
-	case "test":
+	switch classifyStream(stream) {
+	case streamTest:
 		refusal.TestRequests += count
-	case "child":
+	case streamChild:
 		refusal.ChildRequests += count
 	default:
 		refusal.UnlabelledRequests += count
@@ -837,10 +815,10 @@ func (r *Relay) recordRefusal(status int, message, stream string, count int) {
 	}
 }
 
-func (r *Relay) waitForRetry(delay time.Duration, envelope bool) bool {
+func (r *Relay) waitForRetry(delay time.Duration, batch bool) bool {
 	var batchingStopped <-chan struct{}
-	if envelope {
-		batchingStopped = r.batchingStopped
+	if batch {
+		batchingStopped = r.batchingStop
 	}
 	for {
 		r.mu.Lock()
@@ -874,7 +852,7 @@ func (r *Relay) waitForRetry(delay time.Duration, envelope bool) bool {
 
 func (r *Relay) send(queued *upload, token string) (*http.Response, error) {
 	contentType := "application/x-protobuf"
-	if queued.envelope {
+	if queued.batch {
 		contentType = batchContentType
 	}
 	req, err := http.NewRequestWithContext(r.ctx, http.MethodPost, r.config.UpstreamEndpoint, bytes.NewReader(queued.body))
@@ -891,10 +869,9 @@ func (r *Relay) send(queued *upload, token string) (*http.Response, error) {
 		req.Header.Set("Buildkite-Tests-Span-Stream", queued.spanStream)
 	}
 
-	if r.config.ExperimentalBatching {
+	if r.config.Batching {
 		r.mu.Lock()
-		r.report.UpstreamUploads++
-		metrics := &r.streams[streamIndex(queued.spanStream)]
+		metrics := &r.streams[classifyStream(queued.spanStream)]
 		metrics.UploadsOut++
 		metrics.items.observe(int64(len(queued.members)))
 		for _, member := range queued.members {
@@ -995,10 +972,9 @@ func (r *Relay) complete(queue *requestQueue, done *upload, forwarded bool, late
 	}
 	for _, req := range done.members {
 		size := len(req.body) + queueRequestOverhead
-		r.queuedSize -= size
 		queue.size -= size
-		if r.config.ExperimentalBatching {
-			metrics := &r.streams[streamIndex(req.spanStream)]
+		if r.config.Batching {
+			metrics := &r.streams[classifyStream(req.spanStream)]
 			metrics.pending--
 			if r.draining && metrics.pending == 0 {
 				metrics.DrainTime = time.Since(r.drainStart)
@@ -1042,24 +1018,23 @@ func (q *requestQueue) dequeue(members []*request) bool {
 	return true
 }
 
-// Unknown labels may carry test results; treat them as unlabelled for reporting.
-func streamKind(stream string) string {
-	switch kind := strings.ToLower(strings.TrimSpace(stream)); kind {
-	case "test", "child":
-		return kind
-	default:
-		return ""
-	}
-}
+const (
+	streamTest = iota
+	streamChild
+	streamUnlabelled
+)
 
-func streamIndex(stream string) int {
-	switch streamKind(stream) {
+var streamNames = [...]string{"test", "child", "unlabelled"}
+
+// Unknown labels may carry test results; treat them as unlabelled for reporting.
+func classifyStream(stream string) int {
+	switch strings.ToLower(strings.TrimSpace(stream)) {
 	case "test":
-		return 0
+		return streamTest
 	case "child":
-		return 1
+		return streamChild
 	default:
-		return 2
+		return streamUnlabelled
 	}
 }
 
@@ -1071,12 +1046,10 @@ func (r *Relay) dropRemainingAtDeadline() {
 		r.report.DroppedDeadlineRequests += len(queue.requests)
 		for _, req := range queue.requests {
 			r.report.DroppedBytes += int64(len(req.body))
-			switch streamKind(req.spanStream) {
-			case "test":
+			switch classifyStream(req.spanStream) {
+			case streamTest:
 				r.report.DroppedDeadlineTestRequests++
-			case "child":
-				r.report.DroppedDeadlineChildRequests++
-			default:
+			case streamUnlabelled:
 				r.report.DroppedDeadlineUnlabelledRequests++
 			}
 		}
@@ -1090,7 +1063,6 @@ func (r *Relay) dropRemainingAtDeadline() {
 			metrics.pending = 0
 		}
 	}
-	r.queuedSize = 0
 }
 
 // Drain stops accepting requests and waits for queued requests to be delivered
@@ -1136,12 +1108,13 @@ func (r *Relay) Drain(ctx context.Context) Report {
 	r.report.ForwardedLatency = r.latencySampler.stats()
 	report := r.report
 	if report.Batching {
-		for i, name := range []string{"test", "child", "unlabelled"} {
+		for i, name := range streamNames {
 			metrics := &r.streams[i]
 			stream := metrics.StreamReport
 			stream.Stream = name
-			stream.ItemsPerUpload = metrics.items.stats()
+			stream.RequestsPerUpload = metrics.items.stats()
 			stream.QueueWait = metrics.wait.stats()
+			report.UpstreamUploads += stream.UploadsOut
 			report.Streams = append(report.Streams, stream)
 		}
 	}

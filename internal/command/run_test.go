@@ -183,8 +183,8 @@ func TestPrintOTLPRelayReport(t *testing.T) {
 
 	buf.Reset()
 	printOTLPRelayReport(&buf, otlprelay.Report{Batching: true, UpstreamUploads: 3, Streams: []otlprelay.StreamReport{
-		{Stream: "test", RequestsIn: 7, UploadsOut: 2, ItemsPerUpload: otlprelay.Stats[int64]{P50: 3, Max: 4}, QueueWait: otlprelay.Stats[time.Duration]{P50: 250 * time.Millisecond, Max: 300 * time.Millisecond}, DrainTime: 20 * time.Millisecond},
-		{Stream: "child", RequestsIn: 5, UploadsOut: 1, ItemsPerUpload: otlprelay.Stats[int64]{P50: 5, Max: 5}, QueueWait: otlprelay.Stats[time.Duration]{P50: time.Second, Max: 1100 * time.Millisecond}, DrainTime: 120 * time.Millisecond},
+		{Stream: "test", RequestsIn: 7, UploadsOut: 2, RequestsPerUpload: otlprelay.Stats[int64]{P50: 3, Max: 4}, QueueWait: otlprelay.Stats[time.Duration]{P50: 250 * time.Millisecond, Max: 300 * time.Millisecond}, DrainTime: 20 * time.Millisecond},
+		{Stream: "child", RequestsIn: 5, UploadsOut: 1, RequestsPerUpload: otlprelay.Stats[int64]{P50: 5, Max: 5}, QueueWait: otlprelay.Stats[time.Duration]{P50: time.Second, Max: 1100 * time.Millisecond}, DrainTime: 120 * time.Millisecond},
 		{Stream: "unlabelled"},
 	}})
 	want = "bktec OTLP relay: 0 request(s) (0B) forwarded, 3 upstream upload attempt(s), 0 dropped permanently, 0 dropped at drain deadline, 0B dropped\n" +
