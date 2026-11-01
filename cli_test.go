@@ -226,7 +226,7 @@ func TestPlanCommandIncludesParallelismFlag(t *testing.T) {
 }
 
 func TestOTLPRelayFlagsAreRunOnly(t *testing.T) {
-	for _, name := range []string{"otlp-relay", "otlp-relay-upstream-endpoint"} {
+	for _, name := range []string{"otlp-relay", "otlp-relay-batching", "otlp-relay-upstream-endpoint"} {
 		if !hasFlag(runCommandFlags(), name) {
 			t.Errorf("runCommandFlags() missing --%s", name)
 		}
@@ -681,6 +681,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC", "false")
 	t.Setenv("BUILDKITE_TEST_ENGINE_OIDC_LIFETIME", "1h")
 	t.Setenv("BUILDKITE_TESTS_OTLP_RELAY", "true")
+	t.Setenv("BUILDKITE_TESTS_OTLP_RELAY_BATCHING", "true")
 	t.Setenv("BUILDKITE_TESTS_OTLP_RELAY_UPSTREAM_ENDPOINT", "https://otlp.example/v1/traces")
 	t.Setenv("BUILDKITE_TEST_ENGINE_TAGS", "env=production,region=us-east-1")
 
@@ -736,6 +737,7 @@ func TestRunCommandEnvVarsBindToConfig(t *testing.T) {
 		{"OIDC", cfg.OIDC, false},
 		{"OIDCLifetime", cfg.OIDCLifetime, time.Hour},
 		{"OTLPRelay", cfg.OTLPRelay, true},
+		{"OTLPRelayBatching", cfg.OTLPRelayBatching, true},
 		{"OTLPRelayUpstreamEndpoint", cfg.OTLPRelayUpstreamEndpoint, "https://otlp.example/v1/traces"},
 	}
 
