@@ -1,4 +1,7 @@
 # Changelog
+## Unreleased
+- Fix Test Scheduler jobs failing because of unrelated pool failures or failed attempts that another worker successfully retried. Jobs now fail only when they contributed to a terminal test failure. Requires Test Scheduler support on the server.
+
 ## 3.5.0 - 2026-11-02
 - Add opt-in [OTLP relay batching](./README.md#batch-relay-requests) to deliver fast suites with fewer uploads, with per-stream summary statistics. Requires receiver batch support; older receivers fall back to individual requests.
 - Keep throttled child requests from blocking test-result uploads, and limit children to half the relay's shared queue memory.

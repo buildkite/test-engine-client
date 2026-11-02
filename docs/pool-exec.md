@@ -131,13 +131,23 @@ Test Scheduler. With `--no-oidc`, it must remain valid for the entire command.
 `--local-retry-count` retries failed tests in the same worker. These retries
 do not create additional Scheduler attempts. Muted failures are not retried.
 
+Before exiting normally, `pool exec` and `pool consume` check whether this job
+contributed a failed or errored attempt to a terminal test failure. Unrelated
+pool failures and attempts that another worker successfully retried do not fail
+the job. A successful result is final only once the pool is consumed. This
+requires the server's job failure API and `BUILDKITE_JOB_ID` (or `--job-id`).
+
 Retrying a Buildkite job doesn't re-run its tests. A retried job that finds its
-pool already consumed exits 1 if the pool has failed or errored attempts, so the
-retry doesn't hide those failures, and exits 0 otherwise, for example after an
-automatic retry for a lost agent. To re-run failed tests, rebuild instead.
+pool already consumed checks its own failure participation, not the pool's
+attempt totals. To re-run failed tests, rebuild instead.
+
+If the job ID is missing or the job API returns 404, bktec keeps its previous
+behavior: workers fail on their own failed or errored attempts, and retried
+jobs that find a consumed pool fail if any pool attempt failed or errored.
+Other job API errors fail the command.
 
 Each Scheduler attempt is reported as passed, failed, or errored. A failed test
-run exits with status 1. Runner process failures retain the runner's exit status
+outcome exits with status 1. Runner process failures retain the runner's exit status
 when available. Protocol, reporting, or accounting errors exit with status 16.
 When `bktec` receives SIGINT or SIGTERM, it releases its active lease so another
 worker can acquire those attempts without waiting for the lease to expire.

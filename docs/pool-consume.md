@@ -53,8 +53,9 @@ of a lease's tests are reported as errored when the command doesn't write a
 usable report, or when it fails in a way the report can't attribute to
 individual tests. See your runner's guide for the cases that error a lease.
 
-bktec exits with status 16 if any tests errored, or with status 1 if tests
-failed.
+Exit status follows the shared [pool results rules](./pool-exec.md#retries-and-results),
+including per-job terminal failure checks and fallback behavior when the job API
+is unavailable.
 
 When `bktec` receives SIGINT or SIGTERM, it interrupts the running command with
 SIGINT, like Ctrl+C in a terminal, so the test runner can clean up, for example
