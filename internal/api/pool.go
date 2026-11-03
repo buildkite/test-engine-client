@@ -32,12 +32,22 @@ type Pool struct {
 }
 
 type PoolPlanParams struct {
-	Suite    string         `json:"suite"`
-	Pipeline string         `json:"pipeline"`
-	BuildID  string         `json:"build_id"`
-	Key      string         `json:"key"`
-	Plan     PoolPlan       `json:"plan"`
-	Lease    *PoolPlanLease `json:"lease,omitempty"`
+	Suite         string             `json:"suite"`
+	Pipeline      string             `json:"pipeline"`
+	BuildID       string             `json:"build_id"`
+	Key           string             `json:"key"`
+	Plan          PoolPlan           `json:"plan"`
+	Lease         *PoolPlanLease     `json:"lease,omitempty"`
+	AttemptPolicy *PoolAttemptPolicy `json:"attempt_policy,omitempty"`
+}
+
+// PoolAttemptPolicy supports sequential retries until an entry passes or its
+// shared failure/error budget is exhausted.
+type PoolAttemptPolicy struct {
+	MaxAttempts      int `json:"max_attempts"`
+	MaxFailed        int `json:"max_failed"`
+	MaxPassed        int `json:"max_passed"`
+	ParallelAttempts int `json:"parallel_attempts"`
 }
 
 type PoolPlanLease struct {

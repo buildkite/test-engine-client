@@ -92,16 +92,20 @@ func TestResolvePoolConcurrentWorkers(t *testing.T) {
 	}`, string(accepted))
 }
 
-func TestResolvePoolLeaseOptions(t *testing.T) {
+func TestResolvePoolPlanningOptions(t *testing.T) {
 	for _, tc := range []struct {
 		name, lease string
 		costs       map[string]int
 		maxAttempts int
+		retryCount  int
+		policy      string
 	}{
 		{name: "server defaults"},
 		{name: "cost only", costs: map[string]int{"duration_p50_ms": 60_000}, lease: `{"costs":{"duration_p50_ms":60000}}`},
 		{name: "max attempts only uses server cost default", maxAttempts: 25, lease: `{"max_attempts":25}`},
 		{name: "both", costs: map[string]int{"duration_p90_ms": 45_000}, maxAttempts: 12, lease: `{"costs":{"duration_p90_ms":45000},"max_attempts":12}`},
+		{name: "one pool retry", retryCount: 1, policy: `{"max_attempts":2,"max_failed":2,"max_passed":1,"parallel_attempts":1}`},
+		{name: "pool retries independent of lease size", retryCount: 3, maxAttempts: 12, lease: `{"max_attempts":12}`, policy: `{"max_attempts":4,"max_failed":4,"max_passed":1,"parallel_attempts":1}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var received map[string]json.RawMessage
@@ -119,6 +123,7 @@ func TestResolvePoolLeaseOptions(t *testing.T) {
 			cfg := getConfig()
 			cfg.ServerBaseURL, cfg.PipelineSlug, cfg.PoolKey = server.URL, "pipeline", "rspec"
 			cfg.PoolLeaseCosts, cfg.PoolLeaseMaxAttempts = tc.costs, tc.maxAttempts
+			cfg.PoolRetryCount = tc.retryCount
 			cfg.MaxRetries = 8
 			client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: cfg.OrganizationSlug})
 			_, err := ResolvePool(context.Background(), cfg, "", client, false)
@@ -128,7 +133,11 @@ func TestResolvePoolLeaseOptions(t *testing.T) {
 			} else {
 				require.JSONEq(t, tc.lease, string(received["lease"]))
 			}
-			require.NotContains(t, received, "attempt_policy", "local retries must not become Scheduler attempt policy")
+			if tc.policy == "" {
+				require.NotContains(t, received, "attempt_policy", "local retries must not become Scheduler attempt policy")
+			} else {
+				require.JSONEq(t, tc.policy, string(received["attempt_policy"]))
+			}
 		})
 	}
 }
@@ -335,6 +344,7 @@ func TestResolvePrecreatedPoolSnapshot(t *testing.T) {
 	client := api.NewClient(api.ClientConfig{ServerBaseURL: server.URL, OrganizationSlug: "acme"})
 	pool, err := ResolvePool(context.Background(), &config.Config{
 		PoolID: "ready", PoolLeaseCosts: map[string]int{"duration_p50_ms": 60_000}, PoolLeaseMaxAttempts: 25,
+		PoolRetryCount: 3,
 	}, "does-not-exist", client, false)
 	require.NoError(t, err)
 	ready, err := client.WaitForPool(context.Background(), pool.ID)

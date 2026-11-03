@@ -87,6 +87,9 @@ func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList strin
 	if cfg.PoolLeaseMaxAttempts != 0 {
 		fmt.Fprintf(os.Stderr, "  Pool lease max attempts: %d\n", cfg.PoolLeaseMaxAttempts)
 	}
+	if cfg.PoolRetryCount > 0 {
+		fmt.Fprintf(os.Stderr, "  Pool retry count: %d\n", cfg.PoolRetryCount)
+	}
 	autoCollectGitMetadata(ctx, cfg, newGitRunner())
 	testRunner, err := runner.DetectRunner(cfg)
 	if err != nil {
@@ -123,6 +126,12 @@ func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList strin
 	}
 	if len(cfg.PoolLeaseCosts) > 0 || cfg.PoolLeaseMaxAttempts != 0 {
 		request.Lease = &api.PoolPlanLease{Costs: cfg.PoolLeaseCosts, MaxAttempts: cfg.PoolLeaseMaxAttempts}
+	}
+	if cfg.PoolRetryCount > 0 {
+		request.AttemptPolicy = &api.PoolAttemptPolicy{
+			MaxAttempts: cfg.PoolRetryCount + 1, MaxFailed: cfg.PoolRetryCount + 1,
+			MaxPassed: 1, ParallelAttempts: 1,
+		}
 	}
 	return request, nil
 }

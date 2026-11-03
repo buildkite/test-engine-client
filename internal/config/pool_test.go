@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -87,10 +88,11 @@ func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 	}
 }
 
-func TestValidatePoolLeaseOptions(t *testing.T) {
+func TestValidatePoolPlanningOptions(t *testing.T) {
 	for _, tc := range []struct {
 		name, poolID, wantError, cost string
 		durationMS, maxAttempts       int
+		retryCount                    int
 		wantCosts                     map[string]int
 	}{
 		{name: "defaults"},
@@ -104,7 +106,10 @@ func TestValidatePoolLeaseOptions(t *testing.T) {
 		{name: "non-integer cost budget", cost: "duration_p50_ms=1m", wantError: "pool-lease-cost must be"},
 		{name: "negative duration", durationMS: -1, wantError: "pool-lease-duration-ms"},
 		{name: "negative attempts", maxAttempts: -1, wantError: "pool-lease-max-attempts"},
-		{name: "existing pool ignores planning options", poolID: "pool-1", cost: "bogus", durationMS: 60_000, maxAttempts: 25},
+		{name: "pool retries", retryCount: 2},
+		{name: "negative pool retries", retryCount: -1, wantError: "pool-retry-count"},
+		{name: "pool retries overflow initial attempt", retryCount: math.MaxInt, wantError: "pool-retry-count"},
+		{name: "existing pool ignores planning options", poolID: "pool-1", cost: "bogus", durationMS: 60_000, maxAttempts: 25, retryCount: -1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
@@ -113,6 +118,7 @@ func TestValidatePoolLeaseOptions(t *testing.T) {
 			c.PoolID, c.PoolKey, c.TestRunner = tc.poolID, "shared", "rspec"
 			c.BuildID, c.PipelineSlug = "build", "pipeline"
 			c.PoolLeaseCost, c.PoolLeaseDurationMS, c.PoolLeaseMaxAttempts = tc.cost, tc.durationMS, tc.maxAttempts
+			c.PoolRetryCount = tc.retryCount
 			err := c.ValidateForPoolPlan()
 			if tc.wantError != "" {
 				require.ErrorContains(t, err, tc.wantError)

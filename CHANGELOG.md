@@ -1,5 +1,6 @@
 # Changelog
 ## Unreleased
+- Add `--pool-retry-count` to retry failed or errored tests through Test Scheduler, rerunning the whole entry. See [pool retries](./docs/pool-exec.md#retries-and-results).
 - Fix Test Scheduler jobs failing because of unrelated pool failures or failed attempts that another worker successfully retried. Jobs now fail only when they contributed to a terminal test failure. Requires Test Scheduler support on the server.
 
 ## 3.5.0 - 2026-11-02
