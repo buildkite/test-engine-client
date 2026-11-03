@@ -72,6 +72,7 @@ type Config struct {
 	PoolID               string `json:"-"`
 	PoolKey              string `json:"-"`
 	PoolLeaseMaxAttempts int    `json:"-"`
+	PoolRetryCount       int    `json:"-"`
 	// PoolLeaseCost is --pool-lease-cost as given, <dimension>=<budget>.
 	// PoolLeaseDurationMS is its deprecated duration_p50_ms alias. Validation
 	// parses either into PoolLeaseCosts, which pool planning sends.

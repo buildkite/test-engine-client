@@ -770,9 +770,14 @@ var poolLeaseMaxAttemptsFlag = &cli.IntFlag{
 	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_LEASE_MAX_ATTEMPTS"), Destination: &cfg.PoolLeaseMaxAttempts,
 }
 
+var poolRetryCountFlag = &cli.IntFlag{
+	Name: "pool-retry-count", Usage: "Additional Scheduler attempts per entry after failures or errors (0 disables pool retries)",
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_RETRY_COUNT"), Destination: &cfg.PoolRetryCount,
+}
+
 func poolPlanCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
-		filesFlag, tagFiltersFlag, accessTokenFlag, maxParallelismFlag, targetTimeFlag, poolLeaseCostFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag,
+		filesFlag, tagFiltersFlag, accessTokenFlag, maxParallelismFlag, targetTimeFlag, poolLeaseCostFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag, poolRetryCountFlag,
 		&cli.StringFlag{
 			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec and pool consume; pool plan rejects it)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,

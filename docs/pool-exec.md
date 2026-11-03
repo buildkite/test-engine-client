@@ -100,6 +100,7 @@ When creating a pool, `pool exec` supports these test discovery options:
 | `--pool-key` | `BUILDKITE_STEP_ID` | Identify the pool for workers in this build. |
 | `--pool-lease-cost` | unset | Requested cost budget for each lease as `<dimension>=<budget>`; unset uses the Scheduler default. |
 | `--pool-lease-max-attempts` | `0` | Requested maximum attempts per lease; `0` uses the Scheduler default. |
+| `--pool-retry-count` | `0` | Retry failed or errored entries through the Scheduler, rerunning the whole entry. |
 | `--local-retry-count` | `0` | Retry failed, unmuted tests locally before reporting the Scheduler attempt. |
 | `--runner-startup-timeout` | `1m` | Wait for the persistent runner to become ready. |
 | `--runner-batch-timeout` | `10m` | Allow a batch to run and submit its report. |
@@ -128,8 +129,30 @@ Test Scheduler. With `--no-oidc`, it must remain valid for the entire command.
 
 ## Retries and results
 
+Set `--pool-retry-count N` (env: `BUILDKITE_TEST_ENGINE_POOL_RETRY_COUNT`)
+when creating a pool to allow up to N additional Scheduler attempts per entry.
+It defaults to `0` (no pool retries) and is supported by `pool plan`, `pool exec`
+and `pool consume`:
+
+```shell
+bktec pool plan --suite-slug my-suite --test-runner rspec --pool-retry-count 1 --json
+```
+
+Each pool retry reruns the whole entry (usually a file), including tests that
+already passed. Attempts run one at a time per entry and stop after the first
+passing attempt. Failures and errors share the same attempt budget. Any worker
+can lease a retry, including the worker that ran the previous attempt; a
+different worker is not guaranteed.
+
+The retry count is fixed when the pool is created and is part of its planning
+fingerprint. Use the same value when repeating planning for the same build and
+pool key. It is ignored with `--pool-id` and does not apply to local fallback
+execution. `--pool-lease-max-attempts` controls lease size, not retries.
+
 `--local-retry-count` retries failed tests in the same worker. These retries
 do not create additional Scheduler attempts. Muted failures are not retried.
+Local retries reset for each Scheduler attempt: with `--pool-retry-count 2`
+and `--local-retry-count 2`, an always-failing test can run up to nine times.
 
 Before exiting normally, `pool exec` and `pool consume` check whether this job
 contributed a failed or errored attempt to a terminal test failure. Unrelated

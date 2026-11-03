@@ -7,8 +7,9 @@ provide a persistent runner, such as RSpec and pytest.
 
 Apart from how tests run, `pool consume` works like `pool exec`. Both commands
 share the same pool resolution, sizing with `bktec pool plan`, authentication,
-local retries, muting, lease prefetching and fallback when Test Scheduler is
-unavailable. See [`bktec pool exec`](./pool-exec.md) for details.
+local and [pool retries](./pool-exec.md#retries-and-results), muting, lease
+prefetching and fallback when Test Scheduler is unavailable.
+See [`bktec pool exec`](./pool-exec.md) for details.
 
 ## Run a pool worker
 

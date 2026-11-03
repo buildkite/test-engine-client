@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -55,6 +56,9 @@ func (c *Config) ValidateForPoolPlan() error {
 		}
 		if c.PoolLeaseMaxAttempts < 0 {
 			c.errs.appendFieldError("pool-lease-max-attempts", "must be 0 (server default) or a positive attempt limit")
+		}
+		if c.PoolRetryCount < 0 || c.PoolRetryCount == math.MaxInt {
+			c.errs.appendFieldError("pool-retry-count", "must be non-negative and leave room for the initial attempt")
 		}
 		if c.PoolKey == "" {
 			c.PoolKey = c.StepID
