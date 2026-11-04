@@ -675,18 +675,20 @@ func TestPoolExecFallsBackToStaticSplitWhenSchedulerUnavailable(t *testing.T) {
 
 func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		mode, result string
-		wantCode     int
-		jobStatus    int
-		participated bool
-		wantError    string
+		name            string
+		mode, result    string
+		wantCode        int
+		jobStatus       int
+		participated    bool
+		wantError       string
+		wantExplanation bool
 	}{
 		{name: "no job ID failed", mode: "failure", result: "failed", wantCode: 1},
 		{name: "no job ID errored", mode: "unmapped", result: "errored", wantCode: 16, wantError: "errored attempts: 1"},
 		{name: "no job ID crash", mode: "crash", result: "errored", wantCode: 19},
-		{name: "failed then recovered elsewhere", mode: "failure", result: "failed", jobStatus: 200},
-		{name: "errored then recovered elsewhere", mode: "unmapped", result: "errored", jobStatus: 200},
+		{name: "passed without failures", mode: "pass", result: "passed", jobStatus: 200},
+		{name: "failed then recovered elsewhere", mode: "failure", result: "failed", jobStatus: 200, wantExplanation: true},
+		{name: "errored then recovered elsewhere", mode: "unmapped", result: "errored", jobStatus: 200, wantExplanation: true},
 		{name: "terminal failure", mode: "failure", result: "failed", jobStatus: 200, participated: true, wantCode: 1},
 		{name: "terminal error", mode: "unmapped", result: "errored", jobStatus: 200, participated: true, wantCode: 1},
 		{name: "crash still fails", mode: "crash", result: "errored", jobStatus: 200, wantCode: 19},
@@ -738,7 +740,22 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 				cfg.JobID = "job"
 			}
 			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
-			err := PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
+			output, err := os.CreateTemp(t.TempDir(), "stdout")
+			if err != nil {
+				t.Fatal(err)
+			}
+			stdout := os.Stdout
+			os.Stdout = output
+			t.Cleanup(func() { os.Stdout = stdout; output.Close() })
+			err = PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
+			os.Stdout = stdout
+			data, readErr := os.ReadFile(output.Name())
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if got := strings.Contains(string(data), "Test Scheduler confirmed no terminal failures for this worker."); got != tc.wantExplanation {
+				t.Errorf("outcome explanation present=%t, want %t; output:\n%s", got, tc.wantExplanation, data)
+			}
 			if completions != 1 {
 				t.Fatalf("completions=%d err=%v", completions, err)
 			}
