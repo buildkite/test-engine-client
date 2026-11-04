@@ -1,5 +1,5 @@
 FROM golang:1.27.3-alpine AS golang
-FROM goreleaser/goreleaser:v2.18.2 AS goreleaser
+FROM goreleaser/goreleaser:v2.19.0 AS goreleaser
 
 # Pin the compiler independently of the GoReleaser image's bundled Go version.
 COPY --from=golang /usr/local/go /usr/local/go
