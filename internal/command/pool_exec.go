@@ -228,6 +228,9 @@ func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries i
 			if failed {
 				return cli.Exit("This job participated in a terminal Test Scheduler failure.", 1)
 			}
+			if source.failedAttempts > 0 || source.erroredAttempts > 0 {
+				fmt.Println("Test Scheduler confirmed no terminal failures for this worker.")
+			}
 			return nil
 		}
 		debug.Printf("Job failure API unavailable; using local attempt results")
