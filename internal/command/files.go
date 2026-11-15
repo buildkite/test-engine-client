@@ -20,7 +20,7 @@ func getRowsFromFile(path string) ([]string, error) {
 		return nil, fmt.Errorf("%s is not a text file", path)
 	}
 
-	lines := strings.Split(string(content), "\n")
+	lines := strings.Split(strings.TrimPrefix(string(content), "\ufeff"), "\n")
 	rows := []string{}
 	for _, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
