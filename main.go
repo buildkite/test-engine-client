@@ -69,7 +69,7 @@ func poolPlan(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if cfg.PoolID != "" {
-		return fmt.Errorf("bktec pool plan: --pool-id / BUILDKITE_TEST_ENGINE_POOL_ID is for pool exec and pool consume; omit it to plan a pool")
+		return fmt.Errorf("bktec pool plan: --pool-id / BUILDKITE_TEST_ENGINE_POOL_ID is for pool run; omit it to plan a pool")
 	}
 	if err := cfg.ValidateForPoolPlan(); err != nil {
 		return fmt.Errorf("bktec pool plan: invalid configuration:\n%w", err)
@@ -79,6 +79,15 @@ func poolPlan(ctx context.Context, cmd *cli.Command) error {
 		output = command.PlanOutputPipelineUpload
 	}
 	return command.PoolPlan(ctx, &cfg, cmd.String("files"), output, cmd.String("pipeline-upload"))
+}
+
+// poolRun runs leases in a persistent runner when one is given after --, and
+// otherwise starts the test command for each lease.
+func poolRun(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() > 0 {
+		return poolExec(ctx, cmd)
+	}
+	return poolConsume(ctx, cmd)
 }
 
 func poolExec(ctx context.Context, cmd *cli.Command) error {
@@ -98,7 +107,7 @@ func poolExec(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if err := cfg.ValidateForPoolExec(); err != nil {
-		return fmt.Errorf("bktec pool exec: invalid configuration: %w", err)
+		return fmt.Errorf("%s: invalid configuration: %w", cmd.FullName(), err)
 	}
 	return command.PoolExec(ctx, &cfg, cmd.String("files"), cmd.Args().Slice(), cmd.Int("local-retry-count"), opts)
 }
@@ -116,7 +125,7 @@ func poolConsume(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if err := cfg.ValidateForPoolConsume(); err != nil {
-		return fmt.Errorf("bktec pool consume: invalid configuration: %w", err)
+		return fmt.Errorf("%s: invalid configuration: %w", cmd.FullName(), err)
 	}
 	return command.PoolConsume(ctx, &cfg, cmd.String("files"), cmd.Int("local-retry-count"))
 }

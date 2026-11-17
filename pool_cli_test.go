@@ -35,7 +35,7 @@ func TestPoolPlanCLIRejectsExistingID(t *testing.T) {
 			if override {
 				args = append(args, "--pool-id", "flag-pool")
 			}
-			require.ErrorContains(t, cmd.Run(context.Background(), args), "pool consume; omit it to plan a pool")
+			require.ErrorContains(t, cmd.Run(context.Background(), args), "pool run; omit it to plan a pool")
 			require.Equal(t, wantID, cfg.PoolID)
 			require.Equal(t, "ordinary-api-token", cfg.AccessToken, "pool ID is rejected before authentication")
 		})
@@ -76,6 +76,8 @@ func TestPoolCommandsBindPoolRetries(t *testing.T) {
 				switch definition.Name {
 				case "plan":
 					command.Flags = poolPlanCommandFlags()
+				case "run":
+					command.Flags = poolRunCommandFlags()
 				case "exec":
 					command.Flags = poolExecCommandFlags()
 				case "consume":

@@ -331,7 +331,7 @@ func TestPoolPlanFallsBackOnlyWhenSchedulerUnavailable(t *testing.T) {
 
 func TestPoolPlanRejectsExistingIDBeforeDiscovery(t *testing.T) {
 	err := PoolPlan(context.Background(), &config.Config{PoolID: "existing"}, "missing-file", PlanOutputJSON, "")
-	require.ErrorContains(t, err, "pass the ID to pool exec")
+	require.ErrorContains(t, err, "pass the ID to pool run")
 }
 
 func TestResolvePrecreatedPoolSnapshot(t *testing.T) {

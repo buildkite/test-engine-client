@@ -109,13 +109,13 @@ Note that this will cause Jest to parse all test files on every retry, which may
 > Make sure to append `--testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}` in your custom retry command.
 
 ## Run tests from a Test Scheduler pool
-To run Jest tests from a Test Scheduler pool, use [`bktec pool consume`](./pool-consume.md). It uses the test command and result path configured above, and runs Jest once for each lease.
+To run Jest tests from a Test Scheduler pool, use [`bktec pool run`](./pool-run.md). It uses the test command and result path configured above, and runs Jest once for each lease.
 
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=jest
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/jest-result.json
 
-bktec pool consume --suite-slug my-suite --local-retry-count 1
+bktec pool run --suite-slug my-suite --local-retry-count 1
 ```
 
 For each lease, bktec runs the test command with the lease's test files. The command must write Jest's JSON report to `{{resultPath}}`.

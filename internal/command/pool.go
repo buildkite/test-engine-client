@@ -138,7 +138,7 @@ func poolPlanRequest(ctx context.Context, cfg *config.Config, testFileList strin
 
 func PoolPlan(ctx context.Context, cfg *config.Config, testFileList string, output PlanOutput, template string) error {
 	if cfg.PoolID != "" {
-		return fmt.Errorf("pool plan requires a pool key, not a pool ID; pass the ID to pool exec or pool consume")
+		return fmt.Errorf("pool plan requires a pool key, not a pool ID; pass the ID to pool run")
 	}
 	printPlanningBanner(os.Stderr)
 	client := api.NewClient(api.ClientConfig{
