@@ -51,9 +51,9 @@ func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 	}{
 		{name: "exec plans rspec", command: "exec", runner: "rspec"},
 		{name: "exec plans pytest", command: "exec", runner: "pytest"},
-		{name: "exec rejects a pytest JUnit command", command: "exec", runner: "pytest", testCommand: "pytest {{testExamples}} --junit-xml={{resultPath}}", wantError: "BUILDKITE_TEST_ENGINE_TEST_CMD pool exec runs pytest with buildkite-pytest, which reports JSON; remove --junit-xml"},
-		{name: "exec rejects a pytest JUnit retry command", command: "exec", runner: "pytest", retryCommand: "pytest --junit-xml=out.xml {{testExamples}}", wantError: "BUILDKITE_TEST_ENGINE_RETRY_CMD pool exec runs pytest"},
-		{name: "exec has no jest runner", command: "exec", runner: "jest", wantError: "pool exec requires rspec or pytest"},
+		{name: "exec rejects a pytest JUnit command", command: "exec", runner: "pytest", testCommand: "pytest {{testExamples}} --junit-xml={{resultPath}}", wantError: "BUILDKITE_TEST_ENGINE_TEST_CMD buildkite-pytest reports JSON; remove --junit-xml"},
+		{name: "exec rejects a pytest JUnit retry command", command: "exec", runner: "pytest", retryCommand: "pytest --junit-xml=out.xml {{testExamples}}", wantError: "BUILDKITE_TEST_ENGINE_RETRY_CMD buildkite-pytest reports JSON"},
+		{name: "exec has no jest runner", command: "exec", runner: "jest", wantError: "a persistent runner after -- requires rspec or pytest"},
 		{name: "exec with pool ID", command: "exec", poolID: "pool-1"},
 		{name: "consume plans jest", command: "consume", runner: "jest", resultPath: "jest.json"},
 		{name: "consume plans playwright", command: "consume", runner: "playwright", resultPath: "results.json"},
@@ -61,7 +61,7 @@ func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 		{name: "consume plans pytest with its default result path", command: "consume", runner: "pytest"},
 		{name: "consume rejects pytest fail-fast", command: "consume", runner: "pytest", testCommand: "pytest -q --maxfail=2 {{testExamples}}", wantError: "BUILDKITE_TEST_ENGINE_TEST_CMD"},
 		{name: "consume rejects pytest fail-fast retries", command: "consume", runner: "pytest", retryCommand: "pytest -x {{testExamples}}", wantError: "BUILDKITE_TEST_ENGINE_RETRY_CMD"},
-		{name: "consume with pool ID still runs jest, playwright or pytest", command: "consume", poolID: "pool-1", runner: "rspec", resultPath: "out.json", wantError: "pool consume requires jest, playwright or pytest"},
+		{name: "consume with pool ID still runs jest, playwright or pytest", command: "consume", poolID: "pool-1", runner: "rspec", resultPath: "out.json", wantError: "running the test command per lease requires jest, playwright or pytest"},
 		{name: "consume reads the result path", command: "consume", poolID: "pool-1", runner: "jest", wantError: "BUILDKITE_TEST_ENGINE_RESULT_PATH"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
