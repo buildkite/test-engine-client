@@ -107,13 +107,13 @@ Tests skipped because of another failure are listed as **Failed to run** and fai
 When a test file fails to load, Playwright runs no tests at all, so bktec runs the other test files again without it. The broken file fails the job, but failed tests in the other files are still retried. Errors that Playwright doesn't locate in one of the test files bktec ran, such as a failed `globalSetup` or an error in a helper file that a test file imports, error the whole job and stop retries.
 
 ## Run tests from a Test Scheduler pool
-To run Playwright tests from a Test Scheduler pool, use [`bktec pool consume`](./pool-consume.md). It uses the test command and result path configured above, and runs Playwright once for each lease.
+To run Playwright tests from a Test Scheduler pool, use [`bktec pool run`](./pool-run.md). It uses the test command and result path configured above, and runs Playwright once for each lease.
 
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=playwright
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/test-results.json
 
-bktec pool consume --suite-slug my-suite --local-retry-count 1
+bktec pool run --suite-slug my-suite --local-retry-count 1
 ```
 
 For each lease, bktec runs the test command with the lease's test files. Each leased test file runs in every Playwright project, and its result counts once, across all projects: it fails if the file's tests fail in any project. Muted tests are muted in their own project only.
@@ -136,7 +136,7 @@ To run setup once per job instead, run it before bktec and add `--no-deps` to th
 npx playwright test --project=setup
 export BUILDKITE_TEST_ENGINE_TEST_CMD="npx playwright test --no-deps {{testExamples}}"
 
-bktec pool consume --suite-slug my-suite --local-retry-count 1
+bktec pool run --suite-slug my-suite --local-retry-count 1
 ```
 
 Before you use `--no-deps`, check that:

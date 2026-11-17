@@ -96,7 +96,7 @@ func (c *Config) ValidateForPoolPlan() error {
 // ValidateForPoolExec only allows the runners that have a persistent runner.
 func (c *Config) ValidateForPoolExec() error {
 	if c.PoolID == "" && c.TestRunner != "rspec" && c.TestRunner != "pytest" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool exec requires rspec or pytest; use pool consume for jest or playwright")
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "a persistent runner after -- requires rspec or pytest; omit it to run jest or playwright with the test command")
 	}
 	c.PersistentRunner = true
 	// buildkite-pytest reports buildkite-test-collector's JSON, so pytest
@@ -105,7 +105,7 @@ func (c *Config) ValidateForPoolExec() error {
 	if c.TestRunner == "pytest" {
 		for field, command := range map[string]string{"BUILDKITE_TEST_ENGINE_TEST_CMD": c.TestCommand, "BUILDKITE_TEST_ENGINE_RETRY_CMD": c.RetryCommand} {
 			if strings.Contains(command, "--junit-xml") {
-				c.errs.appendFieldError(field, "pool exec runs pytest with buildkite-pytest, which reports JSON; remove --junit-xml")
+				c.errs.appendFieldError(field, "buildkite-pytest reports JSON; remove --junit-xml")
 			}
 		}
 	}
@@ -116,7 +116,7 @@ func (c *Config) ValidateForPoolExec() error {
 // resolves the collector upload token like bktec run.
 func (c *Config) ValidateForPoolConsume() error {
 	if c.TestRunner != "jest" && c.TestRunner != "playwright" && c.TestRunner != "pytest" {
-		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "pool consume requires jest, playwright or pytest")
+		c.errs.appendFieldError("BUILDKITE_TEST_ENGINE_TEST_RUNNER", "running the test command per lease requires jest, playwright or pytest; pass a persistent runner after -- for rspec")
 	}
 	// Like bktec run, pytest writes its report to a temporary file by default.
 	if c.ResultPath == "" && c.TestRunner != "pytest" {
@@ -125,7 +125,7 @@ func (c *Config) ValidateForPoolConsume() error {
 	if c.TestRunner == "pytest" {
 		for field, command := range map[string]string{"BUILDKITE_TEST_ENGINE_TEST_CMD": c.TestCommand, "BUILDKITE_TEST_ENGINE_RETRY_CMD": c.RetryCommand} {
 			if pytestStopsEarly(command) {
-				c.errs.appendFieldError(field, "pool consume doesn't support pytest options that stop at a failure, such as -x, --maxfail or --stepwise")
+				c.errs.appendFieldError(field, "pool run doesn't support pytest options that stop at a failure, such as -x, --maxfail or --stepwise")
 			}
 		}
 	}

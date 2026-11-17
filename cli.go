@@ -779,7 +779,7 @@ func poolPlanCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
 		filesFlag, tagFiltersFlag, accessTokenFlag, maxParallelismFlag, targetTimeFlag, poolLeaseCostFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag, poolRetryCountFlag,
 		&cli.StringFlag{
-			Name: "pool-id", Usage: "Existing pool ID (only supported by pool exec and pool consume; pool plan rejects it)",
+			Name: "pool-id", Usage: "Existing pool ID (only supported by pool run; pool plan rejects it)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,
 		},
 		&cli.StringFlag{
@@ -820,6 +820,18 @@ func poolConsumeCommandFlags() []cli.Flag {
 	return freshFlags(flags)
 }
 
+func poolRunCommandFlags() []cli.Flag {
+	return append(poolExecCommandFlags(), freshFlags([]cli.Flag{uploadTokenFlag, uploadResultsFlag, uploadTagsFlag, uploadBaseURLFlag})...)
+}
+
+// deprecatedPoolCommand warns that a pool subcommand was replaced by pool run.
+func deprecatedPoolCommand(action cli.ActionFunc) cli.ActionFunc {
+	return func(ctx context.Context, cmd *cli.Command) error {
+		fmt.Fprintf(os.Stderr, "Warning: %s is deprecated; use bktec pool run instead\n", cmd.FullName())
+		return action(ctx, cmd)
+	}
+}
+
 var poolCommand = &cli.Command{
 	Name:  "pool",
 	Usage: "Run tests using Test Scheduler pools",
@@ -838,16 +850,25 @@ var poolCommand = &cli.Command{
 			},
 		}},
 	}, {
+		Name:                      "run",
+		Usage:                     "Run Scheduler leases in one persistent runner given after --, or else with a new test command per lease",
+		ArgsUsage:                 "[-- <persistent-runner> [arguments...]]",
+		Action:                    poolRun,
+		DisableSliceFlagSeparator: true,
+		Flags:                     poolRunCommandFlags(),
+	}, {
 		Name:                      "exec",
-		Usage:                     "Execute Scheduler leases in one persistent runner",
+		Usage:                     "Deprecated: use pool run -- <persistent-runner>",
 		ArgsUsage:                 "-- <persistent-runner> [arguments...]",
-		Action:                    poolExec,
+		Hidden:                    true,
+		Action:                    deprecatedPoolCommand(poolExec),
 		DisableSliceFlagSeparator: true,
 		Flags:                     poolExecCommandFlags(),
 	}, {
 		Name:                      "consume",
-		Usage:                     "Execute Scheduler leases with a new test runner command per lease",
-		Action:                    poolConsume,
+		Usage:                     "Deprecated: use pool run",
+		Hidden:                    true,
+		Action:                    deprecatedPoolCommand(poolConsume),
 		DisableSliceFlagSeparator: true,
 		Flags:                     poolConsumeCommandFlags(),
 	}},
