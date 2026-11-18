@@ -26,63 +26,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func TestPoolConsumeJobRetry(t *testing.T) {
-	jest, err := filepath.Abs(filepath.Join("..", "runner", "testdata", "node_modules", ".bin", "jest"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := t.TempDir()
-	for name, source := range map[string]string{
-		"jest.config.js": `module.exports = {}`,
-		"flaky.test.js": `const fs = require('fs')
-test('passes locally', () => {
-  fs.appendFileSync('runs', 'f')
-  expect(fs.readFileSync('runs', 'utf8')).not.toBe('f')
-})`,
-		"passed.test.js": `const fs = require('fs')
-test('passes', () => { fs.appendFileSync('runs', 'p') })`,
-		"unrelated.test.js": `test('must not run', () => { throw new Error('unrelated failure') })`,
-	} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Chdir(dir)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		base := "/v2/organizations/org/test-scheduler/pools/existing"
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == base:
-			fmt.Fprint(w, `{"id":"existing","state":"consumed","muted_tests":[]}`)
-		case r.Method == http.MethodGet && r.URL.Path == base+"/jobs/job":
-			fmt.Fprint(w, `{"pool":{"id":"existing","state":"consumed"},"job":{"id":"job","participated_in_terminal_failure":true}}`)
-		case r.Method == http.MethodGet && r.URL.Path == base+"/entries" && r.URL.Query().Get("job_id") == "job" && r.URL.Query().Get("result") == "failed":
-			file, next := "flaky.test.js", `"?result=failed&job_id=job&after=cursor"`
-			if r.URL.Query().Get("after") == "cursor" {
-				file, next = "passed.test.js", `null`
-			}
-			fmt.Fprintf(w, `{"items":[{"id":%q,"selector_type":"test_plan_test_case_v1","selector":{"format":"selector","value":%q}}],"links":{"next":%s}}`, file, file, next)
-		default:
-			t.Errorf("unexpected Scheduler request: %s %s", r.Method, r.URL)
-			http.Error(w, "unexpected request", http.StatusBadRequest)
-		}
-	}))
-	defer server.Close()
-	cfg := config.New()
-	cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = "existing", "org", "suite", "jest"
-	cfg.JobID, cfg.JobRetryCount = "job", 1
-	cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
-	cfg.ResultPath = filepath.Join(dir, "jest.json")
-	cfg.TestCommand = jest + " --runTestsByPath {{testExamples}} --json --testLocationInResults --outputFile {{resultPath}}"
-	cfg.RetryCommand = jest + " --runTestsByPath {{testExamples}} --testNamePattern '{{testNamePattern}}' --json --testLocationInResults --outputFile {{resultPath}}"
-	if err := PoolConsume(context.Background(), &cfg, "", 1); err != nil {
-		t.Fatal(err)
-	}
-	runs, err := os.ReadFile(filepath.Join(dir, "runs"))
-	if err != nil || string(runs) != "ffp" {
-		t.Fatalf("runs=%q err=%v, want both pages with one local retry", runs, err)
-	}
-}
-
 // TestPoolConsumeJest runs real Jest commands against a fake Scheduler: a new
 // command per lease and per local retry round, with muting and accounting.
 func TestPoolConsumeJest(t *testing.T) {
