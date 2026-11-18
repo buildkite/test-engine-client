@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/buildkite/test-engine-client/v3/internal/api"
@@ -280,21 +279,24 @@ func TestPoolExecSuppliedConsumedIDSkipsRunnerAndPlanning(t *testing.T) {
 	}
 }
 
-func TestPoolExecRetriedJobConsumedPool(t *testing.T) {
+func TestPoolRetriedJobConsumedPool(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		results      string
 		wantErr      string
 		jobID        string
 		jobStatus    int
+		retryCount   int
 		participated bool
 	}{
-		{name: "no job ID no failures", results: `{"passed":3,"failed":0,"errored":0}`},
-		{name: "no job ID failed attempts", results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
-		{name: "no job ID errored attempts", results: `{"passed":3,"failed":0,"errored":1}`, wantErr: "already finished with 0 failed and 1 errored attempts"},
-		{name: "unrelated failures", jobID: "job", jobStatus: 200},
+		{name: "no job ID no failures", retryCount: 1, results: `{"passed":3,"failed":0,"errored":0}`},
+		{name: "no job ID failed attempts", retryCount: 1, results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
+		{name: "no job ID errored attempts", retryCount: 1, results: `{"passed":3,"failed":0,"errored":1}`, wantErr: "already finished with 0 failed and 1 errored attempts"},
+		{name: "unrelated failures", retryCount: 1, jobID: "job", jobStatus: 200},
 		{name: "non-retried participant", jobID: "job", jobStatus: 200, participated: true, wantErr: "participated in a terminal"},
-		{name: "job API unavailable", jobID: "job", jobStatus: 404, results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
+		{name: "participated", retryCount: 1, jobID: "job", jobStatus: 200, participated: true, wantErr: "participated in a terminal"},
+		{name: "retry of retry", retryCount: 2, jobID: "job", jobStatus: 200, participated: true, wantErr: "participated in a terminal"},
+		{name: "job API unavailable", retryCount: 1, jobID: "job", jobStatus: 404, results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -315,161 +317,34 @@ func TestPoolExecRetriedJobConsumedPool(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			cfg := config.New()
-			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.JobRetryCount = "existing", "org", "suite", 1
-			cfg.JobID = tc.jobID
-			if tc.participated {
-				cfg.JobRetryCount = 0
-			}
-			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
-			err := PoolExec(context.Background(), &cfg, "", []string{filepath.Join(t.TempDir(), "nonexistent-runner")}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
-			if tc.wantErr == "" {
-				if err != nil {
-					t.Fatal(err)
-				}
-				return
-			}
-			var exit cli.ExitCoder
-			if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("err=%v, want exit 1 containing %q", err, tc.wantErr)
-			}
-		})
-	}
-}
-
-func TestPoolExecRerunsConsumedJobFailures(t *testing.T) {
-	for _, tc := range []struct {
-		name, mode, muted, items, wantErr string
-		retries                           int
-		unavailable                       bool
-		wantCode                          int
-	}{
-		{name: "passing rerun", mode: "pass"},
-		{name: "failed rerun", mode: "failure", wantErr: "failed attempts: 1", wantCode: 1},
-		{name: "local retry passes", mode: "retry", retries: 1},
-		{name: "muted failure passes", mode: "failure", retries: 1, muted: `[{"format":"example","identifier":"a[1]","path":"a"}]`},
-		{name: "runner crash", mode: "crash", wantErr: "exit status 19", wantCode: 19},
-		{name: "batch timeout", mode: "timeout", wantErr: "timeout"},
-		{name: "entries unavailable", unavailable: true, wantErr: "job entry filter unavailable"},
-		{name: "missing failure set", items: `[]`, wantErr: "no failed entries were returned"},
-		{name: "incomplete entry", mode: "pass", items: `[{"id":"entry-a"}]`, wantErr: "unsupported selector format"},
-		{name: "missing muted snapshot", muted: `null`, wantErr: "missing its muted tests snapshot"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			muted := tc.muted
-			if muted == "" {
-				muted = `[]`
-			}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// The real Scheduler is read-only for retries: any lease,
-				// completion, heartbeat or release request fails this test.
-				if r.Method != http.MethodGet {
-					t.Errorf("retry wrote to Scheduler: %s %s", r.Method, r.URL)
-					http.Error(w, "unexpected write", http.StatusBadRequest)
-					return
-				}
-				switch r.URL.Path {
-				case "/v2/organizations/org/test-scheduler/pools/existing":
-					fmt.Fprintf(w, `{"id":"existing","state":"consumed","muted_tests":%s}`, muted)
-				case "/v2/organizations/org/test-scheduler/pools/existing/jobs/job":
-					fmt.Fprint(w, `{"pool":{"id":"existing","state":"consumed"},"job":{"id":"job","participated_in_terminal_failure":true}}`)
-				case "/v2/organizations/org/test-scheduler/pools/existing/entries":
-					if r.URL.Query().Get("result") != "failed" || r.URL.Query().Get("job_id") != "job" {
-						t.Errorf("incorrect job entry filter: %s", r.URL)
+			for _, mode := range []string{"persistent", "per-command"} {
+				t.Run(mode, func(t *testing.T) {
+					cfg := config.New()
+					cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.JobRetryCount = "existing", "org", "suite", tc.retryCount
+					cfg.JobID = tc.jobID
+					cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
+					cfg.TestRunner, cfg.TestCommand = "jest", filepath.Join(t.TempDir(), "nonexistent-runner")
+					cfg.ResultPath = filepath.Join(t.TempDir(), "jest.json")
+					var err error
+					if mode == "persistent" {
+						err = PoolExec(context.Background(), &cfg, "", []string{cfg.TestCommand}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
+					} else {
+						err = PoolConsume(context.Background(), &cfg, "", 0)
 					}
-					if tc.unavailable {
-						w.WriteHeader(http.StatusNotFound)
-						fmt.Fprint(w, `{"message":"job entry filter unavailable"}`)
+					if tc.wantErr == "" {
+						if err != nil {
+							t.Fatal(err)
+						}
 						return
 					}
-					items := tc.items
-					if items == "" {
-						items = `[{"id":"entry-a","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"a"}}]`
+					var exit cli.ExitCoder
+					if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(err.Error(), tc.wantErr) {
+						t.Fatalf("err=%v, want exit 1 containing %q", err, tc.wantErr)
 					}
-					fmt.Fprintf(w, `{"items":%s,"links":{}}`, items)
-				default:
-					t.Errorf("unexpected request: %s %s", r.Method, r.URL)
-					http.Error(w, "unexpected request", http.StatusBadRequest)
-				}
-			}))
-			defer server.Close()
-			t.Setenv("BKTEC_POOL_TEST_CHILD", tc.mode)
-			t.Setenv("BKTEC_POOL_TEST_FLUSH", filepath.Join(t.TempDir(), "flushed"))
-			cfg := config.New()
-			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug = "existing", "org", "suite"
-			cfg.JobID, cfg.JobRetryCount = "job", 2 // Retrying a retry uses the same original set.
-			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			opts := runnerexec.Options{StartupTimeout: 2 * time.Second, BatchTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}
-			if tc.mode == "timeout" {
-				opts.BatchTimeout, opts.ShutdownTimeout = 100*time.Millisecond, 100*time.Millisecond
-			}
-			err := PoolExec(ctx, &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, tc.retries, opts)
-			if tc.wantErr == "" {
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("err=%v, want %q", err, tc.wantErr)
-			}
-			if tc.wantCode != 0 {
-				var exit cli.ExitCoder
-				if !errors.As(err, &exit) || exit.ExitCode() != tc.wantCode {
-					t.Fatalf("err=%v, want exit %d", err, tc.wantCode)
-				}
+				})
 			}
 		})
 	}
-}
-
-func TestPoolJobRetryKeepsEntriesAfterSlowBatch(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/v2/organizations/org/test-scheduler/pools/existing/entries" {
-			t.Errorf("unexpected Scheduler request: %s %s", r.Method, r.URL)
-			http.Error(w, "unexpected request", http.StatusBadRequest)
-			return
-		}
-		// Close the real connection before advancing the runner's fake clock.
-		w.Header().Set("Connection", "close")
-		fmt.Fprint(w, `{"items":[
-{"id":"a","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"a"},"costs":{"duration_p90_ms":1}},
-{"id":"b","selector_type":"test_plan_test_case_v1","selector":{"format":"file","path":"b"},"costs":{"duration_p90_ms":1}}
-],"links":{}}`)
-	}))
-	defer server.Close()
-	client := api.NewClient(api.ClientConfig{OrganizationSlug: "org", ServerBaseURL: server.URL})
-	synctest.Test(t, func(t *testing.T) {
-		var ran []string
-		err := retryPoolJob(context.Background(), client, api.Pool{ID: "existing", State: "consumed", MutedTests: []plan.TestCase{}}, "job", 0, func(_ context.Context, source *poolSource) error {
-			source.Connected()
-			for {
-				batch, reason, err := source.Next()
-				if err != nil || reason != "" {
-					return err
-				}
-				if batch == nil {
-					time.Sleep(time.Millisecond)
-					continue
-				}
-				if len(batch.Tests) != 1 {
-					t.Fatalf("expected one entry per batch, got %+v", batch.Tests)
-				}
-				if err := source.Dispatched(*batch); err != nil {
-					return err
-				}
-				path := batch.Tests[0].Path
-				ran = append(ran, path)
-				// Longer than the remote lease prefetch idle timeout. No local
-				// entry may be discarded while this batch is still running.
-				time.Sleep(time.Minute)
-				source.Accepted(*batch, poolReport(fmt.Sprintf(`[{"id":%q,"file_path":%q,"status":"passed"}]`, path+"[1]", path), 1, 0))
-			}
-		})
-		if err != nil || strings.Join(ran, ",") != "a,b" {
-			t.Fatalf("ran=%v err=%v, want both entries", ran, err)
-		}
-	})
 }
 
 func TestPoolExecSuppliedConsumingIDReusesSnapshot(t *testing.T) {

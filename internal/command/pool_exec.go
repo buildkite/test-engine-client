@@ -89,9 +89,6 @@ func poolWork(ctx context.Context, cfg *config.Config, files string, retries int
 				return err
 			}
 			if failed {
-				if cfg.JobRetryCount > 0 {
-					return retryPoolJob(ctx, client, pool, cfg.JobID, retries, run)
-				}
 				return cli.Exit("This job participated in a terminal Test Scheduler failure.", 1)
 			}
 			legacy = unavailable != nil
@@ -118,38 +115,6 @@ func poolWork(ctx context.Context, cfg *config.Config, files string, retries int
 	}
 	debug.Printf("Pool ready (state=%s); starting runner", pool.State)
 	return runPool(ctx, client, pool, retries, leaseLog, run, checkJob)
-}
-
-// retryPoolJob reruns a consumed pool's fixed failure set locally. Neither
-// leases nor results are sent to Scheduler, and the original job participation
-// must not override the rerun's outcome.
-func retryPoolJob(ctx context.Context, client *api.Client, pool api.Pool, jobID string, retries int, run poolRunner) error {
-	entries, err := client.GetPoolJobFailedEntries(ctx, pool.ID, jobID)
-	if err != nil {
-		return err
-	}
-	if len(entries) == 0 {
-		return errors.New("job participated in a terminal Test Scheduler failure but no failed entries were returned; rebuild instead")
-	}
-	if pool.MutedTests == nil {
-		return fmt.Errorf("test pool %s is missing its muted tests snapshot", pool.ID)
-	}
-	scheduler := &localPoolScheduler{}
-	for _, entry := range entries {
-		// One entry per batch bounds batch timeouts without reconstructing the
-		// original leases, which may already have been reclaimed.
-		// Omit timing costs: local acquisition needs no predictive prefetch,
-		// whose idle timeout would otherwise discard queued local work.
-		scheduler.leases = append(scheduler.leases, api.Lease{
-			ID: "retry-" + entry.ID,
-			Attempts: []api.LeaseAttempt{{
-				ID: entry.ID, SelectorType: entry.SelectorType, Selector: entry.Selector,
-			}},
-		})
-	}
-	fmt.Printf("+++ Buildkite Test Engine Client: Retrying %d failed entries from this job\n", len(entries))
-	pool.State = "consuming" // Only the local source runs; the server pool stays consumed.
-	return runPool(ctx, scheduler, pool, retries, log.New(io.Discard, "", 0), run, nil)
 }
 
 // poolExecFallback runs this job's share of a static split when Test Scheduler
@@ -179,7 +144,7 @@ func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files 
 		fmt.Println("+++ Buildkite Test Engine Client: No tests to run on this node")
 		return nil
 	}
-	scheduler := &localPoolScheduler{}
+	scheduler := &fallbackScheduler{}
 	for i, test := range share {
 		// One selector per lease keeps each batch well inside the runner batch
 		// timeout, since a local split has no timings to size batches with.
@@ -197,18 +162,18 @@ func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files 
 	return runPool(ctx, scheduler, api.Pool{ID: "fallback", State: "consuming"}, retries, log.New(io.Discard, "", 0), run, nil)
 }
 
-// localLeaseTTL is how long a local lease stays owned between
+// fallbackLeaseTTL is how long a local fallback lease stays owned between
 // heartbeats; nothing else can take its tests.
-const localLeaseTTL = 10 * time.Minute
+const fallbackLeaseTTL = 10 * time.Minute
 
-// localPoolScheduler serves a fixed list as local leases, so job retries and
-// static-split fallbacks reuse the pool runner, local retries and results.
-type localPoolScheduler struct {
+// fallbackScheduler serves a static split's share as local leases, so the
+// fallback reuses the pool runner, local retries and results.
+type fallbackScheduler struct {
 	mu     sync.Mutex
 	leases []api.Lease
 }
 
-func (f *localPoolScheduler) AcquireLease(context.Context, string) (api.LeaseResponse, error) {
+func (f *fallbackScheduler) AcquireLease(context.Context, string) (api.LeaseResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var response api.LeaseResponse
@@ -216,22 +181,22 @@ func (f *localPoolScheduler) AcquireLease(context.Context, string) (api.LeaseRes
 	if len(f.leases) > 0 {
 		lease := f.leases[0]
 		f.leases = f.leases[1:]
-		lease.ExpiresAt = time.Now().Add(localLeaseTTL)
+		lease.ExpiresAt = time.Now().Add(fallbackLeaseTTL)
 		response.Lease = &lease
 		response.Pool.State = "consuming"
 	}
 	return response, nil
 }
 
-func (f *localPoolScheduler) HeartbeatLease(context.Context, string, string) (api.LeaseHeartbeat, error) {
-	return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(localLeaseTTL)}, nil
+func (f *fallbackScheduler) HeartbeatLease(context.Context, string, string) (api.LeaseHeartbeat, error) {
+	return api.LeaseHeartbeat{ExpiresAt: time.Now().Add(fallbackLeaseTTL)}, nil
 }
 
-func (f *localPoolScheduler) CompleteLease(context.Context, string, string, []api.AttemptResult) error {
+func (f *fallbackScheduler) CompleteLease(context.Context, string, string, []api.AttemptResult) error {
 	return nil
 }
 
-func (f *localPoolScheduler) ReleaseLease(context.Context, string, string) error { return nil }
+func (f *fallbackScheduler) ReleaseLease(context.Context, string, string) error { return nil }
 
 func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries int, leases *log.Logger, run poolRunner, checkJob func(context.Context) (bool, error)) error {
 	fmt.Println("+++ Buildkite Test Engine Client: Running tests")
