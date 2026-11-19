@@ -5,6 +5,7 @@
 - Add `--pool-retry-count` to retry failed or errored tests through Test Scheduler, rerunning the whole entry. See [pool retries](./docs/pool-run.md#retries-and-results).
 - Fix Test Scheduler jobs failing because of unrelated pool failures or failed attempts that another worker successfully retried. Jobs now fail only when they contributed to a terminal test failure. Requires Test Scheduler support on the server.
 - Remove automatic job reruns after a Test Scheduler pool finishes. Rebuild to rerun failed tests; in-job retries with `--local-retry-count` are unchanged.
+- Fix concurrent commit metadata backfills overwriting or removing each other's archives.
 
 ## 3.5.0 - 2026-11-02
 - Add opt-in [OTLP relay batching](./README.md#batch-relay-requests) to deliver fast suites with fewer uploads, with per-stream summary statistics. Requires receiver batch support; older receivers fall back to individual requests.
