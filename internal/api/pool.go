@@ -11,9 +11,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/roko"
 	"github.com/buildkite/test-engine-client/v3/internal/debug"
 	"github.com/buildkite/test-engine-client/v3/internal/plan"
+	"github.com/buildkite/roko"
 )
 
 // Pool is the full Scheduler representation, not a lease response. Nil

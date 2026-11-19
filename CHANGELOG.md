@@ -1,5 +1,6 @@
 # Changelog
 ## Unreleased
+- Show `bktest` in help and version output, even when invoked as `bktec`.
 - Add `bktec pool run` for running tests from a [Test Scheduler pool](./docs/pool-run.md). It runs leases in a persistent runner given after `--`, or otherwise starts the test command for each lease. `bktec pool exec` and `bktec pool consume` are deprecated; use `bktec pool run` instead.
 - Add `--pool-retry-count` to retry failed or errored tests through Test Scheduler, rerunning the whole entry. See [pool retries](./docs/pool-run.md#retries-and-results).
 - Fix Test Scheduler jobs failing because of unrelated pool failures or failed attempts that another worker successfully retried. Jobs now fail only when they contributed to a terminal test failure. Requires Test Scheduler support on the server.
