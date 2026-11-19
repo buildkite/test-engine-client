@@ -10,6 +10,9 @@ from pathlib import Path
 CANONICAL = b"github.com/buildkite/bktest/v3"
 LEGACY = b"github.com/buildkite/test-engine-client/v3"
 MANIFEST = Path(__file__).with_name("manifest")
+# The runbook replaces these paths even if an export mapping is removed.
+PROJECTED_ROOTS = ("docs", "internal", "util/supported_features")
+PROJECTED_FILES = {".bktest-source", "go.mod", "go.sum", "CHANGELOG.md", "LICENSE.txt"}
 
 
 def mappings():
@@ -64,14 +67,16 @@ def committed_projection(repo, expected):
     def git(*args):
         return subprocess.check_output(["git", "-C", repo, *args])
 
-    subtrees = tuple(dst for _, dst in mappings() if dst.endswith("/") and dst != "./")
+    files = PROJECTED_FILES | expected.keys()
+    subtrees = tuple(root + "/" for root in PROJECTED_ROOTS)
     actual = {}
     for entry in git("ls-tree", "-rz", "HEAD").split(b"\0"):
         if not entry:
             continue
         metadata, name = entry.split(b"\t", 1)
         path = name.decode()
-        if path not in expected and not path.startswith(subtrees) and not ("/" not in path and path.endswith(".go")):
+        root_go = "/" not in path and path.endswith(".go")
+        if path not in files and path not in PROJECTED_ROOTS and not path.startswith(subtrees) and not root_go:
             continue
         mode, kind, oid = metadata.decode().split()
         if kind != "blob" or mode not in {"100644", "100755"}:

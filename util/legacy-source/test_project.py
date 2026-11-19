@@ -81,6 +81,19 @@ class ProjectionTest(unittest.TestCase):
             (first / executable).chmod(0o644)
             result = check_commit()
             self.assertEqual(result.returncode, 0, result.stderr)
+
+            # A removed mapping must not hide its stale files in the committed tree.
+            (temp / "project.py").write_bytes((TOOLS / "project.py").read_bytes())
+            (temp / "manifest").write_text((TOOLS / "manifest").read_text().replace(
+                "internal/version/\tinternal/version/\n", "",
+            ))
+            result = subprocess.run(
+                ["python3", temp / "project.py", "check-commit", repo, commit, first],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("unexpected projected file: internal/version/fixture.txt", result.stderr)
+
             legacy("update-index", "--chmod=-x", executable)
             legacy("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "mode drift")
             (first / executable).chmod(0o755)
