@@ -1,6 +1,25 @@
 # The canonical repository owns full CLI CI. Keep this status check for
 # compatibility PRs without invoking the old uploads or release producer.
 steps:
+  - label: ":git: Verify committed canonical projection"
+    plugins:
+      - docker#v5.13.0:
+          image: python:3.13-bookworm
+          command:
+            - bash
+            - -euc
+            - |
+              export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+              export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$$PWD"
+              pin="$$(git show HEAD:.bktest-source | sed -n 's/^commit //p')"
+              [[ "$$pin" =~ ^[0-9a-f]{40}$$ ]]
+              canonical="$$(mktemp -d)"
+              trap 'rm -rf "$$canonical"' EXIT
+              git -C "$$canonical" init --quiet
+              git -C "$$canonical" -c credential.helper= fetch --quiet --no-tags --depth=1 https://github.com/buildkite/bktest.git "$$pin"
+              test "$$(git -C "$$canonical" rev-parse FETCH_HEAD)" = "$$pin"
+              python3 util/legacy-source/project.py check-commit "$$canonical" "$$pin" .
+
   - label: ":go: Verify the legacy Go entrypoint"
     plugins:
       - docker#v5.13.0:

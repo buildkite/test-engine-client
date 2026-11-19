@@ -1,9 +1,10 @@
 # Buildkite Test Engine Client
 
 CLI development now happens in [buildkite/bktest](https://github.com/buildkite/bktest).
-Open CLI issues and pull requests there. This repository remains the home of
-legacy `bktec` releases, the existing Go module path, and these versioned
-guides. The Go source here is generated from the canonical CLI.
+Open CLI issues and pull requests there, and see its [Development guide](https://github.com/buildkite/bktest#development)
+to build and test the CLI. This repository remains the home of legacy `bktec`
+releases, the existing Go module path, and these versioned guides. The Go source
+here is generated from the canonical CLI.
 
 Buildkite Test Engine Client (`bktec`) is a command-line tool for running test suites with Buildkite Test Engine.
 
@@ -105,12 +106,12 @@ Splitting quality depends on the timing data available for the suite. First runs
 
 ## Installation
 
-For new installations, see [Install the CLI](https://github.com/buildkite/bktest#installation).
-Existing `bktec` installations and [downloads](https://github.com/buildkite/test-engine-client/releases)
-continue to work. Existing Go installations can keep using
-`go install github.com/buildkite/test-engine-client/v3@<version>` with an
-exact CLI tag. You do not need to change pinned Tests plugin steps or rename
-commands in an existing pipeline.
+Download `bktec` for your OS and architecture from the [latest CLI release](https://github.com/buildkite/test-engine-client/releases/latest).
+For a specific version, choose its tag from the [release list](https://github.com/buildkite/test-engine-client/releases).
+To install with Go, use `go install github.com/buildkite/test-engine-client/v3@<version>`
+with an exact released CLI tag, including the leading `v`.
+You do not need to change pinned Tests plugin steps or rename commands in an
+existing pipeline.
 
 ### Supported OS/Architecture
 

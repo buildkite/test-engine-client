@@ -12,6 +12,12 @@ LEGACY = b"github.com/buildkite/test-engine-client/v3"
 MANIFEST = Path(__file__).with_name("manifest")
 
 
+def mappings():
+    for line in MANIFEST.read_text().splitlines():
+        if line and not line.startswith("#"):
+            yield line.split("\t")
+
+
 def expected_tree(repo, commit):
     def git(*args):
         return subprocess.check_output(["git", "-C", repo, *args])
@@ -24,10 +30,7 @@ def expected_tree(repo, commit):
     tree = {
         ".bktest-source": (0o644, f"repository github.com/buildkite/bktest\ncommit {commit}\n".encode()),
     }
-    for line in MANIFEST.read_text().splitlines():
-        if not line or line.startswith("#"):
-            continue
-        source, destination = line.split("\t")
+    for source, destination in mappings():
         entries = git("ls-tree", "-rz", "--full-tree", commit, "--", source)
         if not entries:
             raise ValueError(f"manifest path missing at {commit}: {source}")
@@ -57,12 +60,32 @@ def expected_tree(repo, commit):
     return tree
 
 
+def committed_projection(repo, expected):
+    def git(*args):
+        return subprocess.check_output(["git", "-C", repo, *args])
+
+    subtrees = tuple(dst for _, dst in mappings() if dst.endswith("/") and dst != "./")
+    actual = {}
+    for entry in git("ls-tree", "-rz", "HEAD").split(b"\0"):
+        if not entry:
+            continue
+        metadata, name = entry.split(b"\t", 1)
+        path = name.decode()
+        if path not in expected and not path.startswith(subtrees) and not ("/" not in path and path.endswith(".go")):
+            continue
+        mode, kind, oid = metadata.decode().split()
+        if kind != "blob" or mode not in {"100644", "100755"}:
+            raise ValueError(f"unsupported projected Git entry: {path}: {mode} {kind}")
+        actual[path] = (int(mode[-3:], 8), git("cat-file", "blob", oid))
+    return actual
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["generate", "check"])
+    parser.add_argument("action", choices=["generate", "check", "check-commit"])
     parser.add_argument("repo", type=Path, help="local canonical Git repository")
     parser.add_argument("commit", help="full canonical commit SHA")
-    parser.add_argument("output", type=Path, help="standalone projection directory")
+    parser.add_argument("output", type=Path, help="standalone projection directory, or legacy repository for check-commit")
     args = parser.parse_args()
 
     try:
@@ -74,7 +97,7 @@ def main():
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_bytes(data)
                 file.chmod(mode)
-        else:
+        elif args.action == "check":
             if not args.output.is_dir():
                 raise ValueError(f"missing projection directory: {args.output}")
             actual = {}
@@ -86,6 +109,9 @@ def main():
                     raise ValueError(f"unexpected non-file: {file}")
                 git_mode = 0o755 if mode & stat.S_IXUSR else 0o644
                 actual[file.relative_to(args.output).as_posix()] = (git_mode, file.read_bytes())
+        else:
+            actual = committed_projection(args.output, expected)
+        if args.action != "generate":
             for name in sorted(actual.keys() | expected.keys()):
                 if name not in expected:
                     raise ValueError(f"unexpected projected file: {name}")

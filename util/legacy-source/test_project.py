@@ -67,6 +67,27 @@ class ProjectionTest(unittest.TestCase):
             (second / "collector.go").touch()
             self.assertIn("unexpected projected file: collector.go", project("check", second).stderr)
 
+            def legacy(*args):
+                return subprocess.check_output(["git", "-C", first, *args])
+
+            def check_commit():
+                return project("check-commit", first)
+
+            legacy("init", "-q")
+            (first / "README.md").write_text("Owned by the legacy repository\n")
+            legacy("add", ".")
+            legacy("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "projection")
+            executable = "internal/runner/testdata/run.sh"
+            (first / executable).chmod(0o644)
+            result = check_commit()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            legacy("update-index", "--chmod=-x", executable)
+            legacy("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "mode drift")
+            (first / executable).chmod(0o755)
+            result = check_commit()
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(f"projected bytes or executable bit differ: {executable}", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
