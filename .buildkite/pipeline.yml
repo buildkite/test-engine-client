@@ -1,61 +1,17 @@
+# The canonical repository owns full CLI CI. Keep this status check for
+# compatibility PRs without invoking the old uploads or release producer.
 steps:
-  - name: ":golangci-lint: Lint"
+  - label: ":go: Verify the legacy Go entrypoint"
     plugins:
       - docker#v5.13.0:
-          image: golangci/golangci-lint:v2.14.0
-          workdir: /go/src/github.com/your-org/your-repo
+          image: golang:1.27.3-bookworm
           command:
-            - golangci-lint
-            - run
-
-  - name: ":go: Tests"
-    command: ".buildkite/steps/tests.sh"
-    parallelism: 2
-    artifact_paths:
-      - cover.{html,out}
-    plugins:
-      - docker-compose#v5.12.1:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: ci
-          propagate-environment: true
-          mount-buildkite-agent: true
-
-  - name: ":test_tube: Integration tests"
-    command: ".buildkite/steps/integration.sh"
-    plugins:
-      - docker-compose#v5.12.1:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: ci
-          propagate-environment: true
-          mount-buildkite-agent: true
-
-  - wait
-
-  - group: ":hammer_and_wrench: Build binaries"
-    steps:
-      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-        artifact_paths: "dist/**/*"
-        plugins:
-          docker#v5.13.0:
-            image: goreleaser/goreleaser:v2.18.2
-            mount-buildkite-agent: true
-            environment:
-              # Honor go.mod's minimum instead of the image's older bundled Go.
-              - GOTOOLCHAIN=auto
-              - GOOS={{matrix.os}}
-              - GOARCH={{matrix.arch}}
-            command:
-              - build
-              - --single-target
-              - --snapshot
-        matrix:
-          setup:
-            os:
-              - darwin
-              - linux
-              - windows
-            arch:
-              - amd64
-              - arm64
+            - bash
+            - -euc
+            - |
+              export GOWORK=off
+              test "$$(go list -m)" = github.com/buildkite/test-engine-client/v3
+              go test -mod=readonly .
+              export GOBIN="$$(mktemp -d)"
+              go install -mod=readonly .
+              "$$GOBIN/test-engine-client" --version
