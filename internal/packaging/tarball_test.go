@@ -5,8 +5,11 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -67,11 +70,11 @@ func sampleMetadata() ArchiveMetadata {
 }
 
 func TestCreateTarball_BasicStructure(t *testing.T) {
-	path, err := CreateTarball(sampleRecords(), sampleMetadata())
+	path, cleanup, err := CreateTarball(sampleRecords(), sampleMetadata())
 	if err != nil {
 		t.Fatalf("CreateTarball error: %v", err)
 	}
-	defer os.Remove(path)
+	t.Cleanup(cleanup)
 
 	files := ReadTarball(t, path)
 	if !HasTarEntry(files, "/commit-metadata.jsonl") {
@@ -86,13 +89,61 @@ func TestCreateTarball_BasicStructure(t *testing.T) {
 	}
 }
 
+func TestCreateTarball_ConcurrentCalls(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	t.Setenv("TMP", dir)
+	// A fixed clock guarantees both calls use the same timestamp.
+	synctest.Test(t, func(t *testing.T) {
+		type result struct {
+			path    string
+			cleanup func()
+			err     error
+		}
+		results := [2]result{}
+		for i := range results {
+			go func() {
+				records := sampleRecords()[i : i+1]
+				results[i].path, results[i].cleanup, results[i].err = CreateTarball(records, sampleMetadata())
+			}()
+		}
+		synctest.Wait()
+		for _, r := range results {
+			if r.err != nil {
+				t.Fatal(r.err)
+			}
+		}
+		if results[0].path == results[1].path {
+			t.Fatalf("concurrent calls returned the same path: %q", results[0].path)
+		}
+		name := regexp.MustCompile(`^bktec-commit-metadata-\d{8}T\d{6}\.\d{3}Z\.tar\.gz$`)
+		for i, r := range results {
+			if !name.MatchString(filepath.Base(r.path)) {
+				t.Errorf("unexpected upload basename: %q", filepath.Base(r.path))
+			}
+			var record CommitRecord
+			files := ReadTarball(t, r.path)
+			if err := json.Unmarshal([]byte(FindTarEntry(t, files, "/commit-metadata.jsonl")), &record); err != nil {
+				t.Fatal(err)
+			}
+			if want := sampleRecords()[i].CommitSHA; record.CommitSHA != want {
+				t.Errorf("archive %d has commit %q, want %q", i, record.CommitSHA, want)
+			}
+			r.cleanup()
+			if _, err := os.Stat(r.path); !os.IsNotExist(err) {
+				t.Errorf("archive still accessible after cleanup: %q (stat error: %v)", r.path, err)
+			}
+		}
+	})
+}
+
 func TestCreateTarball_JSONLContent(t *testing.T) {
 	records := sampleRecords()
-	path, err := CreateTarball(records, sampleMetadata())
+	path, cleanup, err := CreateTarball(records, sampleMetadata())
 	if err != nil {
 		t.Fatalf("CreateTarball error: %v", err)
 	}
-	defer os.Remove(path)
+	t.Cleanup(cleanup)
 
 	files := ReadTarball(t, path)
 	jsonl := FindTarEntry(t, files, "/commit-metadata.jsonl")
@@ -115,11 +166,11 @@ func TestCreateTarball_JSONLContent(t *testing.T) {
 
 func TestCreateTarball_MetadataContent(t *testing.T) {
 	meta := sampleMetadata()
-	path, err := CreateTarball(sampleRecords(), meta)
+	path, cleanup, err := CreateTarball(sampleRecords(), meta)
 	if err != nil {
 		t.Fatalf("CreateTarball error: %v", err)
 	}
-	defer os.Remove(path)
+	t.Cleanup(cleanup)
 
 	files := ReadTarball(t, path)
 	var got ArchiveMetadata
@@ -132,11 +183,11 @@ func TestCreateTarball_MetadataContent(t *testing.T) {
 }
 
 func TestCreateTarball_EmptyRecords(t *testing.T) {
-	path, err := CreateTarball(nil, sampleMetadata())
+	path, cleanup, err := CreateTarball(nil, sampleMetadata())
 	if err != nil {
 		t.Fatalf("CreateTarball error: %v", err)
 	}
-	defer os.Remove(path)
+	t.Cleanup(cleanup)
 
 	files := ReadTarball(t, path)
 	jsonl := FindTarEntry(t, files, "/commit-metadata.jsonl")
@@ -154,11 +205,11 @@ func TestCreateTarball_OmitsEmptyDiffs(t *testing.T) {
 			// GitDiff and GitDiffRaw are empty -- should be omitted
 		},
 	}
-	path, err := CreateTarball(records, sampleMetadata())
+	path, cleanup, err := CreateTarball(records, sampleMetadata())
 	if err != nil {
 		t.Fatalf("CreateTarball error: %v", err)
 	}
-	defer os.Remove(path)
+	t.Cleanup(cleanup)
 
 	files := ReadTarball(t, path)
 	lines := strings.Split(strings.TrimSpace(FindTarEntry(t, files, "/commit-metadata.jsonl")), "\n")
@@ -173,11 +224,11 @@ func TestCreateTarball_SchemaVersion(t *testing.T) {
 	records := []CommitRecord{
 		{SchemaVersion: 1, CommitSHA: "abc123"},
 	}
-	path, err := CreateTarball(records, sampleMetadata())
+	path, cleanup, err := CreateTarball(records, sampleMetadata())
 	if err != nil {
 		t.Fatalf("CreateTarball error: %v", err)
 	}
-	defer os.Remove(path)
+	t.Cleanup(cleanup)
 
 	files := ReadTarball(t, path)
 	lines := strings.Split(strings.TrimSpace(FindTarEntry(t, files, "/commit-metadata.jsonl")), "\n")
@@ -203,11 +254,11 @@ func TestCreateTarball_SchemaVersion(t *testing.T) {
 }
 
 func TestCreateTarball_DirectoryStructure(t *testing.T) {
-	path, err := CreateTarball(sampleRecords(), sampleMetadata())
+	path, cleanup, err := CreateTarball(sampleRecords(), sampleMetadata())
 	if err != nil {
 		t.Fatalf("CreateTarball error: %v", err)
 	}
-	defer os.Remove(path)
+	t.Cleanup(cleanup)
 
 	f, err := os.Open(path)
 	if err != nil {

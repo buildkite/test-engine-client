@@ -58,24 +58,28 @@ type ArchiveMetadata struct {
 // backfill-<org>-<suite>-<timestamp> to follow tar best practices
 // (no top-level files).
 //
-// Returns the path to the temp file. Caller is responsible for cleanup.
-// The temp file is renamed to include a timestamp on success for easier
-// identification if cleanup is skipped.
-func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error) {
-	// Create temp file
-	tmpFile, err := os.CreateTemp("", "bktec-commit-metadata-*.tar.gz")
+// Returns the archive path and a cleanup function. The private directory keeps
+// paths unique without changing the timestamped basename used in uploads.
+func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, func(), error) {
+	dir, err := os.MkdirTemp("", "bktec-backfill-*")
 	if err != nil {
-		return "", fmt.Errorf("creating temp file: %w", err)
+		return "", nil, fmt.Errorf("creating temp directory: %w", err)
 	}
-	tmpPath := tmpFile.Name()
+	cleanup := func() { os.RemoveAll(dir) }
 
-	// If anything fails, clean up the temp file
 	success := false
 	defer func() {
 		if !success {
-			os.Remove(tmpPath)
+			cleanup()
 		}
 	}()
+
+	ts := time.Now().UTC().Format("20060102T150405.000Z")
+	tmpPath := filepath.Join(dir, fmt.Sprintf("bktec-commit-metadata-%s.tar.gz", ts))
+	tmpFile, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", nil, fmt.Errorf("creating temp file: %w", err)
+	}
 
 	gzWriter := gzip.NewWriter(tmpFile)
 	tarWriter := tar.NewWriter(gzWriter)
@@ -86,7 +90,7 @@ func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error)
 		line, err := json.Marshal(record)
 		if err != nil {
 			tmpFile.Close()
-			return "", fmt.Errorf("marshalling record for %s: %w", record.CommitSHA, err)
+			return "", nil, fmt.Errorf("marshalling record for %s: %w", record.CommitSHA, err)
 		}
 		jsonlBuf.Write(line)
 		jsonlBuf.WriteByte('\n')
@@ -107,7 +111,7 @@ func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error)
 		ModTime:  now,
 	}); err != nil {
 		tmpFile.Close()
-		return "", fmt.Errorf("writing directory tar header: %w", err)
+		return "", nil, fmt.Errorf("writing directory tar header: %w", err)
 	}
 
 	if err := tarWriter.WriteHeader(&tar.Header{
@@ -117,18 +121,18 @@ func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error)
 		ModTime: now,
 	}); err != nil {
 		tmpFile.Close()
-		return "", fmt.Errorf("writing jsonl tar header: %w", err)
+		return "", nil, fmt.Errorf("writing jsonl tar header: %w", err)
 	}
 	if _, err := tarWriter.Write(jsonlBuf.Bytes()); err != nil {
 		tmpFile.Close()
-		return "", fmt.Errorf("writing jsonl tar content: %w", err)
+		return "", nil, fmt.Errorf("writing jsonl tar content: %w", err)
 	}
 
 	// Write metadata.json
 	metaBytes, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		tmpFile.Close()
-		return "", fmt.Errorf("marshalling metadata: %w", err)
+		return "", nil, fmt.Errorf("marshalling metadata: %w", err)
 	}
 	metaBytes = append(metaBytes, '\n')
 
@@ -139,36 +143,26 @@ func CreateTarball(records []CommitRecord, meta ArchiveMetadata) (string, error)
 		ModTime: now,
 	}); err != nil {
 		tmpFile.Close()
-		return "", fmt.Errorf("writing metadata tar header: %w", err)
+		return "", nil, fmt.Errorf("writing metadata tar header: %w", err)
 	}
 	if _, err := tarWriter.Write(metaBytes); err != nil {
 		tmpFile.Close()
-		return "", fmt.Errorf("writing metadata tar content: %w", err)
+		return "", nil, fmt.Errorf("writing metadata tar content: %w", err)
 	}
 
 	// Close in order: tar -> gzip -> file
 	if err := tarWriter.Close(); err != nil {
 		tmpFile.Close()
-		return "", fmt.Errorf("closing tar writer: %w", err)
+		return "", nil, fmt.Errorf("closing tar writer: %w", err)
 	}
 	if err := gzWriter.Close(); err != nil {
 		tmpFile.Close()
-		return "", fmt.Errorf("closing gzip writer: %w", err)
+		return "", nil, fmt.Errorf("closing gzip writer: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {
-		return "", fmt.Errorf("closing temp file: %w", err)
-	}
-
-	// Rename to include a timestamp for easier identification
-	dir := filepath.Dir(tmpPath)
-	ts := time.Now().UTC().Format("20060102T150405.000Z")
-	finalPath := filepath.Join(dir, fmt.Sprintf("bktec-commit-metadata-%s.tar.gz", ts))
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		// Rename can fail (e.g. permissions); fall back to the original path
-		success = true
-		return tmpPath, nil
+		return "", nil, fmt.Errorf("closing temp file: %w", err)
 	}
 
 	success = true
-	return finalPath, nil
+	return tmpPath, cleanup, nil
 }
