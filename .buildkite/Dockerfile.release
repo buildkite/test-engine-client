@@ -1,4 +1,4 @@
-FROM golang:1.27.3-alpine AS golang
+FROM golang:1.27.4-alpine AS golang
 FROM goreleaser/goreleaser:v2.19.0 AS goreleaser
 
 # Pin the compiler independently of the GoReleaser image's bundled Go version.
