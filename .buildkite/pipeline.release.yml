@@ -1,72 +1,24 @@
+agents:
+  queue: oss-deploy
+
 steps:
-  - name: ":cook: Prepare release"
-    plugins:
-      - docker#v5.13.0:
-          image: ghcr.io/caarlos0/svu:v2.1.0
-          entrypoint: ""
-          command: [".buildkite/steps/prepare-release.sh"]
-          mount-buildkite-agent: true
+  - label: ":docker: Build and retain v3.6.0 OCI images locally"
+    key: retained-oci-v360
+    timeout_in_minutes: 30
+    command: bash .buildkite/steps/v360-retain-oci.sh
+    artifact_paths:
+      - dist/oci/*.tar
+      - dist/oci/receipt.json
 
-  - wait
-
-  - name: ":rocket: Release"
-    key: release
-    artifact_paths: "dist/**/*"
+  - label: ":mag: Check v3.6.0 registry routes without writes"
+    key: registry-read-v360
+    timeout_in_minutes: 15
     plugins:
-      # IAM role to access SSM
       - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-engine-client-release
-          session-tags:
-            - organization_slug
-            - organization_id
-            - pipeline_slug
-      - aws-ssm#v1.0.0:
-          parameters:
-            GITHUB_TOKEN: /pipelines/buildkite/test-engine-client-release/GH_TOKEN
-            DOCKERHUB_USER: /pipelines/buildkite/test-engine-client-release/dockerhub-user
-            DOCKERHUB_PASSWORD: /pipelines/buildkite/test-engine-client-release/dockerhub-password
-      # IAM role to access ECR
+          session-tags: [organization_slug, organization_id, pipeline_slug]
       - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::172840064832:role/pipeline-buildkite-test-engine-client-release
           credential-name-prefix: ECR_
-          session-tags:
-            - organization_slug
-            - organization_id
-            - pipeline_slug
-      - docker-compose#v5.12.0:
-          config: .buildkite/docker-compose.yml
-          run: release
-          command: ["/bin/sh", ".buildkite/steps/release.sh"]
-          mount-buildkite-agent: true
-          mount-checkout: true
-          volumes:
-            - "/var/run/docker.sock:/var/run/docker.sock"
-          environment:
-            - GITHUB_TOKEN
-            - DOCKERHUB_USER
-            - DOCKERHUB_PASSWORD
-            - ECR_AWS_ACCESS_KEY_ID
-            - ECR_AWS_SECRET_ACCESS_KEY
-            - ECR_AWS_SESSION_TOKEN
-
-  # Keep Files publication downstream of the complete release so a partial
-  # existing release still fails closed. One artifact per matrix job contains
-  # partial failures and permits targeted retries. We deliberately delegate
-  # ambiguous POST recovery to the supported plugin instead of duplicating the
-  # Packages API and OIDC logic here.
-  - name: ":package: Publish {{matrix.artifact}}"
-    depends_on: release
-    plugins:
-      - publish-to-packages#v2.2.0:
-          artifacts: "dist/buildkite-packages/{{matrix.artifact}}-*"
-          registry: "buildkite/bktec"
-    matrix:
-      setup:
-        artifact:
-          - bktec-darwin-amd64
-          - bktec-darwin-arm64
-          - bktec-linux-amd64
-          - bktec-linux-arm64
-          - bktec-windows-amd64
-          - bktec-windows-arm64
-          - bktec-checksums
+          session-tags: [organization_slug, organization_id, pipeline_slug]
+    command: python3 .buildkite/steps/v360-registry-reads.py
