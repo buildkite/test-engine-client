@@ -201,10 +201,16 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 		MinCommitDate:    minDate,
 		MaxCommitDate:    maxDate,
 	}
-	tarPath, err := packaging.CreateTarball(records, archiveMeta)
+	tarPath, cleanup, err := packaging.CreateTarball(records, archiveMeta)
 	if err != nil {
 		return fmt.Errorf("creating tarball: %w", err)
 	}
+	removeTarball := true
+	defer func() {
+		if removeTarball {
+			cleanup()
+		}
+	}()
 	tarInfo, err := os.Stat(tarPath)
 	if err != nil {
 		return fmt.Errorf("stat tarball: %w", err)
@@ -217,13 +223,6 @@ func BackfillCommitMetadata(ctx context.Context, cfg *config.Config, runner git.
 	default:
 		fmt.Fprintf(os.Stderr, "%d bytes\n", size)
 	}
-	removeTarball := true
-	defer func() {
-		if removeTarball {
-			os.Remove(tarPath)
-		}
-	}()
-
 	// 12. Upload or write locally
 	if cfg.Output != "" {
 		if err := copyFile(tarPath, cfg.Output); err != nil {

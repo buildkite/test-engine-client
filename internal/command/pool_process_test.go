@@ -279,21 +279,24 @@ func TestPoolExecSuppliedConsumedIDSkipsRunnerAndPlanning(t *testing.T) {
 	}
 }
 
-func TestPoolExecRetriedJobConsumedPool(t *testing.T) {
+func TestPoolRetriedJobConsumedPool(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		results      string
 		wantErr      string
 		jobID        string
 		jobStatus    int
+		retryCount   int
 		participated bool
 	}{
-		{name: "no job ID no failures", results: `{"passed":3,"failed":0,"errored":0}`},
-		{name: "no job ID failed attempts", results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
-		{name: "no job ID errored attempts", results: `{"passed":3,"failed":0,"errored":1}`, wantErr: "already finished with 0 failed and 1 errored attempts"},
-		{name: "unrelated failures", jobID: "job", jobStatus: 200},
-		{name: "participated", jobID: "job", jobStatus: 200, participated: true, wantErr: "participated in a terminal"},
-		{name: "job API unavailable", jobID: "job", jobStatus: 404, results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
+		{name: "no job ID no failures", retryCount: 1, results: `{"passed":3,"failed":0,"errored":0}`},
+		{name: "no job ID failed attempts", retryCount: 1, results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
+		{name: "no job ID errored attempts", retryCount: 1, results: `{"passed":3,"failed":0,"errored":1}`, wantErr: "already finished with 0 failed and 1 errored attempts"},
+		{name: "unrelated failures", retryCount: 1, jobID: "job", jobStatus: 200},
+		{name: "non-retried participant", jobID: "job", jobStatus: 200, participated: true, wantErr: "participated in a terminal"},
+		{name: "participated", retryCount: 1, jobID: "job", jobStatus: 200, participated: true, wantErr: "participated in a terminal"},
+		{name: "retry of retry", retryCount: 2, jobID: "job", jobStatus: 200, participated: true, wantErr: "participated in a terminal"},
+		{name: "job API unavailable", retryCount: 1, jobID: "job", jobStatus: 404, results: `{"passed":3,"failed":2,"errored":0}`, wantErr: "already finished with 2 failed and 0 errored attempts"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -314,20 +317,31 @@ func TestPoolExecRetriedJobConsumedPool(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			cfg := config.New()
-			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.JobRetryCount = "existing", "org", "suite", 1
-			cfg.JobID = tc.jobID
-			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
-			err := PoolExec(context.Background(), &cfg, "", []string{filepath.Join(t.TempDir(), "nonexistent-runner")}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
-			if tc.wantErr == "" {
-				if err != nil {
-					t.Fatal(err)
-				}
-				return
-			}
-			var exit cli.ExitCoder
-			if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("err=%v, want exit 1 containing %q", err, tc.wantErr)
+			for _, mode := range []string{"persistent", "per-command"} {
+				t.Run(mode, func(t *testing.T) {
+					cfg := config.New()
+					cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.JobRetryCount = "existing", "org", "suite", tc.retryCount
+					cfg.JobID = tc.jobID
+					cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
+					cfg.TestRunner, cfg.TestCommand = "jest", filepath.Join(t.TempDir(), "nonexistent-runner")
+					cfg.ResultPath = filepath.Join(t.TempDir(), "jest.json")
+					var err error
+					if mode == "persistent" {
+						err = PoolExec(context.Background(), &cfg, "", []string{cfg.TestCommand}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
+					} else {
+						err = PoolConsume(context.Background(), &cfg, "", 0)
+					}
+					if tc.wantErr == "" {
+						if err != nil {
+							t.Fatal(err)
+						}
+						return
+					}
+					var exit cli.ExitCoder
+					if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(err.Error(), tc.wantErr) {
+						t.Fatalf("err=%v, want exit 1 containing %q", err, tc.wantErr)
+					}
+				})
 			}
 		})
 	}
@@ -342,6 +356,8 @@ func TestPoolExecSuppliedConsumingIDReusesSnapshot(t *testing.T) {
 			_, _ = io.WriteString(w, `{"id":"existing","state":"consuming","parallelism":4,"muted_tests":[]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/leases":
 			_, _ = io.WriteString(w, `{"lease":null,"pool":{"id":"existing","state":"consumed"}}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/jobs/job" && r.URL.RawQuery == "":
+			_, _ = io.WriteString(w, `{"pool":{"id":"existing","state":"consumed"},"job":{"id":"job","participated_in_terminal_failure":false}}`)
 		default:
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 			http.Error(w, "unexpected request", http.StatusBadRequest)
@@ -353,6 +369,7 @@ func TestPoolExecSuppliedConsumingIDReusesSnapshot(t *testing.T) {
 	t.Setenv("BKTEC_POOL_TEST_FLUSH", flush)
 	cfg := config.New()
 	cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug = "existing", "org", "suite"
+	cfg.JobID, cfg.JobRetryCount = "job", 1 // An active pool is joined, not rerun locally.
 	cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
 	if err := PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
 		t.Fatal(err)

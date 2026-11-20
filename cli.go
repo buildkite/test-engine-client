@@ -153,7 +153,7 @@ var parallelJobFlag = &cli.IntFlag{
 var parallelismFlag = &cli.IntFlag{
 	Name:        "parallelism",
 	Category:    "BUILD ENVIRONMENT",
-	Usage:       "Run the specified number of bktec processes in parallel",
+	Usage:       "Run the specified number of bktest processes in parallel",
 	Value:       1,
 	Sources:     cli.EnvVars("BUILDKITE_PARALLEL_JOB_COUNT"),
 	Destination: &cfg.Parallelism,
@@ -824,10 +824,15 @@ func poolRunCommandFlags() []cli.Flag {
 	return append(poolExecCommandFlags(), freshFlags([]cli.Flag{uploadTokenFlag, uploadResultsFlag, uploadTagsFlag, uploadBaseURLFlag})...)
 }
 
+// Keep the legacy command name in diagnostics, not in help or version output.
+func diagnosticCommandName(cmd *cli.Command) string {
+	return "bktec" + strings.TrimPrefix(cmd.FullName(), cmd.Root().Name)
+}
+
 // deprecatedPoolCommand warns that a pool subcommand was replaced by pool run.
 func deprecatedPoolCommand(action cli.ActionFunc) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
-		fmt.Fprintf(os.Stderr, "Warning: %s is deprecated; use bktec pool run instead\n", cmd.FullName())
+		fmt.Fprintf(os.Stderr, "Warning: %s is deprecated; use bktec pool run instead\n", diagnosticCommandName(cmd))
 		return action(ctx, cmd)
 	}
 }
@@ -875,7 +880,7 @@ var poolCommand = &cli.Command{
 }
 
 var cliCommand = &cli.Command{
-	Name:  "bktec",
+	Name:  "bktest",
 	Usage: "Buildkite Test Engine Client",
 	Flags: []cli.Flag{versionFlag, debugFlag},
 	Commands: []*cli.Command{

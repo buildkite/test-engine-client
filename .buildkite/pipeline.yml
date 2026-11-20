@@ -1,61 +1,36 @@
+# The canonical repository owns full CLI CI. Keep this status check for
+# compatibility PRs without invoking the old uploads or release producer.
 steps:
-  - name: ":golangci-lint: Lint"
+  - label: ":git: Verify committed canonical projection"
     plugins:
       - docker#v5.13.0:
-          image: golangci/golangci-lint:v2.14.0
-          workdir: /go/src/github.com/your-org/your-repo
+          image: python:3.13-bookworm
           command:
-            - golangci-lint
-            - run
+            - bash
+            - -euc
+            - |
+              export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+              export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$$PWD"
+              pin="$$(git show HEAD:.bktest-source | sed -n 's/^commit //p')"
+              [[ "$$pin" =~ ^[0-9a-f]{40}$$ ]]
+              canonical="$$(mktemp -d)"
+              trap 'rm -rf "$$canonical"' EXIT
+              git -C "$$canonical" init --quiet
+              git -C "$$canonical" -c credential.helper= fetch --quiet --no-tags --depth=1 https://github.com/buildkite/bktest.git "$$pin"
+              test "$$(git -C "$$canonical" rev-parse FETCH_HEAD)" = "$$pin"
+              python3 util/legacy-source/project.py check-commit "$$canonical" "$$pin" .
 
-  - name: ":go: Tests"
-    command: ".buildkite/steps/tests.sh"
-    parallelism: 2
-    artifact_paths:
-      - cover.{html,out}
+  - label: ":go: Verify the legacy Go entrypoint"
     plugins:
-      - docker-compose#v5.12.1:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: ci
-          propagate-environment: true
-          mount-buildkite-agent: true
-
-  - name: ":test_tube: Integration tests"
-    command: ".buildkite/steps/integration.sh"
-    plugins:
-      - docker-compose#v5.12.1:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: ci
-          propagate-environment: true
-          mount-buildkite-agent: true
-
-  - wait
-
-  - group: ":hammer_and_wrench: Build binaries"
-    steps:
-      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-        artifact_paths: "dist/**/*"
-        plugins:
-          docker#v5.13.0:
-            image: goreleaser/goreleaser:v2.18.2
-            mount-buildkite-agent: true
-            environment:
-              # Honor go.mod's minimum instead of the image's older bundled Go.
-              - GOTOOLCHAIN=auto
-              - GOOS={{matrix.os}}
-              - GOARCH={{matrix.arch}}
-            command:
-              - build
-              - --single-target
-              - --snapshot
-        matrix:
-          setup:
-            os:
-              - darwin
-              - linux
-              - windows
-            arch:
-              - amd64
-              - arm64
+      - docker#v5.13.0:
+          image: golang:1.27.3-bookworm
+          command:
+            - bash
+            - -euc
+            - |
+              export GOWORK=off
+              test "$$(go list -m)" = github.com/buildkite/test-engine-client/v3
+              go test -mod=readonly .
+              export GOBIN="$$(mktemp -d)"
+              go install -mod=readonly .
+              "$$GOBIN/test-engine-client" --version

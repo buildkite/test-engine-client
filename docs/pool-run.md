@@ -231,9 +231,15 @@ and attempts that another worker successfully retried do not fail the job. A
 successful result is final only once the pool is consumed. This requires the
 server's job failure API and `BUILDKITE_JOB_ID` (or `--job-id`).
 
-Retrying a Buildkite job doesn't re-run its tests. A retried job that finds its
-pool already consumed checks its own failure participation, not the pool's
-attempt totals. To re-run failed tests, rebuild instead.
+Retrying a Buildkite job while its pool is still running joins normal leasing.
+Once the pool is consumed, a retried job does not start a runner or rerun tests.
+It checks its own failure participation, not the pool's attempt totals: jobs
+that contributed to a terminal failure exit with status 1, and jobs with no
+terminal failures exit successfully without running tests. Rebuild to rerun
+failed tests after the pool finishes.
+
+In-job retries with `--local-retry-count` and Scheduler retries with
+`--pool-retry-count` are unchanged.
 
 If the job ID is missing or the job API returns 404, bktec keeps its previous
 behavior: workers fail on their own failed or errored attempts, and retried
