@@ -1,5 +1,6 @@
 """One-shot v3.6.0 handoff. No defaults, producer, Files job, or general publish API."""
 
+import base64
 from contextlib import closing
 import hashlib
 import json
@@ -36,6 +37,10 @@ IMAGE_PINS = {
 INDEX = 'application/vnd.oci.image.index.v1+json'
 MANIFEST = 'application/vnd.oci.image.manifest.v1+json'
 DIGEST = r'sha256:[0-9a-f]{64}'
+SKOPEO = 'quay.io/skopeo/stable@sha256:c4c8a9d6fc95e331fa92fc31de3f6c9b5fe4761c82f0acb99669eef067fb7c33'
+PACKAGES_V2 = 'https://packages.buildkite.com/v2/buildkite/test-engine-client-docker/test-engine-client'
+PACKAGES_BACKEND = '0191e41f-89fd-7980-ae04-b883e5cbead2'
+LAST_GOOD = 'sha256:6acc10130e98f3d0ad1995abef587c6773ac7bdd248268cdaaf6cb007c42e446'
 
 
 def require(test, message):
@@ -52,8 +57,11 @@ def output(*argv, **kwargs):
 
 
 def hash_file(path):
+    sha = hashlib.sha256()
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            sha.update(chunk)
+    return sha.hexdigest()
 
 
 def digest(data):
@@ -195,7 +203,8 @@ class NoRedirect(HTTPRedirectHandler):
 
 def get(url, authorization=None):
     headers = {'Accept': ', '.join([INDEX, MANIFEST, 'application/vnd.docker.distribution.manifest.list.v2+json',
-                                   'application/vnd.docker.distribution.manifest.v2+json'])}
+                                   'application/vnd.docker.distribution.manifest.v2+json']),
+               'Cache-Control': 'no-cache'}
     if authorization:
         headers['Authorization'] = authorization
     try:
@@ -212,6 +221,23 @@ def token_at(url, authorization=None):
     return json.loads(body)['token']
 
 
+def runtime(directory, entrypoint, *args, **kwargs):
+    run('docker', '--config', str(directory / 'docker'), 'run', '--rm', '-i', '--pull=never',
+        '--user', f'{os.getuid()}:{os.getgid()}', '--entrypoint', entrypoint, SKOPEO, *args, **kwargs)
+
+
+def copy_image(directory, layout, source, destination):
+    # Stream across the Docker boundary; the worker's private scratch paths do not need container permissions.
+    with tempfile.TemporaryFile(dir=directory) as stream:
+        with tarfile.open(fileobj=stream, mode='w') as bundle:
+            bundle.add(layout, arcname='oci')
+            bundle.add(directory / 'auth.json', arcname='auth.json')
+        stream.seek(0)
+        runtime(directory, '/bin/sh', '-ec', 'umask 077; cd "$(mktemp -d)"; tar -xf -; '
+                'exec /usr/bin/skopeo copy --all --preserve-digests --dest-authfile auth.json "$@"',
+                'copy', f'oci:oci:{source}', f'docker://{destination}', stdin=stream)
+
+
 def auth(target, directory):
     repo = REPOS[target]
     host, name = repo.split('/', 1)
@@ -224,12 +250,14 @@ def auth(target, directory):
     elif target == 'ecr':
         user, password = 'AWS', output('aws', 'ecr-public', 'get-login-password', '--region', 'us-east-1')
     else:
-        user, password = 'buildkite', output('buildkite-agent', 'oidc', 'request-token', '--audience',
-                'https://packages.buildkite.com/buildkite/test-engine-client-docker', '--lifetime', '300')
+        user = 'buildkite'
+        password = output('buildkite-agent', 'oidc', 'request-token', '--audience',
+                          'https://packages.buildkite.com/buildkite/test-engine-client-docker', '--lifetime', '300')
     require(password, 'empty registry credential')
-    authfile = directory / 'auth.json'
-    run('skopeo', 'login', '--authfile', str(authfile), '--username', user, '--password-stdin', host,
-        input=password + b'\n')
+    runtime(directory, '/usr/bin/skopeo', 'login', '--authfile', '/tmp/auth.json', '--username', user,
+            '--password-stdin', host, input=password + b'\n')
+    encoded = base64.b64encode(user.encode() + b':' + password).decode()
+    (directory / 'auth.json').write_text(json.dumps({'auths': {host: {'auth': encoded}}}))
     if target == 'dockerhub':
         token = token_at('https://auth.docker.io/token?' + urlencode({
             'service': 'registry.docker.io', 'scope': f'repository:{name}:pull'}))
@@ -238,7 +266,31 @@ def auth(target, directory):
         token = token_at('https://public.ecr.aws/token/?service=public.ecr.aws&scope=aws')
     else:
         token = token_at(f'https://{host}/v2/auth?' + urlencode({'scope': f'repository:{name}:pull'}))
-    return authfile, f'https://{host}/v2/{name}/manifests', token
+    return f'https://{host}/v2/{name}/manifests', token
+
+
+def packages_tags(token, ref):
+    def read(**query):
+        url = f'{PACKAGES_V2}/tags/list'
+        if query:
+            url += '?' + urlencode(query)
+        status, body = get(url, 'Bearer ' + token)
+        require(status == 200, f'Packages exact tags/list unavailable (HTTP {status})')
+        data = json.loads(body)
+        tags = data.get('tags')
+        require(data.get('name') == PACKAGES_BACKEND and isinstance(tags, list) and
+                all(isinstance(tag, str) and tag for tag in tags) and sorted(set(tags)) == tags,
+                'Packages tags/list backend or ordering changed')
+        return tags
+
+    tags = read()
+    controls = {'v3.4.2-arm64', 'v3.5.0', 'v3.5.0-amd64', 'v3.5.0-arm64'}
+    controls.update(f'v3.6.0-rc.{rc}{suffix}' for rc in (1, 2) for suffix in ('', '-amd64', '-arm64'))
+    require(controls <= set(tags), 'Packages tags/list controls missing')
+    for cursor in dict.fromkeys(('v3.4.2-arm64', 'v3.5.0-arm64', 'v3.6.0-rc.2-arm64', tags[-1])):
+        require(read(last=cursor, n=1) == [tag for tag in tags if tag > cursor],
+                'Packages tags/list tail differs from exact cursor read')
+    require(ref not in tags, f'Packages lists {ref} but its manifest was unavailable')
 
 
 def current(base, token, ref):
@@ -246,6 +298,10 @@ def current(base, token, ref):
     if status == 200:
         return digest(body)
     if status == 404:
+        if base == f'{PACKAGES_V2}/manifests' and not body and ref in {TAG, *(f'{TAG}-{a}' for a in ARCHES)}:
+            require(current(base, token, 'v3.5.0') == LAST_GOOD, 'Packages OCI control digest differs')
+            packages_tags(token, ref)
+            return None
         try:
             errors = json.loads(body)['errors']
         except (ValueError, KeyError, TypeError):
@@ -256,13 +312,14 @@ def current(base, token, ref):
 
 
 def oci(directory, phase, target, previous):
-    require(shutil.which('skopeo'), 'digest-preserving Skopeo is required on the worker')
     receipt = json.loads(artifact(directory, IMAGES, 'dist/oci/receipt.json').read_bytes())
     archives = {arch: artifact(directory, IMAGES, f'dist/oci/linux_{arch}.tar') for arch in ARCHES}
     layout, desired = image_layout(directory, receipt, archives)
-    authfile, base, token = auth(target, directory)
-    require(current(base, token, 'v3.5.0') == 'sha256:6acc10130e98f3d0ad1995abef587c6773ac7bdd248268cdaaf6cb007c42e446',
-            'last-good OCI control differs')
+    (directory / 'docker').mkdir()
+    run('docker', '--config', str(directory / 'docker'), 'pull', SKOPEO)
+    runtime(directory, '/usr/bin/skopeo', '--version')
+    base, token = auth(target, directory)
+    require(current(base, token, 'v3.5.0') == LAST_GOOD, 'last-good OCI control differs')
     state = {ref: current(base, token, ref) for ref in desired}
     if phase == 'oci-latest':
         require(state == desired, 'all exact versioned OCI refs must match before latest')
@@ -280,8 +337,7 @@ def oci(directory, phase, target, previous):
             continue
         require(actual == state[ref], f'{ref} changed since preflight; stop')
         print(f'{target}:{ref} one digest-preserving copy; stop and read back before any retry.', flush=True)
-        run('skopeo', 'copy', '--all', '--preserve-digests', '--dest-authfile', str(authfile),
-            f'oci:{layout}:{source}', f'docker://{REPOS[target]}:{ref}')
+        copy_image(directory, layout, source, f'{REPOS[target]}:{ref}')
         require(current(base, token, ref) == wanted, f'{ref} readback does not match retained digest')
         print(f'{target}:{ref} verified {wanted}')
 
