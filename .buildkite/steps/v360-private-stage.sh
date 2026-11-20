@@ -24,10 +24,11 @@ case "$1" in
     image="bktest-private-stage:$BUILDKITE_JOB_ID"
     docker build -f "$repo/.buildkite/cli/Dockerfile.stage" -t "$image" "$repo/.buildkite"
     docker run --rm --user "$(id -u):$(id -g)" \
-      --mount "type=bind,src=$repo,dst=/work" --workdir /work \
+      --mount "type=bind,src=$repo,dst=/work,readonly" --workdir /work \
       --env HOME=/tmp --env GOPATH=/tmp/go --env "BUILDKITE_TAG=$tag" "$image" \
-      bash -ec 'bash packaging/cli/stage-checkout.sh dist/cli-release && tar -C dist/cli-release -cf dist/cli-release.tar .'
-    cp "$repo/dist/cli-release.tar" dist/cli-release.tar
+      bash -ec 'bash packaging/cli/stage-checkout.sh /tmp/cli-release >&2 && tar -C /tmp/cli-release -cf - .' \
+      > dist/cli-release.tar.partial
+    mv dist/cli-release.tar.partial dist/cli-release.tar
     sha256sum dist/cli-release.tar | tee dist/stage.sha256
     ;;
   verify)
