@@ -5,7 +5,9 @@ tag=v3.6.0
 canonical=cf34a8992ad430601ffbde7081258ffbc3906d5f
 legacy=4f9bde98ac62d14cd6e4bf3fca47e68d6cdcdb4f
 [[ "$BUILDKITE_ORGANIZATION_SLUG/$BUILDKITE_PIPELINE_SLUG" == buildkite/test-engine-client-release ]]
-[[ "$(git rev-parse HEAD^)" == "$legacy" ]]
+git merge-base --is-ancestor "$legacy" HEAD
+git diff --exit-code "$legacy" HEAD -- . \
+  ':(exclude).buildkite/pipeline.release.yml' ':(exclude).buildkite/steps/v360-private-stage.sh'
 diff -u <(printf 'repository github.com/buildkite/bktest\ncommit %s\n' "$canonical") <(git show "$legacy:.bktest-source")
 
 scratch=$(mktemp -d)
