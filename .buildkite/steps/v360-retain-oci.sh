@@ -21,25 +21,27 @@ printf '%s  %s\n' "$stage_sha" "$scratch/dist/cli-release.tar" | sha256sum --che
 docker run --rm -i --user "$(id -u):$(id -g)" \
   --mount "type=bind,src=$repo,dst=/work,readonly" \
   --mount "type=bind,src=$scratch/dist/cli-release.tar,dst=/candidate.tar,readonly" \
-  --mount "type=bind,src=$scratch/contexts,dst=/contexts" \
   --env PYTHONPATH=/work/packaging/cli python:3.13-slim-bookworm \
-  python3 -B - "$stage_sha" "$tag" "$canonical" "$manifest_sha" <<'PY'
+  python3 -B - "$stage_sha" "$tag" "$canonical" "$manifest_sha" > "$scratch/contexts.tar" <<'PY'
 from pathlib import Path
-import shutil
 import sys
+import tarfile
 
 from publish import open_stage
 
 sha, tag, source, manifest_sha = sys.argv[1:]
-with open_stage(Path('/candidate.tar'), sha, tag, source) as stage:
+with open_stage(Path('/candidate.tar'), sha, tag, source) as stage, \
+        tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as output:
     assert stage.assets['manifest.json'].sha256 == manifest_sha
     for arch in ('amd64', 'arm64'):
         prefix = f'image/linux_{arch}'
-        out = Path('/contexts') / f'linux_{arch}'
-        out.mkdir()
         for name in ('Dockerfile', 'bktec', 'bktest'):
-            shutil.copy2(stage.assets[f'{prefix}/{name}'].path, out / name)
+            path = stage.assets[f'{prefix}/{name}'].path
+            # open_stage verifies bytes and deliberately does not restore file modes.
+            path.chmod(0o644 if name == 'Dockerfile' else 0o755)
+            output.add(path, arcname=f'linux_{arch}/{name}')
 PY
+tar --extract --file "$scratch/contexts.tar" --directory "$scratch/contexts" --no-same-owner --no-same-permissions
 
 mkdir -p dist/oci
 builder="v360-$BUILDKITE_JOB_ID"

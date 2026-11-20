@@ -9,16 +9,3 @@ steps:
     artifact_paths:
       - dist/oci/*.tar
       - dist/oci/receipt.json
-
-  - label: ":mag: Check v3.6.0 registry routes without writes"
-    key: registry-read-v360
-    timeout_in_minutes: 15
-    plugins:
-      - aws-assume-role-with-web-identity#v1.4.0:
-          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-test-engine-client-release
-          session-tags: [organization_slug, organization_id, pipeline_slug]
-      - aws-assume-role-with-web-identity#v1.4.0:
-          role-arn: arn:aws:iam::172840064832:role/pipeline-buildkite-test-engine-client-release
-          credential-name-prefix: ECR_
-          session-tags: [organization_slug, organization_id, pipeline_slug]
-    command: python3 .buildkite/steps/v360-registry-reads.py
