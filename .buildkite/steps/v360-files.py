@@ -57,7 +57,7 @@ def verify_and_queue(directory):
     require(status('bktec-checksums-3.5.0.txt', follow=True) == 200, 'last-good Files control unavailable')
     for index, (name, (artifact, expected)) in enumerate(FILES.items(), 1):
         path = f'dist/buildkite-packages/{name}'
-        matches = agent('artifact', 'search', path, '--build', BUILD, '--format', '%i %j %p\n',
+        matches = agent('artifact', 'search', path, '--build', BUILD, '--format', r'%i %j %p\n',
                         stdout=subprocess.PIPE, text=True).stdout.splitlines()
         require([line.split() for line in matches] == [[artifact, JOB, path]], f'ambiguous or changed lookup: {path}')
         agent('artifact', 'download', path, str(directory), '--build', BUILD)
