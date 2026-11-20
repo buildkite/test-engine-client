@@ -2,16 +2,8 @@ agents:
   queue: oss-deploy
 
 steps:
-  - label: ":package: Stage v3.6.0 privately (no publishing)"
-    key: stage-v360
-    timeout_in_minutes: 25
-    command: .buildkite/steps/v360-private-stage.sh stage
-    artifact_paths:
-      - dist/cli-release.tar
-      - dist/stage.sha256
   - label: ":mag: Verify retained v3.6.0 and Files artifacts"
     key: verify-v360
-    depends_on: stage-v360
     timeout_in_minutes: 15
     command: .buildkite/steps/v360-private-stage.sh verify
     artifact_paths:

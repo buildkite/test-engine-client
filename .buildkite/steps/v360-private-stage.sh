@@ -34,29 +34,36 @@ case "$1" in
     sha256sum dist/cli-release.tar | tee dist/stage.sha256
     ;;
   verify)
-    buildkite-agent artifact download 'dist/cli-release.tar' . --step stage-v360
-    buildkite-agent artifact download 'dist/stage.sha256' . --step stage-v360
-    sha256sum --check --strict dist/stage.sha256
-    read -r sha _ < dist/stage.sha256
-    PYTHONPATH="$repo/packaging/cli" python3 -B - "$sha" "$tag" "$canonical" <<'PY'
+    build=01a1f67c-d02c-48a0-9e8e-48eba8b5c32b
+    job=01a1f680-9390-4e4c-9404-40bca7630349
+    sha=e758f9e8d17b175a744c315c3f9daf281719f8f312e6baa84da51d5ee2feb0c8
+    buildkite-agent artifact download 'dist/cli-release.tar' . --build "$build" --step "$job"
+    printf '%s  dist/cli-release.tar\n' "$sha" | sha256sum --check --strict
+    docker run --rm -i --user "$(id -u):$(id -g)" \
+      --mount "type=bind,src=$repo,dst=/work,readonly" \
+      --mount "type=bind,src=$PWD/dist/cli-release.tar,dst=/candidate.tar,readonly" \
+      --env PYTHONPATH=/work/packaging/cli python:3.13-slim-bookworm \
+      python3 -B - "$sha" "$tag" "$canonical" > dist/verified-files.tar <<'PY'
 from pathlib import Path
-from shutil import copyfile
+import json
 import sys
+import tarfile
 
 from publish import open_stage
 
 sha, tag, source = sys.argv[1:]
-dist = Path("dist")
-with open_stage(dist / "cli-release.tar", sha, tag, source) as stage:
-    files = dist / "buildkite-packages"
-    files.mkdir()
+with open_stage(Path("/candidate.tar"), sha, tag, source) as stage, \
+        tarfile.open(fileobj=sys.stdout.buffer, mode="w|") as output:
     for name, asset in sorted(stage.assets.items()):
         if name.startswith("files/"):
-            copyfile(asset.path, files / asset.path.name)
-            print(f"{asset.sha256}  {files / asset.path.name}")
-    copyfile(stage.assets["manifest.json"].path, dist / "verified-manifest.json")
-    print(f"Verified {len(stage.assets)} staged files and aliases for {tag} at {source}")
+            output.add(asset.path, arcname=f"buildkite-packages/{asset.path.name}")
+            print(f"{asset.sha256}  buildkite-packages/{asset.path.name}", file=sys.stderr)
+    manifest = stage.assets["manifest.json"].path
+    output.add(manifest, arcname="verified-manifest.json")
+    print(f"Verified {len(stage.assets)} staged files and aliases for {tag} at {source}", file=sys.stderr)
+    print("Verified manifest: " + json.dumps(json.loads(manifest.read_bytes()), sort_keys=True), file=sys.stderr)
 PY
+    tar --extract --file dist/verified-files.tar --directory dist --no-same-owner --no-same-permissions
     sha256sum dist/cli-release.tar dist/verified-manifest.json | tee dist/verified-stage.sha256
     ;;
   *) exit 2 ;;
