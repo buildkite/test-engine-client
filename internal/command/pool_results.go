@@ -132,6 +132,7 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, re
 	}
 	seen := make([]bool, len(tests))
 	keys := map[string]bool{}
+	rspecRetry := retry && result.ReportFormat == "rspec-json"
 	for _, test := range report.Tests {
 		key := reportedTestKey(test)
 		if key == "" || keys[key] {
@@ -141,13 +142,19 @@ func (r *poolResults) absorb(tests []plan.TestCase, owners []int, retry bool, re
 		keys[key] = true
 		match := -1
 		for i, dispatched := range tests {
-			if matchesReportedTest(dispatched, test) {
-				if match != -1 {
-					match = -2
-					break
+			// Retry IDs come from the previous report, not from the Scheduler's plan.
+			if rspecRetry && dispatched.Format == plan.TestCaseFormatExample && dispatched.Identifier != "" && test.TestCase.Identifier != "" {
+				if strings.TrimPrefix(dispatched.Identifier, "./") != test.TestCase.Identifier {
+					continue
 				}
-				match = i
+			} else if !matchesReportedTest(dispatched, test) {
+				continue
 			}
+			if match != -1 {
+				match = -2
+				break
+			}
+			match = i
 		}
 		if match == -1 && report.UnselectedTests {
 			// Playwright reruns a retried test's file:line in every project, so

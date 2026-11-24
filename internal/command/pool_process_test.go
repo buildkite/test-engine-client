@@ -696,6 +696,10 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 		mode, result    string
 		wantCode        int
 		jobStatus       int
+		jobRetryCount   int
+		localRetries    int
+		wantJobChecks   int
+		completionError bool
 		participated    bool
 		wantError       string
 		wantExplanation bool
@@ -704,22 +708,29 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 		{name: "no job ID errored", mode: "unmapped", result: "errored", wantCode: 16, wantError: "errored attempts: 1"},
 		{name: "no job ID crash", mode: "crash", result: "errored", wantCode: 19},
 		{name: "passed without failures", mode: "pass", result: "passed", jobStatus: 200},
-		{name: "failed then recovered elsewhere", mode: "failure", result: "failed", jobStatus: 200, wantExplanation: true},
-		{name: "errored then recovered elsewhere", mode: "unmapped", result: "errored", jobStatus: 200, wantExplanation: true},
-		{name: "terminal failure", mode: "failure", result: "failed", jobStatus: 200, participated: true, wantCode: 1},
-		{name: "terminal error", mode: "unmapped", result: "errored", jobStatus: 200, participated: true, wantCode: 1},
+		{name: "passed after local retry", mode: "retry", result: "passed", jobStatus: 200, localRetries: 1},
+		{name: "passing original ignores unavailable job API", mode: "pass", result: "passed", jobStatus: 403},
+		{name: "passing job retry", mode: "pass", result: "passed", jobStatus: 200, jobRetryCount: 1, wantJobChecks: 1},
+		{name: "passing job retry with ancestor failure", mode: "pass", result: "passed", jobStatus: 200, jobRetryCount: 1, participated: true, wantJobChecks: 1, wantCode: 1},
+		{name: "local recovery with ancestor failure", mode: "retry", result: "passed", jobStatus: 200, jobRetryCount: 2, localRetries: 1, participated: true, wantJobChecks: 1, wantCode: 1},
+		{name: "failed then recovered elsewhere", mode: "failure", result: "failed", jobStatus: 200, wantJobChecks: 1, wantExplanation: true},
+		{name: "errored then recovered elsewhere", mode: "unmapped", result: "errored", jobStatus: 200, wantJobChecks: 1, wantExplanation: true},
+		{name: "terminal failure", mode: "failure", result: "failed", jobStatus: 200, participated: true, wantJobChecks: 1, wantCode: 1},
+		{name: "terminal error", mode: "unmapped", result: "errored", jobStatus: 200, participated: true, wantJobChecks: 1, wantCode: 1},
 		{name: "crash still fails", mode: "crash", result: "errored", jobStatus: 200, wantCode: 19},
-		{name: "job API unavailable", mode: "failure", result: "failed", jobStatus: 404, wantCode: 1},
-		{name: "job API forbidden", mode: "pass", result: "passed", jobStatus: 403, wantCode: 16, wantError: "forbidden"},
+		{name: "accounting error still fails", mode: "pass", result: "passed", jobStatus: 200, jobRetryCount: 1, completionError: true, wantCode: 16, wantError: "Scheduler returned HTTP 403"},
+		{name: "job API unavailable", mode: "failure", result: "failed", jobStatus: 404, wantJobChecks: 1, wantCode: 1},
+		{name: "job API forbidden", mode: "pass", result: "passed", jobStatus: 403, jobRetryCount: 1, wantJobChecks: 1, wantCode: 16, wantError: "forbidden"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			acquisitions, completions := 0, 0
+			acquisitions, completions, jobChecks := 0, 0, 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				base := "/v2/organizations/org/test-scheduler/pools/existing"
 				switch {
 				case r.Method == http.MethodGet && r.URL.Path == base:
 					fmt.Fprint(w, `{"id":"existing","state":"consuming","muted_tests":[]}`)
 				case r.Method == http.MethodGet && r.URL.Path == base+"/jobs/job":
+					jobChecks++
 					if completions != 1 {
 						t.Error("checked job outcome before completing its attempts")
 					}
@@ -742,6 +753,10 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 						t.Errorf("completion=%+v err=%v", body, err)
 					}
 					completions++
+					if tc.completionError {
+						http.Error(w, `{"message":"forbidden"}`, http.StatusForbidden)
+						return
+					}
 					fmt.Fprintf(w, `{"leases":[{"lease_id":"lease","attempts":[{"id":"attempt","result":%q,"completion_status":"completed"}]}]}`, tc.result)
 				default:
 					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -753,6 +768,7 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 			t.Setenv("BKTEC_POOL_TEST_FLUSH", filepath.Join(t.TempDir(), "flushed"))
 			cfg := config.New()
 			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug = "existing", "org", "suite"
+			cfg.JobRetryCount = tc.jobRetryCount
 			if tc.jobStatus != 0 {
 				cfg.JobID = "job"
 			}
@@ -764,7 +780,7 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 			stdout := os.Stdout
 			os.Stdout = output
 			t.Cleanup(func() { os.Stdout = stdout; output.Close() })
-			err = PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
+			err = PoolExec(context.Background(), &cfg, "", []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, tc.localRetries, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second})
 			os.Stdout = stdout
 			data, readErr := os.ReadFile(output.Name())
 			if readErr != nil {
@@ -775,6 +791,9 @@ func TestPoolExecExitStatusDistinguishesFailedAttemptsAndRunnerErrors(t *testing
 			}
 			if completions != 1 {
 				t.Fatalf("completions=%d err=%v", completions, err)
+			}
+			if jobChecks != tc.wantJobChecks {
+				t.Errorf("job checks=%d, want %d", jobChecks, tc.wantJobChecks)
 			}
 			var coded cli.ExitCoder
 			var child *exec.ExitError
@@ -815,7 +834,7 @@ func TestPoolExecRequestsNoLeaseBeforeRunnerConnects(t *testing.T) {
 		return r, nil
 	}}
 	opts := runnerexec.Options{StartupTimeout: 500 * time.Millisecond, BatchTimeout: time.Second, ShutdownTimeout: time.Second}
-	err := runPool(context.Background(), f, api.Pool{ID: "pool", State: "consuming"}, 0, log.New(io.Discard, "", 0), func(ctx context.Context, source *poolSource) error {
+	err := runPool(context.Background(), f, api.Pool{ID: "pool", State: "consuming"}, 0, 0, log.New(io.Discard, "", 0), func(ctx context.Context, source *poolSource) error {
 		return runnerexec.Run(ctx, exec.Command("sleep", "60"), source, opts)
 	}, nil)
 	if err == nil || !strings.Contains(err.Error(), "runner startup timeout") {

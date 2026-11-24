@@ -53,29 +53,21 @@ func NewRunResult(mutedTests []plan.TestCase) *RunResult {
 	return r
 }
 
-// getTest finds or creates a TestResult struct for a given test case
-// in the tests map, and returns a pointer to it.
-func (r *RunResult) getTest(testCase plan.TestCase) *TestResult {
+// RecordTestResult records a test result using its scope, name, and path.
+func (r *RunResult) RecordTestResult(testCase plan.TestCase, status TestStatus) {
+	r.recordTestResultWithKey(testIdentifier(testCase), testCase, status)
+}
+
+func (r *RunResult) recordTestResultWithKey(key string, testCase plan.TestCase, status TestStatus) {
 	if r.tests == nil {
 		r.tests = make(map[string]*TestResult)
 	}
 
-	testIdentifier := testIdentifier(testCase)
-
-	test, exists := r.tests[testIdentifier]
-	if !exists {
-		test = &TestResult{
-			TestCase: testCase,
-		}
-		r.tests[testIdentifier] = test
+	test := r.tests[key]
+	if test == nil {
+		test = &TestResult{TestCase: testCase}
+		r.tests[key] = test
 	}
-	return test
-}
-
-// RecordTestResult records the result of a test case.
-// If the test case found in the mutedTestLookup, it will be marked as muted.
-func (r *RunResult) RecordTestResult(testCase plan.TestCase, status TestStatus) {
-	test := r.getTest(testCase)
 	test.Status = status
 	test.ExecutionCount++
 	if r.mutedTestLookup[mutedTestIdentifier(testCase)] {

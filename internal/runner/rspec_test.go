@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/kballard/go-shellquote"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewRspec(t *testing.T) {
@@ -120,6 +122,40 @@ func TestRspecRun_RetryCommand(t *testing.T) {
 	}
 }
 
+func TestRspecRun_RetryWithGeneratedDescription(t *testing.T) {
+	dir := t.TempDir()
+	spec := filepath.Join(dir, "generated_spec.rb")
+	require.NoError(t, os.WriteFile(spec, []byte(`
+RSpec.describe "generated description" do
+  before do
+    unless File.exist?(__FILE__ + ".retried")
+      File.write(__FILE__ + ".retried", "")
+      raise "transient setup failure"
+    end
+  end
+
+  subject { 7 }
+  it { is_expected.to eq(7) }
+end
+`), 0600))
+	rspec := NewRspec(RunnerConfig{
+		TestCommand: "rspec --format json --out {{resultPath}}",
+		ResultPath:  filepath.Join(dir, "result.json"),
+	})
+	result := NewRunResult(nil)
+	require.ErrorAs(t, rspec.Run(result, []plan.TestCase{{Path: spec}}, false), new(*exec.ExitError))
+	failed := result.FailedTests()
+	require.Len(t, failed, 1)
+	require.NoError(t, rspec.Run(result, failed, true))
+	report, err := rspec.ParseReport(rspec.ResultPath)
+	require.NoError(t, err)
+	require.Len(t, report.Examples, 1)
+	require.Equal(t, failed[0].Identifier, report.Examples[0].ID)
+	require.NotEqual(t, failed[0].Name, report.Examples[0].Description)
+	require.Equal(t, RunStatusPassed, result.Status())
+	require.Equal(t, RunStatistics{Total: 1, PassedOnRetry: 1}, result.Statistics())
+}
+
 func TestRspecRun_TestFailedWithResultFile(t *testing.T) {
 	rspec := NewRspec(RunnerConfig{
 		TestCommand: "rspec --format json --out {{resultPath}}",
@@ -204,10 +240,7 @@ func TestRspecRun_TestSkipped(t *testing.T) {
 		t.Errorf("Rspec.Run(%v) RunResult.Status = %v, want %v", testCases, result.Status(), RunStatusPassed)
 	}
 
-	test := result.tests["skipped/is skipped/./testdata/rspec/spec/skipped_spec.rb[1:1]"]
-	if test.Status != TestStatusSkipped {
-		t.Errorf("Rspec.Run(%v) test.Status = %v, want %v", testCases, test.Status, TestStatusSkipped)
-	}
+	assert.Equal(t, []plan.TestCase{{Name: "is skipped", Scope: "skipped", Identifier: "./testdata/rspec/spec/skipped_spec.rb[1:1]", Path: "./testdata/rspec/spec/skipped_spec.rb[1:1]"}}, result.SkippedTests())
 }
 
 func TestRspecRun_TestExit(t *testing.T) {

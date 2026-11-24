@@ -114,7 +114,7 @@ func poolWork(ctx context.Context, cfg *config.Config, files string, retries int
 		return fmt.Errorf("test pool %s is missing its muted tests snapshot", pool.ID)
 	}
 	debug.Printf("Pool ready (state=%s); starting runner", pool.State)
-	return runPool(ctx, client, pool, retries, leaseLog, run, checkJob)
+	return runPool(ctx, client, pool, retries, cfg.JobRetryCount, leaseLog, run, checkJob)
 }
 
 // poolExecFallback runs this job's share of a static split when Test Scheduler
@@ -159,7 +159,7 @@ func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files 
 	}
 	// Local leases are an implementation detail; like bktec run, show only the
 	// runner's output and the final result.
-	return runPool(ctx, scheduler, api.Pool{ID: "fallback", State: "consuming"}, retries, log.New(io.Discard, "", 0), run, nil)
+	return runPool(ctx, scheduler, api.Pool{ID: "fallback", State: "consuming"}, retries, cfg.JobRetryCount, log.New(io.Discard, "", 0), run, nil)
 }
 
 // fallbackLeaseTTL is how long a local fallback lease stays owned between
@@ -198,7 +198,7 @@ func (f *fallbackScheduler) CompleteLease(context.Context, string, string, []api
 
 func (f *fallbackScheduler) ReleaseLease(context.Context, string, string) error { return nil }
 
-func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries int, leases *log.Logger, run poolRunner, checkJob func(context.Context) (bool, error)) error {
+func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries, jobRetryCount int, leases *log.Logger, run poolRunner, checkJob func(context.Context) (bool, error)) error {
 	fmt.Println("+++ Buildkite Test Engine Client: Running tests")
 	workCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -218,7 +218,8 @@ func runPool(ctx context.Context, client poolScheduler, pool api.Pool, retries i
 	}
 	// Execution and accounting failures must not be masked by a successful
 	// Scheduler outcome. Attempt failures alone defer to the job's contribution.
-	if err == nil && source.err == nil && checkJob != nil {
+	// Retried jobs also need the check for terminal failures in retry ancestors.
+	if err == nil && source.err == nil && checkJob != nil && (jobRetryCount > 0 || source.failedAttempts > 0 || source.erroredAttempts > 0) {
 		failed, checkErr := checkJob(ctx)
 		var unavailable *api.NotFoundError
 		if !errors.As(checkErr, &unavailable) {

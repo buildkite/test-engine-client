@@ -1,10 +1,15 @@
 # Changelog
 ## Unreleased
+
+## 3.6.1 - 2026-11-24
+- Skip waiting for the Test Scheduler pool to finish when an original Buildkite job's attempts all pass, including after local retries. Retried Buildkite jobs still check for terminal failures in earlier jobs.
+- Match local retry results by RSpec's native example ID instead of the test name.
+
+## 3.6.0 - 2026-11-20
 - Show `bktest` in help and version output, even when invoked as `bktec`.
 - Add `bktec pool run` for running tests from a [Test Scheduler pool](./docs/pool-run.md). It runs leases in a persistent runner given after `--`, or otherwise starts the test command for each lease. `bktec pool exec` and `bktec pool consume` are deprecated; use `bktec pool run` instead.
 - Add `--pool-retry-count` to retry failed or errored tests through Test Scheduler, rerunning the whole entry. See [pool retries](./docs/pool-run.md#retries-and-results).
 - Fix Test Scheduler jobs failing because of unrelated pool failures or failed attempts that another worker successfully retried. Jobs now fail only when they contributed to a terminal test failure. Requires Test Scheduler support on the server.
-- Remove automatic job reruns after a Test Scheduler pool finishes. Rebuild to rerun failed tests; in-job retries with `--local-retry-count` are unchanged.
 - Fix concurrent commit metadata backfills overwriting or removing each other's archives.
 
 ## 3.5.0 - 2026-11-02

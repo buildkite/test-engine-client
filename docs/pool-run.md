@@ -225,11 +225,15 @@ do not create additional Scheduler attempts. Muted failures are not retried.
 Local retries reset for each Scheduler attempt: with `--pool-retry-count 2`
 and `--local-retry-count 2`, an always-failing test can run up to nine times.
 
-Before exiting normally, `pool run` checks whether this job contributed a
-failed or errored attempt to a terminal test failure. Unrelated pool failures
-and attempts that another worker successfully retried do not fail the job. A
-successful result is final only once the pool is consumed. This requires the
-server's job failure API and `BUILDKITE_JOB_ID` (or `--job-id`).
+After running tests, `pool run` checks whether this job contributed a
+failed or errored attempt to a terminal test failure. Original Buildkite jobs
+(`BUILDKITE_RETRY_COUNT=0`) skip this check when no failed or errored attempts
+remain after local retries. Retried Buildkite jobs still check for terminal
+failures in retry ancestors, even when their current attempts all pass.
+Unrelated pool failures and attempts that another worker successfully retried
+do not fail the job. When a check is needed, a successful result is final only
+once the pool is consumed. This requires the server's job failure API and
+`BUILDKITE_JOB_ID` (or `--job-id`).
 
 Retrying a Buildkite job while its pool is still running joins normal leasing.
 Once the pool is consumed, a retried job does not start a runner or rerun tests.
