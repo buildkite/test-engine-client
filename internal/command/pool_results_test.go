@@ -30,7 +30,7 @@ func TestPoolResultsRetryMappingAndMuting(t *testing.T) {
 	tests := []plan.TestCase{{Format: "selector", Value: "spec/a.rb"}, {Format: "selector", Value: "spec/b.rb"}}
 	r := newPoolResults([]api.LeaseAttempt{{ID: "a", Selector: tests[0]}, {ID: "b", Selector: tests[1]}}, []plan.TestCase{{Name: "muted", Scope: "B"}})
 	r.absorb(tests, []int{0, 1}, false, poolReport(`[
- {"id":"./spec/a.rb[1:2]","file_path":"./spec/a.rb","status":"failed","description":"retry","full_description":"A retry"},
+ {"id":"./spec/a.rb[1:2]","file_path":"./spec/a.rb","status":"failed","description":"","full_description":"A "},
  {"id":"spec/a.rb[1:1]","file_path":"spec/a.rb","status":"passed"},
  {"id":"spec/b.rb[1:1]","file_path":"spec/b.rb","status":"failed","description":"muted","full_description":"B muted"},
  {"id":"spec/b.rb[1:2]","file_path":"spec/b.rb","status":"pending"}]`, 4, 0))
@@ -38,9 +38,20 @@ func TestPoolResultsRetryMappingAndMuting(t *testing.T) {
 	if len(retry) != 1 || retry[0].Format != "example" || retry[0].Identifier != "spec/a.rb[1:2]" || !reflect.DeepEqual(owners, []int{0}) {
 		t.Fatalf("retry=%+v owners=%v", retry, owners)
 	}
-	r.absorb(retry, owners, true, poolReport(`[{"id":"spec/a.rb[1:2]","file_path":"spec/a.rb","status":"passed","description":"retry","full_description":"A retry"}]`, 1, 0))
+	r.absorb(retry, owners, true, poolReport(`[{"id":"spec/a.rb[1:2]","file_path":"spec/a.rb","status":"passed","description":"is expected to pass","full_description":"A is expected to pass"}]`, 1, 0))
 	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "a", Result: "passed"}, {AttemptID: "b", Result: "passed"}}) {
 		t.Fatal(got)
+	}
+}
+
+func TestPoolResultsRSpecRetryDoesNotMatchDifferentIDWithSameName(t *testing.T) {
+	test := plan.TestCase{Format: "file", Path: "spec/a.rb"}
+	r := newPoolResults([]api.LeaseAttempt{{ID: "a", Selector: test}}, nil)
+	r.absorb([]plan.TestCase{test}, []int{0}, false, poolReport(`[{"id":"spec/a.rb[1:1]","file_path":"spec/a.rb","status":"failed","description":"works","full_description":"A works"}]`, 1, 0))
+	retry, owners := r.retries()
+	r.absorb(retry, owners, true, poolReport(`[{"id":"spec/a.rb[1:2]","file_path":"spec/a.rb","status":"passed","description":"works","full_description":"A works"}]`, 1, 0))
+	if got := r.final(); !reflect.DeepEqual(got, []api.AttemptResult{{AttemptID: "a", Result: "errored"}}) {
+		t.Fatalf("different example satisfied retry: %v", got)
 	}
 }
 

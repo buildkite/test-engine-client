@@ -107,7 +107,12 @@ func (r Rspec) Run(result *RunResult, testCases []plan.TestCase, retry bool) err
 	}
 
 	for _, example := range report.Examples {
-		result.RecordTestResult(mapExampleToTestCase(example), rspecExampleStatus(example.Status))
+		testCase := mapExampleToTestCase(example)
+		key := strings.TrimPrefix(testCase.Identifier, "./")
+		if key == "" {
+			key = testIdentifier(testCase)
+		}
+		result.recordTestResultWithKey(key, testCase, rspecExampleStatus(example.Status))
 	}
 
 	if report.Summary.ErrorsOutsideOfExamplesCount > 0 {
