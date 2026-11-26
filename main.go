@@ -103,9 +103,6 @@ func poolExec(ctx context.Context, cmd *cli.Command) error {
 	}
 	debug.SetDebug(cmd.Root().Bool("debug"))
 	debug.SetOutput(os.Stderr)
-	if err := applyPlanRequestContext(cmd); err != nil {
-		return err
-	}
 	if err := cfg.ValidateForPoolExec(); err != nil {
 		return fmt.Errorf("%s: invalid configuration: %w", diagnosticCommandName(cmd), err)
 	}
@@ -121,9 +118,6 @@ func poolConsume(ctx context.Context, cmd *cli.Command) error {
 	}
 	debug.SetDebug(cmd.Root().Bool("debug"))
 	debug.SetOutput(os.Stderr)
-	if err := applyPlanRequestContext(cmd); err != nil {
-		return err
-	}
 	if err := cfg.ValidateForPoolConsume(); err != nil {
 		return fmt.Errorf("%s: invalid configuration: %w", diagnosticCommandName(cmd), err)
 	}

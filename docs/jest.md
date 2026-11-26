@@ -111,6 +111,8 @@ Note that this will cause Jest to parse all test files on every retry, which may
 ## Run tests from a Test Scheduler pool
 To run Jest tests from a Test Scheduler pool, use [`bktec pool run`](./pool-run.md). It uses the test command and result path configured above, and runs Jest once for each lease.
 
+Create the pool first with [`bktec pool plan`](./pool-run.md#create-the-pool-with-bktec-pool-plan), and pass its ID to `pool run` with `--pool-id` or `BUILDKITE_TEST_ENGINE_POOL_ID`.
+
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=jest
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/jest-result.json

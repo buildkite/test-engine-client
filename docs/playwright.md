@@ -109,6 +109,8 @@ When a test file fails to load, Playwright runs no tests at all, so bktec runs t
 ## Run tests from a Test Scheduler pool
 To run Playwright tests from a Test Scheduler pool, use [`bktec pool run`](./pool-run.md). It uses the test command and result path configured above, and runs Playwright once for each lease.
 
+Create the pool first with [`bktec pool plan`](./pool-run.md#create-the-pool-with-bktec-pool-plan), and pass its ID to `pool run` with `--pool-id` or `BUILDKITE_TEST_ENGINE_POOL_ID`.
+
 ```sh
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=playwright
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=tmp/test-results.json

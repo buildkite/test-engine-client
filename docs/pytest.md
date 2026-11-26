@@ -105,6 +105,8 @@ export BUILDKITE_TEST_ENGINE_RETRY_COUNT=2
 ## Run tests from a Test Scheduler pool
 To run pytest tests from a Test Scheduler pool, use [`bktec pool run`](./pool-run.md). It runs pytest once for each lease, or [every lease in one pytest process](#run-tests-in-one-pytest-process-with-bktec-pool-run) when you pass `buildkite-pytest` after `--`.
 
+Create the pool first with [`bktec pool plan`](./pool-run.md#create-the-pool-with-bktec-pool-plan), and pass its ID to `pool run` with `--pool-id` or `BUILDKITE_TEST_ENGINE_POOL_ID`.
+
 Without a command after `--`, `bktec pool run` uses the test command configured above, and runs pytest once for each lease.
 
 ```sh
@@ -138,6 +140,6 @@ With `buildkite-pytest` after `--`, [`bktec pool run`](./pool-run.md#run-tests-i
 bktec pool run --suite-slug my-suite --test-runner pytest --local-retry-count 1 -- buildkite-pytest
 ```
 
-`BUILDKITE_TEST_ENGINE_TEST_CMD` and `BUILDKITE_TEST_ENGINE_RETRY_CMD` don't apply, and bktec doesn't upload results; `buildkite-test-collector` uploads them from the pytest process. `buildkite-pytest` reports tests in the collector's JSON format, so `pool run` rejects test commands with `--junit-xml`. If you create the pool with `bktec pool plan` instead, run it where `buildkite-test-collector` is installed and without `--junit-xml` in the test command, so it plans tests the same way. As when running pytest for each lease, run bktec from pytest's rootdir, and don't use pytest options that stop at a failure.
+`BUILDKITE_TEST_ENGINE_TEST_CMD` and `BUILDKITE_TEST_ENGINE_RETRY_CMD` don't apply, and bktec doesn't upload results; `buildkite-test-collector` uploads them from the pytest process. `buildkite-pytest` reports tests in the collector's JSON format, so `pool run` rejects test commands with `--junit-xml`. Run `bktec pool plan` where `buildkite-test-collector` is installed and without `--junit-xml` in the test command too, so it plans tests the same way. As when running pytest for each lease, run bktec from pytest's rootdir, and don't use pytest options that stop at a failure.
 
 `buildkite-pytest` keeps running a lease's other files when one fails to collect, so only that file's attempt errors.

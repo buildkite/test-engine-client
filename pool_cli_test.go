@@ -57,68 +57,48 @@ func TestPoolPlanCLILeaseOptions(t *testing.T) {
 	require.Equal(t, 25, cfg.PoolLeaseMaxAttempts, "the flag overrides the environment")
 }
 
-func TestPoolCommandsBindPoolRetries(t *testing.T) {
-	for _, definition := range poolCommand.Commands {
-		for _, tc := range []struct {
-			name string
-			args []string
-			want int
-		}{
-			{name: "environment", want: 3},
-			{name: "flag overrides environment", args: []string{"--pool-retry-count", "1"}, want: 1},
-			{name: "flag disables retries", args: []string{"--pool-retry-count", "0"}},
-		} {
-			t.Run(definition.Name+"/"+tc.name, func(t *testing.T) {
-				cfg = config.New()
-				t.Cleanup(func() { cfg = config.New() })
-				t.Setenv("BUILDKITE_TEST_ENGINE_POOL_RETRY_COUNT", "3")
-				command := *definition
-				switch definition.Name {
-				case "plan":
-					command.Flags = poolPlanCommandFlags()
-				case "run":
-					command.Flags = poolRunCommandFlags()
-				case "exec":
-					command.Flags = poolExecCommandFlags()
-				case "consume":
-					command.Flags = poolConsumeCommandFlags()
-				}
-				command.MutuallyExclusiveFlags = nil
-				command.Action = func(_ context.Context, _ *cli.Command) error {
-					require.Equal(t, tc.want, cfg.PoolRetryCount)
-					return nil
-				}
-				root := &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&command}}}}
-				args := append([]string{"bktec", "pool", definition.Name}, tc.args...)
-				require.NoError(t, root.Run(context.Background(), args))
-			})
-		}
-	}
-}
-
-func TestPoolCommandsBindDynamicParallelism(t *testing.T) {
-	for _, definition := range poolCommand.Commands {
-		t.Run(definition.Name, func(t *testing.T) {
+func TestPoolPlanCLIBindsPoolRetries(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want int
+	}{
+		{name: "environment", want: 3},
+		{name: "flag overrides environment", args: []string{"--pool-retry-count", "1"}, want: 1},
+		{name: "flag disables retries", args: []string{"--pool-retry-count", "0"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			cfg = config.New()
 			t.Cleanup(func() { cfg = config.New() })
-			t.Setenv("BUILDKITE_TEST_ENGINE_TARGET_TIME", "2m")
-			t.Setenv("BUILDKITE_TEST_ENGINE_MAX_PARALLELISM", "120")
-			command := *definition
-			if definition.Name == "plan" {
-				command.Flags = poolPlanCommandFlags()
-			} else {
-				command.Flags = poolExecCommandFlags()
-			}
+			t.Setenv("BUILDKITE_TEST_ENGINE_POOL_RETRY_COUNT", "3")
+			command := *poolCommand.Commands[0]
+			command.Flags = poolPlanCommandFlags()
 			command.MutuallyExclusiveFlags = nil
 			command.Action = func(_ context.Context, _ *cli.Command) error {
-				require.Equal(t, 90*time.Second, cfg.TargetTime)
-				require.Equal(t, 80, cfg.MaxParallelism)
+				require.Equal(t, tc.want, cfg.PoolRetryCount)
 				return nil
 			}
 			root := &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&command}}}}
-			require.NoError(t, root.Run(context.Background(), []string{"bktec", "pool", definition.Name, "--target-time", "90s", "--max-parallelism", "80"}))
+			require.NoError(t, root.Run(context.Background(), append([]string{"bktec", "pool", "plan"}, tc.args...)))
 		})
 	}
+}
+
+func TestPoolPlanCLIBindsDynamicParallelism(t *testing.T) {
+	cfg = config.New()
+	t.Cleanup(func() { cfg = config.New() })
+	t.Setenv("BUILDKITE_TEST_ENGINE_TARGET_TIME", "2m")
+	t.Setenv("BUILDKITE_TEST_ENGINE_MAX_PARALLELISM", "120")
+	command := *poolCommand.Commands[0]
+	command.Flags = poolPlanCommandFlags()
+	command.MutuallyExclusiveFlags = nil
+	command.Action = func(_ context.Context, _ *cli.Command) error {
+		require.Equal(t, 90*time.Second, cfg.TargetTime)
+		require.Equal(t, 80, cfg.MaxParallelism)
+		return nil
+	}
+	root := &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&command}}}}
+	require.NoError(t, root.Run(context.Background(), []string{"bktec", "pool", "plan", "--target-time", "90s", "--max-parallelism", "80"}))
 }
 
 func TestPoolPlanCLIAuthentication(t *testing.T) {

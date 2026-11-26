@@ -73,28 +73,6 @@ func TestPoolExecArgumentsWithoutGate(t *testing.T) {
 	}
 }
 
-func TestPoolExecCLILeasePlanningOptions(t *testing.T) {
-	cfg = config.New()
-	t.Cleanup(func() { cfg = config.New() })
-	t.Setenv("BUILDKITE_TEST_ENGINE_POOL_LEASE_DURATION_MS", "50000")
-	t.Setenv("BUILDKITE_TEST_ENGINE_POOL_LEASE_MAX_ATTEMPTS", "70")
-	execCmd := *poolCommand.Commands[2]
-	execCmd.Flags = poolExecCommandFlags()
-	execCmd.Action = func(_ context.Context, c *cli.Command) error {
-		if cfg.PoolLeaseDurationMS != 50_000 || cfg.PoolLeaseMaxAttempts != 25 {
-			t.Errorf("planning overrides: duration=%d attempts=%d", cfg.PoolLeaseDurationMS, cfg.PoolLeaseMaxAttempts)
-		}
-		if !reflect.DeepEqual(c.Args().Slice(), []string{"bundle", "exec", "buildkite-rspec"}) {
-			t.Errorf("runner args: %v", c.Args().Slice())
-		}
-		return nil
-	}
-	cmd := &cli.Command{Name: "bktec", Commands: []*cli.Command{{Name: "pool", Commands: []*cli.Command{&execCmd}}}}
-	if err := cmd.Run(context.Background(), []string{"bktec", "pool", "exec", "--pool-lease-max-attempts", "25", "--", "bundle", "exec", "buildkite-rspec"}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestPoolExecCLIBindsSuppliedOIDCToken(t *testing.T) {
 	cfg = config.New()
 	t.Cleanup(func() { cfg = config.New() })
