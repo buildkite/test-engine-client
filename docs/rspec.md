@@ -104,6 +104,8 @@ export BUILDKITE_TEST_ENGINE_SPLIT_BY_EXAMPLE=true
 
 To run RSpec tests from a Test Scheduler pool, use [`bktec pool run`](./pool-run.md#run-tests-in-one-persistent-runner) with `buildkite-rspec` after `--`. It starts `buildkite-rspec`, the persistent runner from [Test Collector Ruby](https://buildkite.com/docs/test-engine/test-collection/ruby-collectors). The runner starts RSpec once and runs each of the worker's leases in that process, so the worker pays RSpec's startup cost once instead of for each lease.
 
+Create the pool first with [`bktec pool plan`](./pool-run.md#create-the-pool-with-bktec-pool-plan), and pass its ID to `pool run` with `--pool-id` or `BUILDKITE_TEST_ENGINE_POOL_ID`.
+
 ```sh
 bktec pool run --suite-slug my-suite --test-runner rspec --local-retry-count 1 -- bundle exec buildkite-rspec
 ```

@@ -775,13 +775,20 @@ var poolRetryCountFlag = &cli.IntFlag{
 	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_RETRY_COUNT"), Destination: &cfg.PoolRetryCount,
 }
 
+var poolIDFlag = &cli.StringFlag{
+	Name: "pool-id", Usage: "ID of the pool created by bktec pool plan (required by pool run; pool plan rejects it)",
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,
+}
+
+var poolFallbackFlag = &cli.BoolFlag{
+	Name: "pool-fallback", Usage: "Run this job's share of a local split instead of leasing; bktec pool plan sets it when Test Scheduler is unavailable",
+	Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_FALLBACK"), Destination: &cfg.PoolFallback,
+}
+
 func poolPlanCommandFlags() []cli.Flag {
 	flags := []cli.Flag{
 		filesFlag, tagFiltersFlag, accessTokenFlag, maxParallelismFlag, targetTimeFlag, poolLeaseCostFlag, poolLeaseDurationFlag, poolLeaseMaxAttemptsFlag, poolRetryCountFlag,
-		&cli.StringFlag{
-			Name: "pool-id", Usage: "Existing pool ID (only supported by pool run; pool plan rejects it)",
-			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_ID"), Destination: &cfg.PoolID,
-		},
+		poolIDFlag,
 		&cli.StringFlag{
 			Name: "pool-key", Usage: "Pool key within this build (defaults to BUILDKITE_STEP_ID)",
 			Sources: cli.EnvVars("BUILDKITE_TEST_ENGINE_POOL_KEY"), Destination: &cfg.PoolKey,
@@ -805,8 +812,21 @@ var localRetryCountFlag = &cli.IntFlag{
 	Sources: cli.EnvVars("BUILDKITE_TEST_SCHEDULER_LOCAL_RETRY_COUNT"),
 }
 
+// poolWorkerCommandFlags are shared by the commands that lease from a pool. They
+// omit the planning options, because only pool plan creates pools. Test
+// discovery options remain for the local fallback split.
+func poolWorkerCommandFlags() []cli.Flag {
+	flags := []cli.Flag{filesFlag, accessTokenFlag, poolIDFlag, poolFallbackFlag}
+	flags = append(flags, buildEnvironmentFlags...)
+	// Only used to split tests locally when Test Scheduler is unavailable.
+	flags = append(flags, parallelismFlag)
+	flags = append(flags, suiteSlugFlag, baseURLFlag, oidcFlag, oidcLifetimeFlag)
+	flags = append(flags, runnerEnvironmentFlags...)
+	return freshFlags(flags)
+}
+
 func poolExecCommandFlags() []cli.Flag {
-	flags := poolPlanCommandFlags()
+	flags := poolWorkerCommandFlags()
 	return append(flags,
 		freshFlag(localRetryCountFlag),
 		&cli.DurationFlag{Name: "runner-startup-timeout", Value: time.Minute, Usage: "Persistent runner handshake timeout (Go duration, e.g. 1m)"},
@@ -816,7 +836,7 @@ func poolExecCommandFlags() []cli.Flag {
 }
 
 func poolConsumeCommandFlags() []cli.Flag {
-	flags := append(poolPlanCommandFlags(), localRetryCountFlag, uploadTokenFlag, uploadResultsFlag, uploadTagsFlag, uploadBaseURLFlag)
+	flags := append(poolWorkerCommandFlags(), localRetryCountFlag, uploadTokenFlag, uploadResultsFlag, uploadTagsFlag, uploadBaseURLFlag)
 	return freshFlags(flags)
 }
 
@@ -841,7 +861,7 @@ var poolCommand = &cli.Command{
 	Name:  "pool",
 	Usage: "Run tests using Test Scheduler pools",
 	Commands: []*cli.Command{{
-		Name: "plan", Usage: "Fetch or create a pool, waiting for recommended parallelism when dynamic sizing is requested",
+		Name: "plan", Usage: "Create or reuse a pool for pool run workers, waiting for recommended parallelism when dynamic sizing is requested",
 		Action: poolPlan, DisableSliceFlagSeparator: true,
 		Flags: poolPlanCommandFlags(),
 		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{{
@@ -856,7 +876,7 @@ var poolCommand = &cli.Command{
 		}},
 	}, {
 		Name:                      "run",
-		Usage:                     "Run Scheduler leases in one persistent runner given after --, or else with a new test command per lease",
+		Usage:                     "Run tests from the pool that pool plan created (--pool-id), in one persistent runner given after --, or else with a new test command per lease",
 		ArgsUsage:                 "[-- <persistent-runner> [arguments...]]",
 		Action:                    poolRun,
 		DisableSliceFlagSeparator: true,

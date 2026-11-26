@@ -24,8 +24,8 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// PoolExec resolves directly (no separate pool plan invocation is required), then
-// runs one persistent process. Native bktec uploads are never invoked here.
+// PoolExec leases from the pool bktec pool plan created, running one
+// persistent process. Native bktec uploads are never invoked here.
 func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []string, retries int, opts runnerexec.Options) error {
 	if len(argv) == 0 {
 		return errors.New("pool exec requires a runner executable")
@@ -43,17 +43,26 @@ func PoolExec(ctx context.Context, cfg *config.Config, files string, argv []stri
 	})
 }
 
+// errPoolPlanFellBack is why a worker given cfg.PoolFallback runs a local
+// split.
+var errPoolPlanFellBack = errors.New("bktec pool plan fell back to a local split")
+
 // poolRunner runs the batches a pool source offers until the source finishes.
 type poolRunner func(context.Context, *poolSource) error
 
-// poolWork resolves the pool shared by pool exec and pool consume, then runs
-// this worker's leases with run.
+// poolWork fetches the pool bktec pool plan created, then runs this worker's
+// leases with run. Workers never create pools, so that a build plans its pool
+// once instead of once per worker.
 func poolWork(ctx context.Context, cfg *config.Config, files string, retries int, run poolRunner) error {
 	if retries < 0 {
 		return errors.New("local retry count must not be negative")
 	}
 	if cfg.AccessToken == "" && !cfg.OIDC {
 		return errors.New("test pools require a supplied Scheduler OIDC token or agent OIDC authentication")
+	}
+	if cfg.PoolFallback {
+		printWarn("Pool Plan Fallback", "bktec pool plan did not create a test pool")
+		return runStaticSplit(ctx, cfg, errPoolPlanFellBack, files, retries, run)
 	}
 	printPlanningBanner(os.Stderr)
 	var mint func(context.Context) (string, error)
@@ -70,9 +79,6 @@ func poolWork(ctx context.Context, cfg *config.Config, files string, retries int
 		// GET and idempotent planning POST return the same representation.
 	default:
 		return fmt.Errorf("test pool %s has unsupported state %q", pool.ID, pool.State)
-	}
-	if cfg.PoolID == "" && cfg.MaxParallelism > 0 && pool.Parallelism != nil {
-		fmt.Fprintf(os.Stderr, "  Parallelism: %d (recommended)\n", *pool.Parallelism)
 	}
 	var checkJob func(context.Context) (bool, error)
 	if cfg.JobID != "" {
@@ -126,6 +132,12 @@ func poolExecFallback(ctx context.Context, cfg *config.Config, err error, files 
 		return poolFatal(err)
 	}
 	warnPoolFallback(err)
+	return runStaticSplit(ctx, cfg, err, files, retries, run)
+}
+
+// runStaticSplit runs this job's share of a local split of the tests, after
+// err stopped the pool from being used.
+func runStaticSplit(ctx context.Context, cfg *config.Config, err error, files string, retries int, run poolRunner) error {
 	if cfg.Parallelism < 1 || cfg.NodeIndex < 0 || cfg.NodeIndex >= cfg.Parallelism {
 		return fmt.Errorf("%w; cannot fall back to a static split: BUILDKITE_PARALLEL_JOB (%d) must be less than BUILDKITE_PARALLEL_JOB_COUNT (%d)", err, cfg.NodeIndex, cfg.Parallelism)
 	}

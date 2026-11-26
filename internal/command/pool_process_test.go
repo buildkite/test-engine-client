@@ -438,51 +438,6 @@ func TestPoolExecRunnerDoesNotInheritStdin(t *testing.T) {
 	}
 }
 
-func TestPoolExecIdempotentPlanAlreadyConsumingSkipsReadinessGet(t *testing.T) {
-	var logs bytes.Buffer
-	setDebugEnabled(t, &logs)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/filter_tests"):
-			_, _ = io.WriteString(w, `{"tests":[]}`)
-		case r.Method == http.MethodPost && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/plan":
-			w.WriteHeader(http.StatusAccepted)
-			_, _ = io.WriteString(w, `{"id":"existing","state":"consuming","parallelism":4,"muted_tests":[]}`)
-		case r.Method == http.MethodPost && r.URL.Path == "/v2/organizations/org/test-scheduler/pools/existing/leases":
-			_, _ = io.WriteString(w, `{"lease":null,"pool":{"id":"existing","state":"consumed"}}`)
-		default:
-			t.Errorf("unexpected request after ready planning response: %s %s", r.Method, r.URL.Path)
-			http.Error(w, "unexpected request", http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-	files := filepath.Join(t.TempDir(), "files")
-	if err := os.WriteFile(files, []byte("spec/a_spec.rb\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	flush := filepath.Join(t.TempDir(), "flushed")
-	t.Setenv("BKTEC_POOL_TEST_CHILD", "empty")
-	t.Setenv("BKTEC_POOL_TEST_FLUSH", flush)
-	cfg := config.New()
-	cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = "org", "suite", "rspec"
-	cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
-	cfg.PoolKey, cfg.BuildID, cfg.PipelineSlug = "key", "build", "pipeline"
-	cfg.MaxParallelism = 10
-	stderr := captureStderr(t)
-	if err := PoolExec(context.Background(), &cfg, files, []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
-		t.Fatal(err)
-	}
-	filtered := strings.Index(logs.String(), "No filtered selector-backed files found")
-	start := strings.Index(logs.String(), "Creating or reusing pool with key key")
-	resolved := strings.Index(logs.String(), "Pool existing resolved (state=consuming)")
-	if filtered < 0 || start <= filtered || resolved <= start {
-		t.Fatalf("expected discovery and filtering before resolution: %s", logs.String())
-	}
-	if want := "\nPlanning test pool\n  Key: key\n  ID: existing\n  Parallelism: 4 (recommended)\n"; !strings.Contains(stderr(), want) {
-		t.Fatalf("stderr missing planning section %q", want)
-	}
-}
-
 func TestPoolExecStartsLeasingWhilePopulating(t *testing.T) {
 	var logs bytes.Buffer
 	setDebugEnabled(t, &logs)
@@ -646,9 +601,14 @@ func TestPoolExecSuppliedJWTIsInitialAuth(t *testing.T) {
 func TestPoolExecFallsBackToStaticSplitWhenSchedulerUnavailable(t *testing.T) {
 	defer func(timeout time.Duration) { poolPlanningTimeout = timeout }(poolPlanningTimeout)
 	poolPlanningTimeout = 300 * time.Millisecond
-	for _, tc := range []struct{ name, pool, wantWarning string }{
-		{"planning failure", `{"id":"existing","state":"errored","error":{"message":"timing calculation failed"}}`, "Error Plan: Test Scheduler failed to plan test pool existing: timing calculation failed"},
-		{"planning deadline", `{"id":"existing","state":"planning"}`, "Timeout: Test Scheduler did not finish planning the test pool within 300ms"},
+	for _, tc := range []struct {
+		name, poolID, pool, wantWarning string
+		poolFallback                    bool
+	}{
+		{"planning failure", "existing", `{"id":"existing","state":"errored","error":{"message":"timing calculation failed"}}`, "Error Plan: Test Scheduler failed to plan test pool existing: timing calculation failed", false},
+		{"planning deadline", "existing", `{"id":"existing","state":"planning"}`, "Timeout: Test Scheduler did not finish planning the test pool within 300ms", false},
+		// pool plan already fell back, so the worker doesn't contact Test Scheduler.
+		{"pool plan fell back", "", "", "Pool Plan Fallback: bktec pool plan did not create a test pool", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			leaseRequests := 0
@@ -670,9 +630,9 @@ func TestPoolExecFallsBackToStaticSplitWhenSchedulerUnavailable(t *testing.T) {
 			t.Setenv("BKTEC_POOL_TEST_CHILD", "fallback")
 			t.Setenv("BKTEC_POOL_TEST_FLUSH", filepath.Join(t.TempDir(), "flushed"))
 			cfg := config.New()
-			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = "existing", "org", "suite", "rspec"
+			cfg.PoolID, cfg.OrganizationSlug, cfg.SuiteSlug, cfg.TestRunner = tc.poolID, "org", "suite", "rspec"
 			cfg.ServerBaseURL, cfg.AccessToken, cfg.OIDC = server.URL, "header.payload.signature", false
-			cfg.NodeIndex, cfg.Parallelism = 0, 2
+			cfg.NodeIndex, cfg.Parallelism, cfg.PoolFallback = 0, 2, tc.poolFallback
 			stderr := captureStderr(t)
 			if err := PoolExec(context.Background(), &cfg, files, []string{os.Args[0], "-test.run=^TestPoolPersistentChild$"}, 0, runnerexec.Options{StartupTimeout: 2 * time.Second, ShutdownTimeout: 2 * time.Second}); err != nil {
 				t.Fatal(err)

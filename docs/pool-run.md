@@ -11,7 +11,7 @@ leases in one of two ways:
   after `--`. bktec runs the test command configured like `bktec run` for each
   lease and each local retry round. Jest, Playwright and pytest support this.
 
-Both ways share the same pool resolution, sizing with `bktec pool plan`,
+Both ways lease from a pool that `bktec pool plan` created, and share the same
 authentication, local and pool retries, muting, lease prefetching and fallback
 when Test Scheduler is unavailable.
 
@@ -19,6 +19,48 @@ when Test Scheduler is unavailable.
 > `bktec pool run` replaces `bktec pool exec` and `bktec pool consume`, which
 > still work but are deprecated. Replace `pool exec -- <runner>` with
 > `pool run -- <runner>`, and `pool consume` with `pool run`.
+
+## Create the pool with `bktec pool plan`
+
+`pool run` requires the ID of a pool, given with `--pool-id` or
+`BUILDKITE_TEST_ENGINE_POOL_ID`. Workers don't create pools, so create the pool
+once with `bktec pool plan` in a step before the workers, then pass its ID to
+them. Without a pool ID, `pool run` fails and asks you to run `pool plan` first.
+
+`pool plan` discovers the tests, so run it with the same test runner options,
+such as `--test-runner`, `--test-file-pattern`, `--files` or
+`--location-prefix`. For example, a planning step uploads the workers with
+`--pipeline-upload`:
+
+```shell
+bktec pool plan \
+  --suite-slug my-suite \
+  --test-runner rspec \
+  --pipeline-upload pool-workers.yml
+```
+
+`pool-workers.yml` can use `BUILDKITE_TEST_ENGINE_POOL_ID` and
+`BUILDKITE_TEST_ENGINE_POOL_FALLBACK`, which `pool plan` sets when it uploads
+the template. Pass both to the workers, so they still run their tests if
+`pool plan` [falls back](#fallback-when-test-scheduler-is-unavailable):
+
+```yaml
+steps:
+  - label: "RSpec"
+    parallelism: 10
+    command: bktec pool run --suite-slug my-suite --test-runner rspec -- bundle exec buildkite-rspec
+    env:
+      BUILDKITE_TEST_ENGINE_POOL_ID: "$BUILDKITE_TEST_ENGINE_POOL_ID"
+      BUILDKITE_TEST_ENGINE_POOL_FALLBACK: "$BUILDKITE_TEST_ENGINE_POOL_FALLBACK"
+```
+
+With `--json` instead, `pool plan` prints these variables as a JSON object,
+such as `{"BUILDKITE_TEST_ENGINE_POOL_ID":"..."}`, for your own pipeline
+generator.
+
+By default, `pool plan` uses `BUILDKITE_STEP_ID` as the pool key, so running it
+again in the same step, such as after a retry, reuses the same pool. Set
+`--pool-key` when one step plans several pools.
 
 ## Run tests in one persistent runner
 
@@ -32,11 +74,11 @@ Each runner's guide describes its persistent runner and how to configure it:
   runs with the [`buildkite-pytest`](https://github.com/buildkite/bktest/tree/main/test-collector-python)
   persistent runner from `buildkite-test-collector`.
 
-Create or reuse a pool automatically, passing the persistent runner command
-after `--`. For example, an RSpec worker:
+Pass the persistent runner command after `--`. For example, an RSpec worker:
 
 ```shell
 bktec pool run \
+  --pool-id "$BUILDKITE_TEST_ENGINE_POOL_ID" \
   --suite-slug my-suite \
   --test-runner rspec \
   -- bundle exec buildkite-rspec
@@ -100,23 +142,7 @@ don't exit within 90 seconds, bktec kills them.
 `BUILDKITE_TEST_ENGINE_RETRY_COUNT` and the muted-test retry options of
 `bktec run` don't apply; muted failures are not retried.
 
-## Pools
-
-By default, workers in the same step use `BUILDKITE_STEP_ID` as the pool key.
-Set `--pool-key` when different groups of workers in the same step need separate
-pools.
-
-To use a pool created with `bktec pool plan`, provide its ID:
-
-```shell
-bktec pool run \
-  --pool-id "$BUILDKITE_TEST_ENGINE_POOL_ID" \
-  --suite-slug my-suite \
-  --test-runner rspec \
-  -- bundle exec buildkite-rspec
-```
-
-### Size workers with `bktec pool plan`
+## Size workers with `bktec pool plan`
 
 Pass `--max-parallelism` (env: `BUILDKITE_TEST_ENGINE_MAX_PARALLELISM`), and
 optionally `--target-time` (env: `BUILDKITE_TEST_ENGINE_TARGET_TIME`), to have
@@ -149,25 +175,26 @@ recommended parallelism would. Workers that start after the pool is consumed
 exit without running tests.
 
 Without `--max-parallelism`, `pool plan` returns as soon as the pool is created
-and exports only `BUILDKITE_TEST_ENGINE_POOL_ID`. `pool run` accepts the same
-sizing options when it creates a pool, but it does not change the number of
-running jobs.
-
-When creating a pool, `pool run` supports these test discovery options:
-
-- `--files` and `--selector-file`;
-- `--test-file-pattern` and `--test-file-exclude-pattern`;
-- `--location-prefix`.
+and exports only `BUILDKITE_TEST_ENGINE_POOL_ID`. Workers then wait for planning
+to finish before they lease.
 
 ## Options
 
+`pool plan` takes these options, which apply when it creates the pool:
+
 | Option | Default | Description |
 | --- | --- | --- |
-| `--pool-id` | unset | Consume an existing pool instead of creating or reusing one. |
-| `--pool-key` | `BUILDKITE_STEP_ID` | Identify the pool for workers in this build. |
+| `--pool-key` | `BUILDKITE_STEP_ID` | Identify the pool within this build. |
 | `--pool-lease-cost` | unset | Requested cost budget for each lease as `<dimension>=<budget>`; unset uses the Scheduler default. |
 | `--pool-lease-max-attempts` | `0` | Requested maximum attempts per lease; `0` uses the Scheduler default. |
 | `--pool-retry-count` | `0` | Retry failed or errored entries through the Scheduler, rerunning the whole entry. |
+
+`pool run` takes these options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--pool-id` | required | The ID of the pool created by `bktec pool plan`. |
+| `--pool-fallback` | `false` | Run this job's share of a local split instead of leasing. `pool plan` sets `BUILDKITE_TEST_ENGINE_POOL_FALLBACK=true` when it falls back. |
 | `--local-retry-count` | `0` | Retry failed, unmuted tests locally before reporting the Scheduler attempt. |
 | `--runner-startup-timeout` | `1m` | Persistent runner only: wait for the runner to become ready. |
 | `--runner-batch-timeout` | `10m` | Persistent runner only: allow a batch to run and submit its report. |
@@ -183,13 +210,12 @@ supports `duration_p50_ms` and `duration_p90_ms`, the sum of the leased tests'
 median or p90 durations in milliseconds:
 
 ```shell
-bktec pool run --pool-lease-cost duration_p90_ms=120000 --suite-slug my-suite --test-runner rspec -- bundle exec buildkite-rspec
+bktec pool plan --pool-lease-cost duration_p90_ms=120000 --suite-slug my-suite --test-runner rspec --json
 ```
 
 The deprecated `--pool-lease-duration-ms <ms>` (env:
 `BUILDKITE_TEST_ENGINE_POOL_LEASE_DURATION_MS`) is the same as
-`--pool-lease-cost duration_p50_ms=<ms>`. The lease options only apply when
-bktec creates the pool; they're ignored with `--pool-id`.
+`--pool-lease-cost duration_p50_ms=<ms>`.
 
 ## Authentication
 
@@ -201,9 +227,8 @@ Test Scheduler. With `--no-oidc`, it must remain valid for the entire command.
 ## Retries and results
 
 Set `--pool-retry-count N` (env: `BUILDKITE_TEST_ENGINE_POOL_RETRY_COUNT`)
-when creating a pool to allow up to N additional Scheduler attempts per entry.
-It defaults to `0` (no pool retries) and is supported by `pool plan` and
-`pool run`:
+on `pool plan` to allow up to N additional Scheduler attempts per entry. It
+defaults to `0` (no pool retries):
 
 ```shell
 bktec pool plan --suite-slug my-suite --test-runner rspec --pool-retry-count 1 --json
@@ -217,8 +242,7 @@ different worker is not guaranteed.
 
 The retry count is fixed when the pool is created and is part of its planning
 fingerprint. Use the same value when repeating planning for the same build and
-pool key. It is ignored with `--pool-id` and does not apply to local fallback
-execution. `--pool-lease-max-attempts` controls lease size, not retries.
+pool key. It does not apply to local fallback execution. `--pool-lease-max-attempts` controls lease size, not retries.
 
 `--local-retry-count` retries failed tests in the same worker. These retries
 do not create additional Scheduler attempts. Muted failures are not retried.
@@ -266,13 +290,14 @@ when the pool's planning fails, or when the pool isn't ready to lease within
 minutes to give up on planning, so bktec doesn't wait that long. Rejected
 requests (`4xx`) still fail the command.
 
-- `pool plan` warns and exports an empty `BUILDKITE_TEST_ENGINE_POOL_ID` and
+- `pool plan` warns and exports an empty `BUILDKITE_TEST_ENGINE_POOL_ID`,
+  `BUILDKITE_TEST_ENGINE_POOL_FALLBACK=true`, and
   `BUILDKITE_TEST_ENGINE_PARALLELISM` set to `--max-parallelism`, or to
-  `BUILDKITE_PARALLEL_JOB_COUNT` (default 1) when that is unset. Workers given
-  an empty pool ID create or reuse a pool themselves.
+  `BUILDKITE_PARALLEL_JOB_COUNT` (default 1) when that is unset.
 - `pool run` warns and runs its share of the locally discovered tests, split
   round-robin by `BUILDKITE_PARALLEL_JOB` across `BUILDKITE_PARALLEL_JOB_COUNT`
-  jobs. Tests still run the same way and `--local-retry-count` still applies,
+  jobs. It does this when `BUILDKITE_TEST_ENGINE_POOL_FALLBACK` is `true`,
+  without contacting Test Scheduler, or when it can't fetch its pool. Tests still run the same way and `--local-retry-count` still applies,
   but test selection and muting are not applied.
 
 The fallback only happens before a worker starts leasing. If Test Scheduler

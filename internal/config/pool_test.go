@@ -12,22 +12,19 @@ import (
 )
 
 func TestValidatePoolPlanIdentity(t *testing.T) {
-	for _, tc := range []struct{ name, id, key, step, runner, wantError string }{
-		{"step default", "", "", "step-1", "rspec", ""},
-		{"explicit key", "", "shared", "", "rspec", ""},
-		{"missing key", "", "", "", "rspec", "POOL_KEY"},
-		{"jest", "", "shared", "", "jest", ""},
-		{"unsupported runner", "", "shared", "", "cypress", "requires rspec, jest, playwright or pytest"},
-		{"precreated skips discovery validation", "pool-1", "", "", "", ""},
+	for _, tc := range []struct{ name, key, step, runner, wantError string }{
+		{"step default", "", "step-1", "rspec", ""},
+		{"explicit key", "shared", "", "rspec", ""},
+		{"missing key", "", "", "rspec", "POOL_KEY"},
+		{"jest", "shared", "", "jest", ""},
+		{"unsupported runner", "shared", "", "cypress", "requires rspec, jest, playwright or pytest"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
 			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "token", "acme", "suite"
 			c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, "./mock-buildkite-agent"
-			c.PoolID, c.PoolKey, c.StepID, c.TestRunner = tc.id, tc.key, tc.step, tc.runner
-			if tc.id == "" {
-				c.BuildID, c.PipelineSlug = "build", "pipeline"
-			}
+			c.PoolKey, c.StepID, c.TestRunner = tc.key, tc.step, tc.runner
+			c.BuildID, c.PipelineSlug = "build", "pipeline"
 			err := c.ValidateForPoolPlan()
 			if tc.wantError != "" {
 				require.ErrorContains(t, err, tc.wantError)
@@ -45,32 +42,36 @@ func TestValidatePoolPlanIdentity(t *testing.T) {
 
 func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 	for _, tc := range []struct {
-		name, command, poolID, runner, resultPath, wantError string
-		testCommand, retryCommand                            string
-		splitByExample                                       bool
+		name, command, runner, resultPath, wantError string
+		testCommand, retryCommand                    string
+		missingPoolID, poolFallback                  bool
 	}{
-		{name: "exec plans rspec", command: "exec", runner: "rspec"},
-		{name: "exec plans pytest", command: "exec", runner: "pytest"},
+		{name: "exec requires a pool ID", command: "exec", runner: "rspec", missingPoolID: true, wantError: "BUILDKITE_TEST_ENGINE_POOL_ID must be set; create the pool with bktec pool plan"},
+		{name: "pool plan fallback needs no pool ID", command: "exec", runner: "rspec", missingPoolID: true, poolFallback: true},
+		{name: "consume requires a pool ID", command: "consume", runner: "jest", resultPath: "jest.json", missingPoolID: true, wantError: "BUILDKITE_TEST_ENGINE_POOL_ID must be set; create the pool with bktec pool plan"},
+		{name: "exec runs rspec", command: "exec", runner: "rspec"},
+		{name: "exec runs pytest", command: "exec", runner: "pytest"},
 		{name: "exec rejects a pytest JUnit command", command: "exec", runner: "pytest", testCommand: "pytest {{testExamples}} --junit-xml={{resultPath}}", wantError: "BUILDKITE_TEST_ENGINE_TEST_CMD buildkite-pytest reports JSON; remove --junit-xml"},
 		{name: "exec rejects a pytest JUnit retry command", command: "exec", runner: "pytest", retryCommand: "pytest --junit-xml=out.xml {{testExamples}}", wantError: "BUILDKITE_TEST_ENGINE_RETRY_CMD buildkite-pytest reports JSON"},
 		{name: "exec has no jest runner", command: "exec", runner: "jest", wantError: "a persistent runner after -- requires rspec or pytest"},
-		{name: "exec with pool ID", command: "exec", poolID: "pool-1"},
-		{name: "consume plans jest", command: "consume", runner: "jest", resultPath: "jest.json"},
-		{name: "consume plans playwright", command: "consume", runner: "playwright", resultPath: "results.json"},
-		{name: "consume plans playwright files only", command: "consume", runner: "playwright", resultPath: "results.json", splitByExample: true, wantError: "split by example is not supported for Playwright pools"},
-		{name: "consume plans pytest with its default result path", command: "consume", runner: "pytest"},
+		{name: "consume runs jest", command: "consume", runner: "jest", resultPath: "jest.json"},
+		{name: "consume runs playwright", command: "consume", runner: "playwright", resultPath: "results.json"},
+		{name: "consume runs pytest with its default result path", command: "consume", runner: "pytest"},
 		{name: "consume rejects pytest fail-fast", command: "consume", runner: "pytest", testCommand: "pytest -q --maxfail=2 {{testExamples}}", wantError: "BUILDKITE_TEST_ENGINE_TEST_CMD"},
 		{name: "consume rejects pytest fail-fast retries", command: "consume", runner: "pytest", retryCommand: "pytest -x {{testExamples}}", wantError: "BUILDKITE_TEST_ENGINE_RETRY_CMD"},
-		{name: "consume with pool ID still runs jest, playwright or pytest", command: "consume", poolID: "pool-1", runner: "rspec", resultPath: "out.json", wantError: "running the test command per lease requires jest, playwright or pytest"},
-		{name: "consume reads the result path", command: "consume", poolID: "pool-1", runner: "jest", wantError: "BUILDKITE_TEST_ENGINE_RESULT_PATH"},
+		{name: "consume runs jest, playwright or pytest", command: "consume", runner: "rspec", resultPath: "out.json", wantError: "running the test command per lease requires jest, playwright or pytest"},
+		{name: "consume reads the result path", command: "consume", runner: "jest", wantError: "BUILDKITE_TEST_ENGINE_RESULT_PATH"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
 			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "header.payload.signature", "acme", "suite"
 			c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, "./mock-buildkite-agent"
-			c.PoolID, c.PoolKey, c.TestRunner, c.ResultPath, c.SplitByExample = tc.poolID, "shared", tc.runner, tc.resultPath, tc.splitByExample
+			c.PoolID, c.TestRunner, c.ResultPath = "pool-1", tc.runner, tc.resultPath
+			if tc.missingPoolID {
+				c.PoolID = ""
+			}
+			c.PoolFallback = tc.poolFallback
 			c.TestCommand, c.RetryCommand = tc.testCommand, tc.retryCommand
-			c.BuildID, c.PipelineSlug = "build", "pipeline"
 			validate := c.ValidateForPoolExec
 			if tc.command == "consume" {
 				validate = c.ValidateForPoolConsume
@@ -90,10 +91,10 @@ func TestValidatePoolExecAndConsumeRunners(t *testing.T) {
 
 func TestValidatePoolPlanningOptions(t *testing.T) {
 	for _, tc := range []struct {
-		name, poolID, wantError, cost string
-		durationMS, maxAttempts       int
-		retryCount                    int
-		wantCosts                     map[string]int
+		name, wantError, cost   string
+		durationMS, maxAttempts int
+		retryCount              int
+		wantCosts               map[string]int
 	}{
 		{name: "defaults"},
 		{name: "cost override", cost: "duration_p90_ms=60000", wantCosts: map[string]int{"duration_p90_ms": 60_000}},
@@ -109,13 +110,12 @@ func TestValidatePoolPlanningOptions(t *testing.T) {
 		{name: "pool retries", retryCount: 2},
 		{name: "negative pool retries", retryCount: -1, wantError: "pool-retry-count"},
 		{name: "pool retries overflow initial attempt", retryCount: math.MaxInt, wantError: "pool-retry-count"},
-		{name: "existing pool ignores planning options", poolID: "pool-1", cost: "bogus", durationMS: 60_000, maxAttempts: 25, retryCount: -1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
 			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "token", "acme", "suite"
 			c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, "./mock-buildkite-agent"
-			c.PoolID, c.PoolKey, c.TestRunner = tc.poolID, "shared", "rspec"
+			c.PoolKey, c.TestRunner = "shared", "rspec"
 			c.BuildID, c.PipelineSlug = "build", "pipeline"
 			c.PoolLeaseCost, c.PoolLeaseDurationMS, c.PoolLeaseMaxAttempts = tc.cost, tc.durationMS, tc.maxAttempts
 			c.PoolRetryCount = tc.retryCount
@@ -133,7 +133,6 @@ func TestValidatePoolPlanningOptions(t *testing.T) {
 func TestValidatePoolDynamicParallelism(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
-		poolID         string
 		targetTime     time.Duration
 		maxParallelism int
 		wantError      string
@@ -143,12 +142,11 @@ func TestValidatePoolDynamicParallelism(t *testing.T) {
 		{name: "target and maximum", targetTime: 2 * time.Minute, maxParallelism: 120},
 		{name: "target requires maximum", targetTime: 2 * time.Minute, wantError: "max-parallelism must be set when target-time is set"},
 		{name: "maximum is bounded", maxParallelism: 1001, wantError: "must be between 0 and 1000"},
-		{name: "existing pool ignores planning sizing", poolID: "pool-1", targetTime: 2 * time.Minute},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New()
 			c.AccessToken, c.OrganizationSlug, c.SuiteSlug = "header.payload.signature", "acme", "suite"
-			c.PoolID, c.PoolKey, c.TestRunner = tc.poolID, "shared", "rspec"
+			c.PoolKey, c.TestRunner = "shared", "rspec"
 			c.BuildID, c.PipelineSlug = "build", "pipeline"
 			c.TargetTime, c.MaxParallelism = tc.targetTime, tc.maxParallelism
 			err := c.ValidateForPoolPlan()
@@ -167,10 +165,10 @@ func TestPoolOIDCClaims(t *testing.T) {
 	agent := filepath.Join(t.TempDir(), "agent")
 	require.NoError(t, os.WriteFile(agent, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0700))
 	c := New()
-	c.PoolID, c.OrganizationSlug, c.SuiteSlug = "pool-1", "acme", "suite"
+	c.PoolID, c.OrganizationSlug, c.SuiteSlug, c.TestRunner = "pool-1", "acme", "suite", "rspec"
 	c.AccessToken = "ordinary-api-token"
 	c.OIDC, c.OIDCLifetime, c.BuildkiteAgentCommand = true, 20*time.Minute, agent
-	require.NoError(t, c.ValidateForPoolPlan())
+	require.NoError(t, c.ValidateForPoolExec())
 	want := "oidc\nrequest-token\n--audience\nhttps://api.buildkite.com/v2/analytics/organizations/acme/suites/suite\n--lifetime\n1200"
 	require.Equal(t, want+"\n--claim\norganization_id,pipeline_id,build_id,job_id", c.AccessToken)
 	refreshed, err := c.RequestSchedulerOIDCToken(context.Background())
@@ -189,9 +187,9 @@ func TestPoolRejectsDisabledOIDCWithAPIToken(t *testing.T) {
 
 func TestPoolAcceptsSuppliedOIDCTokenWithoutAgent(t *testing.T) {
 	c := New()
-	c.PoolID, c.OrganizationSlug, c.SuiteSlug = "pool-1", "acme", "suite"
+	c.PoolID, c.OrganizationSlug, c.SuiteSlug, c.TestRunner = "pool-1", "acme", "suite", "rspec"
 	c.AccessToken = "header.payload.signature"
 	c.OIDC = false
-	require.NoError(t, c.ValidateForPoolPlan())
+	require.NoError(t, c.ValidateForPoolExec())
 	require.Equal(t, "header.payload.signature", c.AccessToken)
 }

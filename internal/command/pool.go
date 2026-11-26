@@ -27,9 +27,9 @@ var poolPlanningTimeout = 130 * time.Second
 
 var errPoolPlanningTimeout = errors.New("test pool planning timed out")
 
-// ResolvePool is shared by pool plan, pool exec and pool consume. It creates or
-// reuses the pool, or fetches a supplied pool ID, and, if wait is set, waits for
-// planning to finish. Test discovery is not counted against poolPlanningTimeout.
+// ResolvePool is shared by pool plan and the pool workers. pool plan creates or
+// reuses the pool for cfg.PoolKey; workers fetch the pool cfg.PoolID names. If
+// wait is set, it waits for planning to finish. Test discovery is not counted against poolPlanningTimeout.
 func ResolvePool(ctx context.Context, cfg *config.Config, testFileList string, client *api.Client, wait bool) (pool api.Pool, err error) {
 	var request api.PoolPlanParams
 	if cfg.PoolID == "" {
@@ -238,8 +238,8 @@ func poolFatal(err error) error {
 }
 
 // poolPlanFallback mirrors bktec plan's local fallback when Test Scheduler is
-// unavailable. It exports an empty pool ID so workers still try to create or
-// reuse a pool themselves, then fall back to a static split if they can't.
+// unavailable. It exports BUILDKITE_TEST_ENGINE_POOL_FALLBACK so workers run
+// their share of a local split without contacting Test Scheduler.
 func poolPlanFallback(ctx context.Context, cfg *config.Config, err error, output PlanOutput, template string) error {
 	if !poolSchedulerUnavailable(ctx, err) {
 		return poolFatal(err)
@@ -248,8 +248,9 @@ func poolPlanFallback(ctx context.Context, cfg *config.Config, err error, output
 	fallback := makeFallbackPlan(cfg)
 	printPlanningSummary(os.Stderr, fallback, "local fallback", cfg)
 	return writePoolPlan(map[string]string{
-		"BUILDKITE_TEST_ENGINE_POOL_ID":     "",
-		"BUILDKITE_TEST_ENGINE_PARALLELISM": strconv.Itoa(fallback.Parallelism),
+		"BUILDKITE_TEST_ENGINE_POOL_ID":       "",
+		"BUILDKITE_TEST_ENGINE_POOL_FALLBACK": "true",
+		"BUILDKITE_TEST_ENGINE_PARALLELISM":   strconv.Itoa(fallback.Parallelism),
 	}, output, template)
 }
 
