@@ -70,6 +70,7 @@ type Config struct {
 	// Pool identity is shared across workers and independent of local retries.
 	PipelineSlug         string `json:"-"`
 	PoolID               string `json:"-"`
+	PoolFallback         bool   `json:"-"`
 	PoolKey              string `json:"-"`
 	PoolLeaseMaxAttempts int    `json:"-"`
 	PoolRetryCount       int    `json:"-"`

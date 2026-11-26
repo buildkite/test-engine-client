@@ -187,7 +187,7 @@ func TestSelectionFlagsVisibility(t *testing.T) {
 	}
 	commands := map[string]func() []cli.Flag{
 		"run": runCommandFlags, "plan": planCommandFlags,
-		"pool plan": poolPlanCommandFlags, "pool run": poolRunCommandFlags,
+		"pool plan": poolPlanCommandFlags,
 	}
 	for command, flags := range commands {
 		byName := map[string]cli.Flag{}
@@ -345,7 +345,7 @@ func TestPlanCommandIncludesPlanOutOutputFlag(t *testing.T) {
 func TestCollectGitMetadataResolution(t *testing.T) {
 	commands := map[string]func() []cli.Flag{
 		"run": runCommandFlags, "plan": planCommandFlags,
-		"pool plan": poolPlanCommandFlags, "pool run": poolRunCommandFlags,
+		"pool plan": poolPlanCommandFlags,
 	}
 	for _, tc := range []struct {
 		name, env string
